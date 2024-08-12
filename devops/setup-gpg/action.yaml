@@ -1,0 +1,41 @@
+name: 'Setup GPG'
+description: 'Configures this action to run gpg with a given key and pass'
+inputs:
+  private-key:  # id of input
+    description: 'gpg private key'
+    required: true
+  key-pass:  # id of input
+    description: 'gpg key pass'
+    required: true
+  key-name:  # id of input
+    description: 'gpg key name'
+    required: true
+    default: "aerospike"
+runs:
+  using: "composite"
+  steps:
+      - name: Set up GPG
+        env:
+          GPG_PRIVATE_KEY: ${{ inputs.private-key }}
+          GPG_KEY_PASS: ${{ inputs.key-pass }}
+          GPG_ID: ${{ inputs.key-name }}
+        run: |
+          mkdir -p ~/.gnupg
+          echo "$GPG_PRIVATE_KEY" | gpg --import --batch --yes
+          echo "$GPG_KEY_PASS"
+          echo -e "pinentry-mode loopback\nuse-agent" >> ~/.gnupg/gpg.conf
+          echo -e "allow-loopback-pinentry" >> ~/.gnupg/gpg-agent.conf
+
+          echo -e "$GPG_KEY_PASS" >> ~/pass
+          echo -e "%_signature gpg" >> ~/.rpmmacros
+          echo -e "%_gpg_path ~/.gnupg" >> ~/.rpmmacros
+          echo -e "%_gpg_name $GPG_ID" >> ~/.rpmmacros
+          echo -e "%_gpgbin /usr/bin/gpg" >> ~/.rpmmacros
+          echo -e "%__gpg /usr/bin/gpg" >> ~/.rpmmacros
+          echo -e "%__gpg_sign_cmd %{__gpg} \\" >> ~/.rpmmacros
+          echo -e "gpg --no-verbose --batch --no-tty --passphrase-file /home/runner/pass --pinentry-mode loopback \\" >> ~/.rpmmacros
+          echo -e "  %{?_gpg_digest_algo:--digest-algo %{_gpg_digest_algo}} \\" >> ~/.rpmmacros
+          echo -e "  --no-secmem-warning \\" >> ~/.rpmmacros
+          echo -e "  -u '%{_gpg_name}' -sbo %{__signature_filename} %{__plaintext_filename}" >> ~/.rpmmacros
+          export GPG_TTY=no-tty
+          gpg-connect-agent reloadagent /bye
