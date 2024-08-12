@@ -39,3 +39,4 @@ runs:
           echo -e "  -u '%{_gpg_name}' -sbo %{__signature_filename} %{__plaintext_filename}" >> ~/.rpmmacros
           export GPG_TTY=no-tty
           gpg-connect-agent reloadagent /bye
+        shell: bash
