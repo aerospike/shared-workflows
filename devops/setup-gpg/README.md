@@ -16,5 +16,7 @@ jobs:
       - id: foo
         uses: aerospike/devops/setup-pgp@latest
         with:
-          who-to-greet: 'Mona the Octocat'
+          private-key: ${{ secret.gpg_key }}
+          key-pass: ${{ secret.gpg_pass }}
+          key-name: "aerospike"
 ```
