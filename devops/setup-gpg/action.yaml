@@ -20,12 +20,17 @@ runs:
           GPG_KEY_PASS: ${{ inputs.key-pass }}
           GPG_ID: ${{ inputs.key-name }}
         run: |
+          # Setup gpg
           mkdir -p ~/.gnupg
           echo "$GPG_PRIVATE_KEY" | gpg --import --batch --yes
           echo "$GPG_KEY_PASS"
+
+          # configure for non-interactive use
+          export GPG_TTY=no-tty
           echo -e "pinentry-mode loopback\nuse-agent" >> ~/.gnupg/gpg.conf
           echo -e "allow-loopback-pinentry" >> ~/.gnupg/gpg-agent.conf
 
+          # configure rpm's
           echo -e "$GPG_KEY_PASS" >> ~/pass
           echo -e "%_signature gpg" >> ~/.rpmmacros
           echo -e "%_gpg_path ~/.gnupg" >> ~/.rpmmacros
@@ -37,6 +42,7 @@ runs:
           echo -e "  %{?_gpg_digest_algo:--digest-algo %{_gpg_digest_algo}} \\" >> ~/.rpmmacros
           echo -e "  --no-secmem-warning \\" >> ~/.rpmmacros
           echo -e "  -u '%{_gpg_name}' -sbo %{__signature_filename} %{__plaintext_filename}" >> ~/.rpmmacros
-          export GPG_TTY=no-tty
+
+          # reload agent
           gpg-connect-agent reloadagent /bye
         shell: bash

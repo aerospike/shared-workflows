@@ -2,6 +2,13 @@
 
 This composite action will setup your github action to use a supplied gpg key.
 
+## Supported Platroms
+- GPG
+- rpmsign/rpm
+- debsign
+
+If you need a platform not listed above, please contact the maintainers!
+
 ## Example Usage
 
 ```yaml
