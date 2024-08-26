@@ -10,7 +10,7 @@ inputs:
   key-name:  # id of input
     description: 'gpg key name'
     required: true
-    default: "aerospike"
+    default: "Aerospike"
 runs:
   using: "composite"
   steps:
