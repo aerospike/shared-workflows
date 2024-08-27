@@ -2,7 +2,7 @@
 
 This composite action will setup your github action to use a supplied gpg key.
 
-## Supported Platroms
+## Supported Platforms
 - GPG
 - rpmsign/rpm
 - debsign
