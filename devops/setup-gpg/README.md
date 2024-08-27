@@ -21,7 +21,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - id: foo
-        uses: aerospike/devops/setup-pgp@latest
+        uses: aerospike/shared-workflows/devops/setup-gpg@latest
         with:
           private-key: ${{ secret.gpg_key }}
           key-pass: ${{ secret.gpg_pass }}
