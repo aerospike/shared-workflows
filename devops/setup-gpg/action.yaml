@@ -1,14 +1,11 @@
 name: 'Setup GPG'
 description: 'Configures this action to run gpg with a given key and pass'
 inputs:
-  private-key:  # id of input
-    description: 'gpg private key'
+  gpg-private-key:  # id of input
     required: true
-  key-pass:  # id of input
-    description: 'gpg key pass'
+  gpg-key-pass:  # id of input
     required: true
-  key-name:  # id of input
-    description: 'gpg key name'
+  gpg-key-name:  # id of input
     required: true
     default: "Aerospike"
 runs:
@@ -16,9 +13,9 @@ runs:
   steps:
       - name: Set up GPG
         env:
-          GPG_PRIVATE_KEY: ${{ inputs.private-key }}
-          GPG_KEY_PASS: ${{ inputs.key-pass }}
-          GPG_ID: ${{ inputs.key-name }}
+          GPG_PRIVATE_KEY: ${{ inputs.gpg-private-key }}
+          GPG_KEY_PASS: ${{ inputs.gpg-key-pass }}
+          GPG_ID: ${{ inputs.gpg-key-name }}
         run: |
           # Setup gpg
           mkdir -p ~/.gnupg

@@ -23,7 +23,7 @@ jobs:
       - id: foo
         uses: aerospike/shared-workflows/devops/setup-gpg@latest
         with:
-          private-key: ${{ secret.gpg_key }}
-          key-pass: ${{ secret.gpg_pass }}
-          key-name: "aerospike"
+          gpg-private-key: ${{ secret.gpg_key }}
+          gpg-key-pass: ${{ secret.gpg_pass }}
+          gpg-key-name: "Aerospike"
 ```
