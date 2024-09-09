@@ -1,11 +1,11 @@
 name: 'Setup GPG'
 description: 'Configures this action to run gpg with a given key and pass'
 inputs:
-  gpg-private-key:
+  gpg-private-key:  # id of input
     required: true
-  gpg-key-pass:
+  gpg-key-pass:  # id of input
     required: true
-  gpg-key-name:
+  gpg-key-name:  # id of input
     required: true
     default: "Aerospike"
 runs:
