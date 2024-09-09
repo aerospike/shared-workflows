@@ -15,20 +15,23 @@ runs:
         env: 
             PRIVATE_KEY: ${{ inputs.gpg-private-key }}
         if: ${{ env.PRIVATE_KEY == '' }}
-        run: '"echo the gpg-private-key was empty"'
+        run: echo "the gpg-private-key was empty"
         shell: bash
       - name: "check if key name is not empty"
         env: 
             KEY_NAME: ${{ inputs.gpg-key-name }}
         if: ${{ env.KEY_NAME == '' }}
-        run: 'echo " the gpg-key-name was empty"'
+        run: echo "the gpg-key-name was empty"
         shell: bash
       - name: "check if key pass is not empty"
         env: 
             KEY_PASS: ${{ inputs.gpg-key-pass }}
         if: ${{ env.KEY_PASS == '' }}
-        run: 'echo "the secret gpg-key-pass was empty"'
+        run: echo "the secret gpg-key-pass was empty"
         shell: bash
+      - name: install tools
+        run: |
+          sudo apt-get update && sudo apt-get install ca-certificates gnupg dpkg-dev -y
       - name: Set up GPG
         env:
           GPG_PRIVATE_KEY: ${{ inputs.gpg-private-key }}
