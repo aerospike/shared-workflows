@@ -1,52 +1,72 @@
 name: 'Setup GPG'
 description: 'Configures this action to run gpg with a given key and pass'
 inputs:
-  gpg-private-key:  # id of input
+  gpg-private-key:
+    description: 'GPG private key exported as an ASCII armored version or its base64 encoding'
     required: true
-  gpg-key-pass:  # id of input
+  gpg-key-pass:
+    description: 'Passphrase of the GPG private key'
     required: true
-  gpg-key-name:  # id of input
+  gpg-public-key:
+    description: 'GPG public key exported as an ASCII armored version or its base64 encoding'
     required: true
-    default: "Aerospike"
+  gpg-key-name:
+    description: 'GPG key name'
+    required: true
+    default: "aerospike-inc"
+  gpg-trust-level:
+    description: 'Set key trust level'
+    required: false
+    default: 5
 runs:
   using: "composite"
   steps:
-      - name: "check if private key is not empty"
+      - name: "check if private key is empty"
         env: 
-            PRIVATE_KEY: ${{ inputs.gpg-private-key }}
-        if: ${{ env.PRIVATE_KEY == '' }}
+            GPG_PRIVATE_KEY: ${{ inputs.gpg-private-key }}
+        if: ${{ env.GPG_PRIVATE_KEY == '' }}
         run: |
-          echo "the gpg-private-key was empty"
+          echo "The gpg-private-key was empty"
           exit 1
         shell: bash
-      - name: "check if key name is not empty"
-        env: 
-            KEY_NAME: ${{ inputs.gpg-key-name }}
-        if: ${{ env.KEY_NAME == '' }}
+      - name: "check if public key is empty"
+        env:
+            GPG_PUBLIC_KEY: ${{ inputs.gpg-public-key }}
+        if: ${{ env.GPG_PUBLIC_KEY == '' }}
         run: |
-          echo "the gpg-key-name was empty"
+          echo "The gpg-public-key was empty"
           exit 1
         shell: bash
-      - name: "check if key pass is not empty"
+      - name: "check if key name is empty"
         env: 
-            KEY_PASS: ${{ inputs.gpg-key-pass }}
-        if: ${{ env.KEY_PASS == '' }}
+            GPG_ID: ${{ inputs.gpg-key-name }}
+        if: ${{ env.GPG_ID == '' }}
         run: |
-          echo "the secret gpg-key-pass was empty"
+          echo "The gpg-key-name was empty"
+          exit 1
+        shell: bash
+      - name: "check if key pass is empty"
+        env: 
+            GPG_KEY_PASS: ${{ inputs.gpg-key-pass }}
+        if: ${{ env.GPG_KEY_PASS == '' }}
+        run: |
+          echo "The secret gpg-key-pass was empty"
           exit 1
         shell: bash
       - name: install tools
         run: |
-          sudo apt-get update && sudo apt-get install ca-certificates gnupg dpkg-dev -y
+          sudo apt-get update && sudo apt-get install ca-certificates gnupg dpkg-dev dpkg-sig rpm -y
         shell: bash
       - name: Set up GPG
         env:
           GPG_PRIVATE_KEY: ${{ inputs.gpg-private-key }}
           GPG_KEY_PASS: ${{ inputs.gpg-key-pass }}
           GPG_ID: ${{ inputs.gpg-key-name }}
+          GPG_PUBLIC_KEY: ${{ inputs.gpg-public-key }}
         run: |
           # Setup gpg
           mkdir -p ~/.gnupg
+          chmod 700 ~/.gnupg
           echo "$GPG_PRIVATE_KEY" | gpg --import --batch --yes
           echo "$GPG_KEY_PASS"
 
@@ -56,17 +76,10 @@ runs:
           echo -e "allow-loopback-pinentry" >> ~/.gnupg/gpg-agent.conf
 
           # configure rpm's
-          echo -e "$GPG_KEY_PASS" >> ~/pass
-          echo -e "%_signature gpg" >> ~/.rpmmacros
-          echo -e "%_gpg_path ~/.gnupg" >> ~/.rpmmacros
-          echo -e "%_gpg_name $GPG_ID" >> ~/.rpmmacros
-          echo -e "%_gpgbin /usr/bin/gpg" >> ~/.rpmmacros
-          echo -e "%__gpg /usr/bin/gpg" >> ~/.rpmmacros
-          echo -e "%__gpg_sign_cmd %{__gpg} \\" >> ~/.rpmmacros
-          echo -e "gpg --no-verbose --batch --no-tty --passphrase-file /home/runner/pass --pinentry-mode loopback \\" >> ~/.rpmmacros
-          echo -e "  %{?_gpg_digest_algo:--digest-algo %{_gpg_digest_algo}} \\" >> ~/.rpmmacros
-          echo -e "  --no-secmem-warning \\" >> ~/.rpmmacros
-          echo -e "  -u '%{_gpg_name}' -sbo %{__signature_filename} %{__plaintext_filename}" >> ~/.rpmmacros
+          echo -e "$GPG_KEY_PASS" >> ~/.gnupg/.pass
+          echo -e "$GPG_PUBLIC_KEY" >> ~/.gnupg/.public_key.asc
+          cp setup-gpg/.rpmmacros ~/.rpmmacros
+          rpm --import ~/.gnupg/.public_key.asc 
 
           # reload agent
           gpg-connect-agent reloadagent /bye

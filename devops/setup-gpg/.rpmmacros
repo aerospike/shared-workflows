@@ -1,0 +1,17 @@
+%_signature gpg
+%_gpg_path ~/.gnupg
+%_gpg_name aerospike-inc
+%__gpg_check_password_cmd /bin/true
+%_gpgbin /usr/bin/gpg
+%__gpg /usr/bin/gpg
+%__gpg_sign_cmd  %{__gpg} \
+   gpg \
+     --pinentry-mode loopback \
+     --batch \
+     --verbose \
+     --no-armor \
+     --no-secmem-warning \
+     --passphrase-file /home/runner/.gnupg/.pass \
+     --digest-algo sha256 \
+     -u "%{_gpg_name}" \
+     -sbo %{__signature_filename} %{__plaintext_filename}
