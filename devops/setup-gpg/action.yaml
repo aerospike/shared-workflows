@@ -8,6 +8,9 @@ inputs:
   gpg-key-name:  # id of input
     required: true
     default: "Aerospike"
+  gpg-public-key:
+    description: 'GPG public key exported as an ASCII armored version or its base64 encoding'
+    required: true
 runs:
   using: "composite"
   steps:
@@ -35,6 +38,14 @@ runs:
           echo "the secret gpg-key-pass was empty"
           exit 1
         shell: bash
+      - name: "check if public key pass is empty"
+        env: 
+            PUBLIC_KEY: ${{ inputs.gpg-public-key }}
+        if: ${{ env.PUBLIC_KEY == '' }}
+        run: |
+          echo "the secret gpg-public-pass was empty"
+          exit 1
+        shell: bash
       - name: install tools
         run: |
           sudo apt-get update && sudo apt-get install ca-certificates gnupg dpkg-dev -y
@@ -44,6 +55,7 @@ runs:
           GPG_PRIVATE_KEY: ${{ inputs.gpg-private-key }}
           GPG_KEY_PASS: ${{ inputs.gpg-key-pass }}
           GPG_ID: ${{ inputs.gpg-key-name }}
+          GPG_PUBLIC_KEY: ${{ inputs.gpg-public-key }}
         run: |
           # Setup gpg
           mkdir -p ~/.gnupg
@@ -67,6 +79,9 @@ runs:
           echo -e "  %{?_gpg_digest_algo:--digest-algo %{_gpg_digest_algo}} \\" >> ~/.rpmmacros
           echo -e "  --no-secmem-warning \\" >> ~/.rpmmacros
           echo -e "  -u '%{_gpg_name}' -sbo %{__signature_filename} %{__plaintext_filename}" >> ~/.rpmmacros
+
+          # public key for verification
+          echo -e "$GPG_PUBLIC_KEY" >> ~/.gnupg/.public_key.asc
 
           # reload agent
           gpg-connect-agent reloadagent /bye
