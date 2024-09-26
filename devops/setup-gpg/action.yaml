@@ -40,6 +40,9 @@ runs:
           echo -e "  --no-secmem-warning \\" >> ~/.rpmmacros
           echo -e "  -u '%{_gpg_name}' -sbo %{__signature_filename} %{__plaintext_filename}" >> ~/.rpmmacros
 
+          # Configure Maven
+          echo -e "passphrase-file $HOME/pass" >> ~/.gnupg/gpg.conf
+
           # reload agent
           gpg-connect-agent reloadagent /bye
         shell: bash
