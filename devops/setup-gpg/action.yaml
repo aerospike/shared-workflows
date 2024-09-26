@@ -19,6 +19,7 @@ runs:
         run: |
           # Setup gpg
           mkdir -p ~/.gnupg
+          chmod 700 ~/.gnupg
           echo "$GPG_PRIVATE_KEY" | gpg --import --batch --yes
           echo "$GPG_KEY_PASS"
 
