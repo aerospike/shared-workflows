@@ -1,0 +1,22 @@
+name: GPG sign artifacts
+on: workflow_dispatch
+jobs:
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@master
+      
+      - name: setup GPG
+        uses: ./shared-workflows/devops/setup-gpg
+        with:
+          gpg-private-key: ${{ secrets.GPG_SECRET_KEY }}
+          gpg-public-key: ${{ secrets.GPG_PUBLIC_KEY }}
+          gpg-key-pass: ${{ secrets.GPG_PASS }}
+          gpg-key-name: "aerospike-inc"
+   
+      - name: Sign and check rpm # gpg sign and verify rpm packages 
+        # your rpm here
+        run: |
+          rpm --addsign tests/rpm/*.rpm
+          rpm --checksig tests/rpm/*.rpm
+
