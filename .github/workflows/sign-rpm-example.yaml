@@ -17,6 +17,6 @@ jobs:
       - name: Sign and check rpm # gpg sign and verify rpm packages 
         # your rpm here
         run: |
-          rpm --addsign tests/rpm/*.rpm
-          rpm --checksig tests/rpm/*.rpm
+          rpm --addsign tests/*.rpm
+          rpm --checksig tests/*.rpm
 
