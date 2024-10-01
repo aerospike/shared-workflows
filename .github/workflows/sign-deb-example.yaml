@@ -1,4 +1,4 @@
-name: GPG sign artifacts
+name: GPG sign DEB
 on: workflow_dispatch
 jobs:
   security:

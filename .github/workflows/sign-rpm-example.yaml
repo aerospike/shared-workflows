@@ -1,4 +1,4 @@
-name: GPG sign artifacts
+name: GPG sign RPM
 on: workflow_dispatch
 jobs:
   security:
