@@ -14,6 +14,14 @@ jobs:
           gpg-key-pass: ${{ secrets.GPG_PASS }}
           gpg-key-name: "aerospike-inc"
    
+      - name: Sign and check rpm # gpg sign and verify rpm packages 
+        env:
+          GPG_TTY: no-tty
+        # your rpm here
+        run: |
+          rpm --addsign tests/*.rpm
+          rpm --checksig tests/*.rpm
+
       - name: GPG sign deb # gpg sign and verify deb packages
         env:
           GPG_TTY: no-tty
