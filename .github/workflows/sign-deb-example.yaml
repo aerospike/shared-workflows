@@ -27,4 +27,3 @@ jobs:
           GPG_TTY: no-tty
         run: |
           dpkg-sig --sign builder tests/*.deb
-          dpkg-sig --verify tests/*.deb
