@@ -48,7 +48,7 @@ runs:
         shell: bash
       - name: install tools
         run: |
-          sudo apt-get update && sudo apt-get install ca-certificates gnupg dpkg-dev -y
+          sudo apt-get update && sudo apt-get install ca-certificates gnupg dpkg-dev dpkg-sig rpm -y
         shell: bash
       - name: Set up GPG
         env:
