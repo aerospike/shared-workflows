@@ -83,6 +83,7 @@ runs:
 
           # public key for verification
           echo -e "$GPG_PUBLIC_KEY" >> ~/.gnupg/.public_key.asc
+          rpm --import ~/.gnupg/.public_key.asc
 
           # reload agent
           gpg-connect-agent reloadagent /bye
