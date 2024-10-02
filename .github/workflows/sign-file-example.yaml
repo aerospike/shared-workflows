@@ -1,7 +1,7 @@
 name: GPG sign file
 on: workflow_dispatch
 jobs:
-  security:
+  sign-deb:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@master

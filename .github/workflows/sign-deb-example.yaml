@@ -1,7 +1,7 @@
 name: GPG sign DEB
 on: workflow_dispatch
 jobs:
-  security:
+  sign-deb:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@master
@@ -15,6 +15,8 @@ jobs:
           gpg-key-name: "aerospike-inc"
    
       - name: GPG sign deb # gpg sign and verify deb packages
+        env:
+          GPG_TTY: no-tty
         run: |
           dpkg-sig --sign builder tests/*.deb
           dpkg-sig --verify tests/*.deb

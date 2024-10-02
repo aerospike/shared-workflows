@@ -1,7 +1,7 @@
 name: GPG sign RPM
 on: workflow_dispatch
 jobs:
-  security:
+  sign-rpm:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@master
@@ -15,6 +15,8 @@ jobs:
           gpg-key-name: "aerospike-inc"
    
       - name: Sign and check rpm # gpg sign and verify rpm packages 
+        env:
+          GPG_TTY: no-tty
         # your rpm here
         run: |
           rpm --addsign tests/*.rpm
