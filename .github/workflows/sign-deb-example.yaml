@@ -17,7 +17,11 @@ jobs:
           gpg-public-key: ${{ secrets.GPG_PUBLIC_KEY }}
           gpg-key-pass: ${{ secrets.GPG_PASS }}
           gpg-key-name: "aerospike-inc"
-   
+
+# It is required to use ether rpm or gpg directly to cache the password.
+# This should be fixed in the future 
+# You can instead use the --passphrase-file flag if you want
+
       - name: Sign and check rpm # gpg sign and verify rpm packages 
         env:
           GPG_TTY: no-tty
