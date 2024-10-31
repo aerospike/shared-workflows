@@ -1,0 +1,167 @@
+name: Sign,  Build, and Bundle
+
+on:
+  workflow_dispatch:
+    inputs:
+      repository_owner:
+        description: 'Owner of the repository to download the release from'
+        required: true
+        default: 'citrusleaf'
+      repository_name:
+        description: 'Name of the repository to download the release from'
+        required: true
+        default: 'aerospike-vector-search'
+      release_tag:
+        description: 'Release tag to download (e.g., 2.1.0)'
+        required: true
+        default: 'aerospike-vector-search-0.11.1'
+      build_version:
+        description: 'Build version to use for the release'
+        required: true
+        default: '0.11.1'
+
+jobs:
+  download_sign_deploy_bundle:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout current repository
+        uses: actions/checkout@v3
+        
+      - name: setup GPG
+        uses: aerospike/shared-workflows/devops/setup-gpg@main
+        with:
+          gpg-private-key: ${{ secrets.GPG_SECRET_KEY }}
+          gpg-public-key: ${{ secrets.GPG_PUBLIC_KEY }}
+          gpg-key-pass: ${{ secrets.GPG_PASS }}
+          gpg-key-name: "aerospike-inc"
+          
+      - name: setup jfrog
+        uses: jfrog/setup-jfrog-cli@v4
+        env:
+          JF_URL: https://aerospike.jfrog.io
+          JF_ACCESS_TOKEN: ${{ secrets.JF_ACCESS_TOKEN }}
+          JF_PROJECT: "ecosystem"
+
+      - name: Get release info
+        id: get_release_info
+        run: |
+          release_info=$(curl -H "Authorization: token ${{ secrets.PACKAGE_PAT }}" -s https://api.github.com/repos/${{ github.event.inputs.repository_owner }}/${{ github.event.inputs.repository_name }}/releases)
+          echo "$release_info" | jq 
+          selected_release=$(echo "$release_info" | jq --arg tag "${{ github.event.inputs.release_tag }}" '.[] | select(.tag_name == $tag)')
+          echo "$selected_release" | jq -r '.assets[] | "\(.id) \(.name)"' > asset_ids_and_names.txt
+          jq -n --argjson release "$selected_release" '{"release_name": $release.name, "release_tag": $release.tag_name, "release_body": $release.body}' > release_info.json
+          echo "::set-output name=release_notes::$(echo "$selected_release" | jq -r '.body' | sed 's/\r//g')"
+
+      - name: Download and categorize release assets
+        run: |
+          mkdir -p ./downloaded_release/{debs,rpms,jars,zips,others}
+          while read asset_id asset_name; do
+            case "$asset_name" in
+              *.deb) dest_folder="debs" ;;
+              *.rpm) dest_folder="rpms" ;;
+              *.jar) dest_folder="jars" ;;
+              *.zip) dest_folder="zips" ;;
+              *) dest_folder="others" ;;
+            esac
+            echo "Downloading $asset_name to ./downloaded_release/$dest_folder/$asset_name"
+            curl -H "Authorization: token ${{ secrets.PACKAGE_PAT }}" \
+                 -H "Accept: application/octet-stream" \
+                 -L "https://api.github.com/repos/${{ github.event.inputs.repository_owner }}/${{ github.event.inputs.repository_name }}/releases/assets/$asset_id" \
+                 -o ./downloaded_release/$dest_folder/$asset_name
+          done < asset_ids_and_names.txt
+
+      - name: "Sign rpms"
+        env:
+          GPG_TTY: no-tty
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASS }}
+        run: |
+          for rpm in ./downloaded_release/rpms/*.rpm; do
+            echo "Signing $rpm"
+            gpg --batch --no-tty --yes --detach-sign --armor --passphrase "$GPG_PASSPHRASE" --local-user aerospike-inc --output $rpm.asc $rpm
+            rpm --addsign $rpm
+            rpm --checksig $rpm
+            shasum -a 256 $rpm > $rpm.sha256
+            cat $rpm.asc
+            cat $rpm.sha256
+          done
+          find .
+      - name: "Sign debs"
+        env:
+          GPG_TTY: no-tty
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASS }}
+        run: |
+          for deb in ./downloaded_release/debs/*.deb; do
+            echo "Signing $deb"
+            dpkg-sig --sign builder $deb
+    
+            dpkg-sig --verify $deb
+            gpg --batch --yes --detach-sign --armor --passphrase "$GPG_PASSPHRASE" --local-user aerospike-inc --output $deb.asc $deb
+            shasum -a 256 $deb > $deb.sha256
+            cat $deb.asc 
+            cat $deb.sha256
+
+          done
+          find .
+      - name: "Deploy debs to JFrog"
+        run: |
+            cd ./downloaded_release/debs
+            for file in *; do
+              if [[ "$file" == *.deb ]]; then
+                  arch=$(dpkg --info "$file" | grep 'Architecture' | awk '{print $2}')
+                  jf rt upload "$file" "ecosystem-deb-dev-local/${{ github.event.inputs.repository_name }}/${{ github.event.inputs.build_version }}/" \
+                    --build-name="${{ github.event.inputs.repository_name }}-deb" --build-number="${{ github.event.inputs.build_version }}" --project="ecosystem" \
+                    --target-props "deb.distribution=stable;deb.component=main;deb.architecture=$arch" --deb "stable/main/$arch"
+              else
+                  jf rt upload "$file" "ecosystem-deb-dev-local/${{ github.event.inputs.repository_name }}/${{ github.event.inputs.build_version }}/" \
+                    --build-name="${{ github.event.inputs.repository_name }}-deb" --build-number="${{ github.event.inputs.build_version }}" --project="ecosystem"
+              fi
+            done
+            jfrog rt build-collect-env "${{ github.event.inputs.repository_name }}-deb" "${{ github.event.inputs.build_version }}"
+            jfrog rt build-add-git "${{ github.event.inputs.repository_name }}-deb" "${{ github.event.inputs.build_version }}"
+            jfrog rt build-add-dependencies "${{ github.event.inputs.repository_name }}-deb" "${{ github.event.inputs.build_version }}" .
+            jfrog rt build-publish "${{ github.event.inputs.repository_name }}-deb" "${{ github.event.inputs.build_version }}" --project="ecosystem"
+        
+      - name: "Deploy rpms to JFrog"
+        run: |
+            cd ./downloaded_release/rpms
+            for file in *; do
+                if [[ "$file" == *.rpm ]]; then
+                    arch=$(rpm -q --qf "%{ARCH}" -p "$file")
+                    jf rt upload "$file" "ecosystem-rpm-dev-local/${{ github.event.inputs.repository_name }}/${{ github.event.inputs.build_version }}/" \
+                    --build-name="${{ github.event.inputs.repository_name }}-rpm" --build-number="${{ github.event.inputs.build_version }}" --project="ecosystem" \
+                    --target-props "rpm.distribution=stable;rpm.component=main;rpm.architecture=$arch"
+                else
+                    jf rt upload "$file" "ecosystem-rpm-dev-local/${{ github.event.inputs.repository_name }}/${{ github.event.inputs.build_version }}/" \
+                    --build-name="${{ github.event.inputs.repository_name }}-rpm" --build-number="${{ github.event.inputs.build_version }}" --project="ecosystem"
+                fi
+            done
+            jfrog rt build-collect-env "${{ github.event.inputs.repository_name }}-rpm" "${{ github.event.inputs.build_version }}"
+            jfrog rt build-add-git "${{ github.event.inputs.repository_name }}-rpm" "${{ github.event.inputs.build_version }}"
+            jfrog rt build-add-dependencies "${{ github.event.inputs.repository_name }}-rpm" "${{ github.event.inputs.build_version }}" .
+            jfrog rt build-publish "${{ github.event.inputs.repository_name }}-rpm" "${{ github.event.inputs.build_version }}" --project="ecosystem"
+                  
+      - name: Create release bundle
+      
+        run: |
+          sanitized_release_notes=$(echo "${{ steps.get_release_info.outputs.release_notes }}" | jq -Rsa '.')
+            echo '{
+              
+              "name": "${{ github.event.inputs.repository_name }}-release-bundle",
+              "version": "${{ github.event.inputs.build_version }}",
+              "description": "Release for build version ${{ github.event.inputs.build_version }}",
+              "release_notes": "$sanitized_release_notes",
+              "files": [
+                {
+                  "project": "ecosystem",
+                  "build": "${{ github.event.inputs.repository_name }}-deb/${{ github.event.inputs.build_version }}"
+                },
+                {
+                  "project": "ecosystem",
+                  "build": "${{ github.event.inputs.repository_name }}-rpm/${{ github.event.inputs.build_version }}"
+                }
+              ]
+            }' > release-bundle-spec.json
+            cat release-bundle-spec.json
+            jf release-bundle-create "${{ github.event.inputs.repository_name }}" "${{ github.event.inputs.build_version }}" \
+              --spec release-bundle-spec.json --project="ecosystem" --signing-key="aerospike"
+        
