@@ -1,0 +1,188 @@
+name: Build, sign, checksum artifacts
+on:
+  workflow_dispatch:
+    
+jobs:
+  build:
+    outputs: # Update accordingly to your package types
+      version: ${{ steps.artifacts-list.outputs.version }}
+      rpm-version: ${{ steps.artifacts-list.outputs.rpm-version }}
+      artifacts: ${{ steps.artifacts-list.outputs.artifacts }}
+      rpm-artifacts: ${{ steps.artifacts-list.outputs.rpm-artifacts }}
+      deb-artifacts: ${{ steps.artifacts-list.outputs.deb-artifacts }}
+      zip-artifacts: ${{ steps.artifacts-list.outputs.zip-artifacts }}
+      pkg-artifacts: ${{ steps.artifacts-list.outputs.pkg-artifacts }}
+      sha-artifacts: ${{ steps.artifacts-list.outputs.sha-artifacts }}
+      asc-artifacts: ${{ steps.artifacts-list.outputs.asc-artifacts }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@master
+
+      - name: Build rpm & deb  # update this accrodingly to your *.rpm & *.deb generating steps
+        run: |
+          mkdir -p artifacts
+          cp packages/*.rpm packages/*.deb artifacts/
+
+      - name: Build pkg  # update this accrodingly to your *.pkg generating steps
+        run: |
+          cp packages/*.pkg artifacts/
+
+      - name: Build zip  # update this accrodingly to your *.zip generating steps
+        run: |
+          cp packages/*.zip artifacts/
+        
+      - name: Upload Artifacts  # upload artifacts so that they can be downloaded later to sign
+        uses: actions/upload-artifact@v4
+        with:
+          name: demo-artifacts  # artifact name
+          path: ~/work/my-repo/my-repo/artifacts/*  # path to artifacts: ~/work/<repo-name>/<repo-name>/.../<artifacts>
+       
+      - name: Artifacts listing
+        id: artifacts-list
+        run: |
+          VER=$(cat VERSION.md)
+          echo version=${VER} >> $GITHUB_OUTPUT
+          
+          # Sometime, the rpm version need to be changed
+          RPM_VER=$(echo ${VER} | sed 's/-/_/g')
+          echo rpm-verion=${RPM_VER} >> $GITHUB_OUTPUT
+          
+          # Update as needed to artifacts that relevant to your product 
+          ARTIFACTS="productName-linux-all-${VER}.deb productName-linux-noarch-${VER}.rpm productName-linux-amd64-${VER}.zip productName-linux-arm64-${VER}.zip productName-macos-${VER}.pkg productName-macos-amd64-${VER}.zip productName-macos-arm64-${VER}.zip productName-windows-amd64-${VER}.zip productName-windows-arm64-${VER}.zip"
+                echo "artifacts=${ARTIFACTS}" >> $GITHUB_OUTPUT
+                RPM_ARTIFACTS=$(echo "${ARTIFACTS}" | tr ' ' '\n' | grep '\.rpm$' | tr '\n' ' ')
+                echo "rpm-artifacts=${RPM_ARTIFACTS}" >> $GITHUB_OUTPUT
+
+                DEB_ARTIFACTS=$(echo "${ARTIFACTS}" | tr ' ' '\n' | grep '\.deb$' | tr '\n' ' ')
+                echo "deb-artifacts=${DEB_ARTIFACTS}" >> $GITHUB_OUTPUT
+
+                ZIP_ARTIFACTS=$(echo "${ARTIFACTS}" | tr ' ' '\n' | grep '\.zip$' | tr '\n' ' ')
+                echo "zip-artifacts=${ZIP_ARTIFACTS}" >> $GITHUB_OUTPUT
+
+                PKG_ARTIFACTS=$(echo "${ARTIFACTS}" | tr ' ' '\n' | grep '\.pkg$' | tr '\n' ' ')
+                echo "pkg-artifacts=${PKG_ARTIFACTS}" >> $GITHUB_OUTPUT
+
+                SHA256_FILES=$(for pkg in ${ARTIFACTS}; do echo "${pkg}.sha256"; done | tr '\n' ' ')
+                echo "sha-artifacts=${SHA256_FILES}" >> $GITHUB_OUTPUT
+
+                ASC_FILES=$(for pkg in ${ARTIFACTS} ${SHA256_FILES}; do
+                  if [[ ! "${pkg}" =~ \.rpm$ && ! "${pkg}" =~ \.deb$ ]]; then
+                  echo "${pkg}.asc"
+                  fi
+                done | tr '\n' ' ')
+                echo "asc-artifacts=${ASC_FILES}" >> $GITHUB_OUTPUT
+
+  sign:
+    needs: build
+    runs-on: ubuntu-latest
+    env:
+      KEY_ID: 'aerospike-inc'   # use "Aerospike" for original key, "aerospike-inc" for new key
+
+    steps:
+      - name: "Git checkout"
+        uses: actions/checkout@master
+        with:
+          fetch-depth: 0
+
+      - name: "Download Artifacts" # download built, unsigned artifacts to sign
+        uses: actions/download-artifact@v4
+        with:
+          name: demo-artifacts  # your artifact name
+
+      - name: Set env # key id to use for signing
+        run: |
+          if [[ $KEY_ID == 'Aerospike' ]]; then
+            echo "EXT=_ORG" >> $GITHUB_ENV
+          elif [[ $KEY_ID == 'aerospike-inc' ]]; then
+            echo "EXT=" >> $GITHUB_ENV
+          else
+            echo -e "Invalid key name"
+            exit 1
+          fi
+          echo "KEY_ID=$KEY_ID" >> $GITHUB_ENV
+          
+      - name: "Set dynamic key info" 
+        run: |    
+          echo "PRIVATE_KEY=GPG_SECRET_KEY${{ env.EXT }}" >> $GITHUB_ENV
+          echo "PUBLIC_KEY=GPG_PUBLIC_KEY${{ env.EXT }}" >> $GITHUB_ENV
+          echo "PASS_KEY=GPG_PASS${{ env.EXT }}" >> $GITHUB_ENV
+          
+      - name: setup GPG
+        uses: aerospike/shared-workflows/devops/setup-gpg@main   # update to the official action as needed
+        with:
+          gpg-private-key: ${{ secrets[env.PRIVATE_KEY] }}
+          gpg-public-key: ${{ secrets[env.PUBLIC_KEY] }}
+          gpg-key-pass: ${{ secrets[env.PASS_KEY] }}
+          gpg-key-name: ${{ env.KEY_ID }}
+
+      - name: List keys
+        run: gpg -K
+
+      - name: GPG Sign All Files
+        env:
+          GPG_TTY: no-tty
+          GPG_PASSPHRASE: ${{ secrets[env.PASS_KEY] }}
+        run: |
+          # GPG sign rpm packages 
+          for file in ${{needs.build.outputs.rpm-artifacts}}; do
+            rpm --addsign "${file}" > /dev/null 2>&1
+            OUTPUT=$(rpm --checksig "${file}")
+            if [[ "$OUTPUT" =~ 'digests signatures OK' ]]; then
+              echo "Successfully GPG Signing $file"
+            else
+              echo "$OUTPUT"
+              echo "GPG Signing $file has failed."
+              exit 1
+            fi
+          done
+          # GPG sign deb packages
+          for file in ${{needs.build.outputs.deb-artifacts}}; do
+            dpkg-sig --sign builder "${file}" > /dev/null 2>&1
+            OUTPUT=$(dpkg-sig --verify "${file}")
+            if [[ "$OUTPUT" =~ 'GOODSIG _gpgbuilder' ]]; then
+              echo "Successfully GPG Signing $file"
+            else
+              echo "$OUTPUT"
+              echo "GPG Signing $file has failed."
+             exit 1
+            fi
+          done          
+          # GPG sign other packages
+          for file in ${{needs.build.outputs.zip-artifacts}} ${{needs.build.outputs.pkg-artifacts}}; do
+            gpg --detach-sign --no-tty --batch --yes --output "${file}.asc" --passphrase "$GPG_PASSPHRASE" "${file}"
+            gpg --verify "${file}.asc" "${file}" &>/dev/null
+            RETURN_CODE=$?
+            if [ ! "$RETURN_CODE" = 0 ]; then
+              echo "GPG Signing $file has failed."
+              exit 1
+            else
+              echo "Successfully GPG Signing $file"
+            fi
+          done
+
+      - name: Create Checksums
+        run: |
+          # checksum 256 all packages
+          for pkg in ${{needs.build.outputs.artifacts}}; do
+            shasum -a 256 $pkg > ${pkg}.sha256
+          done
+          # GPG sign checksum files if required
+          for file in ${{needs.build.outputs.sha-artifacts}}; do
+            gpg --detach-sign --no-tty --batch --yes --output "${file}.asc" --passphrase "$GPG_PASSPHRASE" "${file}"
+            gpg --verify "${file}.asc" "${file}" &>/dev/null
+            RETURN_CODE=$?
+            if [ ! "$RETURN_CODE" = 0 ]; then
+              echo "GPG Signing $file has failed."
+              exit 1
+            else
+              echo "Successfully GPG Signing $file"
+            fi
+          done
+          
+      - name: "Upload Artifacts"
+        uses: actions/upload-artifact@v4
+        with:
+          name: demo-artifacts
+          path: productName-*
+          overwrite: true
+    
