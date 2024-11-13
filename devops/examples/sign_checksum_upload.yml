@@ -18,16 +18,16 @@ jobs:
     steps:
       - uses: actions/checkout@master
 
-      - name: Build rpm & deb  # update this accrodingly to your *.rpm & *.deb generating steps
+      - name: Build rpm & deb  # update this accroding to your *.rpm & *.deb generating steps
         run: |
           mkdir -p artifacts
           cp packages/*.rpm packages/*.deb artifacts/
 
-      - name: Build pkg  # update this accrodingly to your *.pkg generating steps
+      - name: Build pkg  # update this accroding to your *.pkg generating steps
         run: |
           cp packages/*.pkg artifacts/
 
-      - name: Build zip  # update this accrodingly to your *.zip generating steps
+      - name: Build zip  # update this accroding to your *.zip generating steps
         run: |
           cp packages/*.zip artifacts/
         
@@ -47,7 +47,7 @@ jobs:
           RPM_VER=$(echo ${VER} | sed 's/-/_/g')
           echo rpm-verion=${RPM_VER} >> $GITHUB_OUTPUT
           
-          # Update as needed to artifacts that relevant to your product 
+          # Update as needed for artifacts that are relevant to your product 
           ARTIFACTS="productName-linux-all-${VER}.deb productName-linux-noarch-${VER}.rpm productName-linux-amd64-${VER}.zip productName-linux-arm64-${VER}.zip productName-macos-${VER}.pkg productName-macos-amd64-${VER}.zip productName-macos-arm64-${VER}.zip productName-windows-amd64-${VER}.zip productName-windows-arm64-${VER}.zip"
                 echo "artifacts=${ARTIFACTS}" >> $GITHUB_OUTPUT
                 RPM_ARTIFACTS=$(echo "${ARTIFACTS}" | tr ' ' '\n' | grep '\.rpm$' | tr '\n' ' ')
@@ -76,7 +76,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     env:
-      KEY_ID: 'aerospike-inc'   # use "Aerospike" for original key, "aerospike-inc" for new key
+      KEY_ID: 'aerospike-inc'   # use "Aerospike" for the original key, "aerospike-inc" for the new key
 
     steps:
       - name: "Git checkout"
@@ -128,7 +128,7 @@ jobs:
             rpm --addsign "${file}" > /dev/null 2>&1
             OUTPUT=$(rpm --checksig "${file}")
             if [[ "$OUTPUT" =~ 'digests signatures OK' ]]; then
-              echo "Successfully GPG Signing $file"
+              echo "Successfully GPG Signed $file"
             else
               echo "$OUTPUT"
               echo "GPG Signing $file has failed."
@@ -140,7 +140,7 @@ jobs:
             dpkg-sig --sign builder "${file}" > /dev/null 2>&1
             OUTPUT=$(dpkg-sig --verify "${file}")
             if [[ "$OUTPUT" =~ 'GOODSIG _gpgbuilder' ]]; then
-              echo "Successfully GPG Signing $file"
+              echo "Successfully GPG Signed $file"
             else
               echo "$OUTPUT"
               echo "GPG Signing $file has failed."
@@ -156,7 +156,7 @@ jobs:
               echo "GPG Signing $file has failed."
               exit 1
             else
-              echo "Successfully GPG Signing $file"
+              echo "Successfully GPG Signed $file"
             fi
           done
 
@@ -166,16 +166,16 @@ jobs:
           for pkg in ${{needs.build.outputs.artifacts}}; do
             shasum -a 256 $pkg > ${pkg}.sha256
           done
-          # GPG sign checksum files if required
+          # GPG sign checksum files, if required
           for file in ${{needs.build.outputs.sha-artifacts}}; do
             gpg --detach-sign --no-tty --batch --yes --output "${file}.asc" --passphrase "$GPG_PASSPHRASE" "${file}"
             gpg --verify "${file}.asc" "${file}" &>/dev/null
             RETURN_CODE=$?
             if [ ! "$RETURN_CODE" = 0 ]; then
-              echo "GPG Signing $file has failed."
+              echo "GPG Signing of $file has failed."
               exit 1
             else
-              echo "Successfully GPG Signing $file"
+              echo "Successfully GPG Signed $file"
             fi
           done
           
