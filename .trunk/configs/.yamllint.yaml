@@ -1,0 +1,21 @@
+rules:
+  comments:
+    ignore-shebangs: true
+    require-starting-space: true
+  document-end:
+    present: false
+  document-start:
+    present: false
+  key-duplicates: {}
+  new-line-at-end-of-file:
+    present: true
+  octal-values:
+    forbid-implicit-octal: true
+  quoted-strings:
+    required: only-when-needed
+    extra-allowed: [ ^http://, ^https://, ^ftp://, "{|}" ]
+    extra-required: [ QUOTED ]
+  trailing-spaces: enable
+  truthy:
+    allowed-values: [ 'true', 'false', 'True', 'False' ]
+    check-keys: true

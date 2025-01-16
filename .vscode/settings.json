@@ -1,0 +1,11 @@
+{
+  "yaml.schemas": {
+    "https://json.schemastore.org/github-action.json": "file:///Users/skilgore/Developer/repos/aerospike/shared-workflows/.github/actions/setup-gpg/action.yaml",
+    "https://json.schemastore.org/github-workflow.json": "file:///Users/skilgore/Developer/repos/aerospike/shared-workflows/.github/actions/trunk-ci.yaml"
+  },
+  "cSpell.words": [
+    "aerospike",
+    "debsign",
+    "rpmsign"
+  ]
+}
