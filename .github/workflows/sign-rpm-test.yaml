@@ -26,4 +26,3 @@ jobs:
         run: |
           rpm --addsign tests/*.rpm
           rpm --checksig tests/*.rpm
-
