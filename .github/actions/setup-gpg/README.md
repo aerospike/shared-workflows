@@ -3,6 +3,7 @@
 This composite action will setup your github action to use a supplied gpg key.
 
 ## Supported Platforms
+
 - GPG
 - rpmsign/rpm
 - debsign
@@ -28,7 +29,8 @@ jobs:
           gpg-key-name: "Aerospike"
 ```
 
-### Example RPM and GPG useage
+### Example RPM and GPG usage
+
 ```yaml
 name: GPG sign rpm
 on: workflow_dispatch
