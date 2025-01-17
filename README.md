@@ -58,14 +58,18 @@ uses: aerospike/shared-workflows/workflows/workflow-1@v1.0.0
 
 While we welcome contributions from the community, that isn't the intended use case for this repository. We'll try our best but may not respond to your issue or PR. We may close an issue or PR without much feedback.
 
-## Editor Tooling
+## Repo Tooling
 
 Linting will be run on PRs; you can save yourself some time and annoyance by linting as you write.
 
-If you use Visual Studio Code or a derivative, there are suggested extensions in the [.vscode](.vscode) directory. You're highly encouraged to use these extensions or similar tools in your editor of choice. Trunk in particular can be run without IDE integration before committing: `trunk fmt` will match what CI expects.
+If you use Visual Studio Code or a derivative, there are suggested extensions in the [.vscode](.vscode) directory. You're highly encouraged to use these extensions or similar tools in your editor of choice.
+
+### Trunk
+
+Trunk can also be run as a CLI. Once installed, you can run `trunk git-hooks sync` to check and make sure that your code will pass CI.
 
 ### Linter notes
 
 `kennylong.kubernetes-yaml-formatter`: Prettier and this yaml formatter disagree on some rules. If you have yaml format-on-save enabled with kennylong's extension, `trunk check|fmt` will complain about it.
 
-`streetsidesoftware.code-spell-checker`: This isn't enabled via trunk and you should run it in your editor of choice. Trunk marks all mispelled words as errors, when they should properly be be notes (blue squiggles, not red squiggles).
+`streetsidesoftware.code-spell-checker`: This isn't enabled via trunk and you should run it in your editor of choice. Trunk marks all misspelled words as errors, when they should properly be be notes (blue squiggles, not red squiggles).
