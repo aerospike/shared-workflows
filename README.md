@@ -40,7 +40,29 @@ shared-workflows/
 
 GitHub Actions and Workflows in the same repository necessarily share a version. We will use semantic versioning (SemVer) to manage changes. Each release will be tagged in the repository.
 
-We suggest that you not pin these actions/workflows to a specific sha in your repo and instead use the semver tag; this way you can use dependabot to keep your workflows up to date.
+### Consumer Versioning
+
+We suggest that you pin these actions/workflows to a specific sha with a comment of the semver tag. This way you can use dependabot to keep your workflows up to date. See [dependabot.yml](.github/dependabot.yml) for an example of this.
+
+```yaml
+# GOOD
+uses: aerospike/shared-workflows/actions/setup-gpg@ed780e9928d56ef074532dbc6877166d5460587a # v0.1.0
+# pro: reproducible builds, allows you to specify a known version of the action
+# pro: dependabot can auto-PR updates to your repo, will also update version comment
+# pro: official GitHub security hardening best practice
+
+# BAD
+uses: aerospike/shared-workflows/actions/setup-gpg@v0.1.0
+# pro: dependabot can auto-PR updates to your repo
+# con: tags are not immutable. 'semver' hint not usable with semver niceties (pessimistic versioning, etc)
+
+# BAD
+uses: aerospike/shared-workflows/actions/setup-gpg@main
+# con: unsupported versioning usage: if this breaks for you, you will be told you should've pinned to a sha
+# con: Requires that main is always backwards compatible and never breaks anything ever (not possible)
+# con: Requires extreme coordination with every consumer when updates are necessary (not going to do)
+# pro: no updates ever needed in your repo!
+```
 
 ### Major/Breaking Changes
 
@@ -51,7 +73,7 @@ If you need to introduce a major/breaking change in a specific action or workflo
 To use a workflow or action from this repository, reference it in your GitHub repository's workflow file. For example:
 
 ```yaml
-uses: aerospike/shared-workflows/workflows/workflow-1@v1.0.0
+uses: aerospike/shared-workflows/workflows/workflow-1@ed780e9928d56ef074532dbc6877166d5460587a # v0.1.0
 ```
 
 ## Contributing
