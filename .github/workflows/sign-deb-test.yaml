@@ -7,9 +7,14 @@ on:
 permissions: read-all
 jobs:
   sign-deb:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os:
+          - ubuntu-22.04
+          - ubuntu-24.04
     steps:
-      - uses: actions/checkout@master
+      - uses: actions/checkout@v4
 
       - name: setup GPG
         uses: ./.github/actions/setup-gpg/
@@ -19,21 +24,17 @@ jobs:
           gpg-key-pass: ${{ secrets.GPG_PASS }}
           gpg-key-name: aerospike-inc
 
+      - name: Install deb-sigs
+        run: |
+          sudo apt-get update -y && sudo apt-get install deb-sigs -y
+
       # It is required to use ether rpm or gpg directly to cache the password.
       # This should be fixed in the future
       # You can instead use the --passphrase-file flag if you want
-
-      - name: Sign and check rpm # gpg sign and verify rpm packages
-        env:
-          GPG_TTY: no-tty
-        # your rpm here
-        run: |
-          rpm --addsign tests/*.rpm
-          rpm --checksig tests/*.rpm
 
       - name: GPG sign deb # gpg sign and verify deb packages
         env:
           GPG_TTY: no-tty
         run: |
-          dpkg-sig --sign builder tests/*.deb
-          dpkg-sig --verify tests/*.deb
+          deb-sigs --sign builder tests/*.deb
+          deb-sigs --verify tests/*.deb
