@@ -6,10 +6,12 @@ on:
       - main
 jobs:
   sign-deb:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@master
-      
+      - name: install dpkg-sig
+        run: |
+          sudo apt-get install dpkg-sig dpkg-dev
       - name: setup GPG
         uses: ./devops/setup-gpg
         with:
