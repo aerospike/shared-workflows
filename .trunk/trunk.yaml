@@ -30,6 +30,7 @@ actions:
     - trunk-check-pre-push
     - trunk-share-with-everyone
   enabled:
+    - commitlint
     - trunk-check-pre-commit
     - trunk-upgrade-available
     - trunk-fmt-pre-commit
