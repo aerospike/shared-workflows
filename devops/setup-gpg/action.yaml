@@ -19,7 +19,7 @@ runs:
   using: "composite"
   steps:
       - name: "check if private key is not empty"
-        env: 
+        env:
             PRIVATE_KEY: ${{ inputs.gpg-private-key }}
         if: ${{ env.PRIVATE_KEY == '' }}
         run: |
@@ -27,7 +27,7 @@ runs:
           exit 1
         shell: bash
       - name: "check if key name is not empty"
-        env: 
+        env:
             KEY_NAME: ${{ inputs.gpg-key-name }}
         if: ${{ env.KEY_NAME == '' }}
         run: |
@@ -35,7 +35,7 @@ runs:
           exit 1
         shell: bash
       - name: "check if key pass is not empty"
-        env: 
+        env:
             KEY_PASS: ${{ inputs.gpg-key-pass }}
         if: ${{ env.KEY_PASS == '' }}
         run: |
@@ -43,7 +43,7 @@ runs:
           exit 1
         shell: bash
       - name: "check if public key pass is empty"
-        env: 
+        env:
             PUBLIC_KEY: ${{ inputs.gpg-public-key }}
         if: ${{ env.PUBLIC_KEY == '' }}
         run: |
