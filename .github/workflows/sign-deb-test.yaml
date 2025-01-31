@@ -24,9 +24,9 @@ jobs:
           gpg-key-pass: ${{ secrets.GPG_PASS }}
           gpg-key-name: aerospike-inc
 
-      - name: Install deb-sigs
+      - name: Install debsigs
         run: |
-          sudo apt-get update -y && sudo apt-get install deb-sigs -y
+          sudo apt-get update -y && sudo apt-get install debsigs -y
 
       # It is required to use ether rpm or gpg directly to cache the password.
       # This should be fixed in the future
@@ -36,5 +36,5 @@ jobs:
         env:
           GPG_TTY: no-tty
         run: |
-          deb-sigs --sign builder tests/*.deb
-          deb-sigs --verify tests/*.deb
+          debsigs --sign builder tests/*.deb
+          debsigs --verify tests/*.deb
