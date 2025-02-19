@@ -38,5 +38,5 @@ jobs:
         env:
           GPG_TTY: no-tty
         run: |
-          dpkg-sig --sign builder tests/*.deb
-          dpkg-sig --verify tests/*.deb
+          dpkg-sig -g 'no-tty' --sign builder tests/*.deb
+          dpkg-sig -g 'no-tty' --verify tests/*.deb
