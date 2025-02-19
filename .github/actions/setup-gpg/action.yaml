@@ -20,6 +20,13 @@ inputs:
 runs:
   using: composite
   steps:
+    - name: Check Ubuntu version
+      run: |
+        if [[ "$(cat /etc/os-release | grep VERSION_ID)" != *"22.04"* ]]; then
+          echo "This action only supports Ubuntu 22.04"
+          exit 1
+        fi
+      shell: bash
     - name: check if private key is not empty
       env:
         PRIVATE_KEY: ${{ inputs.gpg-private-key }}

@@ -12,10 +12,20 @@ jobs:
       matrix:
         os:
           - ubuntu-22.04
-          - ubuntu-24.04
+          #- ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-
+      - name: Check Ubuntu version
+        # This action only supports Ubuntu 22.04. 24.04 has removed dpkg-sig
+        run: |
+          if [[ "$(cat /etc/lsb-release | grep DISTRIB_RELEASE)" != *"22.04"* ]]; then
+            echo "This action only supports Ubuntu 22.04 due to the removal of dpkg-sig in 24.04"
+            exit 1
+          fi
+        shell: bash
+      - name: install dpkg-sig
+        run: |
+          sudo apt-get update && sudo apt-get install dpkg-sig dpkg-dev -y
       - name: setup GPG
         uses: ./.github/actions/setup-gpg/
         with:
@@ -24,17 +34,10 @@ jobs:
           gpg-key-pass: ${{ secrets.GPG_PASS }}
           gpg-key-name: aerospike-inc
 
-      - name: Install debsigs
-        run: |
-          sudo apt-get update -y && sudo apt-get install debsigs -y
-
-      # It is required to use ether rpm or gpg directly to cache the password.
-      # This should be fixed in the future
-      # You can instead use the --passphrase-file flag if you want
-
       - name: GPG sign deb # gpg sign and verify deb packages
         env:
           GPG_TTY: no-tty
         run: |
-          debsigs --sign builder tests/*.deb
-          debsigs --verify tests/*.deb
+          exit 1
+          dpkg-sig --sign builder tests/*.deb
+          dpkg-sig --verify tests/*.deb
