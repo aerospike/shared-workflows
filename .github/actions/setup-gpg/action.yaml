@@ -3,11 +3,9 @@ description: Configures this action to run gpg with a given key and pass
 inputs:
   gpg-private-key:
     description: GPG private key exported as an ASCII armored version or its base64 encoding
-    # id of input
     required: true
   gpg-key-pass:
     description: GPG key pass
-    # id of input
     required: true
   gpg-public-key:
     description: GPG public key exported as an ASCII armored version or its base64 encoding
@@ -16,48 +14,59 @@ runs:
   using: composite
   steps:
     - name: Check Ubuntu version
+      shell: bash
       run: |
         if [[ "$(cat /etc/os-release | grep VERSION_ID)" != *"22.04"* ]]; then
           echo "This action only supports Ubuntu 22.04"
           exit 1
         fi
-      shell: bash
+
     - name: check if private key is not empty
+      shell: bash
       env:
         PRIVATE_KEY: ${{ inputs.gpg-private-key }}
       if: ${{ env.PRIVATE_KEY == '' }}
       run: |
         echo "the gpg-private-key was empty"
         exit 1
-      shell: bash
+
     - name: check if key pass is not empty
+      shell: bash
       env:
         KEY_PASS: ${{ inputs.gpg-key-pass }}
       if: ${{ env.KEY_PASS == '' }}
       run: |
         echo "the secret gpg-key-pass was empty"
         exit 1
-      shell: bash
+
     - name: check if public key pass is empty
+      shell: bash
       env:
         PUBLIC_KEY: ${{ inputs.gpg-public-key }}
       if: ${{ env.PUBLIC_KEY == '' }}
       run: |
         echo "the secret gpg-public-pass was empty"
         exit 1
-      shell: bash
+
     - name: install tools
+      shell: bash
       run: |
         sudo apt-get update && sudo apt-get install ca-certificates gnupg rpm pinentry-tty -y
-      shell: bash
+
     - name: Set up GPG
+      shell: bash
       env:
         GPG_PRIVATE_KEY: ${{ inputs.gpg-private-key }}
         GPG_KEY_PASS: ${{ inputs.gpg-key-pass }}
         GPG_PUBLIC_KEY: ${{ inputs.gpg-public-key }}
+        HOME: /home/runner
+        GNUPGHOME: /home/runner/.gnupg
       run: |
+        # Ensure environment variables are exported
+        export HOME="${HOME}"
+        export GNUPGHOME="${GNUPGHOME}"
+
         # Setup gpg with consistent path
-        export GNUPGHOME="/root/.gnupg"
         mkdir -p "$GNUPGHOME"
         chmod 700 "$GNUPGHOME"
 
@@ -86,23 +95,33 @@ runs:
         echo "$GPG_KEY_PASS" > "$GNUPGHOME/passphrase"
         chmod 600 "$GNUPGHOME/passphrase"
 
-        # Set permissions
-        chmod 600 "$GNUPGHOME"/*
+        # Set permissions on specific files we know exist
+        for file in "$GNUPGHOME/gpg.conf" "$GNUPGHOME/gpg-agent.conf" "$GNUPGHOME/passphrase"; do
+          if [ -f "$file" ]; then
+            chmod 600 "$file"
+          fi
+        done
+
+        # Create symlink for gpg2 (required for rpm signing)
+        sudo ln -sf $(which gpg) /usr/bin/gpg2
 
         # Configure rpm macros line by line
-        echo "%_signature gpg" > ~/.rpmmacros
-        echo "%_gpg_path $GNUPGHOME" >> ~/.rpmmacros
-        echo "%_gpg_name \"$KEY_FP\"" >> ~/.rpmmacros
-        echo "%_gpgbin /usr/bin/gpg2" >> ~/.rpmmacros
-        echo "%__gpg /usr/bin/gpg2" >> ~/.rpmmacros
-        echo "%__gpg_sign_cmd %{__gpg} --batch --pinentry-mode loopback --passphrase-file $GNUPGHOME/passphrase --no-armor --no-secmem-warning --no-tty -u \"%{_gpg_name}\" -sbo %{__signature_filename} %{__plaintext_filename}" >> ~/.rpmmacros
+        {
+          echo "%_signature gpg"
+          echo "%_gpg_path $GNUPGHOME"
+          echo "%_gpg_name $KEY_FP"
+          echo "%_gpgbin /usr/bin/gpg2"
+          echo "%__gpg /usr/bin/gpg2"
+          echo "%__gpg_sign_cmd %{__gpg} --batch --pinentry-mode loopback --passphrase-file $GNUPGHOME/passphrase --no-armor --no-secmem-warning --no-tty -u \"%{_gpg_name}\" -sbo %{__signature_filename} %{__plaintext_filename}"
+        } > "$HOME/.rpmmacros"
+        chmod 600 "$HOME/.rpmmacros"
 
         # Import public key for verification
         echo -e "$GPG_PUBLIC_KEY" > "$GNUPGHOME/public.key"
+        chmod 600 "$GNUPGHOME/public.key"
         gpg --import "$GNUPGHOME/public.key"
         rpm --import "$GNUPGHOME/public.key"
 
         # Restart gpg-agent to apply changes
         gpgconf --kill gpg-agent
         gpg-agent --daemon
-      shell: bash

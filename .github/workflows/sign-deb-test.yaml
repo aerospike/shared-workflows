@@ -36,8 +36,13 @@ jobs:
       - name: GPG sign deb # gpg sign and verify deb packages
         env:
           GPG_TTY: /dev/null
-          GNUPGHOME: /root/.gnupg
+          HOME: /home/runner
+          GNUPGHOME: /home/runner/.gnupg
         run: |
+          # Ensure environment variables are exported
+          export HOME="${HOME}"
+          export GNUPGHOME="${GNUPGHOME}"
+
           # Sign the package
           dpkg-sig --sign builder --gpg-options "--batch --pinentry-mode loopback --passphrase-file $GNUPGHOME/passphrase" tests/*.deb
           # Verify the signature

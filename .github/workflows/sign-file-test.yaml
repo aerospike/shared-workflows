@@ -25,8 +25,15 @@ jobs:
 
       - name: GPG sign artifacts # Signing other artifacts
         env:
-          GPG_TTY: no-tty
-          GPG_PASSPHRASE: ${{ secrets.GPG_PASS }}
+          GPG_TTY: /dev/null
+          HOME: /home/runner
+          GNUPGHOME: /home/runner/.gnupg
         run: |
-          gpg --detach-sign --no-tty --batch --yes --output README.md.asc --passphrase "$GPG_PASSPHRASE" README.md
+          # Ensure environment variables are exported
+          export HOME="${HOME}"
+          export GNUPGHOME="${GNUPGHOME}"
+
+          # Sign the file
+          gpg --detach-sign --no-tty --batch --yes --output README.md.asc --passphrase-file "$GNUPGHOME/passphrase" README.md
+          # Verify the signature
           gpg --verify README.md.asc README.md

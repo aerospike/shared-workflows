@@ -26,10 +26,15 @@ jobs:
       - name: Sign and check rpm # gpg sign and verify rpm packages
         env:
           GPG_TTY: /dev/null
-          GNUPGHOME: /root/.gnupg
+          HOME: /home/runner
+          GNUPGHOME: /home/runner/.gnupg
         run: |
+          # Ensure environment variables are exported
+          export HOME="${HOME}"
+          export GNUPGHOME="${GNUPGHOME}"
+
           # Create symlink for gpg2 (required for rpm signing)
-          ln -s $(which gpg) /usr/bin/gpg2
+          sudo ln -sf $(which gpg) /usr/bin/gpg2
 
           # Sign the package
           rpm --addsign tests/*.rpm
