@@ -122,6 +122,5 @@ runs:
         gpg --import "$GNUPGHOME/public.key"
         rpm --import "$GNUPGHOME/public.key"
 
-        # Restart gpg-agent to apply changes
-        gpgconf --kill gpg-agent
-        gpg-agent --daemon
+        # Reload gpg-agent configuration
+        gpg-connect-agent reloadagent /bye
