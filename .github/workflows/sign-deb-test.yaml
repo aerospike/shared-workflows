@@ -1,0 +1,49 @@
+name: GPG sign DEB
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+permissions: read-all
+jobs:
+  sign-deb:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os:
+          - ubuntu-22.04
+          #- ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check Ubuntu version
+        # This action only supports Ubuntu 22.04. 24.04 has removed dpkg-sig
+        run: |
+          if [[ "$(cat /etc/lsb-release | grep DISTRIB_RELEASE)" != *"22.04"* ]]; then
+            echo "This action only supports Ubuntu 22.04 due to the removal of dpkg-sig in 24.04"
+            exit 1
+          fi
+        shell: bash
+      - name: install dpkg-sig
+        run: |
+          sudo apt-get update && sudo apt-get install dpkg-sig dpkg-dev -y
+      - name: setup GPG
+        uses: ./.github/actions/setup-gpg/
+        with:
+          gpg-private-key: ${{ secrets.GPG_SECRET_KEY }}
+          gpg-public-key: ${{ secrets.GPG_PUBLIC_KEY }}
+          gpg-key-pass: ${{ secrets.GPG_PASS }}
+
+      - name: GPG sign deb # gpg sign and verify deb packages
+        env:
+          GPG_TTY: /dev/null
+          HOME: /home/runner
+          GNUPGHOME: /home/runner/.gnupg
+        run: |
+          # Ensure environment variables are exported
+          export HOME="${HOME}"
+          export GNUPGHOME="${GNUPGHOME}"
+
+          # Sign the package
+          dpkg-sig --sign builder --gpg-options "--batch --pinentry-mode loopback --passphrase-file $GNUPGHOME/passphrase" tests/*.deb
+          # Verify the signature
+          dpkg-sig --verify tests/*.deb

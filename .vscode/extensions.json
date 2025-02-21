@@ -1,0 +1,9 @@
+{
+	"recommendations": [
+		"trunk.io",
+		"streetsidesoftware.code-spell-checker",
+		"editorconfig.editorconfig"
+	],
+	// these are extensions that either duplicate or cause conflicts with trunk linters
+	"unwantedRecommendations": ["kennylong.kubernetes-yaml-formatter"]
+}
