@@ -4,18 +4,18 @@ on:
   workflow_call:
     inputs:
       image:
-        description: The Docker image to scan
+        description: "The Docker image to scan"
         required: true
         type: string
       fail_build:
-        description: Fail the build if vulnerabilities are found
+        description: "Fail the build if vulnerabilities are found"
         required: false
         default: true
         type: boolean
       severity_cutoff:
         description: "The severity cutoff for vulnerabilities to report"
         required: false
-        default: medium
+        default: "medium"
         type: string
 
 permissions:
@@ -31,7 +31,7 @@ jobs:
     steps:
       - name: Check out the code
         uses: actions/checkout@v4
-      - name: Build the Docker image
+      - name: "Build the Docker image"
         env:
           IMAGE_NAME: ${{ inputs.image }}
         run: docker build . --file Dockerfile --tag $IMAGE_NAME
