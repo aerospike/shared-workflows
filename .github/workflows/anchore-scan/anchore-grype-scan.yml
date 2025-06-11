@@ -1,0 +1,48 @@
+name: Anchore Grype vulnerability scan
+
+on:
+  workflow_call:
+    inputs:
+      image:
+        description: The Docker image to scan
+        required: true
+        type: string
+      fail_build:
+        description: Fail the build if vulnerabilities are found
+        required: false
+        default: true
+        type: boolean
+      severity_cutoff:
+        description: The severity cutoff for vulnerabilities to report
+        required: false
+        default: medium
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  Anchore-Build-Scan:
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v4
+      - name: Build the Docker image
+        env:
+          IMAGE_NAME: ${{ inputs.image }}
+        run: docker build . --file Dockerfile --tag $IMAGE_NAME
+      - name: Run the Anchore Grype scan action
+        uses: anchore/scan-action@d5aa5b6cb9414b0c7771438046ff5bcfa2854ed7
+        id: scan
+        with:
+          image: ${{ inputs.image }}
+          fail-build: ${{ inputs.fail_build }}
+          severity-cutoff: ${{ inputs.severity_cutoff }}
+      - name: Upload vulnerability report
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: ${{ steps.scan.outputs.sarif }}
