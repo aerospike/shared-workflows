@@ -32,9 +32,11 @@ shared-workflows/
 
 ```
 
-- **actions/**: Contains individual GitHub Actions.
-- **workflows/**: Contains reusable GitHub Workflows.
+- **actions/**: Contains individual GitHub Actions. Each action should be in a folder named to describe its purpose (e.g., `setup-gpg`, `docker-build`).
+- **workflows/**: Contains reusable GitHub Workflows. Each workflow should be in a folder named to describe its purpose (e.g., `security-scan`, `release-management`).
 - **docs/**: Documentation for each action and workflow.
+
+**Important**: While the example above uses generic names (`workflow-1`, `action-1`), in practice, folder names should be descriptive and indicate the purpose of the workflow or action they contain. For example, a security scanning workflow might be in a folder named `security-scan`, and a GPG setup action might be in a folder named `setup-gpg`. The folder name should help users understand what the workflow or action does at a glance.
 
 ## Versioning
 
