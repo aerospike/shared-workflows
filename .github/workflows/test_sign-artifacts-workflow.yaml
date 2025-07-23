@@ -1,0 +1,26 @@
+name: Test Sign Workflow
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+
+permissions: read-all
+
+jobs:
+  #  In order to test the workflow in a subdirectory we will need to limit it to a specific ref. This will cause a secondary PR to clean it up for main to remove
+  #  the conditional.
+  test-sign-workflow:
+    if: github.head_ref == 'feature/INFRA-127-develop-sign-artifacts-workflow'
+    uses: aerospike/shared-workflows/.github/workflows/shared_sign-artifacts.yaml@feature/INFRA-127-develop-sign-artifacts-workflow
+    with:
+      artifact_glob: tests/**/*.{deb,rpm}
+    secrets:
+      gpg-private-key: ${{ secrets.GPG_SECRET_KEY }}
+      gpg-public-key: ${{ secrets.GPG_PUBLIC_KEY }}
+      gpg-key-pass: ${{ secrets.GPG_PASS }}
+  run-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Test Entrypoint
+        run: |
+          .github/workflows/sign-artifacts/test-entrypoint.sh
