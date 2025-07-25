@@ -2,41 +2,55 @@
 
 ## Introduction
 
-This repository is a centralized location for sharing GitHub Actions and Workflows across Aerospike repos. Because we have many public repos, this repo is also public.
+This repository is a centralized collection of reusable GitHub Actions and Workflows used across Aerospike repositories. It is public because many of the consuming repositories are public, and these workflows are intended to be widely reused.
 
 ## Repository Structure
 
-To maintain organization and ease of use, we use the following directory layout:
+We use the following layout for our actions and workflows:
 
 ```text
 shared-workflows/
 │
 ├── .github/
-│   ├── actions/
-│   │   ├── action-1/
-|   |   |   ├── action1.yaml
-|   |   |   ├── README.md
-│   │   ├── action-2/
-|   |   |   ├── action2.yaml
-|   |   |   ├── README.md
-│   │   └── ...
-│   │
-│   └── workflows/
-│       ├── workflow-1/
-│       │   ├── README.md
-│       │   ├── workflow1.yaml
-│       ├── workflow-2/
-│       │   ├── README.md
-│       │   ├── workflow2.yaml
-│       └── ...
-
+    ├── actions/
+    │   └── <action-name>/
+    │       ├── action.yaml
+    │       └── README.md
+    │
+    └── workflows/
+        ├── reusable_<name>.yaml           # ✅ Entry points for reusable workflows
+        ├── test_<name>.yaml               # ✅ Workflow tests for reusable workflows
+        └── <name>/                        # Supporting scripts and README per workflow
+            ├── entrypoint.sh, test runners, etc.
+            └── README.md
 ```
 
-- **actions/**: Contains individual GitHub Actions. Each action should be in a folder named to describe its purpose (e.g., `setup-gpg`, `docker-build`).
-- **workflows/**: Contains reusable GitHub Workflows. Each workflow should be in a folder named to describe its purpose (e.g., `security-scan`, `release-management`).
-- **docs/**: Documentation for each action and workflow.
+### Folder & File Roles
 
-**Important**: While the example above uses generic names (`workflow-1`, `action-1`), in practice, folder names should be descriptive and indicate the purpose of the workflow or action they contain. For example, a security scanning workflow might be in a folder named `security-scan`, and a GPG setup action might be in a folder named `setup-gpg`. The folder name should help users understand what the workflow or action does at a glance.
+| Path                                | Purpose                                                       |
+| ----------------------------------- | ------------------------------------------------------------- |
+| `.github/actions/`                  | Composite GitHub Actions, each in its own directory           |
+| `.github/workflows/reusable_*.yaml` | Reusable workflows (called via `workflow_call`)               |
+| `.github/workflows/test_*.yaml`     | Test workflows that validate the reusable workflows           |
+| `.github/workflows/<name>/`         | Shell scripts, test harnesses, and documentation per workflow |
+
+### Naming Conventions
+
+To simulate namespacing in a flat structure (since GitHub requires reusable workflows to be top-level `.yaml` files), we use the following prefixes:
+
+- `reusable_`: workflows designed for reuse via `workflow_call`
+- `test_`: workflows that test the (reusable) workflows in CI
+
+This convention allows us to organize as we add more workflows and actions.
+[!WARNING]
+
+> Due to a [GitHub Actions platform limitation](https://github.com/orgs/community/discussions/18055), reusable workflow files must live **directly under `.github/workflows/`**.
+> Nested workflows (e.g., `.github/workflows/some-folder/workflow.yaml`) **will not work** as `uses:` targets.
+
+To work around this while maintaining some order we use a naming convention:
+
+- All reusable `.yaml` workflows are prefixed with `reusable_` and placed at the root of `.github/workflows/`
+- Supporting logic (e.g., `entrypoint.sh`, test scripts) lives in subfolders named after the workflow
 
 ## Versioning
 
