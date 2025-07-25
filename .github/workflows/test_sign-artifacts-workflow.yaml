@@ -21,9 +21,8 @@ jobs:
   run-tests:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
       - name: Test Entrypoint
         run: |
-          set -x
-          find .
-          pwd
           .github/workflows/sign-artifacts/test-entrypoint.sh

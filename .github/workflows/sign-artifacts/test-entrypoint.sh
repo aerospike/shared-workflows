@@ -5,6 +5,19 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 GIT_ROOT="$(git rev-parse --show-toplevel)"
 
+# Define test directory
+TEST_DIR=".github/workflows/sign-artifacts/test-artifacts"
+
+# Cleanup function
+cleanup() {
+    echo "🧹 Cleaning up test artifacts..."
+    rm -rf "$TEST_DIR"
+    echo "✅ Cleanup complete"
+}
+
+# Set trap to cleanup on exit (success or error)
+trap cleanup EXIT
+
 echo "🧪 Testing sign-artifacts entrypoint script..."
 echo "📁 Git root: $GIT_ROOT"
 echo "📁 Script dir: $SCRIPT_DIR"
@@ -64,7 +77,6 @@ else
 fi
 
 # Create test directory
-TEST_DIR=".github/workflows/sign-artifacts/test-artifacts"
 rm -rf "$TEST_DIR"
 mkdir -p "$TEST_DIR"
 
