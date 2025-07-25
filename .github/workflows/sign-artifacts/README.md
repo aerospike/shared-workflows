@@ -33,7 +33,7 @@ From another workflow:
 ```yaml
 jobs:
   sign:
-    uses: aerospike/shared-workflows/.github/workflows/reusable_sign-artifacts.yaml@main
+    uses: aerospike/shared-workflows/.github/workflows/reusable_sign-artifacts.yaml@CURRENTGITSHA # vn.n.n
     with:
       artifact-glob: dist/**/*.{deb,rpm}
       # output-dir: signed-artifacts  # optional, defaults to signed-artifacts
