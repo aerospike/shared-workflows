@@ -1,4 +1,4 @@
-# 🔐 Sign Artifacts Workflow
+# Sign Artifacts Workflow
 
 This is a reusable GitHub Actions workflow that signs binary artifacts using GPG. It supports `.deb`, `.rpm`, and any other file type passed via a glob pattern. It produces:
 
@@ -8,7 +8,7 @@ This is a reusable GitHub Actions workflow that signs binary artifacts using GPG
 
 ---
 
-## 📥 Inputs
+## Inputs
 
 | Name            | Type     | Required | Description                                                                 |
 | --------------- | -------- | -------- | --------------------------------------------------------------------------- |
@@ -18,7 +18,7 @@ Signed artifacts are left in-place, `shas` and `asc` files are adjacent to the o
 
 ---
 
-## 🚀 Example Usage
+## Example Usage
 
 From another workflow:
 
