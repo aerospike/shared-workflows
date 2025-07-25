@@ -23,4 +23,6 @@ jobs:
     steps:
       - name: Test Entrypoint
         run: |
+          set -e
+          find .
           .github/workflows/sign-artifacts/test-entrypoint.sh
