@@ -112,6 +112,44 @@ fi
 echo "📁 Test files created:"
 find "$TEST_DIR" -type f | sort
 
+# Define expected test files explicitly
+declare -a TEST_FILES=(
+    "$TEST_DIR/test.deb"
+    "$TEST_DIR/test-1.0-2.noarch.rpm"
+    "$TEST_DIR/test.jar"
+    "$TEST_DIR/test.zip"
+    "$TEST_DIR/nested/dir/nested.deb"
+    "$TEST_DIR/nested/dir/nested.rpm"
+)
+
+# Function to verify all expected files exist
+verify_test_files() {
+    local missing_files=()
+    for file in "${TEST_FILES[@]}"; do
+        if [[ ! -f "$file" ]]; then
+            missing_files+=("$file")
+        fi
+    done
+    if [[ ${#missing_files[@]} -gt 0 ]]; then
+        echo "❌ Missing expected test files:"
+        printf '  %s\n' "${missing_files[@]}"
+        exit 1
+    fi
+    echo "✅ All expected test files present"
+}
+
+# Function to verify files were signed
+verify_files_signed() {
+    local test_name="$1"
+    local signed_count
+    signed_count=$(find "$TEST_DIR" -name "*.asc" | wc -l)
+    if [[ $signed_count -eq 0 ]]; then
+        echo "❌ ERROR: No files were signed in $test_name!"
+        exit 1
+    fi
+    echo "✅ $test_name: $signed_count files signed"
+}
+
 # Test 1: Test with specific file types
 echo ""
 echo "🔍 Test 1: Signing specific file types"
