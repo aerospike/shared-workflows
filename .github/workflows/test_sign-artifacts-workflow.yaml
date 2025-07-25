@@ -18,11 +18,15 @@ jobs:
       gpg-private-key: ${{ secrets.GPG_SECRET_KEY }}
       gpg-public-key: ${{ secrets.GPG_PUBLIC_KEY }}
       gpg-key-pass: ${{ secrets.GPG_PASS }}
+
   run-tests:
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Install dpkg-sig
+        run: |
+          sudo apt-get update && sudo apt-get install dpkg-sig dpkg-dev -y
       - name: Test Entrypoint
         run: |
           .github/workflows/sign-artifacts/test-entrypoint.sh
