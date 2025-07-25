@@ -13,7 +13,9 @@ jobs:
     if: github.head_ref == 'feature/INFRA-127-develop-sign-artifacts-workflow'
     uses: aerospike/shared-workflows/.github/workflows/reusable_sign-artifacts.yaml@feature/INFRA-127-develop-sign-artifacts-workflow
     with:
-      artifact_glob: tests/**/*.{deb,rpm}
+      artifact-glob: tests/**/*.{deb,rpm}
+      output-dir: signed-artifacts
+      retention-days: 1
     secrets:
       gpg-private-key: ${{ secrets.GPG_SECRET_KEY }}
       gpg-public-key: ${{ secrets.GPG_PUBLIC_KEY }}

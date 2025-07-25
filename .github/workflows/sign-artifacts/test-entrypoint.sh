@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
-
 # Find the git root directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 GIT_ROOT="$(git rev-parse --show-toplevel)"
 
 # Define test directory
-TEST_DIR=".github/workflows/sign-artifacts/test-artifacts"
+TEST_DIR="$GIT_ROOT/.github/workflows/sign-artifacts/test-artifacts"
+SIGNED_ARTIFACTS_DIR="$TEST_DIR/signed-artifacts"
+UNSIGNED_ARTIFACTS_DIR="$TEST_DIR/unsigned-artifacts"
 
 # Cleanup function
 cleanup() {
@@ -79,47 +80,49 @@ fi
 # Create test directory
 rm -rf "$TEST_DIR"
 mkdir -p "$TEST_DIR"
+mkdir -p "$SIGNED_ARTIFACTS_DIR"
+mkdir -p "$UNSIGNED_ARTIFACTS_DIR"
 
 # Copy real test fixtures
 echo "📝 Copying test fixtures..."
 if [[ -f "tests/test.deb" ]]; then
-    cp "tests/test.deb" "$TEST_DIR/"
+    cp "tests/test.deb" "$UNSIGNED_ARTIFACTS_DIR/"
     echo "  ✅ Copied test.deb"
 else
     echo "  ❌ test.deb not found"
 fi
 
 if [[ -f "tests/test-1.0-2.noarch.rpm" ]]; then
-    cp "tests/test-1.0-2.noarch.rpm" "$TEST_DIR/"
+    cp "tests/test-1.0-2.noarch.rpm" "$UNSIGNED_ARTIFACTS_DIR/"
     echo "  ✅ Copied test-1.0-2.noarch.rpm"
 else
     echo "  ❌ test-1.0-2.noarch.rpm not found"
 fi
 
 # Create some additional test files
-echo "test jar content" > "$TEST_DIR/test.jar"
-echo "test zip content" > "$TEST_DIR/test.zip"
+echo "test jar content" > "$UNSIGNED_ARTIFACTS_DIR/test.jar"
+echo "test zip content" > "$UNSIGNED_ARTIFACTS_DIR/test.zip"
 
 # Create nested directory structure
-mkdir -p "$TEST_DIR/nested/dir"
+mkdir -p "$UNSIGNED_ARTIFACTS_DIR/nested/dir"
 if [[ -f "tests/test.deb" ]]; then
-    cp "tests/test.deb" "$TEST_DIR/nested/dir/nested.deb"
+    cp "tests/test.deb" "$UNSIGNED_ARTIFACTS_DIR/nested/dir/nested.deb"
 fi
 if [[ -f "tests/test-1.0-2.noarch.rpm" ]]; then
-    cp "tests/test-1.0-2.noarch.rpm" "$TEST_DIR/nested/dir/nested.rpm"
+    cp "tests/test-1.0-2.noarch.rpm" "$UNSIGNED_ARTIFACTS_DIR/nested/dir/nested.rpm"
 fi
 
 echo "📁 Test files created:"
-find "$TEST_DIR" -type f | sort
+find "$UNSIGNED_ARTIFACTS_DIR" -type f | sort
 
 # Define expected test files explicitly
 declare -a TEST_FILES=(
-    "$TEST_DIR/test.deb"
-    "$TEST_DIR/test-1.0-2.noarch.rpm"
-    "$TEST_DIR/test.jar"
-    "$TEST_DIR/test.zip"
-    "$TEST_DIR/nested/dir/nested.deb"
-    "$TEST_DIR/nested/dir/nested.rpm"
+    "$UNSIGNED_ARTIFACTS_DIR/test.deb"
+    "$UNSIGNED_ARTIFACTS_DIR/test-1.0-2.noarch.rpm"
+    "$UNSIGNED_ARTIFACTS_DIR/test.jar"
+    "$UNSIGNED_ARTIFACTS_DIR/test.zip"
+    "$UNSIGNED_ARTIFACTS_DIR/nested/dir/nested.deb"
+    "$UNSIGNED_ARTIFACTS_DIR/nested/dir/nested.rpm"
 )
 
 # Function to verify all expected files exist
@@ -142,7 +145,7 @@ verify_test_files() {
 verify_files_signed() {
     local test_name="$1"
     local signed_count
-    signed_count=$(find "$TEST_DIR" -name "*.asc" | wc -l)
+    signed_count=$(find "$SIGNED_ARTIFACTS_DIR" -name "*.asc" | wc -l)
     if [[ $signed_count -eq 0 ]]; then
         echo "❌ ERROR: No files were signed in $test_name!"
         exit 1
@@ -154,11 +157,11 @@ verify_files_signed() {
 echo ""
 echo "🔍 Test 1: Signing specific file types"
 # shellcheck disable=SC1091
-. "$SCRIPT_DIR/entrypoint.sh" "$TEST_DIR/*.{deb,rpm}"
+. "$SCRIPT_DIR/entrypoint.sh" "$UNSIGNED_ARTIFACTS_DIR/*.{deb,rpm}" "$SIGNED_ARTIFACTS_DIR"
 
 echo ""
 echo "📋 Results for Test 1:"
-for file in "$TEST_DIR"/*.{deb,rpm}; do
+for file in "$SIGNED_ARTIFACTS_DIR"/*.{deb,rpm}; do
     if [[ -f "$file" ]]; then
         echo "  ✅ $file"
         echo "    - Original: $(stat -c%s "$file" 2>/dev/null || echo "ERROR") bytes"
@@ -172,11 +175,11 @@ done
 echo ""
 echo "🔍 Test 2: Signing nested files"
 # shellcheck disable=SC1091
-. "$SCRIPT_DIR/entrypoint.sh" "$TEST_DIR/**/*.{deb,rpm}"
+. "$SCRIPT_DIR/entrypoint.sh" "$UNSIGNED_ARTIFACTS_DIR/**/*.{deb,rpm}" "$SIGNED_ARTIFACTS_DIR"
 
 echo ""
 echo "📋 Results for Test 2:"
-for file in "$TEST_DIR"/**/*.{deb,rpm}; do
+for file in "$SIGNED_ARTIFACTS_DIR"/**/*.{deb,rpm}; do
     if [[ -f "$file" ]]; then
         echo "  ✅ $file"
         echo "    - Original: $(stat -c%s "$file" 2>/dev/null || echo "ERROR") bytes"
@@ -190,11 +193,11 @@ done
 echo ""
 echo "🔍 Test 3: Signing all files"
 # shellcheck disable=SC1091
-. "$SCRIPT_DIR/entrypoint.sh" "$TEST_DIR/**/*"
+. "$SCRIPT_DIR/entrypoint.sh" "$UNSIGNED_ARTIFACTS_DIR/**/*" "$SIGNED_ARTIFACTS_DIR"
 
 echo ""
 echo "📋 Results for Test 3:"
-for file in "$TEST_DIR"/**/*; do
+for file in "$SIGNED_ARTIFACTS_DIR"/**/*; do
     if [[ -f "$file" && ! "$file" =~ \.(asc|sha256)$ ]]; then
         echo "  ✅ $file"
         echo "    - Original: $(stat -c%s "$file" 2>/dev/null || echo "ERROR") bytes"
@@ -207,7 +210,7 @@ done
 # Test 4: Validate signatures
 echo ""
 echo "🔍 Test 4: Validating signatures"
-for file in "$TEST_DIR"/**/*.asc; do
+for file in "$SIGNED_ARTIFACTS_DIR"/**/*.asc; do
     if [[ -f "$file" ]]; then
         original_file="${file%.asc}"
         if [[ -f "$original_file" ]]; then
@@ -224,7 +227,7 @@ done
 # Test 5: Validate checksums
 echo ""
 echo "🔍 Test 5: Validating checksums"
-for file in "$TEST_DIR"/**/*.sha256; do
+for file in "$SIGNED_ARTIFACTS_DIR"/**/*.sha256; do
     if [[ -f "$file" ]]; then
         original_file="${file%.sha256}"
         if [[ -f "$original_file" ]]; then
@@ -240,10 +243,10 @@ done
 # Summary
 echo ""
 echo "📊 Test Summary:"
-echo "  - Test files created: $(find "$TEST_DIR" -type f ! -name "*.asc" ! -name "*.sha256" | wc -l)"
-echo "  - Signatures created: $(find "$TEST_DIR" -name "*.asc" | wc -l)"
-echo "  - Checksums created: $(find "$TEST_DIR" -name "*.sha256" | wc -l)"
-echo "  - Total files: $(find "$TEST_DIR" -type f | wc -l)"
+echo "  - Test files created: $(find "$SIGNED_ARTIFACTS_DIR" -type f ! -name "*.asc" ! -name "*.sha256" | wc -l)"
+echo "  - Signatures created: $(find "$SIGNED_ARTIFACTS_DIR" -name "*.asc" | wc -l)"
+echo "  - Checksums created: $(find "$SIGNED_ARTIFACTS_DIR" -name "*.sha256" | wc -l)"
+echo "  - Total files: $(find "$SIGNED_ARTIFACTS_DIR" -type f | wc -l)"
 
 echo ""
 echo "🎉 Entrypoint script testing completed!"

@@ -3,10 +3,20 @@ name: Sign Artifacts
 on:
   workflow_call:
     inputs:
-      artifact_glob:
+      artifact-glob:
         description: Glob pattern to match artifacts to sign (e.g. dist/**/*.{jar,deb,rpm})
         required: true
         type: string
+      output-dir:
+        description: Output directory where signed artifacts will be placed (e.g. signed-artifacts)
+        required: false
+        type: string
+        default: signed-artifacts
+      retention-days:
+        description: Retention days for the artifacts
+        required: false
+        type: number
+        default: 7
     secrets:
       gpg-private-key:
         required: true
@@ -37,4 +47,10 @@ jobs:
       - name: Sign Artifacts
         run: |
           chmod +x ${{ github.workspace }}/.github/workflows/sign-artifacts/entrypoint.sh
-          ${{ github.workspace }}/.github/workflows/sign-artifacts/entrypoint.sh "${{ inputs.artifact_glob }}"
+          ${{ github.workspace }}/.github/workflows/sign-artifacts/entrypoint.sh "${{ inputs.artifact-glob }}" "${{ inputs.output-dir }}"
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.output-dir }}
+          path: ${{ inputs.output-dir }}
+          retention-days: ${{ inputs.retention-days }}
