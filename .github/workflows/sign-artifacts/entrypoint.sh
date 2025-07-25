@@ -10,8 +10,14 @@ export GPG_TTY="/dev/null"
 echo "Expanding glob pattern: $ARTIFACT_GLOB"
 shopt -s globstar nullglob #  Necessary options for globbing
 
+# Validate the glob pattern to ensure it is safe
+if [[ -z "$ARTIFACT_GLOB" || "$ARTIFACT_GLOB" =~ [^a-zA-Z0-9._*/?-] ]]; then
+  echo "Invalid glob pattern: $ARTIFACT_GLOB"
+  exit 1
+fi
+
 # Expand the glob pattern into an array
-eval "FILES=( $ARTIFACT_GLOB )"
+readarray -t FILES < <(echo $ARTIFACT_GLOB | xargs -n1 echo)
 
 if [[ ${#FILES[@]} -eq 0 ]]; then
   echo "No matching artifacts found for pattern: $ARTIFACT_GLOB"
@@ -44,7 +50,7 @@ for file in "${FILES[@]}"; do
       dpkg-sig --sign builder --gpg-options "--batch --pinentry-mode loopback --passphrase-file $GNUPGHOME/passphrase --quiet" "$file"
     else
       echo "ERROR: dpkg-sig not found"
-      return 1
+      exit 1
     fi
   fi
 

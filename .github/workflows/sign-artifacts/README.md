@@ -25,7 +25,7 @@ From another workflow:
 ```yaml
 jobs:
   sign:
-    uses: aerospike/shared-workflows/.github/workflows/sign-artifacts/sign.yaml@main
+    uses: aerospike/shared-workflows/.github/workflows/reusable_sign-artifacts.yaml@main
     with:
       artifact_glob: dist/**/*.{deb,rpm}
     secrets:
