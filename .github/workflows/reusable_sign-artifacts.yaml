@@ -1,0 +1,56 @@
+name: Sign Artifacts
+
+on:
+  workflow_call:
+    inputs:
+      artifact-glob:
+        description: Glob pattern to match artifacts to sign (e.g. dist/**/*.{jar,deb,rpm})
+        required: true
+        type: string
+      output-dir:
+        description: Output directory where signed artifacts will be placed (e.g. signed-artifacts)
+        required: false
+        type: string
+        default: signed-artifacts
+      retention-days:
+        description: Retention days for the artifacts
+        required: false
+        type: number
+        default: 7
+    secrets:
+      gpg-private-key:
+        required: true
+      gpg-public-key:
+        required: true
+      gpg-key-pass:
+        required: true
+permissions:
+  contents: read
+  packages: read
+jobs:
+  sign:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up GPG
+        uses: aerospike/shared-workflows/.github/actions/setup-gpg@dda8173aca1f1e73f95267572a7d3849cd00f1b8 # v1.0.0
+        with:
+          gpg-private-key: ${{ secrets.gpg-private-key }}
+          gpg-public-key: ${{ secrets.gpg-public-key }}
+          gpg-key-pass: ${{ secrets.gpg-key-pass }}
+
+      - name: Install dpkg-sig
+        run: |
+          sudo apt-get update && sudo apt-get install dpkg-sig dpkg-dev -y
+
+      - name: Sign Artifacts
+        run: |
+          chmod +x ${{ github.workspace }}/.github/workflows/sign-artifacts/entrypoint.sh
+          ${{ github.workspace }}/.github/workflows/sign-artifacts/entrypoint.sh "${{ inputs.artifact-glob }}" "${{ inputs.output-dir }}"
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.output-dir }}
+          path: ${{ inputs.output-dir }}
+          retention-days: ${{ inputs.retention-days }}
