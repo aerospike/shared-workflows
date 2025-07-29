@@ -1,19 +1,102 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ARTIFACTS_GLOB="${1:-}"
-PROJECT="${2:-}"
-VERSION="${3:-}"
-DRY_RUN="${4:-false}"
+export PS4='+($LINENO): ${FUNCNAME[0]:+${FUNCNAME[0]}(): }'
+trap 'handle_error ${LINENO}' ERR
+
+handle_error() {
+    local exit_code=$?
+    local line_number=$1
+    echo "Error: Command failed with exit code $exit_code at line $line_number" >&2
+    exit 1
+}
+
+# Default values
+DRY_RUN="false"
+
+# Parse command line arguments
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --dry-run)
+      DRY_RUN="true"
+      shift
+      ;;
+    --help|-h)
+      echo "Usage: $0 <artifacts-glob> <project> <version> [OPTIONS]"
+      echo ""
+      echo "Uploads artifacts to JFrog Artifactory"
+      echo ""
+      echo "Options:"
+      echo "  --dry-run        Show what would be uploaded without actually uploading"
+      echo "  --help, -h       Show this help message"
+      echo ""
+      echo "Examples:"
+      echo "  $0 '**/*.{deb,rpm}' database v1.0.0"
+      echo "  $0 '**/*.{deb,rpm}' database v1.0.0 --dry-run"
+      exit 0
+      ;;
+    -*)
+      echo "Unknown option: $1"
+      echo "Use --help for usage information"
+      exit 1
+      ;;
+    *)
+      # Positional arguments
+      if [[ -z "${ARTIFACTS_GLOB:-}" ]]; then
+        ARTIFACTS_GLOB="$1"
+      elif [[ -z "${PROJECT:-}" ]]; then
+        PROJECT="$1"
+      elif [[ -z "${VERSION:-}" ]]; then
+        VERSION="$1"
+      else
+        echo "Use --help for usage information"
+        exit 1
+      fi
+      shift
+      ;;
+  esac
+done
+
+# Validate required arguments
+if [[ -z "${ARTIFACTS_GLOB:-}" ]]; then
+  echo "Error: artifacts-glob is required"
+  echo "Use --help for usage information"
+  exit 1
+fi
+
+if [[ -z "${PROJECT:-}" ]]; then
+  echo "Error: project is required"
+  echo "Use --help for usage information"
+  exit 1
+fi
+
+if [[ -z "${VERSION:-}" ]]; then
+  echo "Error: version is required"
+  echo "Use --help for usage information"
+  exit 1
+fi
 
 # Source the package utilities
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/package_utils.sh"
 
+# Wrapper function that either executes or echoes commands
+run() {
+  if [[ "$DRY_RUN" == "true" ]]; then
+    # Define color variables
+    local green='\033[0;32m'
+    local reset='\033[0m'
+
+    echo -e "${green}   $*${reset}"
+  else
+    "$@"
+  fi
+}
+
 upload_deb_packages() {
   if [[ "$DRY_RUN" == "true" ]]; then
-    echo "DRY RUN: Would upload DEB packages to JFrog..."
+    echo "Would upload DEB packages to JFrog..."
   else
     echo "Uploading DEB packages to JFrog..."
   fi
@@ -32,80 +115,57 @@ upload_deb_packages() {
 
     echo "  Package: $pkgname, Arch: $arch, Codename: $codename"
 
-    if [[ "$DRY_RUN" == "true" ]]; then
-      echo "  DRY RUN: Would upload $deb to $PROJECT-deb-dev-local"
-      echo "  DRY RUN:   --build-name=$PROJECT-deb"
-      echo "  DRY RUN:   --build-number=$VERSION"
-      echo "  DRY RUN:   --target-props deb.distribution=$codename;deb.component=main;deb.architecture=$arch"
-      echo "  DRY RUN:   --deb $codename/main/$arch"
-    else
-      # Upload the DEB
-      jf rt upload "$deb" "$PROJECT-deb-dev-local" --flat=false \
-        --build-name="$PROJECT-deb" \
-        --build-number="$VERSION" \
-        --project="$PROJECT" \
-        --target-props "deb.distribution=$codename;deb.component=main;deb.architecture=$arch" \
-        --deb "$codename/main/$arch"
-    fi
+    # Upload the DEB
+    run jf rt upload "$deb" "$PROJECT-deb-dev-local" --flat=false \
+      --build-name="$PROJECT-deb" \
+      --build-number="$VERSION" \
+      --project="$PROJECT" \
+      --target-props "deb.distribution=$codename;deb.component=main;deb.architecture=$arch" \
+      --deb "$codename/main/$arch"
 
     # Upload signature and checksum if they exist
     if [[ -f "$deb.asc" ]]; then
-      if [[ "$DRY_RUN" == "true" ]]; then
-        echo "  DRY RUN: Would upload signature: $deb.asc"
-      else
-        echo "  Uploading signature: $deb.asc"
-        jf rt upload "$deb.asc" "$PROJECT-deb-dev-local" --flat=false \
-          --build-name="$PROJECT-deb" \
-          --build-number="$VERSION" \
-          --project="$PROJECT"
-      fi
+      echo "  Uploading signature: $deb.asc"
+      run jf rt upload "$deb.asc" "$PROJECT-deb-dev-local" --flat=false \
+        --build-name="$PROJECT-deb" \
+        --build-number="$VERSION" \
+        --project="$PROJECT"
     fi
 
     if [[ -f "$deb.sha256" ]]; then
-      if [[ "$DRY_RUN" == "true" ]]; then
-        echo "  DRY RUN: Would upload checksum: $deb.sha256"
-      else
-        echo "  Uploading checksum: $deb.sha256"
-        jf rt upload "$deb.sha256" "$PROJECT-deb-dev-local" --flat=false \
-          --build-name="$PROJECT-deb" \
-          --build-number="$VERSION" \
-          --project="$PROJECT"
-      fi
+      echo "  Uploading checksum: $deb.sha256"
+      run jf rt upload "$deb.sha256" "$PROJECT-deb-dev-local" --flat=false \
+        --build-name="$PROJECT-deb" \
+        --build-number="$VERSION" \
+        --project="$PROJECT"
     fi
 
     if [[ -f "$deb.asc.sha256" ]]; then
-      if [[ "$DRY_RUN" == "true" ]]; then
-        echo "  DRY RUN: Would upload signature checksum: $deb.asc.sha256"
-      else
-        echo "  Uploading signature checksum: $deb.asc.sha256"
-        jf rt upload "$deb.asc.sha256" "$PROJECT-deb-dev-local" --flat=false \
-          --build-name="$PROJECT-deb" \
-          --build-number="$VERSION" \
-          --project="$PROJECT"
-      fi
+      echo "  Uploading signature checksum: $deb.asc.sha256"
+      run jf rt upload "$deb.asc.sha256" "$PROJECT-deb-dev-local" --flat=false \
+        --build-name="$PROJECT-deb" \
+        --build-number="$VERSION" \
+        --project="$PROJECT"
     fi
   done
 }
 
 publish_deb_build_info() {
   if [[ "$DRY_RUN" == "true" ]]; then
-    echo "DRY RUN: Would publish DEB build info..."
-    echo "DRY RUN:   jf rt build-collect-env $PROJECT-deb $VERSION --project=$PROJECT"
-    echo "DRY RUN:   jf rt build-add-git $PROJECT-deb $VERSION --project=$PROJECT"
-    echo "DRY RUN:   jf rt build-add-dependencies $PROJECT-deb $VERSION . --project=$PROJECT"
-    echo "DRY RUN:   jf rt build-publish $PROJECT-deb $VERSION --project=$PROJECT"
+    echo "Would publish DEB build info..."
   else
     echo "Publishing DEB build info..."
-    jf rt build-collect-env "$PROJECT-deb" "$VERSION" --project="$PROJECT"
-    jf rt build-add-git "$PROJECT-deb" "$VERSION" --project="$PROJECT"
-    jf rt build-add-dependencies "$PROJECT-deb" "$VERSION" . --project="$PROJECT"
-    jf rt build-publish "$PROJECT-deb" "$VERSION" --project="$PROJECT"
   fi
+
+  run jf rt build-collect-env "$PROJECT-deb" "$VERSION" --project="$PROJECT"
+  run jf rt build-add-git "$PROJECT-deb" "$VERSION" --project="$PROJECT"
+  run jf rt build-add-dependencies "$PROJECT-deb" "$VERSION" . --project="$PROJECT"
+  run jf rt build-publish "$PROJECT-deb" "$VERSION" --project="$PROJECT"
 }
 
 upload_rpm_packages() {
   if [[ "$DRY_RUN" == "true" ]]; then
-    echo "DRY RUN: Would upload RPM packages to JFrog..."
+    echo "Would upload RPM packages to JFrog..."
   else
     echo "Uploading RPM packages to JFrog..."
   fi
@@ -126,119 +186,87 @@ upload_rpm_packages() {
 
     echo "  Package: $pkgname, Version: $version, Arch: $arch, Dist: $dist"
 
-    if [[ "$DRY_RUN" == "true" ]]; then
-      echo "  DRY RUN: Would upload $rpm to $PROJECT-rpm-dev-local"
-      echo "  DRY RUN:   --build-name=$PROJECT-rpm"
-      echo "  DRY RUN:   --build-number=$VERSION"
-      echo "  DRY RUN:   --target-props rpm.distribution=$dist;rpm.component=main;rpm.architecture=$arch"
-    else
-      # Upload the RPM
-      jf rt upload "$rpm" "$PROJECT-rpm-dev-local" --flat=false \
-        --build-name="$PROJECT-rpm" \
-        --build-number="$VERSION" \
-        --project="$PROJECT" \
-        --target-props "rpm.distribution=$dist;rpm.component=main;rpm.architecture=$arch"
-    fi
+    # Upload the RPM
+    run jf rt upload "$rpm" "$PROJECT-rpm-dev-local" --flat=false \
+      --build-name="$PROJECT-rpm" \
+      --build-number="$VERSION" \
+      --project="$PROJECT" \
+      --target-props "rpm.distribution=$dist;rpm.component=main;rpm.architecture=$arch"
 
     # Upload signature and checksums if they exist
     if [[ -f "$rpm.asc" ]]; then
-      if [[ "$DRY_RUN" == "true" ]]; then
-        echo "  DRY RUN: Would upload signature: $rpm.asc"
-      else
-        echo "  Uploading signature: $rpm.asc"
-        jf rt upload "$rpm.asc" "$PROJECT-rpm-dev-local" --flat=false \
-          --build-name="$PROJECT-rpm" \
-          --build-number="$VERSION" \
-          --project="$PROJECT"
-      fi
+      echo "  Uploading signature: $rpm.asc"
+      run jf rt upload "$rpm.asc" "$PROJECT-rpm-dev-local" --flat=false \
+        --build-name="$PROJECT-rpm" \
+        --build-number="$VERSION" \
+        --project="$PROJECT"
     fi
 
     if [[ -f "$rpm.sha256" ]]; then
-      if [[ "$DRY_RUN" == "true" ]]; then
-        echo "  DRY RUN: Would upload checksum: $rpm.sha256"
-      else
-        echo "  Uploading checksum: $rpm.sha256"
-        jf rt upload "$rpm.sha256" "$PROJECT-rpm-dev-local" --flat=false \
-          --build-name="$PROJECT-rpm" \
-          --build-number="$VERSION" \
-          --project="$PROJECT"
-      fi
+      echo "  Uploading checksum: $rpm.sha256"
+      run jf rt upload "$rpm.sha256" "$PROJECT-rpm-dev-local" --flat=false \
+        --build-name="$PROJECT-rpm" \
+        --build-number="$VERSION" \
+        --project="$PROJECT"
     fi
 
     if [[ -f "$rpm.asc.sha256" ]]; then
-      if [[ "$DRY_RUN" == "true" ]]; then
-        echo "  DRY RUN: Would upload signature checksum: $rpm.asc.sha256"
-      else
-        echo "  Uploading signature checksum: $rpm.asc.sha256"
-        jf rt upload "$rpm.asc.sha256" "$PROJECT-rpm-dev-local" --flat=false \
-          --build-name="$PROJECT-rpm" \
-          --build-number="$VERSION" \
-          --project="$PROJECT"
-      fi
+      echo "  Uploading signature checksum: $rpm.asc.sha256"
+      run jf rt upload "$rpm.asc.sha256" "$PROJECT-rpm-dev-local" --flat=false \
+        --build-name="$PROJECT-rpm" \
+        --build-number="$VERSION" \
+        --project="$PROJECT"
     fi
   done
 }
 
 publish_rpm_build_info() {
   if [[ "$DRY_RUN" == "true" ]]; then
-    echo "DRY RUN: Would publish RPM build info..."
-    echo "DRY RUN:   jf rt build-collect-env $PROJECT-rpm $VERSION --project=$PROJECT"
-    echo "DRY RUN:   jf rt build-add-git $PROJECT-rpm $VERSION --project=$PROJECT"
-    echo "DRY RUN:   jf rt build-add-dependencies $PROJECT-rpm $VERSION . --project=$PROJECT"
-    echo "DRY RUN:   jf rt build-publish $PROJECT-rpm $VERSION --project=$PROJECT"
+    echo "Would publish RPM build info..."
   else
     echo "Publishing RPM build info..."
-    jf rt build-collect-env "$PROJECT-rpm" "$VERSION" --project="$PROJECT"
-    jf rt build-add-git "$PROJECT-rpm" "$VERSION" --project="$PROJECT"
-    jf rt build-add-dependencies "$PROJECT-rpm" "$VERSION" . --project="$PROJECT"
-    jf rt build-publish "$PROJECT-rpm" "$VERSION" --project="$PROJECT"
   fi
+
+  run jf rt build-collect-env "$PROJECT-rpm" "$VERSION" --project="$PROJECT"
+  run jf rt build-add-git "$PROJECT-rpm" "$VERSION" --project="$PROJECT"
+  run jf rt build-add-dependencies "$PROJECT-rpm" "$VERSION" . --project="$PROJECT"
+  run jf rt build-publish "$PROJECT-rpm" "$VERSION" --project="$PROJECT"
 }
 
 upload_generic_files() {
   if [[ "$DRY_RUN" == "true" ]]; then
-    echo "DRY RUN: Would upload generic files..."
+    echo "Would upload generic files..."
   else
     echo "Uploading generic files..."
   fi
 
   while IFS= read -r -d '' file; do
     if [[ -f "$file" ]]; then
-      if [[ "$DRY_RUN" == "true" ]]; then
-        echo "DRY RUN: Would upload generic file: $file"
-        echo "DRY RUN:   to $PROJECT-generic-dev-local"
-        echo "DRY RUN:   --build-name=$PROJECT-generic"
-        echo "DRY RUN:   --build-number=$VERSION"
-      else
-        echo "Uploading generic file: $file"
-        jf rt upload "$file" "$PROJECT-generic-dev-local" --flat=false \
-          --build-name="$PROJECT-generic" \
-          --build-number="$VERSION" \
-          --project="$PROJECT"
-      fi
+      echo "Uploading generic file: $file"
+      run jf rt upload "$file" "$PROJECT-generic-dev-local" --flat=false \
+        --build-name="$PROJECT-generic" \
+        --build-number="$VERSION" \
+        --project="$PROJECT"
     fi
   done < <(find . -type f \( -not -name "*.deb" -not -name "*.rpm" -not -name "*.asc" -not -name "*.sha256" \) -print0)
 }
 
 publish_generic_build_info() {
   if [[ "$DRY_RUN" == "true" ]]; then
-    echo "DRY RUN: Would publish generic build info..."
-    echo "DRY RUN:   jf rt build-collect-env $PROJECT-generic $VERSION --project=$PROJECT"
-    echo "DRY RUN:   jf rt build-add-git $PROJECT-generic $VERSION --project=$PROJECT"
-    echo "DRY RUN:   jf rt build-add-dependencies $PROJECT-generic $VERSION . --project=$PROJECT"
-    echo "DRY RUN:   jf rt build-publish $PROJECT-generic $VERSION --project=$PROJECT"
+    echo "Would publish generic build info..."
   else
     echo "Publishing generic build info..."
-    jf rt build-collect-env "$PROJECT-generic" "$VERSION" --project="$PROJECT"
-    jf rt build-add-git "$PROJECT-generic" "$VERSION" --project="$PROJECT"
-    jf rt build-add-dependencies "$PROJECT-generic" "$VERSION" . --project="$PROJECT"
-    jf rt build-publish "$PROJECT-generic" "$VERSION" --project="$PROJECT"
   fi
+
+  run jf rt build-collect-env "$PROJECT-generic" "$VERSION" --project="$PROJECT"
+  run jf rt build-add-git "$PROJECT-generic" "$VERSION" --project="$PROJECT"
+  run jf rt build-add-dependencies "$PROJECT-generic" "$VERSION" . --project="$PROJECT"
+  run jf rt build-publish "$PROJECT-generic" "$VERSION" --project="$PROJECT"
 }
 
 main() {
   if [[ "$DRY_RUN" == "true" ]]; then
-    echo "DRY RUN: Would upload artifacts to JFrog Artifactory"
+    echo "Would upload artifacts to JFrog Artifactory"
   else
     echo "Uploading artifacts to JFrog Artifactory"
   fi
@@ -271,15 +299,9 @@ main() {
   upload_generic_files
   publish_generic_build_info
 
-  if [[ "$DRY_RUN" == "true" ]]; then
-    echo "DRY RUN: Upload simulation complete!"
-    echo "DRY RUN: Would create build names: $PROJECT-deb, $PROJECT-rpm, $PROJECT-generic"
-    echo "DRY RUN: Would use build version: $VERSION"
-  else
     echo "Upload complete!"
     echo "Build names: $PROJECT-deb, $PROJECT-rpm, $PROJECT-generic"
     echo "Build version: $VERSION"
-  fi
 }
 
 main "$@"
