@@ -1,0 +1,14 @@
+name: Test Upload to Artifactory
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+
+permissions: read-all
+
+jobs:
+  hello-world:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Hello World
+        run: echo "Hello, world!"
