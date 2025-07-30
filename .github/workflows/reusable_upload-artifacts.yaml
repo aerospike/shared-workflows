@@ -31,11 +31,6 @@ on:
         required: false
         type: string
         default: build-artifacts
-      artifacts-glob:
-        description: Glob pattern to match downloaded artifacts
-        required: false
-        type: string
-        default: "**"
 
 permissions:
   contents: read
@@ -72,6 +67,5 @@ jobs:
         run: |
           chmod +x ${{ github.workspace }}/.github/workflows/upload-artifacts/entrypoint.sh
           ${{ github.workspace }}/.github/workflows/upload-artifacts/entrypoint.sh \
-            "${{ inputs.artifacts-glob }}" \
             "${{ inputs.project }}" \
             "${{ inputs.version }}"

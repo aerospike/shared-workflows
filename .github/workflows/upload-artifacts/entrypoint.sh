@@ -3,11 +3,20 @@ set -euo pipefail
 
 export PS4='+($LINENO): ${FUNCNAME[0]:+${FUNCNAME[0]}(): }'
 trap 'handle_error ${LINENO}' ERR
-
+# shellcheck disable=SC2317
 handle_error() {
     local exit_code=$?
     local line_number=$1
     echo "Error: Command failed with exit code $exit_code at line $line_number" >&2
+    exit 1
+}
+error() {
+    local reason="${1:-}"
+    if [[ -n "$reason" ]]; then
+        echo "Error: $reason" >&2
+    else
+        echo "Error" >&2
+    fi
     exit 1
 }
 
@@ -22,34 +31,34 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     --help|-h)
-      echo "Usage: $0 <artifacts-glob> <project> <version> [OPTIONS]"
-      echo ""
-      echo "Uploads artifacts to JFrog Artifactory"
-      echo ""
-      echo "Options:"
-      echo "  --dry-run        Show what would be uploaded without actually uploading"
-      echo "  --help, -h       Show this help message"
-      echo ""
-      echo "Examples:"
-      echo "  $0 '**/*.{deb,rpm}' database v1.0.0"
-      echo "  $0 '**/*.{deb,rpm}' database v1.0.0 --dry-run"
+      echo "Usage: $0 <project> <build-prefix> <version> [OPTIONS]" >&2
+      echo "" >&2
+      echo "Uploads artifacts to JFrog Artifactory" >&2
+      echo "" >&2
+      echo "Options:" >&2
+      echo "  --dry-run        Show what would be uploaded without actually uploading" >&2
+      echo "  --help, -h       Show this help message" >&2
+      echo "" >&2
+      echo "Examples:" >&2
+      echo "  $0  database db v1.0.0" >&2
+      echo "  $0  database db v1.0.0 --dry-run" >&2
       exit 0
       ;;
     -*)
-      echo "Unknown option: $1"
-      echo "Use --help for usage information"
+      echo "Unknown option: $1" >&2
+      echo "Use --help for usage information" >&2
       exit 1
       ;;
     *)
       # Positional arguments
-      if [[ -z "${ARTIFACTS_GLOB:-}" ]]; then
-        ARTIFACTS_GLOB="$1"
-      elif [[ -z "${PROJECT:-}" ]]; then
+      if [[ -z "${PROJECT:-}" ]]; then
         PROJECT="$1"
+      elif [[ -z "${BUILD_PREFIX:-}" ]]; then
+        BUILD_PREFIX="$1"
       elif [[ -z "${VERSION:-}" ]]; then
         VERSION="$1"
       else
-        echo "Use --help for usage information"
+        echo "Use --help for usage information" >&2
         exit 1
       fi
       shift
@@ -57,29 +66,27 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# Validate required arguments
-if [[ -z "${ARTIFACTS_GLOB:-}" ]]; then
-  echo "Error: artifacts-glob is required"
-  echo "Use --help for usage information"
-  exit 1
-fi
 
 if [[ -z "${PROJECT:-}" ]]; then
-  echo "Error: project is required"
-  echo "Use --help for usage information"
-  exit 1
+  error "Error: project is required
+Use --help for usage information"
+fi
+
+if [[ -z "${BUILD_PREFIX:-}" ]]; then
+  error "Error: build-prefix is required
+Use --help for usage information"
 fi
 
 if [[ -z "${VERSION:-}" ]]; then
-  echo "Error: version is required"
-  echo "Use --help for usage information"
-  exit 1
+  error "Error: version is required
+Use --help for usage information"
 fi
 
 # Source the package utilities
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/package_utils.sh"
+
 
 # Wrapper function that either executes or echoes commands
 run() {
@@ -88,36 +95,56 @@ run() {
     local green='\033[0;32m'
     local reset='\033[0m'
 
-    echo -e "${green}   $*${reset}"
+    echo -e "${green}   $*${reset}" >&2
   else
     "$@"
   fi
 }
 
-upload_deb_packages() {
-  if [[ "$DRY_RUN" == "true" ]]; then
-    echo "Would upload DEB packages to JFrog..."
-  else
-    echo "Uploading DEB packages to JFrog..."
-  fi
-
-  find . -name "*.deb" -print0 | while IFS= read -r -d '' deb; do
+structure_build_artifacts() {
+  mkdir -p structured_build_artifacts
+  while IFS= read -r -d '' deb; do
     if [[ ! -f "$deb" ]]; then
       continue
     fi
 
-    echo "Processing DEB: $deb"
+    echo "Processing DEB: $deb" >&2
+    process_deb "$deb" "./structured_build_artifacts"
+  done < <(find build-artifacts -name "*.deb" -print0)
 
+  while IFS= read -r -d '' rpm; do
+    if [[ ! -f "$rpm" ]]; then
+      continue
+    fi
+
+    echo "Processing RPM: $rpm" >&2
+    process_rpm "$rpm" "./structured_build_artifacts"
+  done < <(find build-artifacts -name "*.rpm" -print0)
+}
+
+upload_deb_packages() {
+  if [[ "$DRY_RUN" == "true" ]]; then
+    echo "Would upload DEB packages to JFrog..." >&2
+  else
+    echo "Uploading DEB packages to JFrog..." >&2
+  fi
+
+  while IFS= read -r -d '' deb; do
+    if [[ ! -f "$deb" ]]; then
+      continue
+    fi
     # Get package metadata
     pkgname=$(dpkg-deb -f "$deb" Package)
     arch=$(dpkg-deb -f "$deb" Architecture)
-    codename=$(get_codename_for_deb "$deb")
+    if ! codename=$(get_codename_for_deb "$deb"); then
+        error "Failed to get codename for $deb"
+    fi
 
-    echo "  Package: $pkgname, Arch: $arch, Codename: $codename"
-
+    echo "  Package: $pkgname, Arch: $arch, Codename: $codename" >&2
     # Upload the DEB
+
     run jf rt upload "$deb" "$PROJECT-deb-dev-local" --flat=false \
-      --build-name="$PROJECT-deb" \
+      --build-name="$BUILD_PREFIX-deb" \
       --build-number="$VERSION" \
       --project="$PROJECT" \
       --target-props "deb.distribution=$codename;deb.component=main;deb.architecture=$arch" \
@@ -125,57 +152,56 @@ upload_deb_packages() {
 
     # Upload signature and checksum if they exist
     if [[ -f "$deb.asc" ]]; then
-      echo "  Uploading signature: $deb.asc"
+      echo "  Uploading signature: $deb.asc" >&2
       run jf rt upload "$deb.asc" "$PROJECT-deb-dev-local" --flat=false \
-        --build-name="$PROJECT-deb" \
+        --build-name="$BUILD_PREFIX-deb" \
         --build-number="$VERSION" \
         --project="$PROJECT"
     fi
 
     if [[ -f "$deb.sha256" ]]; then
-      echo "  Uploading checksum: $deb.sha256"
+      echo "  Uploading checksum: $deb.sha256" >&2
       run jf rt upload "$deb.sha256" "$PROJECT-deb-dev-local" --flat=false \
-        --build-name="$PROJECT-deb" \
+        --build-name="$BUILD_PREFIX-deb" \
         --build-number="$VERSION" \
         --project="$PROJECT"
     fi
 
     if [[ -f "$deb.asc.sha256" ]]; then
-      echo "  Uploading signature checksum: $deb.asc.sha256"
+      echo "  Uploading signature checksum: $deb.asc.sha256" >&2
       run jf rt upload "$deb.asc.sha256" "$PROJECT-deb-dev-local" --flat=false \
-        --build-name="$PROJECT-deb" \
+        --build-name="$BUILD_PREFIX-deb" \
         --build-number="$VERSION" \
         --project="$PROJECT"
     fi
-  done
+  done < <(find . -name "*.deb" -print0)
 }
 
 publish_deb_build_info() {
   if [[ "$DRY_RUN" == "true" ]]; then
-    echo "Would publish DEB build info..."
+    echo "Would publish DEB build info..." >&2
   else
-    echo "Publishing DEB build info..."
+    echo "Publishing DEB build info..." >&2
   fi
 
-  run jf rt build-collect-env "$PROJECT-deb" "$VERSION" --project="$PROJECT"
-  run jf rt build-add-git "$PROJECT-deb" "$VERSION" --project="$PROJECT"
-  run jf rt build-add-dependencies "$PROJECT-deb" "$VERSION" . --project="$PROJECT"
-  run jf rt build-publish "$PROJECT-deb" "$VERSION" --project="$PROJECT"
+  run jf rt build-collect-env "$BUILD_PREFIX-deb" "$VERSION" --project="$PROJECT"
+  run jf rt build-add-git "$BUILD_PREFIX-deb" "$VERSION" --project="$PROJECT"
+  run jf rt build-add-dependencies "$BUILD_PREFIX-deb" "$VERSION" . --project="$PROJECT"
+  run jf rt build-publish "$BUILD_PREFIX-deb" "$VERSION" --project="$PROJECT"
 }
 
 upload_rpm_packages() {
+  
   if [[ "$DRY_RUN" == "true" ]]; then
-    echo "Would upload RPM packages to JFrog..."
+    echo "Would upload RPM packages to JFrog..." >&2
   else
-    echo "Uploading RPM packages to JFrog..."
+    echo "Uploading RPM packages to JFrog..." >&2
   fi
 
-  find . -name "*.rpm" -print0 | while IFS= read -r -d '' rpm; do
+  while IFS= read -r -d '' rpm; do
     if [[ ! -f "$rpm" ]]; then
       continue
     fi
-
-    echo "Processing RPM: $rpm"
 
     # Get metadata using the shared function
     read -r -a metadata < <(get_rpm_metadata "$rpm")
@@ -184,67 +210,67 @@ upload_rpm_packages() {
     arch="${metadata[2]}"
     dist="${metadata[3]}"
 
-    echo "  Package: $pkgname, Version: $version, Arch: $arch, Dist: $dist"
+    echo "  Package: $pkgname, Version: $version, Arch: $arch, Dist: $dist" >&2
 
     # Upload the RPM
     run jf rt upload "$rpm" "$PROJECT-rpm-dev-local" --flat=false \
-      --build-name="$PROJECT-rpm" \
+      --build-name="$BUILD_PREFIX-rpm" \
       --build-number="$VERSION" \
       --project="$PROJECT" \
       --target-props "rpm.distribution=$dist;rpm.component=main;rpm.architecture=$arch"
 
     # Upload signature and checksums if they exist
     if [[ -f "$rpm.asc" ]]; then
-      echo "  Uploading signature: $rpm.asc"
+      echo "  Uploading signature: $rpm.asc" >&2
       run jf rt upload "$rpm.asc" "$PROJECT-rpm-dev-local" --flat=false \
-        --build-name="$PROJECT-rpm" \
+        --build-name="$BUILD_PREFIX-rpm" \
         --build-number="$VERSION" \
         --project="$PROJECT"
     fi
 
     if [[ -f "$rpm.sha256" ]]; then
-      echo "  Uploading checksum: $rpm.sha256"
+      echo "  Uploading checksum: $rpm.sha256" >&2
       run jf rt upload "$rpm.sha256" "$PROJECT-rpm-dev-local" --flat=false \
-        --build-name="$PROJECT-rpm" \
+        --build-name="$BUILD_PREFIX-rpm" \
         --build-number="$VERSION" \
         --project="$PROJECT"
     fi
 
     if [[ -f "$rpm.asc.sha256" ]]; then
-      echo "  Uploading signature checksum: $rpm.asc.sha256"
+      echo "  Uploading signature checksum: $rpm.asc.sha256" >&2
       run jf rt upload "$rpm.asc.sha256" "$PROJECT-rpm-dev-local" --flat=false \
-        --build-name="$PROJECT-rpm" \
+        --build-name="$BUILD_PREFIX-rpm" \
         --build-number="$VERSION" \
         --project="$PROJECT"
     fi
-  done
+  done < <(find . -name "*.rpm" -print0)
 }
 
 publish_rpm_build_info() {
   if [[ "$DRY_RUN" == "true" ]]; then
-    echo "Would publish RPM build info..."
+    echo "Would publish RPM build info..." >&2
   else
-    echo "Publishing RPM build info..."
+    echo "Publishing RPM build info..." >&2
   fi
 
-  run jf rt build-collect-env "$PROJECT-rpm" "$VERSION" --project="$PROJECT"
-  run jf rt build-add-git "$PROJECT-rpm" "$VERSION" --project="$PROJECT"
-  run jf rt build-add-dependencies "$PROJECT-rpm" "$VERSION" . --project="$PROJECT"
-  run jf rt build-publish "$PROJECT-rpm" "$VERSION" --project="$PROJECT"
+  run jf rt build-collect-env "$BUILD_PREFIX-rpm" "$VERSION" --project="$PROJECT"
+  run jf rt build-add-git "$BUILD_PREFIX-rpm" "$VERSION" --project="$PROJECT"
+  run jf rt build-add-dependencies "$BUILD_PREFIX-rpm" "$VERSION" . --project="$PROJECT"
+  run jf rt build-publish "$BUILD_PREFIX-rpm" "$VERSION" --project="$PROJECT"
 }
 
 upload_generic_files() {
   if [[ "$DRY_RUN" == "true" ]]; then
-    echo "Would upload generic files..."
+    echo "Would upload generic files..." >&2
   else
-    echo "Uploading generic files..."
+    echo "Uploading generic files..." >&2
   fi
 
   while IFS= read -r -d '' file; do
     if [[ -f "$file" ]]; then
-      echo "Uploading generic file: $file"
+      echo "Uploading generic file: $file" >&2
       run jf rt upload "$file" "$PROJECT-generic-dev-local" --flat=false \
-        --build-name="$PROJECT-generic" \
+        --build-name="$BUILD_PREFIX-generic" \
         --build-number="$VERSION" \
         --project="$PROJECT"
     fi
@@ -253,40 +279,34 @@ upload_generic_files() {
 
 publish_generic_build_info() {
   if [[ "$DRY_RUN" == "true" ]]; then
-    echo "Would publish generic build info..."
+    echo "Would publish generic build info..." >&2
   else
-    echo "Publishing generic build info..."
+    echo "Publishing generic build info..." >&2
   fi
 
-  run jf rt build-collect-env "$PROJECT-generic" "$VERSION" --project="$PROJECT"
-  run jf rt build-add-git "$PROJECT-generic" "$VERSION" --project="$PROJECT"
-  run jf rt build-add-dependencies "$PROJECT-generic" "$VERSION" . --project="$PROJECT"
-  run jf rt build-publish "$PROJECT-generic" "$VERSION" --project="$PROJECT"
+  run jf rt build-collect-env "$BUILD_PREFIX-generic" "$VERSION" --project="$PROJECT"
+  run jf rt build-add-git "$BUILD_PREFIX-generic" "$VERSION" --project="$PROJECT"
+  run jf rt build-add-dependencies "$BUILD_PREFIX-generic" "$VERSION" . --project="$PROJECT"
+  run jf rt build-publish "$BUILD_PREFIX-generic" "$VERSION" --project="$PROJECT"
 }
 
 main() {
   if [[ "$DRY_RUN" == "true" ]]; then
-    echo "Would upload artifacts to JFrog Artifactory"
+    echo "Would upload artifacts to JFrog Artifactory" >&2
   else
-    echo "Uploading artifacts to JFrog Artifactory"
+    echo "Uploading artifacts to JFrog Artifactory" >&2
   fi
-  echo "Artifacts glob: $ARTIFACTS_GLOB"
-  echo "Project: $PROJECT"
-  echo "Version: $VERSION"
-  echo "Dry run: $DRY_RUN"
-
+  echo "Project: $PROJECT" >&2
+  echo "Build prefix: $BUILD_PREFIX" >&2
+  echo "Version: $VERSION" >&2
+  echo "Dry run: $DRY_RUN" >&2
   # Expand glob pattern to find files in build-artifacts
-  cd build-artifacts
+#   cd build-artifacts
+  mkdir -p structured_build_artifacts
   shopt -s globstar nullglob
-  eval "FILES=( $ARTIFACTS_GLOB )"
 
-  if [[ ${#FILES[@]} -eq 0 ]]; then
-    echo "No matching artifacts found for pattern: $ARTIFACTS_GLOB"
-    exit 1
-  fi
-
-  echo "Found ${#FILES[@]} artifact(s) to process"
-
+  structure_build_artifacts
+  cd structured_build_artifacts
   # Upload and publish DEB packages
   upload_deb_packages
   publish_deb_build_info
@@ -299,9 +319,9 @@ main() {
   upload_generic_files
   publish_generic_build_info
 
-    echo "Upload complete!"
-    echo "Build names: $PROJECT-deb, $PROJECT-rpm, $PROJECT-generic"
-    echo "Build version: $VERSION"
+  echo "Upload complete!" >&2
+  echo "Build names: $BUILD_PREFIX-deb, $BUILD_PREFIX-rpm, $BUILD_PREFIX-generic" >&2
+  echo "Build version: $VERSION" >&2
 }
 
 main "$@"

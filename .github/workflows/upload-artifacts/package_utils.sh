@@ -40,13 +40,15 @@ process_rpm() {
     # Create target directory: <dist>/<arch>/
     # Example: el8/x86_64/
     local target="$dest_dir/$dist/$arch"
-    echo "DEBUG: Creating directory structure:"
-    echo "  Distribution: $dist"
-    echo "  Architecture: $arch"
-    echo "  Target path: $target"
+    echo "DEBUG: Creating directory structure:" >&2
+    echo "  Distribution: $dist" >&2
+    echo "  Architecture: $arch" >&2
+    echo "  Target path: $target" >&2
     mkdir -p "$target"
-    echo "Copying RPM to: $target"
-    cp "$rpm" "$target/"
+    echo "Copying RPM to: $target" >&2
+    rpm_name=$(basename "$rpm")
+    cp "$rpm" "$target/$rpm_name"
+    echo "$target/$rpm_name"
 }
 
 get_codename_for_deb() {
@@ -56,14 +58,14 @@ get_codename_for_deb() {
     *ubuntu24.04*) echo "noble" ;;
     *debian11*)    echo "bullseye" ;;
     *debian12*)    echo "bookworm" ;;
-    *) echo "distro $1 not supported" ; exit 1 ;;
+    *) echo "distro $1 not supported" >&2 ; return 1 ;;
   esac
 }
 
 process_deb() {
     local deb="$1"
     local dest_dir="$2"
-    local codename pkgname arch
+    local codename pkgname arch deb_name
     codename=$(get_codename_for_deb "$deb")
     
     # Get package metadata directly from the DEB file
@@ -72,6 +74,8 @@ process_deb() {
     
     local target="$dest_dir/pool/$codename/$pkgname"
     mkdir -p "$target"
-    echo "Copying DEB to: $target"
-    cp "$deb" "$target/"
+    echo "Copying DEB to: $target" >&2
+    deb_name=$(basename "$deb")
+    cp "$deb" "$target/$deb_name"
+    echo "$target/$deb_name"
 }
