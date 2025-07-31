@@ -69,6 +69,7 @@ jobs:
           path: ./build-artifacts
 
       - name: Upload Artifacts
+        shell: bash
         run: |
           chmod +x ${{ github.workspace }}/.github/workflows/upload-artifacts/entrypoint.sh
           local dry_run_arg=""
@@ -77,5 +78,6 @@ jobs:
           fi
           ${{ github.workspace }}/.github/workflows/upload-artifacts/entrypoint.sh \
             "${{ inputs.project }}" \
+            "${{ inputs.build-prefix }}" \
             "${{ inputs.version }}" \
             $dry_run_arg

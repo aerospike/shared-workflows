@@ -68,17 +68,17 @@ done
 
 
 if [[ -z "${PROJECT:-}" ]]; then
-  error "Error: project is required
+  error "project is required
 Use --help for usage information"
 fi
 
 if [[ -z "${BUILD_PREFIX:-}" ]]; then
-  error "Error: build-prefix is required
+  error "build-prefix is required
 Use --help for usage information"
 fi
 
 if [[ -z "${VERSION:-}" ]]; then
-  error "Error: version is required
+  error "version is required
 Use --help for usage information"
 fi
 
