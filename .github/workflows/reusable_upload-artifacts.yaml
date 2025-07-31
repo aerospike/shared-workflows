@@ -31,6 +31,11 @@ on:
         required: false
         type: string
         default: build-artifacts
+      dry-run:
+        description: Whether to run in dry-run mode. Dry-run mode will not upload any artifacts.
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -66,6 +71,11 @@ jobs:
       - name: Upload Artifacts
         run: |
           chmod +x ${{ github.workspace }}/.github/workflows/upload-artifacts/entrypoint.sh
+          local dry_run_arg=""
+          if [ "${{ inputs.dry-run }}" = "true" ]; then
+            dry_run_arg="--dry-run"
+          fi
           ${{ github.workspace }}/.github/workflows/upload-artifacts/entrypoint.sh \
             "${{ inputs.project }}" \
-            "${{ inputs.version }}"
+            "${{ inputs.version }}" \
+            $dry_run_arg
