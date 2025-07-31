@@ -14,6 +14,7 @@ jobs:
     uses: aerospike/shared-workflows/.github/workflows/reusable_upload-artifacts.yaml@feature/INFRA-128-upload-artifacts
     with:
       project: test-project
+      build-prefix: test-upload-workflow
       version: v1.0.0
       artifactory-url: aerospike.jfrog.io
       artifactory-oidc-provider-name: gh-citrusleaf
