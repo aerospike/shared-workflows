@@ -4,7 +4,10 @@ on:
   pull_request:
     branches: [main]
 
-permissions: read-all
+permissions:
+  id-token: write
+  contents: read
+  packages: write
 
 jobs:
   # In order to test the workflow in a subdirectory, we need to limit it to a specific ref.
