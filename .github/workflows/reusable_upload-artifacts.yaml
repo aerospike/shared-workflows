@@ -19,7 +19,7 @@ on:
         required: false
         description: JFrog Artifactory URL
         type: string
-        default: aerospike.jfrog.io
+        default: https://aerospike.jfrog.io
       artifactory-oidc-provider-name:
         required: false
         description: OIDC provider name

@@ -21,7 +21,7 @@ jobs:
       version: v1.0.0
       artifactory-url: https://aerospike.jfrog.io
       artifactory-oidc-provider-name: gh-citrusleaf
-      artifactory-oidc-audience: aerospike
+      artifactory-oidc-audience: citrusleaf
       build-artifacts-name: build-artifacts
 
   run-tests:
