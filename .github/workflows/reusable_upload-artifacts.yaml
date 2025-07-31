@@ -7,6 +7,10 @@ on:
         description: JFrog Artifactory project name
         required: true
         type: string
+      build-prefix:
+        description: Prefix for the build name
+        required: true
+        type: string
       version:
         description: Version of the artifact to upload
         required: true
