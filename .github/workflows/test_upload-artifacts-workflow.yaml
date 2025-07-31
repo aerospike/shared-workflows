@@ -19,7 +19,7 @@ jobs:
       project: test-project
       build-prefix: test-upload-workflow
       version: v1.0.0
-      artifactory-url: aerospike.jfrog.io
+      artifactory-url: https://aerospike.jfrog.io
       artifactory-oidc-provider-name: gh-citrusleaf
       artifactory-oidc-audience: citrusleaf
       build-artifacts-name: build-artifacts
