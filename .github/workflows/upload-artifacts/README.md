@@ -10,50 +10,28 @@ This workflow uploads build artifacts to JFrog Artifactory. It automatically cat
 - **RPM packages** → `{project}-rpm-dev-local`
 - **Generic files** → `{project}-generic-dev-local`
 
-With the structure
+The workflow processes artifacts from a `build-artifacts` directory and creates structured build artifacts before uploading.
 
-### Debian/Ubuntu
+### Debian/Ubuntu Structure
 
 ```text
-dists/
-├── bookworm/
-│   └── main/
-│       └── binary-amd64/
-│           ├── Packages.gz
-│           ├── Release
-│           └── Release.gpg
-├── bullseye/
-│   └── main/
-│       └── binary-amd64/
-│           └── …
-└── noble/
-    └── main/
-        └── binary-amd64/
-            └── …
 pool/
 ├── bookworm/
-│   └── aerospike-server-community/
-│       ├── aerospike-server-community_7.2.0.10-1debian12_amd64.deb
-│       ├── aerospike-server-community_7.2.0.10-1debian12_amd64.deb.asc
-│       ├── aerospike-server-community_7.2.0.10-1debian12_arm64.deb
-│       ├── aerospike-server-community_7.2.0.10-1debian12_arm64.deb.asc
-│       ├── aerospike-server-community_8.0.0.7-1debian12_amd64.deb
-│       ├── aerospike-server-community_8.0.0.7-1debian12_amd64.deb.asc
-│       ├── aerospike-server-community_8.0.0.7-1debian12_arm64.deb
-│       └── aerospike-server-community_8.0.0.7-1debian12_arm64.deb.asc
+│   └── {package-name}/
+│       ├── {package-name}_version_debian12_arch.deb
+│       └── {package-name}_version_debian12_arch.deb.asc
 ├── bullseye/
-│   └── aerospike-server-community/
-│       ├── aerospike-server-community_7.2.0.10-1debian11_amd64.deb
-│       ├── … (and corresponding `.asc`)
+│   └── {package-name}/
+│       └── {package-name}_version_debian11_arch.deb
+├── jammy/
+│   └── {package-name}/
+│       └── {package-name}_version_ubuntu22.04_arch.deb
 └── noble/
-    └── aerospike-server-community/
-        ├── aerospike-server-community_7.2.0.10-1ubuntu24.04_amd64.deb
-        ├── … (and corresponding `.asc`)
-
-
+    └── {package-name}/
+        └── {package-name}_version_ubuntu24.04_arch.deb
 ```
 
-### RPM/Yum
+### RPM/Yum Structure
 
 ```text
 repo/
@@ -72,21 +50,16 @@ repo/
 
 ## Inputs
 
-| Input                            | Description                              | Required | Default |
-| -------------------------------- | ---------------------------------------- | -------- | ------- |
-| `repository`                     | JFrog Artifactory repository name        | Yes      | -       |
-| `project`                        | Project name (used in repository naming) | Yes      | -       |
-| `version`                        | Version string for build info            | Yes      | -       |
-| `artifactory-url`                | JFrog Artifactory URL                    | Yes      | -       |
-| `artifactory-oidc-provider-name` | OIDC provider name for authentication    | Yes      | -       |
-| `artifactory-oidc-audience`      | OIDC audience for authentication         | Yes      | -       |
-| `build-artifacts-name`           | Name of the artifacts to download        | Yes      | -       |
-
-## Secrets
-
-| Secret                   | Description                               | Required |
-| ------------------------ | ----------------------------------------- | -------- |
-| `artifactory-oidc-token` | OIDC token for Artifactory authentication | Yes      |
+| Input                            | Description                           | Required | Default                      |
+| -------------------------------- | ------------------------------------- | -------- | ---------------------------- |
+| `project`                        | JFrog Artifactory project name        | Yes      | -                            |
+| `build-prefix`                   | Prefix for the build name             | Yes      | -                            |
+| `version`                        | Version string for build info         | Yes      | -                            |
+| `artifactory-url`                | JFrog Artifactory URL                 | No       | `https://aerospike.jfrog.io` |
+| `artifactory-oidc-provider-name` | OIDC provider name for authentication | No       | `gh-citrusleaf`              |
+| `artifactory-oidc-audience`      | OIDC audience for authentication      | No       | `citrusleaf`                 |
+| `build-artifacts-name`           | Name of the artifacts to download     | No       | `build-artifacts`            |
+| `dry-run`                        | Whether to run in dry-run mode        | No       | `false`                      |
 
 ## Example Usage
 
@@ -101,15 +74,14 @@ jobs:
   upload:
     uses: ./.github/workflows/reusable_upload-artifacts.yaml
     with:
-      repository: database-deb-dev-local
       project: database
+      build-prefix: database
       version: ${{ github.ref_name }}
-      artifactory-url: https://aerospike.jfrog.io/artifactory
-      artifactory-oidc-provider-name: github-actions
-      artifactory-oidc-audience: https://aerospike.jfrog.io/artifactory
+      artifactory-url: https://aerospike.jfrog.io
+      artifactory-oidc-provider-name: gh-citrusleaf
+      artifactory-oidc-audience: citrusleaf
       build-artifacts-name: build-artifacts
-    secrets:
-      artifactory-oidc-token: ${{ secrets.ARTIFACTORY_OIDC_TOKEN }}
+      dry-run: false
 ```
 
 ### Build Info Publishing
@@ -121,24 +93,22 @@ After uploading artifacts, the workflow publishes comprehensive build informatio
 - Dependencies
 - Build metadata
 
-### Repository Structure
+The workflow creates separate build info for each artifact type:
 
-Following JFrog best practices, artifacts are organized by:
-
-- **Project**: Your project identifier (e.g., "database")
-- **Technology**: Package type (deb, rpm, generic)
-- **Maturity**: Environment level (dev, stage, prod)
-- **Locator**: Physical location (local)
+- `{build-prefix}-deb` for DEB packages
+- `{build-prefix}-rpm` for RPM packages
+- `{build-prefix}-generic` for generic files
 
 ## Prerequisites
 
 - JFrog Artifactory instance with OIDC authentication configured
 - GitHub Actions with OIDC token access to Artifactory
-- Build artifacts available as downloadable artifacts from a previous job
+- Build artifacts available as downloadable artifacts
 
 ## Notes
 
 - The workflow expects artifacts to be in a directory called `build-artifacts`
 - All uploads use the "DEV" environment level and "local" locator
 - Build info is published for each artifact type separately
-- The workflow follows JFrog's recommended repository naming conventions
+- The workflow processes DEB and RPM files and creates structured build artifacts before uploading
+- Generic files are uploaded directly without structured processing
