@@ -77,7 +77,7 @@ jobs:
         shell: bash
         run: |
           chmod +x ${{ github.workspace }}/.github/workflows/upload-artifacts/entrypoint.sh
-          local dry_run_arg=""
+          dry_run_arg=""
           if [ "${{ inputs.dry-run }}" = "true" ]; then
             dry_run_arg="--dry-run"
           fi
