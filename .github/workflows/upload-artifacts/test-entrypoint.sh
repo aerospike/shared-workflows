@@ -7,7 +7,15 @@ trap 'handle_error ${LINENO}' ERR
 TOTAL_TESTS=0
 PASSED_TESTS=0
 FAILED_TESTS=0
+# Find the git root directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+GIT_ROOT="$(git rev-parse --show-toplevel)"
+
+# Define test directory
+TEST_DIR="$GIT_ROOT/.github/workflows/upload-artifacts/test-artifacts"
+BUILD_ARTIFACTS_DIR="$TEST_DIR/build-artifacts"
 TEST_REPORT_FILE="$TEST_DIR/test-report.txt"
+
 handle_error() {
     local exit_code=$?
     local line_number=$1
@@ -29,27 +37,14 @@ record_test_result() {
     fi
 }
 
-# Find the git root directory
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-GIT_ROOT="$(git rev-parse --show-toplevel)"
-
-# Define test directory
-TEST_DIR="$GIT_ROOT/.github/workflows/upload-artifacts/test-artifacts"
-BUILD_ARTIFACTS_DIR="$TEST_DIR/build-artifacts"
 
 # Cleanup function
 cleanup() {
-    echo "🧹 Cleaning up test artifacts..."
-    # rm -rf "$TEST_DIR"
-    echo "✅ Cleanup complete"
+    rm -rf "$TEST_DIR"
 }
 
 # Set trap to cleanup on exit (success or error)
 trap cleanup EXIT
-
-echo " Testing upload-artifacts entrypoint script..."
-echo "📁 Git root: $GIT_ROOT"
-echo "📁 Script dir: $SCRIPT_DIR"
 
 # Change to git root for consistent context
 cd "$GIT_ROOT" || error "Failed to cd to git root $GIT_ROOT"
@@ -60,18 +55,18 @@ mkdir -p "$TEST_DIR"
 mkdir -p "$BUILD_ARTIFACTS_DIR"
 
 # Copy real test fixtures
-echo "📝 Copying test fixtures..."
+echo " Copying test fixtures..."
 if [[ -f "tests/nano-tiny_8.4-1_arm64.deb" ]]; then
     cp "tests/nano-tiny_8.4-1_arm64.deb" "$BUILD_ARTIFACTS_DIR/test-ubuntu22.04.deb"
-    echo "  ✅ Copied nano-tiny_8.4-1_arm64.deb as test-ubuntu22.04.deb"
+    echo "  Copied nano-tiny_8.4-1_arm64.deb as test-ubuntu22.04.deb"
 else
-    echo "  ❌ nano-tiny_8.4-1_arm64.deb not found, creating mock"
+    echo "   nano-tiny_8.4-1_arm64.deb not found, creating mock"
     echo "test-deb-content" > "$BUILD_ARTIFACTS_DIR/test-ubuntu22.04.deb"
 fi
 
 if [[ -f "tests/test-1.0-2.noarch.rpm" ]]; then
     cp "tests/test-1.0-2.noarch.rpm" "$BUILD_ARTIFACTS_DIR/"
-    echo "  ✅ Copied test-1.0-2.noarch.rpm"
+    echo "   Copied test-1.0-2.noarch.rpm"
 else
     echo "  ❌ test-1.0-2.noarch.rpm not found, creating mock"
     echo "test-rpm-content" > "$BUILD_ARTIFACTS_DIR/test-1.0-2.noarch.rpm"
@@ -86,13 +81,13 @@ echo "test tar content" > "$BUILD_ARTIFACTS_DIR/test.tar.gz"
 mkdir -p "$BUILD_ARTIFACTS_DIR/nested/dir"
 if [[ -f "tests/nano-tiny_8.4-1_arm64.deb" ]]; then
     cp "tests/nano-tiny_8.4-1_arm64.deb" "$BUILD_ARTIFACTS_DIR/nested/dir/test-debian12.deb"
-    echo "  ✅ Copied nano-tiny_8.4-1_arm64.deb as nested test-debian12.deb"
+    echo "   Copied nano-tiny_8.4-1_arm64.deb as nested test-debian12.deb"
 else
     echo "test-nested-deb-content" > "$BUILD_ARTIFACTS_DIR/nested/dir/test-debian12.deb"
 fi
 if [[ -f "tests/test-1.0-2.noarch.rpm" ]]; then
     cp "tests/test-1.0-2.noarch.rpm" "$BUILD_ARTIFACTS_DIR/nested/dir/nested.rpm"
-    echo "  ✅ Copied test-1.0-2.noarch.rpm as nested.rpm"
+    echo "   Copied test-1.0-2.noarch.rpm as nested.rpm"
 else
     echo "test-nested-rpm-content" > "$BUILD_ARTIFACTS_DIR/nested/dir/nested.rpm"
 fi
@@ -124,7 +119,7 @@ verify_test_files() {
         printf '  %s\n' "${missing_files[@]}"
         exit 1
     fi
-    echo "✅ All expected test files present"
+    echo " All expected test files present"
 }
 
 # Mock functions for testing
@@ -136,7 +131,7 @@ capture_dry_run_output() {
     local test_args="$2"
     local output_file="$3"
     
-    echo "🔍 Running: $test_name"
+    echo "  Running: $test_name"
     echo "   Command: $test_args"
     
     # Run the dry-run and capture output (both stdout and stderr)
@@ -176,15 +171,15 @@ verify_commands() {
         if [[ -n "$pattern" ]]; then
             test_count=$((test_count + 1))
             if grep -q "$pattern" "$commands_file"; then
-                echo "    ✅ Pattern found: $pattern"
+                echo "     Pattern found: $pattern"
                 passed_count=$((passed_count + 1))
             else
-                echo "    ❌ Pattern not found: $pattern"
+                echo "     Pattern not found: $pattern"
             fi
         fi
     done <<< "$expected_patterns"
     
-    echo "    📊 Command verification: $passed_count/$test_count patterns matched"
+    echo "     Command verification: $passed_count/$test_count patterns matched"
     if [[ $passed_count -eq $test_count ]]; then
         return 0
     else
@@ -209,7 +204,7 @@ verify_command_count() {
     actual_count=$(wc -l < "$commands_file")
     
     if [[ "$actual_count" -eq "$expected_count" ]]; then
-        echo "    ✅ Command count matches: expected $expected_count, actual $actual_count"
+        echo "     Command count matches: expected $expected_count, actual $actual_count"
         return 0
     else
         echo "    ❌ Command count mismatch: expected $expected_count, actual $actual_count"
@@ -337,9 +332,9 @@ echo "  Testing missing project argument..."
 # shellcheck disable=SC2015
 missing_project_output=$(cd "$TEST_DIR" && "$SCRIPT_DIR/entrypoint.sh" 2>&1 || true)
 if echo "$missing_project_output" | grep -q "Error: project is required"; then
-    echo "    ✅ Missing project error handled correctly"
+    echo "     Missing project error handled correctly"
 else
-    echo "    ❌ Missing project error not handled correctly"
+    echo "     Missing project error not handled correctly"
     test4_success=false
 fi
 
@@ -347,9 +342,9 @@ echo "  Testing missing build-prefix argument..."
 # shellcheck disable=SC2015
 missing_build_prefix_output=$(cd "$TEST_DIR" && "$SCRIPT_DIR/entrypoint.sh" test-project 2>&1 || true)
 if echo "$missing_build_prefix_output" | grep -q "Error: build-prefix is required"; then
-    echo "    ✅ Missing build-prefix error handled correctly"
+    echo "     Missing build-prefix error handled correctly"
 else
-    echo "    ❌ Missing build-prefix error not handled correctly"
+    echo "     Missing build-prefix error not handled correctly"
     test4_success=false
 fi
 
@@ -357,9 +352,9 @@ echo "  Testing missing version argument..."
 # shellcheck disable=SC2015
 missing_version_output=$(cd "$TEST_DIR" && "$SCRIPT_DIR/entrypoint.sh" test-project test-build 2>&1 || true)
 if echo "$missing_version_output" | grep -q "Error: version is required"; then
-    echo "    ✅ Missing version error handled correctly"
+    echo "     Missing version error handled correctly"
 else
-    echo "    ❌ Missing version error not handled correctly"
+    echo "     Missing version error not handled correctly"
     test4_success=false
 fi
 
@@ -367,9 +362,9 @@ echo "  Testing invalid option..."
 # shellcheck disable=SC2015
 invalid_option_output=$(cd "$TEST_DIR" && "$SCRIPT_DIR/entrypoint.sh" --invalid-option test-project test-build v1.0.0 2>&1 || true)
 if echo "$invalid_option_output" | grep -q "Unknown option"; then
-    echo "    ✅ Invalid option error handled correctly"
+    echo "     Invalid option error handled correctly"
 else
-    echo "    ❌ Invalid option error not handled correctly"
+    echo "     Invalid option error not handled correctly"
     test4_success=false
 fi
 
@@ -384,29 +379,24 @@ echo "  Testing structured build artifacts creation..."
 # shellcheck disable=SC2015
 structured_output=$(cd "$TEST_DIR" && "$SCRIPT_DIR/entrypoint.sh" test-project test-build v1.0.0 --dry-run 2>&1 || true)
 if echo "$structured_output" | grep -q "Processing DEB:"; then
-    echo "    ✅ Structured build artifacts processing works correctly"
+    echo "     Structured build artifacts processing works correctly"
 else
-    echo "    ❌ Structured build artifacts processing not working correctly"
+    echo "    Structured build artifacts processing not working correctly"
     test5_success=false
 fi
 
 echo "  Testing RPM processing..."
 # shellcheck disable=SC2015
 if echo "$structured_output" | grep -q "Processing RPM:"; then
-    echo "    ✅ RPM processing works correctly"
+    echo "     RPM processing works correctly"
 else
-    echo "    ❌ RPM processing not working correctly"
+    echo "     RPM processing not working correctly"
     test5_success=false
 fi
 
 record_test_result "Test 5: Structured build artifacts" "$test5_success"
 
 # Summary
-echo ""
-echo "Test Results Summary:"
-echo "  - Total Tests: $TOTAL_TESTS"
-echo "  - Passed Tests: $PASSED_TESTS"
-echo "  - Failed Tests: $FAILED_TESTS"
 
 cat "$TEST_REPORT_FILE"
 
