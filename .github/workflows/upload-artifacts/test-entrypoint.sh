@@ -7,7 +7,7 @@ trap 'handle_error ${LINENO}' ERR
 TOTAL_TESTS=0
 PASSED_TESTS=0
 FAILED_TESTS=0
-
+TEST_REPORT_FILE="$TEST_DIR/test-report.txt"
 handle_error() {
     local exit_code=$?
     local line_number=$1
@@ -22,10 +22,10 @@ record_test_result() {
     TOTAL_TESTS=$((TOTAL_TESTS + 1))
     if [[ "$success" == "true" ]]; then
         PASSED_TESTS=$((PASSED_TESTS + 1))
-        echo "✅ $test_name - PASSED"
+        echo "✅ $test_name - PASSED" >> "$TEST_REPORT_FILE"
     else
         FAILED_TESTS=$((FAILED_TESTS + 1))
-        echo "❌ $test_name - FAILED"
+        echo "❌ $test_name - FAILED" >> "$TEST_REPORT_FILE"
     fi
 }
 
@@ -403,16 +403,18 @@ record_test_result "Test 5: Structured build artifacts" "$test5_success"
 
 # Summary
 echo ""
-echo "📊 Test Results Summary:"
+echo "Test Results Summary:"
 echo "  - Total Tests: $TOTAL_TESTS"
 echo "  - Passed Tests: $PASSED_TESTS"
 echo "  - Failed Tests: $FAILED_TESTS"
-echo "  - Success Rate: $((PASSED_TESTS * 100 / TOTAL_TESTS))%"
+
+cat "$TEST_REPORT_FILE"
 
 if [[ $FAILED_TESTS -eq 0 ]]; then
     echo ""
     echo "🎉 All tests passed successfully!"
 else
     echo ""
-    echo "❌ Some tests failed. Please review the output above."
+    echo "❌ Test failures."
+    return 1
 fi
