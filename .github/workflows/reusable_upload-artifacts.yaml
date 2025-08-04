@@ -1,0 +1,88 @@
+name: Upload to JFrog Artifactory
+
+on:
+  workflow_call:
+    inputs:
+      project:
+        description: JFrog Artifactory project name
+        required: true
+        type: string
+      build-prefix:
+        description: Prefix for the build name
+        required: true
+        type: string
+      version:
+        description: Version of the artifact to upload
+        required: true
+        type: string
+      artifactory-url:
+        required: false
+        description: JFrog Artifactory URL
+        type: string
+        default: https://aerospike.jfrog.io
+      artifactory-oidc-provider-name:
+        required: false
+        description: OIDC provider name
+        type: string
+        default: gh-citrusleaf
+      artifactory-oidc-audience:
+        required: false
+        description: OIDC audience
+        type: string
+        default: citrusleaf
+      build-artifacts-name:
+        description: Name of downloaded/uploaded artifacts
+        required: false
+        type: string
+        default: build-artifacts
+      dry-run:
+        description: Whether to run in dry-run mode. Dry-run mode will not upload any artifacts.
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+
+jobs:
+  upload:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Setup JFrog CLI
+        uses: jfrog/setup-jfrog-cli@f748a0599171a192a2668afee8d0497f7c1069df # v4.5.6
+        env:
+          JF_URL: ${{ inputs.artifactory-url }}
+          JF_PROJECT: ${{ inputs.project }}
+        with:
+          oidc-provider-name: ${{ inputs.artifactory-oidc-provider-name }}
+          oidc-audience: ${{ inputs.artifactory-oidc-audience }}
+
+      - name: Check JFrog Configuration
+        run: |
+          jf c show
+          jf rt ping
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.build-artifacts-name }}
+          path: ./build-artifacts
+
+      - name: Upload Artifacts
+        shell: bash
+        run: |
+          chmod +x ${{ github.workspace }}/.github/workflows/upload-artifacts/entrypoint.sh
+          dry_run_arg=""
+          if [ "${{ inputs.dry-run }}" = "true" ]; then
+            dry_run_arg="--dry-run"
+          fi
+          ${{ github.workspace }}/.github/workflows/upload-artifacts/entrypoint.sh \
+            "${{ inputs.project }}" \
+            "${{ inputs.build-prefix }}" \
+            "${{ inputs.version }}" \
+            $dry_run_arg
