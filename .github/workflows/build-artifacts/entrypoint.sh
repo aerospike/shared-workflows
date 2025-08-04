@@ -25,6 +25,28 @@ error() {
 # Default values
 DRY_RUN="false"
 
+show_help() {
+  echo "Usage: $0 --artifact-directory <dir> (--build-script <commands> | --build-script-path <file>) [OPTIONS]" >&2
+  echo "" >&2
+  echo "Set up and build using an arbitrary build script and upload the results to be used later by other actions" >&2
+  echo "" >&2
+  echo "Required Arguments:" >&2
+  echo "  --artifact-directory <dir>     Directory that will contain all artifacts from this build" >&2
+  echo "" >&2
+  echo "Build Script (choose one):" >&2
+  echo "  --build-script <commands>      Inline bash commands to execute" >&2
+  echo "  --build-script-path <file>     Path to build script file to execute" >&2
+  echo "" >&2
+  echo "Options:" >&2
+  echo "  --dry-run                      Show what would be done without actually doing it" >&2
+  echo "  --help, -h                     Show this help message" >&2
+  echo "" >&2
+  echo "Examples:" >&2
+  echo "  $0 --build-script-path ./scripts/build.sh --artifact-directory build-output" >&2
+  echo "  $0 --build-script 'make all && cp build/* artifacts/' --artifact-directory artifacts" >&2
+  echo "  $0 --build-script-path make.sh --artifact-directory artifacts --dry-run" >&2
+}
+
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -53,34 +75,17 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     --help|-h)
-      echo "Usage: $0 --artifact-directory <dir> (--build-script <commands> | --build-script-path <file>) [OPTIONS]" >&2
-      echo "" >&2
-      echo "Set up and build using an arbitrary build script and upload the results to be used later by other actions" >&2
-      echo "" >&2
-      echo "Required Arguments:" >&2
-      echo "  --artifact-directory <dir>     Directory that will contain all artifacts from this build" >&2
-      echo "" >&2
-      echo "Build Script (choose one):" >&2
-      echo "  --build-script <commands>      Inline bash commands to execute" >&2
-      echo "  --build-script-path <file>     Path to build script file to execute" >&2
-      echo "" >&2
-      echo "Options:" >&2
-      echo "  --dry-run                      Show what would be done without actually doing it" >&2
-      echo "  --help, -h                     Show this help message" >&2
-      echo "" >&2
-      echo "Examples:" >&2
-      echo "  $0 --build-script-path ./scripts/build.sh --artifact-directory build-output" >&2
-      echo "  $0 --build-script 'make all && cp build/* artifacts/' --artifact-directory artifacts" >&2
-      echo "  $0 --build-script-path make.sh --artifact-directory artifacts --dry-run" >&2
+      show_help
       exit 0
       ;;
     -*)
       echo "Unknown option: $1" >&2
-      echo "Use --help for usage information" >&2
+      show_help
       exit 1
       ;;
     *)
-      echo "Use --help for usage information" >&2
+      echo "Unexpected positional argument: $1" >&2
+      show_help
       exit 1
       ;;
   esac
@@ -120,11 +125,11 @@ main() {
   
   # Handle build script based on type
   local resolved_build_script
-  local is_inline_script=false
+#  local is_inline_script=false
 
   if [[ "$BUILD_SCRIPT_TYPE" == "inline" ]]; then
     # Create a temporary script file from inline commands
-    is_inline_script=true
+    # is_inline_script=true
     
     local temp_script="/tmp/build-script-$$.sh"
     echo "#!/bin/bash" > "$temp_script"
@@ -183,9 +188,9 @@ main() {
   echo "Build-artifacts workflow completed successfully!" >&2
 
   # At the end, clean up temp script if created:
-  if [[ "$is_inline_script" == "true" && -f "$resolved_build_script" ]]; then
-    rm -f "$resolved_build_script"
-  fi
+#   if [[ "$is_inline_script" == "true" && -f "$resolved_build_script" ]]; then
+#     rm -f "$resolved_build_script"
+#   fi
 }
 
 main "$@" 
