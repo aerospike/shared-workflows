@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       build-script:
-        description: Path to the build script to execute
+        description: Inline build script to execute
         required: false
         type: string
         default: ""

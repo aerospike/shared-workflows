@@ -233,16 +233,6 @@ if [[ $FAILED_TESTS -eq 0 ]]; then
     echo "✅ Test suite completed with exit code 0"
     exit 0
 else
-    echo ""
-    echo "❌ Some tests failed."
-    echo "Failed test details:"
-    echo "  - Test 1: Basic successful build - $([[ "$test1_success" == "true" ]] && echo "PASSED" || echo "FAILED")"
-    echo "  - Test 2: Dry-run mode - $([[ "$test2_success" == "true" ]] && echo "PASSED" || echo "FAILED")"
-    echo "  - Test 3: Error handling - missing build script - $([[ "$test3_success" == "true" ]] && echo "PASSED" || echo "FAILED")"
-    echo "  - Test 4: Error handling - missing arguments - $([[ "$test4_success" == "true" ]] && echo "PASSED" || echo "FAILED")"
-    echo "  - Test 5: Real build using test app - $([[ "$test5_success" == "true" ]] && echo "PASSED" || echo "FAILED")"
-    echo "  - Test 6: Script permissions handling - $([[ "$test6_success" == "true" ]] && echo "PASSED" || echo "FAILED")"
-    echo "  - Test 7: Error handling - no artifacts created - $([[ "$test7_success" == "true" ]] && echo "PASSED" || echo "FAILED")"
     echo "❌ Test suite completed with exit code 1"
     exit 1
 fi 
