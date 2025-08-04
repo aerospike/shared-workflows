@@ -23,7 +23,6 @@ handle_error() {
     exit 1
 }
 
-# Function to record test results
 record_test_result() {
     local test_name="$1"
     local success="$2"

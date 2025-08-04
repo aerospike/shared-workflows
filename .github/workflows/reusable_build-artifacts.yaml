@@ -1,0 +1,56 @@
+name: Build Artifacts
+
+on:
+  workflow_call:
+    inputs:
+      build-script:
+        description: Path to the build script to execute
+        required: true
+        type: string
+      artifact-directory:
+        description: Directory that will contain all artifacts from this build
+        required: true
+        type: string
+      artifact-name:
+        description: Name for the uploaded artifacts
+        required: false
+        type: string
+        default: build-artifacts
+      dry-run:
+        description: Whether to run in dry-run mode
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  build-artifacts:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Execute Build Script
+        shell: bash
+        run: |
+          chmod +x ${{ github.workspace }}/.github/workflows/build-artifacts/entrypoint.sh
+          dry_run_arg=""
+          if [ "${{ inputs.dry-run }}" = "true" ]; then
+            dry_run_arg="--dry-run"
+          fi
+          ${{ github.workspace }}/.github/workflows/build-artifacts/entrypoint.sh \
+            "${{ inputs.build-script }}" \
+            "${{ inputs.artifact-directory }}" \
+            $dry_run_arg
+
+      - name: Upload Artifacts
+        if: inputs.dry-run != true
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.artifact-name }}
+          path: ${{ inputs.artifact-directory }}
+          retention-days: 1
