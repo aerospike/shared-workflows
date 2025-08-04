@@ -22,7 +22,8 @@ error() {
 
 # Default values
 DRY_RUN="false"
-
+# print full command line
+echo "Command line: $0 $*" >&2
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
   case $1 in
