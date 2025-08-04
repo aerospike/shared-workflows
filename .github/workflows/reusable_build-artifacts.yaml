@@ -50,9 +50,9 @@ jobs:
           fi
           build_script_arg=""
           if [ "${{ inputs.build-script }}" != "" ]; then
-            build_script_arg="--build-script ${inputs.build-script}"
+            build_script_arg="--build-script ${{ inputs.build-script }}"
           elif [ "${{ inputs.build-script-path }}" != "" ]; then
-            build_script_arg="--build-script-path ${{inputs.build-script-path}}"
+            build_script_arg="--build-script-path ${{ inputs.build-script-path }}"
           else
             echo "Error: Either ${{ inputs.build-script }} or ${{ inputs.build-script-path }} must be provided"
             exit 1
