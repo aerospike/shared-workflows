@@ -136,6 +136,8 @@ main() {
     echo "set -euo pipefail" >> "$temp_script"
     echo "$BUILD_SCRIPT" >> "$temp_script"
     chmod +x "$temp_script"
+    echo "temp_script: $temp_script"
+    cat "$temp_script"
     resolved_build_script="$temp_script"
     
     echo "Created temporary script from inline commands: $temp_script" >&2
