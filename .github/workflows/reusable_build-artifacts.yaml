@@ -50,7 +50,7 @@ jobs:
           fi
           if [ "${{ inputs.build-script }}" != "" ]; then
             "${{ github.workspace }}/.github/workflows/build-artifacts/entrypoint.sh" \
-              --build-script \"${{ inputs.build-script }}\" \
+              --build-script "${{ inputs.build-script }}" \
               --artifact-directory "${{ inputs.artifact-directory }}" \
               $dry_run_arg
           elif [ "${{ inputs.build-script-path }}" != "" ]; then
