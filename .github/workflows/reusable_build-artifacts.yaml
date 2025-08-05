@@ -27,6 +27,21 @@ on:
         required: false
         type: number
         default: 1
+      artifactory-url:
+        required: false
+        description: JFrog Artifactory URL
+        type: string
+        default: https://aerospike.jfrog.io
+      artifactory-oidc-provider-name:
+        required: false
+        description: OIDC provider name
+        type: string
+        default: gh-aerospike
+      artifactory-oidc-audience:
+        required: false
+        description: OIDC audience
+        type: string
+        default: aerospike
       dry-run:
         description: Whether to run in dry-run mode
         required: false
