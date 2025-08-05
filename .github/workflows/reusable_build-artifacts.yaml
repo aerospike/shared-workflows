@@ -59,7 +59,7 @@ jobs:
               --artifact-directory "${{ inputs.artifact-directory }}" \
               $dry_run_arg
           else
-            echo "Error: Either build-script or build-script-path must be provided"
+            echo "Error: Either build-script or build-script-path must be given"
             exit 1
           fi
 
