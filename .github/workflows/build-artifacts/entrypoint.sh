@@ -125,7 +125,6 @@ main() {
   
   # Handle build script based on type
   local resolved_build_script
-#  local is_inline_script=false
 
   if [[ "$BUILD_SCRIPT_TYPE" == "inline" ]]; then
     # Create a temporary script file from inline commands
