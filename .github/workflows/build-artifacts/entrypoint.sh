@@ -188,10 +188,6 @@ main() {
   
   echo "Build-artifacts workflow completed successfully!" >&2
 
-  # At the end, clean up temp script if created:
-#   if [[ "$is_inline_script" == "true" && -f "$resolved_build_script" ]]; then
-#     rm -f "$resolved_build_script"
-#   fi
 }
 
 main "$@" 
