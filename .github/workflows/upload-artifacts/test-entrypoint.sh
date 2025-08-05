@@ -192,7 +192,7 @@ verify_command_count() {
     local commands_file="$2"
     local expected_count="$3"
     
-    echo "  🔍 Verifying command count for: $test_name"
+    echo "   Verifying command count for: $test_name"
     
     if [[ ! -f "$commands_file" ]]; then
         echo "    ❌ Commands file not found: $commands_file"
@@ -213,7 +213,7 @@ verify_command_count() {
 
 # Test 1: Test with specific file types (DEB and RPM)
 echo ""
-echo "🔍 Test 1: Uploading specific file types (DEB and RPM)"
+echo " Test 1: Uploading specific file types (DEB and RPM)"
 cd "$TEST_DIR" || error "Failed to cd to $TEST_DIR"
 
 # Set up environment for the test - only mock jf command
@@ -265,7 +265,7 @@ record_test_result "Test 1: DEB and RPM upload" "$test1_success"
 
 # Test 2: Test with nested files
 echo ""
-echo "🔍 Test 2: Uploading nested files"
+echo " Test 2: Uploading nested files"
 capture_dry_run_output \
     "Nested files upload test" \
     "$SCRIPT_DIR/entrypoint.sh test-project test-build v1.0.0 --dry-run" \
@@ -290,7 +290,7 @@ record_test_result "Test 2: Nested files upload" "$test2_success"
 
 # Test 3: Test with all files
 echo ""
-echo "🔍 Test 3: Uploading all files"
+echo " Test 3: Uploading all files"
 capture_dry_run_output \
     "All files upload test" \
     "$SCRIPT_DIR/entrypoint.sh test-project test-build v1.0.0 --dry-run" \
@@ -324,7 +324,7 @@ record_test_result "Test 3: All files upload" "$test3_success"
 
 # Test 4: Test error handling
 echo ""
-echo "🔍 Test 4: Error handling"
+echo " Test 4: Error handling"
 test4_success=true
 
 echo "  Testing missing project argument..."
@@ -371,7 +371,7 @@ record_test_result "Test 4: Error handling" "$test4_success"
 
 # Test 5: Test structured build artifacts
 echo ""
-echo "🔍 Test 5: Structured build artifacts"
+echo " Test 5: Structured build artifacts"
 test5_success=true
 
 echo "  Testing structured build artifacts creation..."

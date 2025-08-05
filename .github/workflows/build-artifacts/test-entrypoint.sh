@@ -89,7 +89,7 @@ chmod +x "$TEST_DIR"/*.sh
 
 # Test 1: Basic successful build
 echo ""
-echo "🔍 Test 1: Basic successful build"
+echo " Test 1: Basic successful build"
 test1_success=true
 
 cd "$TEST_DIR"
@@ -105,7 +105,7 @@ record_test_result "Test 1: Basic successful build" "$test1_success"
 
 # Test 2: Dry-run mode
 echo ""
-echo "🔍 Test 2: Dry-run mode"
+echo " Test 2: Dry-run mode"
 test2_success=true
 
 cd "$TEST_DIR"
@@ -129,7 +129,7 @@ record_test_result "Test 2: Dry-run mode" "$test2_success"
 
 # Test 3: Error handling - missing build script
 echo ""
-echo "🔍 Test 3: Error handling - missing build script"
+echo " Test 3: Error handling - missing build script"
 test3_success=true
 
 cd "$TEST_DIR"
@@ -141,7 +141,7 @@ record_test_result "Test 3: Error handling - missing build script" "$test3_succe
 
 # Test 4: Error handling - missing arguments
 echo ""
-echo "🔍 Test 4: Error handling - missing arguments"
+echo " Test 4: Error handling - missing arguments"
 test4_success=true
 
 cd "$TEST_DIR"
@@ -185,7 +185,7 @@ record_test_result "Test 5: Real build using test app" "$test5_success"
 
 # Test 6: Script permissions handling
 echo ""
-echo "🔍 Test 6: Script permissions handling"
+echo " Test 6: Script permissions handling"
 test6_success=true
 
 cd "$TEST_DIR"
