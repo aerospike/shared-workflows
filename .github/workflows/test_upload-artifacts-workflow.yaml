@@ -10,6 +10,16 @@ permissions:
   packages: write
 
 jobs:
+  upload-test-gh-artifacts:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts
+          path: tests/test-1.0-2.noarch.rpm
   # In order to test the workflow in a subdirectory, we need to limit it to a specific ref.
   # This will require a secondary PR to clean up the conditional logic for the main branch.
   test-upload-workflow:
@@ -20,7 +30,7 @@ jobs:
       build-prefix: test-upload-workflow
       version: v1.0.0
       artifactory-url: https://aerospike.jfrog.io
-      artifactory-oidc-provider-name: gh-citrusleaf
+      artifactory-oidc-provider-name: gh-aerospike
       artifactory-oidc-audience: aerospike
       build-artifacts-name: build-artifacts
 
