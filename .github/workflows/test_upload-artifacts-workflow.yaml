@@ -20,8 +20,6 @@ jobs:
         with:
           name: build-artifacts
           path: tests/test-1.0-2.noarch.rpm
-  # In order to test the workflow in a subdirectory, we need to limit it to a specific ref.
-  # This will require a secondary PR to clean up the conditional logic for the main branch.
   test-upload-workflow:
     uses: ./.github/workflows/reusable_upload-artifacts.yaml
     with:

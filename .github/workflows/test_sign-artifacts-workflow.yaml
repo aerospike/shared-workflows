@@ -7,8 +7,6 @@ on:
 permissions: read-all
 
 jobs:
-  # In order to test the workflow in a subdirectory, we need to limit it to a specific ref.
-  # This will require a secondary PR to clean up the conditional logic for the main branch.
   test-sign-workflow:
     uses: ./.github/workflows/reusable_sign-artifacts.yaml
     with:
