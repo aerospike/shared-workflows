@@ -10,12 +10,18 @@ This workflow executes a custom build script and uploads the resulting artifacts
 
 | Input                | Description                                               | Required | Default           |
 | -------------------- | --------------------------------------------------------- | -------- | ----------------- |
-| `build-script`       | Path to the build script to execute                       | Yes      | -                 |
+| `build-script`       | Inline bash commands to execute                           | No\*     | -                 |
+| `build-script-path`  | Path to the build script file to execute                  | No\*     | -                 |
 | `artifact-directory` | Directory that will contain all artifacts from this build | Yes      | -                 |
 | `artifact-name`      | Name for the uploaded artifacts                           | No       | `build-artifacts` |
+| `retention-days`     | Retention days for the artifacts                          | No       | `1`               |
 | `dry-run`            | Whether to run in dry-run mode                            | No       | `false`           |
 
+\*Either `build-script` or `build-script-path` is required, but not both.
+
 ## Example Usage
+
+### Using inline build commands
 
 ```yaml
 name: Build and Upload
@@ -28,9 +34,24 @@ jobs:
   build:
     uses: ./.github/workflows/reusable_build-artifacts.yaml
     with:
-      build-script: ./scripts/build.sh
+      build-script: "make clean && make all && cp build/* dist/"
       artifact-directory: dist
       artifact-name: my-build-artifacts
+      retention-days: 7
+      dry-run: false
+```
+
+### Using a build script file
+
+```yaml
+jobs:
+  build:
+    uses: ./.github/workflows/reusable_build-artifacts.yaml
+    with:
+      build-script-path: ./scripts/build.sh
+      artifact-directory: dist
+      artifact-name: my-build-artifacts
+      retention-days: 7
       dry-run: false
 ```
 
@@ -43,7 +64,7 @@ Your build script should:
 - Exit with code 0 on success, non-zero on failure
 - Handle its own dependency installation
 
-Example build script:
+### Example build script file
 
 ```bash
 #!/bin/bash
@@ -56,28 +77,31 @@ make clean
 make all
 
 # Copy artifacts to the specified directory
-mkdir -p "$1"  # artifact-directory is passed as first argument
-cp build/*.tar.gz "$1/"
-cp build/*.deb "$1/"
+mkdir -p build-output
+cp build/*.tar.gz build-output/
+cp build/*.deb build-output/
 
 echo "Build completed successfully"
 ```
 
+### Example inline build commands
+
+```bash
+# These commands will be executed directly
+make clean && make all && mkdir -p dist && cp build/* dist/
+```
+
 ## Prerequisites
 
-- Build script must exist in the repository
+- Build script must exist in the repository (if using `build-script-path`)
 - Build script should create artifacts in the specified directory
-- No additional system dependencies (build script handles its own requirements)
 
 ## Notes
 
 - The workflow follows the established patterns from sign-artifacts and upload-artifacts workflows
-- All operations support dry-run mode for testing
-- The entrypoint script includes comprehensive error handling and logging
 - Test suite provides detailed reporting with proper exit codes
-- Artifacts are uploaded with 30-day retention by default
 - Build script is automatically made executable if needed
-- Workflow validates that artifacts were created after build completion
+- Supports both inline commands and script files
 
 ## Testing
 
@@ -87,56 +111,4 @@ Run the test suite:
 .github/workflows/build-artifacts/test-entrypoint.sh
 ```
 
-The test suite validates:
-
-- Basic build script execution
-- Dry-run mode functionality
-- Error handling for missing scripts and arguments
-- Help message display
-- Script permission handling
-- Artifact creation validation
-
 The test suite will create temporary build scripts and verify all functionality works correctly.
-
-## Error Handling
-
-The workflow includes robust error handling:
-
-- Validates build script exists before execution
-- Makes scripts executable automatically if needed
-- Verifies artifacts were created after build
-- Provides clear error messages for common issues
-- Supports dry-run mode for testing without side effects
-
-## Integration
-
-This workflow is designed to be used as a building block in larger CI/CD pipelines:
-
-1. **Build Phase**: Use this workflow to execute your build process
-2. **Test Phase**: Download artifacts and run tests
-3. **Deploy Phase**: Download artifacts and deploy to environments
-
-```yaml
-jobs:
-  build:
-    uses: ./.github/workflows/reusable_build-artifacts.yaml
-    with:
-      build-script: ./build.sh
-      artifact-directory: dist
-
-  test:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: build-artifacts
-      - name: Run tests
-        run: ./test.sh
-
-  deploy:
-    needs: [build, test]
-    uses: ./.github/workflows/reusable_deploy.yaml
-    with:
-      artifact-name: build-artifacts
-```
