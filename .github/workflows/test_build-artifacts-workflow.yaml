@@ -1,0 +1,27 @@
+name: Test Build Artifacts Workflow
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test-build-artifacts-workflow:
+    uses: ./.github/workflows/reusable_build-artifacts.yaml
+    with:
+      build-script: cd .github/workflows/build-artifacts/test_apps/hi && make
+      artifact-directory: .github/workflows/build-artifacts/test_apps/hi/build
+      artifact-name: test-build-artifacts
+      dry-run: false
+
+  # Test the entrypoint script directly
+  run-tests:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Test Entrypoint
+        run: |
+          .github/workflows/build-artifacts/test-entrypoint.sh

@@ -30,11 +30,16 @@ on:
         description: OIDC audience
         type: string
         default: citrusleaf
-      build-artifacts-name:
+      artifact-name:
         description: Name of downloaded/uploaded artifacts
         required: false
         type: string
         default: build-artifacts
+      retention-days:
+        description: Retention days for the artifacts
+        required: false
+        type: number
+        default: 1
       dry-run:
         description: Whether to run in dry-run mode. Dry-run mode will not upload any artifacts.
         required: false
@@ -70,7 +75,7 @@ jobs:
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
-          name: ${{ inputs.build-artifacts-name }}
+          name: ${{ inputs.artifact-name }}
           path: ./build-artifacts
 
       - name: Upload Artifacts

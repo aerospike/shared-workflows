@@ -1,3 +1,6 @@
 .DS_Store
-test-artifacts
-build-artifacts
+.github/workflows/upload-artifacts/test-artifacts
+.github/workflows/build-artifacts/test-artifacts
+.github/workflows/upload-artifacts/build-artifacts
+.github/workflows/build-artifacts/build-output
+.github/workflows/sign-artifacts/test-artifacts

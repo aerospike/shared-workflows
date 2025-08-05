@@ -1,0 +1,92 @@
+name: Build Artifacts
+
+on:
+  workflow_call:
+    inputs:
+      build-script:
+        description: Inline build script to execute
+        required: false
+        type: string
+        default: ""
+      build-script-path:
+        description: Path to the build script to execute
+        required: false
+        type: string
+        default: ""
+      artifact-directory:
+        description: Directory that will contain all artifacts from this build
+        required: true
+        type: string
+      artifact-name:
+        description: Name for the uploaded artifacts
+        required: false
+        type: string
+        default: build-artifacts
+      retention-days:
+        description: Retention days for the artifacts
+        required: false
+        type: number
+        default: 1
+      artifactory-url:
+        required: false
+        description: JFrog Artifactory URL
+        type: string
+        default: https://aerospike.jfrog.io
+      artifactory-oidc-provider-name:
+        required: false
+        description: OIDC provider name
+        type: string
+        default: gh-aerospike
+      artifactory-oidc-audience:
+        required: false
+        description: OIDC audience
+        type: string
+        default: aerospike
+      dry-run:
+        description: Whether to run in dry-run mode
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  build-artifacts:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Execute Build Script
+        shell: bash
+        run: |
+          chmod +x ${{ github.workspace }}/.github/workflows/build-artifacts/entrypoint.sh
+          dry_run_arg=""
+          if [ "${{ inputs.dry-run }}" = "true" ]; then
+            dry_run_arg="--dry-run"
+          fi
+          if [ "${{ inputs.build-script }}" != "" ]; then
+            "${{ github.workspace }}/.github/workflows/build-artifacts/entrypoint.sh" \
+              --build-script "${{ inputs.build-script }}" \
+              --artifact-directory "${{ inputs.artifact-directory }}" \
+              $dry_run_arg
+          elif [ "${{ inputs.build-script-path }}" != "" ]; then
+            "${{ github.workspace }}/.github/workflows/build-artifacts/entrypoint.sh" \
+              --build-script-path "${{ inputs.build-script-path }}" \
+              --artifact-directory "${{ inputs.artifact-directory }}" \
+              $dry_run_arg
+          else
+            echo "Error: Either build-script or build-script-path must be given"
+            exit 1
+          fi
+
+      - name: Upload Artifacts
+        if: inputs.dry-run != true
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.artifact-name }}
+          path: ${{ inputs.artifact-directory }}
+          retention-days: ${{ inputs.retention-days }}

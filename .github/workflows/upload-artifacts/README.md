@@ -58,7 +58,8 @@ repo/
 | `artifactory-url`                | JFrog Artifactory URL                 | No       | `https://aerospike.jfrog.io` |
 | `artifactory-oidc-provider-name` | OIDC provider name for authentication | No       | `gh-citrusleaf`              |
 | `artifactory-oidc-audience`      | OIDC audience for authentication      | No       | `citrusleaf`                 |
-| `build-artifacts-name`           | Name of the artifacts to download     | No       | `build-artifacts`            |
+| `artifact-name`                  | Name of the artifacts to download     | No       | `build-artifacts`            |
+| `retention-days`                 | Retention days for the artifacts      | No       | `1`                          |
 | `dry-run`                        | Whether to run in dry-run mode        | No       | `false`                      |
 
 ## Example Usage
@@ -80,7 +81,8 @@ jobs:
       artifactory-url: https://aerospike.jfrog.io
       artifactory-oidc-provider-name: gh-citrusleaf
       artifactory-oidc-audience: citrusleaf
-      build-artifacts-name: build-artifacts
+      artifact-name: build-artifacts
+      retention-days: 1
       dry-run: false
 ```
 

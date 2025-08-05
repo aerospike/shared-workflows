@@ -155,7 +155,7 @@ verify_files_signed() {
 
 # Test 1: Test with specific file types
 echo ""
-echo "🔍 Test 1: Signing specific file types"
+echo " Test 1: Signing specific file types"
 # shellcheck disable=SC1091
 . "$SCRIPT_DIR/entrypoint.sh" "$UNSIGNED_ARTIFACTS_DIR/*.{deb,rpm}" "$SIGNED_ARTIFACTS_DIR"
 
@@ -173,7 +173,7 @@ done
 
 # Test 2: Test with nested files
 echo ""
-echo "🔍 Test 2: Signing nested files"
+echo " Test 2: Signing nested files"
 # shellcheck disable=SC1091
 . "$SCRIPT_DIR/entrypoint.sh" "$UNSIGNED_ARTIFACTS_DIR/**/*.{deb,rpm}" "$SIGNED_ARTIFACTS_DIR"
 
@@ -191,7 +191,7 @@ done
 
 # Test 3: Test with all files
 echo ""
-echo "🔍 Test 3: Signing all files"
+echo " Test 3: Signing all files"
 # shellcheck disable=SC1091
 . "$SCRIPT_DIR/entrypoint.sh" "$UNSIGNED_ARTIFACTS_DIR/**/*" "$SIGNED_ARTIFACTS_DIR"
 
@@ -209,7 +209,7 @@ done
 
 # Test 4: Validate signatures
 echo ""
-echo "🔍 Test 4: Validating signatures"
+echo " Test 4: Validating signatures"
 for file in "$SIGNED_ARTIFACTS_DIR"/**/*.asc; do
     if [[ -f "$file" ]]; then
         original_file="${file%.asc}"
@@ -226,12 +226,12 @@ done
 
 # Test 5: Validate checksums
 echo ""
-echo "🔍 Test 5: Validating checksums"
+echo " Test 5: Validating checksums"
 for file in "$SIGNED_ARTIFACTS_DIR"/**/*.sha256; do
     if [[ -f "$file" ]]; then
         original_file="${file%.sha256}"
         if [[ -f "$original_file" ]]; then
-            echo "  🔍 Validating checksum for $original_file"
+            echo "   Validating checksum for $original_file"
             if shasum -a 256 -c "$file" 2>/dev/null; then
                 echo "    ✅ Checksum is valid"
             else

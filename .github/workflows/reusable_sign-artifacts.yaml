@@ -7,8 +7,8 @@ on:
         description: Glob pattern to match artifacts to sign (e.g. dist/**/*.{jar,deb,rpm})
         required: true
         type: string
-      output-dir:
-        description: Output directory where signed artifacts will be placed (e.g. signed-artifacts)
+      artifact-name:
+        description: Name for the uploaded artifacts
         required: false
         type: string
         default: signed-artifacts
@@ -16,7 +16,23 @@ on:
         description: Retention days for the artifacts
         required: false
         type: number
-        default: 7
+        default: 1
+      artifactory-url:
+        required: false
+        description: JFrog Artifactory URL
+        type: string
+        default: https://aerospike.jfrog.io
+      artifactory-oidc-provider-name:
+        required: false
+        description: OIDC provider name
+        type: string
+        default: gh-aerospike
+      artifactory-oidc-audience:
+        required: false
+        description: OIDC audience
+        type: string
+        default: aerospike
+
     secrets:
       gpg-private-key:
         required: true
@@ -47,10 +63,10 @@ jobs:
       - name: Sign Artifacts
         run: |
           chmod +x ${{ github.workspace }}/.github/workflows/sign-artifacts/entrypoint.sh
-          ${{ github.workspace }}/.github/workflows/sign-artifacts/entrypoint.sh "${{ inputs.artifact-glob }}" "${{ inputs.output-dir }}"
+          ${{ github.workspace }}/.github/workflows/sign-artifacts/entrypoint.sh "${{ inputs.artifact-glob }}" "${{ inputs.artifact-name }}"
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ inputs.output-dir }}
-          path: ${{ inputs.output-dir }}
+          name: ${{ inputs.artifact-name }}
+          path: ${{ inputs.artifact-name }}
           retention-days: ${{ inputs.retention-days }}
