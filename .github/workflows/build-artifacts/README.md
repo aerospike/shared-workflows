@@ -34,7 +34,7 @@ jobs:
   build:
     uses: ./.github/workflows/reusable_build-artifacts.yaml
     with:
-      build-script: "make clean && make all && cp build/* dist/"
+      build-script: make clean && make all && cp build/* dist/
       artifact-directory: dist
       artifact-name: my-build-artifacts
       retention-days: 7
@@ -95,13 +95,18 @@ make clean && make all && mkdir -p dist && cp build/* dist/
 
 - Build script must exist in the repository (if using `build-script-path`)
 - Build script should create artifacts in the specified directory
+- No additional system dependencies (build script handles its own requirements)
 
 ## Notes
 
 - The workflow follows the established patterns from sign-artifacts and upload-artifacts workflows
+- All operations support dry-run mode for testing
+- The entrypoint script includes comprehensive error handling and logging
 - Test suite provides detailed reporting with proper exit codes
+- Artifacts are uploaded with configurable retention period (default: 1 day)
 - Build script is automatically made executable if needed
-- Supports both inline commands and script files
+- Workflow validates that artifacts were created after build completion
+- Supports both inline commands and script files for maximum flexibility
 
 ## Testing
 
