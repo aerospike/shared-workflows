@@ -15,7 +15,7 @@ jobs:
       build-script: cd .github/workflows/build-artifacts/test_apps/hi && make
       artifact-directory: .github/workflows/build-artifacts/test_apps/hi/build
       artifact-name: test-build-artifacts
-      dry-run: true
+      dry-run: false
 
   # Test the entrypoint script directly
   run-tests:
