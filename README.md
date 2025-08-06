@@ -1,3 +1,121 @@
+# Shared Workflows
+
+This repository contains reusable GitHub Actions workflows for common CI/CD tasks.
+
+## Available Workflows
+
+### Sign Artifacts
+- **File**: `.github/workflows/reusable_sign-artifacts.yaml`
+- **Purpose**: Sign RPM and DEB packages with GPG
+- **Usage**: See [Sign Artifacts Documentation](#sign-artifacts)
+
+### Sign NuGet Packages
+- **File**: `.github/workflows/reusable_sign-nuget.yaml`
+- **Purpose**: Sign NuGet packages with SSL.com certificates
+- **Usage**: See [Sign NuGet Packages Documentation](#sign-nuget-packages)
+
+### Upload Artifacts
+- **File**: `.github/workflows/reusable_upload-artifacts.yaml`
+- **Purpose**: Upload artifacts to various destinations
+- **Usage**: See [Upload Artifacts Documentation](#upload-artifacts)
+
+## Sign NuGet Packages
+
+The reusable NuGet signing workflow automatically detects .csproj files in your repository and signs the resulting NuGet packages using SSL.com certificates.
+
+### Features
+
+- **Auto-detection**: Automatically finds .csproj files and extracts package information
+- **Flexible configuration**: Supports custom project paths, package names, and build settings
+- **Secure signing**: Uses SSL.com certificates for professional code signing
+- **Verification**: Includes built-in package verification steps
+
+### Basic Usage
+
+```yaml
+name: Sign My NuGet Package
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  sign-nuget:
+    uses: aerospike/shared-workflows/.github/workflows/reusable_sign-nuget.yaml@main
+    secrets:
+      ssl-username: ${{ secrets.SSL_USERNAME }}
+      ssl-password: ${{ secrets.SSL_PASSWORD }}
+      ssl-credential-id: ${{ secrets.SSL_CREDENTIAL_ID }}
+      ssl-totp-secret: ${{ secrets.SSL_TOTP_SECRET }}
+      ssl-client-id: ${{ secrets.SSL_CLIENT_ID }}
+```
+
+### Advanced Usage
+
+```yaml
+name: Sign My NuGet Package
+
+on:
+  workflow_dispatch:
+
+jobs:
+  sign-nuget:
+    uses: aerospike/shared-workflows/.github/workflows/reusable_sign-nuget.yaml@main
+    with:
+      # Specify a specific .csproj file (optional)
+      project-path: 'src/MyProject/MyProject.csproj'
+      
+      # Specify custom package name (optional)
+      package-name: 'MyCustomPackage.2.1.0.nupkg'
+      
+      # Customize output directory
+      output-dir: 'signed-packages'
+      
+      # Customize retention period
+      retention-days: 90
+      
+      # Specify .NET version
+      dotnet-version: '8.0.x'
+      
+      # Specify build configuration
+      build-configuration: 'Release'
+    secrets:
+      ssl-username: ${{ secrets.SSL_USERNAME }}
+      ssl-password: ${{ secrets.SSL_PASSWORD }}
+      ssl-credential-id: ${{ secrets.SSL_CREDENTIAL_ID }}
+      ssl-totp-secret: ${{ secrets.SSL_TOTP_SECRET }}
+      ssl-client-id: ${{ secrets.SSL_CLIENT_ID }}
+```
+
+### Required Secrets
+
+You need to set up the following secrets in your repository:
+
+- `SSL_USERNAME`: Your SSL.com username
+- `SSL_PASSWORD`: Your SSL.com password
+- `SSL_CREDENTIAL_ID`: Your SSL.com credential ID
+- `SSL_TOTP_SECRET`: Your SSL.com TOTP secret
+- `SSL_CLIENT_ID`: Your SSL.com client ID
+
+### How It Works
+
+1. **Auto-detection**: The workflow automatically finds .csproj files in your repository
+2. **Package extraction**: Extracts package name and version from the .csproj file
+3. **Build**: Restores dependencies, builds the project, and creates the NuGet package
+4. **Signing**: Signs the package using SSL.com certificates
+5. **Verification**: Verifies the signed package and uploads it as an artifact
+
+### Supported .csproj Properties
+
+The workflow automatically extracts these properties from your .csproj file:
+
+- `<PackageId>`: The package name (preferred)
+- `<AssemblyName>`: Fallback for package name
+- `<Version>`: The package version
+
+If these properties are not found, the workflow uses sensible defaults.
+
 # shared-workflows
 
 ## Introduction
