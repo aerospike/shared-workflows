@@ -1,0 +1,35 @@
+name: Test Create Release Bundle Workflow
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+
+permissions:
+  id-token: write
+  contents: read
+  packages: write
+
+jobs:
+  test-create-release-bundle-workflow:
+    uses: ./.github/workflows/reusable_create-release-bundle.yaml
+    with:
+      project: database
+      build-names: test-build-1,test-build-2
+      bundle-name: test-release-bundle
+      version: v1.0.0
+      artifactory-url: https://aerospike.jfrog.io
+      artifactory-oidc-provider-name: gh-aerospike
+      artifactory-oidc-audience: aerospike
+      dry-run: true
+
+  run-tests:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          sudo apt-get update && sudo apt-get install jq -y
+      - name: Test Entrypoint
+        run: |
+          .github/workflows/create-release-bundle/test-entrypoint.sh

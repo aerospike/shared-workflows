@@ -101,11 +101,6 @@ make clean && make all && mkdir -p dist && cp build/* dist/
 
 - The workflow follows the established patterns from sign-artifacts and upload-artifacts workflows
 - All operations support dry-run mode for testing
-- The entrypoint script includes comprehensive error handling and logging
-- Test suite provides detailed reporting with proper exit codes
-- Artifacts are uploaded with configurable retention period (default: 1 day)
-- Build script is automatically made executable if needed
-- Workflow validates that artifacts were created after build completion
 - Supports both inline commands and script files for maximum flexibility
 
 ## Testing

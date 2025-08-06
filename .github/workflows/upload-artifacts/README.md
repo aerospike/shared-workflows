@@ -12,7 +12,23 @@ This workflow uploads build artifacts to JFrog Artifactory. It automatically cat
 
 The workflow processes artifacts from a `build-artifacts` directory and creates structured build artifacts before uploading.
 
-### Debian/Ubuntu Structure
+## Inputs
+
+| Input                            | Description                           | Required | Default                      |
+| -------------------------------- | ------------------------------------- | -------- | ---------------------------- |
+| `project`                        | JFrog Artifactory project name        | Yes      | -                            |
+| `build-prefix`                   | Prefix for the build name             | Yes      | -                            |
+| `version`                        | Version string for build info         | Yes      | -                            |
+| `artifactory-url`                | JFrog Artifactory URL                 | No       | `https://aerospike.jfrog.io` |
+| `artifactory-oidc-provider-name` | OIDC provider name for authentication | No       | `gh-citrusleaf`              |
+| `artifactory-oidc-audience`      | OIDC audience for authentication      | No       | `citrusleaf`                 |
+| `artifact-name`                  | Name of the artifacts to download     | No       | `build-artifacts`            |
+| `retention-days`                 | Retention days for the artifacts      | No       | `1`                          |
+| `dry-run`                        | Whether to run in dry-run mode        | No       | `false`                      |
+
+## Structure
+
+### Debian/Ubuntu
 
 ```text
 pool/
@@ -31,7 +47,7 @@ pool/
         └── {package-name}_version_ubuntu24.04_arch.deb
 ```
 
-### RPM/Yum Structure
+### RPM/Yum
 
 ```text
 repo/
