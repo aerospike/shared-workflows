@@ -82,7 +82,7 @@ This workflow is designed to be used as part of larger CI/CD pipelines:
 ```yaml
 jobs:
   build:
-    uses: ./.github/workflows/reusable_build-artifacts.yaml
+    uses: ./.github/workflows/reusable_execute-build.yaml
     with:
       build-script: ./build.sh
       artifact-directory: dist

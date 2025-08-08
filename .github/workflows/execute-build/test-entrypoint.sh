@@ -12,7 +12,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 GIT_ROOT="$(git rev-parse --show-toplevel)"
 
 # Define test directory
-TEST_DIR="$GIT_ROOT/.github/workflows/build-artifacts/test-artifacts"
+TEST_DIR="$GIT_ROOT/.github/workflows/execute-build/test-artifacts"
 rm -rf "$TEST_DIR"
 mkdir -p "$TEST_DIR"
 TEST_REPORT_FILE="$TEST_DIR/test-report.txt"
