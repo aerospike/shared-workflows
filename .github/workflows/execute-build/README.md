@@ -1,4 +1,4 @@
-# Build Artifacts Workflow
+# Execute Build Workflow
 
 Set up and build using an arbitrary build script and upload the results to be used later by other actions.
 
@@ -32,8 +32,11 @@ on:
 
 jobs:
   build:
-    uses: ./.github/workflows/reusable_build-artifacts.yaml
+    uses: ./.github/workflows/reusable_execute-build.yaml
     with:
+      project: my-project
+      build-name: my-app
+      build-version: v1.0.0
       build-script: make clean && make all && cp build/* dist/
       artifact-directory: dist
       artifact-name: my-build-artifacts
@@ -46,8 +49,11 @@ jobs:
 ```yaml
 jobs:
   build:
-    uses: ./.github/workflows/reusable_build-artifacts.yaml
+    uses: ./.github/workflows/reusable_execute-build.yaml
     with:
+      project: my-project
+      build-name: my-app
+      build-version: v1.0.0
       build-script-path: ./scripts/build.sh
       artifact-directory: dist
       artifact-name: my-build-artifacts
@@ -102,6 +108,7 @@ make clean && make all && mkdir -p dist && cp build/* dist/
 - The workflow follows the established patterns from sign-artifacts and upload-artifacts workflows
 - All operations support dry-run mode for testing
 - Supports both inline commands and script files for maximum flexibility
+- Includes JFrog Artifactory integration for uploading build artifacts
 
 ## Testing
 

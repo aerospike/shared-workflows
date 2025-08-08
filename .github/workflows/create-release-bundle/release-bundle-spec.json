@@ -1,0 +1,15 @@
+{
+	"name": "test-bundle",
+	"version": "v1.0.0",
+	"description": "Release for build version v1.0.0",
+	"files": [
+		{
+			"project": "test-project",
+			"build": "test-build-1/v1.0.0"
+		},
+		{
+			"project": "test-project",
+			"build": "test-build-2/v1.0.0"
+		}
+	]
+}

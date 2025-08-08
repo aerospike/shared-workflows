@@ -140,29 +140,9 @@ main() {
   
   # Convert comma-separated build names to array
   IFS=',' read -ra BUILD_ARRAY <<< "$BUILD_NAMES"
-  
-  # Validate that builds exist
-  for build_name in "${BUILD_ARRAY[@]}"; do
-    build_name=$(echo "$build_name" | xargs)  # trim whitespace
-    if [[ -z "$build_name" ]]; then
-      continue
-    fi
-    
-    echo "Validating build: $build_name" >&2
-    if [[ "$DRY_RUN" == "true" ]]; then
-      echo "   Would check if build exists: jf rt build-info $build_name" >&2
-    else
-      if ! jf rt build-info "$build_name" >/dev/null 2>&1; then
-        error "Build not found: $build_name"
-      fi
-    fi
-  done
-  
-  # Create release bundle
-  echo "Creating release bundle: $BUNDLE_NAME/$VERSION" >&2
-  
+  mkdir -p build-artifacts
   # Create the release bundle spec file
-  cat > release-bundle-spec.json <<EOF
+  cat > build-artifacts/release-bundle-spec.json <<EOF
 {
   "name": "$BUNDLE_NAME",
   "version": "$VERSION",
@@ -185,17 +165,14 @@ done)
 }
 EOF
 
-  if [[ "$DRY_RUN" == "true" ]]; then
-    echo "Would execute: jf release-bundle-create $BUNDLE_NAME $VERSION --spec release-bundle-spec.json --project=$PROJECT --signing-key=aerospike" >&2
-    echo "Spec file:" >&2
-    cat release-bundle-spec.json >&2
-  else
-    # Create the release bundle
-    run jf release-bundle-create "$BUNDLE_NAME" "$VERSION" \
-      --spec release-bundle-spec.json \
+  echo "Spec file:" >&2
+  cat build-artifacts/release-bundle-spec.json >&2
+
+  # Create the release bundle
+  run jf release-bundle-create "$BUNDLE_NAME" "$VERSION" \
+      --spec build-artifacts/release-bundle-spec.json \
       --project="$PROJECT" \
       --signing-key="aerospike"
-  fi
   
   echo "Create release bundle workflow completed successfully!" >&2
 }

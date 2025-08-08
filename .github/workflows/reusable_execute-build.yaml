@@ -1,4 +1,4 @@
-name: Build Artifacts
+name: Execute Build
 
 on:
   workflow_call:
@@ -64,7 +64,7 @@ permissions:
   contents: read
 
 jobs:
-  build-artifacts:
+  execute-build:
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout
@@ -80,23 +80,28 @@ jobs:
         with:
           oidc-provider-name: ${{ inputs.artifactory-oidc-provider-name }}
           oidc-audience: ${{ inputs.artifactory-oidc-audience }}
+
       - name: Execute Build Script
         shell: bash
         run: |
-          chmod +x ${{ github.workspace }}/.github/workflows/build-artifacts/entrypoint.sh
+          chmod +x ${{ github.workspace }}/.github/workflows/execute-build/entrypoint.sh
           dry_run_arg=""
           if [ "${{ inputs.dry-run }}" = "true" ]; then
             dry_run_arg="--dry-run"
           fi
           if [ "${{ inputs.build-script }}" != "" ]; then
-            "${{ github.workspace }}/.github/workflows/build-artifacts/entrypoint.sh" \
+            "${{ github.workspace }}/.github/workflows/execute-build/entrypoint.sh" \
               --build-script "${{ inputs.build-script }}" \
               --artifact-directory "${{ inputs.artifact-directory }}" \
+              --build-name "${{ inputs.build-name }}" \
+              --build-version "${{ inputs.build-version }}" \
               $dry_run_arg
           elif [ "${{ inputs.build-script-path }}" != "" ]; then
-            "${{ github.workspace }}/.github/workflows/build-artifacts/entrypoint.sh" \
+            "${{ github.workspace }}/.github/workflows/execute-build/entrypoint.sh" \
               --build-script-path "${{ inputs.build-script-path }}" \
               --artifact-directory "${{ inputs.artifact-directory }}" \
+              --build-name "${{ inputs.build-name }}" \
+              --build-version "${{ inputs.build-version }}" \
               $dry_run_arg
           else
             echo "Error: Either build-script or build-script-path must be given"
