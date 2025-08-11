@@ -32,7 +32,7 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     --help|-h)
-      echo "Usage: $0 <project> <build-prefix> <version> [OPTIONS]" >&2
+      echo "Usage: $0 <project> <build-prefix> <version> <git-tag> [OPTIONS]" >&2
       echo "" >&2
       echo "Uploads artifacts to JFrog Artifactory" >&2
       echo "" >&2
@@ -41,8 +41,8 @@ while [[ $# -gt 0 ]]; do
       echo "  --help, -h       Show this help message" >&2
       echo "" >&2
       echo "Examples:" >&2
-      echo "  $0  database db v1.0.0" >&2
-      echo "  $0  database db v1.0.0 --dry-run" >&2
+      echo "  $0  database db v1.0.0 v1.0.0" >&2
+      echo "  $0  database db v1.0.0 v1.0.0 --dry-run" >&2
       exit 0
       ;;
     -*)
@@ -58,6 +58,8 @@ while [[ $# -gt 0 ]]; do
         BUILD_PREFIX="$1"
       elif [[ -z "${VERSION:-}" ]]; then
         VERSION="$1"
+      elif [[ -z "${GIT_TAG:-}" ]]; then
+        GIT_TAG="$1"
       else
         echo "Use --help for usage information" >&2
         exit 1
@@ -80,6 +82,11 @@ fi
 
 if [[ -z "${VERSION:-}" ]]; then
   error "version is required
+Use --help for usage information"
+fi
+
+if [[ -z "${GIT_TAG:-}" ]]; then
+  error "git-tag is required
 Use --help for usage information"
 fi
 
@@ -146,9 +153,9 @@ upload_deb_packages() {
 
     run jf rt upload "$deb" "$PROJECT-deb-dev-local" --flat=false \
       --build-name="$BUILD_PREFIX-deb" \
-      --build-number="$VERSION" \
+      --build-number="$GITHUB_RUN_ID" \
       --project="$PROJECT" \
-      --target-props "deb.distribution=$codename;deb.component=main;deb.architecture=$arch" \
+      --target-props "version=$VERSION;git_tag=$GIT_TAG;deb.distribution=$codename;deb.component=main;deb.architecture=$arch" \
       --deb "$codename/main/$arch"
 
     # Upload signature and checksum if they exist
@@ -156,7 +163,7 @@ upload_deb_packages() {
       echo "  Uploading signature: $deb.asc" >&2
       run jf rt upload "$deb.asc" "$PROJECT-deb-dev-local" --flat=false \
         --build-name="$BUILD_PREFIX-deb" \
-        --build-number="$VERSION" \
+        --build-number="$GITHUB_RUN_ID" \
         --project="$PROJECT"
     fi
 
@@ -164,7 +171,7 @@ upload_deb_packages() {
       echo "  Uploading checksum: $deb.sha256" >&2
       run jf rt upload "$deb.sha256" "$PROJECT-deb-dev-local" --flat=false \
         --build-name="$BUILD_PREFIX-deb" \
-        --build-number="$VERSION" \
+        --build-number="$GITHUB_RUN_ID" \
         --project="$PROJECT"
     fi
 
@@ -172,7 +179,7 @@ upload_deb_packages() {
       echo "  Uploading signature checksum: $deb.asc.sha256" >&2
       run jf rt upload "$deb.asc.sha256" "$PROJECT-deb-dev-local" --flat=false \
         --build-name="$BUILD_PREFIX-deb" \
-        --build-number="$VERSION" \
+        --build-number="$GITHUB_RUN_ID" \
         --project="$PROJECT"
     fi
   done < <(find . -name "*.deb" -print0)
@@ -185,10 +192,10 @@ publish_deb_build_info() {
     echo "Publishing DEB build info..." >&2
   fi
 
-  run jf rt build-collect-env "$BUILD_PREFIX-deb" "$VERSION" --project="$PROJECT"
-  run jf rt build-add-git "$BUILD_PREFIX-deb" "$VERSION" --project="$PROJECT"
-  run jf rt build-add-dependencies "$BUILD_PREFIX-deb" "$VERSION" . --project="$PROJECT"
-  run jf rt build-publish "$BUILD_PREFIX-deb" "$VERSION" --project="$PROJECT"
+  run jf rt build-collect-env "$BUILD_PREFIX-deb" "$GITHUB_RUN_ID" --project="$PROJECT"
+  run jf rt build-add-git "$BUILD_PREFIX-deb" "$GITHUB_RUN_ID" --project="$PROJECT"
+  run jf rt build-add-dependencies "$BUILD_PREFIX-deb" "$GITHUB_RUN_ID" . --project="$PROJECT"
+  run jf rt build-publish "$BUILD_PREFIX-deb" "$GITHUB_RUN_ID" --project="$PROJECT"
 }
 
 upload_rpm_packages() {
@@ -216,16 +223,16 @@ upload_rpm_packages() {
     # Upload the RPM
     run jf rt upload "$rpm" "$PROJECT-rpm-dev-local" --flat=false \
       --build-name="$BUILD_PREFIX-rpm" \
-      --build-number="$VERSION" \
+      --build-number="$GITHUB_RUN_ID" \
       --project="$PROJECT" \
-      --target-props "rpm.distribution=$dist;rpm.component=main;rpm.architecture=$arch"
+      --target-props "version=$VERSION;git_tag=$GIT_TAG;rpm.distribution=$dist;rpm.component=main;rpm.architecture=$arch"
 
     # Upload signature and checksums if they exist
     if [[ -f "$rpm.asc" ]]; then
       echo "  Uploading signature: $rpm.asc" >&2
       run jf rt upload "$rpm.asc" "$PROJECT-rpm-dev-local" --flat=false \
         --build-name="$BUILD_PREFIX-rpm" \
-        --build-number="$VERSION" \
+        --build-number="$GITHUB_RUN_ID" \
         --project="$PROJECT"
     fi
 
@@ -233,7 +240,7 @@ upload_rpm_packages() {
       echo "  Uploading checksum: $rpm.sha256" >&2
       run jf rt upload "$rpm.sha256" "$PROJECT-rpm-dev-local" --flat=false \
         --build-name="$BUILD_PREFIX-rpm" \
-        --build-number="$VERSION" \
+        --build-number="$GITHUB_RUN_ID" \
         --project="$PROJECT"
     fi
 
@@ -241,7 +248,7 @@ upload_rpm_packages() {
       echo "  Uploading signature checksum: $rpm.asc.sha256" >&2
       run jf rt upload "$rpm.asc.sha256" "$PROJECT-rpm-dev-local" --flat=false \
         --build-name="$BUILD_PREFIX-rpm" \
-        --build-number="$VERSION" \
+        --build-number="$GITHUB_RUN_ID" \
         --project="$PROJECT"
     fi
   done < <(find . -name "*.rpm" -print0)
@@ -254,10 +261,10 @@ publish_rpm_build_info() {
     echo "Publishing RPM build info..." >&2
   fi
 
-  run jf rt build-collect-env "$BUILD_PREFIX-rpm" "$VERSION" --project="$PROJECT"
-  run jf rt build-add-git "$BUILD_PREFIX-rpm" "$VERSION" --project="$PROJECT"
-  run jf rt build-add-dependencies "$BUILD_PREFIX-rpm" "$VERSION" . --project="$PROJECT"
-  run jf rt build-publish "$BUILD_PREFIX-rpm" "$VERSION" --project="$PROJECT"
+  run jf rt build-collect-env "$BUILD_PREFIX-rpm" "$GITHUB_RUN_ID" --project="$PROJECT"
+  run jf rt build-add-git "$BUILD_PREFIX-rpm" "$GITHUB_RUN_ID" --project="$PROJECT"
+  run jf rt build-add-dependencies "$BUILD_PREFIX-rpm" "$GITHUB_RUN_ID" . --project="$PROJECT"
+  run jf rt build-publish "$BUILD_PREFIX-rpm" "$GITHUB_RUN_ID" --project="$PROJECT"
 }
 
 upload_generic_files() {
@@ -272,7 +279,7 @@ upload_generic_files() {
       echo "Uploading generic file: $file" >&2
       run jf rt upload "$file" "$PROJECT-generic-dev-local" --flat=false \
         --build-name="$BUILD_PREFIX-generic" \
-        --build-number="$VERSION" \
+        --build-number="$GITHUB_RUN_ID" \
         --project="$PROJECT"
     fi
   done < <(find . -type f \( -not -name "*.deb" -not -name "*.rpm" -not -name "*.asc" -not -name "*.sha256" \) -print0)
@@ -285,10 +292,10 @@ publish_generic_build_info() {
     echo "Publishing generic build info..." >&2
   fi
 
-  run jf rt build-collect-env "$BUILD_PREFIX-generic" "$VERSION" --project="$PROJECT"
-  run jf rt build-add-git "$BUILD_PREFIX-generic" "$VERSION" --project="$PROJECT"
-  run jf rt build-add-dependencies "$BUILD_PREFIX-generic" "$VERSION" . --project="$PROJECT"
-  run jf rt build-publish "$BUILD_PREFIX-generic" "$VERSION" --project="$PROJECT"
+  run jf rt build-collect-env "$BUILD_PREFIX-generic" "$GITHUB_RUN_ID" --project="$PROJECT"
+  run jf rt build-add-git "$BUILD_PREFIX-generic" "$GITHUB_RUN_ID" --project="$PROJECT"
+  run jf rt build-add-dependencies "$BUILD_PREFIX-generic" "$GITHUB_RUN_ID" . --project="$PROJECT"
+  run jf rt build-publish "$BUILD_PREFIX-generic" "$GITHUB_RUN_ID" --project="$PROJECT"
 }
 
 main() {
@@ -301,6 +308,7 @@ main() {
   echo "Build prefix: $BUILD_PREFIX" >&2
   echo "Version: $VERSION" >&2
   echo "Dry run: $DRY_RUN" >&2
+  echo "Git tag: $GIT_TAG" >&2
   # Expand glob pattern to find files in build-artifacts
 #   cd build-artifacts
   mkdir -p structured_build_artifacts
@@ -322,7 +330,7 @@ main() {
 
   echo "Upload complete!" >&2
   echo "Build names: $BUILD_PREFIX-deb, $BUILD_PREFIX-rpm, $BUILD_PREFIX-generic" >&2
-  echo "Build version: $VERSION" >&2
+  echo "Build version: $GITHUB_RUN_ID" >&2
 }
 
 main "$@"
