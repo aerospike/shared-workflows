@@ -32,7 +32,7 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     --help|-h)
-      echo "Usage: $0 <project> <build-prefix> <version> <git-tag> [OPTIONS]" >&2
+      echo "Usage: $0 <project> <build-prefix> <version> [OPTIONS]" >&2
       echo "" >&2
       echo "Uploads artifacts to JFrog Artifactory" >&2
       echo "" >&2
@@ -41,8 +41,8 @@ while [[ $# -gt 0 ]]; do
       echo "  --help, -h       Show this help message" >&2
       echo "" >&2
       echo "Examples:" >&2
-      echo "  $0  database db v1.0.0 v1.0.0" >&2
-      echo "  $0  database db v1.0.0 v1.0.0 --dry-run" >&2
+      echo "  $0  database db v1.0.0" >&2
+      echo "  $0  database db v1.0.0 --dry-run" >&2
       exit 0
       ;;
     -*)
@@ -58,8 +58,6 @@ while [[ $# -gt 0 ]]; do
         BUILD_PREFIX="$1"
       elif [[ -z "${VERSION:-}" ]]; then
         VERSION="$1"
-      elif [[ -z "${GIT_TAG:-}" ]]; then
-        GIT_TAG="$1"
       else
         echo "Use --help for usage information" >&2
         exit 1
@@ -82,11 +80,6 @@ fi
 
 if [[ -z "${VERSION:-}" ]]; then
   error "version is required
-Use --help for usage information"
-fi
-
-if [[ -z "${GIT_TAG:-}" ]]; then
-  error "git-tag is required
 Use --help for usage information"
 fi
 
@@ -155,7 +148,7 @@ upload_deb_packages() {
       --build-name="$BUILD_PREFIX-deb" \
       --build-number="$GITHUB_RUN_ID" \
       --project="$PROJECT" \
-      --target-props "version=$VERSION;git_tag=$GIT_TAG;deb.distribution=$codename;deb.component=main;deb.architecture=$arch" \
+      --target-props "version=$VERSION;deb.distribution=$codename;deb.component=main;deb.architecture=$arch" \
       --deb "$codename/main/$arch"
 
     # Upload signature and checksum if they exist
@@ -225,7 +218,7 @@ upload_rpm_packages() {
       --build-name="$BUILD_PREFIX-rpm" \
       --build-number="$GITHUB_RUN_ID" \
       --project="$PROJECT" \
-      --target-props "version=$VERSION;git_tag=$GIT_TAG;rpm.distribution=$dist;rpm.component=main;rpm.architecture=$arch"
+      --target-props "version=$VERSION;rpm.distribution=$dist;rpm.component=main;rpm.architecture=$arch"
 
     # Upload signature and checksums if they exist
     if [[ -f "$rpm.asc" ]]; then
@@ -308,7 +301,6 @@ main() {
   echo "Build prefix: $BUILD_PREFIX" >&2
   echo "Version: $VERSION" >&2
   echo "Dry run: $DRY_RUN" >&2
-  echo "Git tag: $GIT_TAG" >&2
   # Expand glob pattern to find files in build-artifacts
 #   cd build-artifacts
   mkdir -p structured_build_artifacts
@@ -330,7 +322,7 @@ main() {
 
   echo "Upload complete!" >&2
   echo "Build names: $BUILD_PREFIX-deb, $BUILD_PREFIX-rpm, $BUILD_PREFIX-generic" >&2
-  echo "Build version: $GITHUB_RUN_ID" >&2
+  echo "Build number: $GITHUB_RUN_ID" >&2
 }
 
 main "$@"
