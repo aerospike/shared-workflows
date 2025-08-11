@@ -2,138 +2,142 @@ name: Sign NuGet Package
 
 on:
   workflow_run:
-    workflows: ["Build My Package"]
+    workflows: [Build My Package]
     types: [completed]
     branches: [main, release]
+
+permissions:
+  contents: read
+  actions: read
 
 jobs:
   sign:
     runs-on: ubuntu-latest
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
-    
+
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      
-    - name: Download build artifacts
-      uses: actions/download-artifact@v4
-      continue-on-error: true
-      with:
-        name: nuget-package
-        path: artifacts
-        
-    - name: Check if artifacts were downloaded
-      id: check-artifacts
-      run: |
-        if [ -d "artifacts" ] && [ "$(ls -A artifacts 2>/dev/null)" ]; then
-          echo "artifacts_found=true" >> $GITHUB_OUTPUT
-          echo "✅ Artifacts found and downloaded successfully"
-        else
-          echo "artifacts_found=false" >> $GITHUB_OUTPUT
-          echo "⚠️ No artifacts found, attempting to build locally"
-        fi
-        
-    - name: Build locally if no artifacts found
-      if: steps.check-artifacts.outputs.artifacts_found == 'false'
-      run: |
-        echo "Building package locally as fallback..."
-        
-        # Setup .NET if not already available
-        if ! command -v dotnet &> /dev/null; then
-          echo "Installing .NET..."
-          # This would need to be handled by the runner environment
-        fi
-        
-        # Find and build the project
-        PROJECT_FILE=$(find . -name "*.csproj" -type f | head -1)
-        if [ -n "$PROJECT_FILE" ]; then
-          echo "Building project: $PROJECT_FILE"
-          dotnet restore "$PROJECT_FILE"
-          dotnet build "$PROJECT_FILE" --configuration Release --no-restore
-          dotnet pack "$PROJECT_FILE" --configuration Release --output ./artifacts --no-build
-          echo "✅ Local build completed"
-        else
-          echo "❌ No .csproj file found for local build"
-          exit 1
-        fi
-        
-    - name: List artifacts
-      run: |
-        echo "Available artifacts:"
-        if [ -d "artifacts" ]; then
-          ls -la artifacts/
-        else
-          echo "No artifacts directory found"
-          exit 1
-        fi
-        
-    - name: Find NuGet package
-      id: find-package
-      run: |
-        # Find the .nupkg file in artifacts directory
-        PACKAGE_FILE=$(find artifacts -name "*.nupkg" -type f | head -1)
-        if [ -n "$PACKAGE_FILE" ]; then
-          echo "package_file=$PACKAGE_FILE" >> $GITHUB_OUTPUT
-          echo "Found package: $PACKAGE_FILE"
-        else
-          echo "No .nupkg files found in artifacts directory."
-          echo "Available files in artifacts:"
-          ls -la artifacts/
-          exit 1
-        fi
-        
-    - name: Sign NuGet Package with CodeSignTool
-      uses: sslcom/esigner-codesign@a272724cb13abe0abc579c6c40f7899969b6942b
-      with:
-        command: sign
-        username: ${{secrets.ES_USERNAME}}
-        password: ${{secrets.ES_PASSWORD}}
-        credential_id: ${{secrets.CREDENTIAL_ID}}
-        totp_secret: ${{secrets.ES_TOTP_SECRET}}
-        file_path: ${{ steps.find-package.outputs.package_file }}
-        output_path: ${{github.workspace}}/signed-artifacts
-        malware_block: false
-        override: false
-        environment_name: PROD
-        clean_logs: true
-        jvm_max_memory: 1024M
-        signing_method: v1
-        
-    - name: Upload signed artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: signed-nuget-package
-        path: signed-artifacts/
-        retention-days: 1
-        
-    - name: Verify signed package
-      run: |
-        echo "Verifying signed package..."
-        ls -la signed-artifacts/
-        
-        # Get the signed package name
-        SIGNED_PACKAGE=$(find signed-artifacts/ -name "*.nupkg" -type f | head -1)
-        if [ -z "$SIGNED_PACKAGE" ]; then
-          echo "❌ No signed package found in signed-artifacts/"
-          exit 1
-        fi
-        
-        echo "Verifying: $SIGNED_PACKAGE"
-        
-        # Verify the signed package using .NET CLI
-        echo "Verifying package signature using .NET CLI..."
-        dotnet nuget verify "$SIGNED_PACKAGE" --all
-        
-        # Check for signature file in package
-        echo "Checking package contents for signature..."
-        unzip -l "$SIGNED_PACKAGE" | grep -i signature || echo "No signature file found in package"
-        
-        # Production verification summary
-        echo ""
-        echo "=== PRODUCTION SIGNING VERIFICATION SUMMARY ==="
-        echo "✅ Package was successfully signed by production certificate"
-        echo "✅ Signature file (.signature.p7s) found in package"
-        echo "✅ Certificate chain validation passed"
-        echo "✅ Package structure is intact and valid"
-        echo ""
-        echo "Production signing verification completed successfully!"
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: nuget-package
+          path: artifacts
+
+      - name: Check if artifacts were downloaded
+        id: check-artifacts
+        run: |
+          if [ -d "artifacts" ] && [ "$(ls -A artifacts 2>/dev/null)" ]; then
+            echo "artifacts_found=true" >> $GITHUB_OUTPUT
+            echo "✅ Artifacts found and downloaded successfully"
+          else
+            echo "artifacts_found=false" >> $GITHUB_OUTPUT
+            echo "⚠️ No artifacts found, attempting to build locally"
+          fi
+
+      - name: Build locally if no artifacts found
+        if: steps.check-artifacts.outputs.artifacts_found == 'false'
+        run: |
+          echo "Building package locally as fallback..."
+
+          # Setup .NET if not already available
+          if ! command -v dotnet &> /dev/null; then
+            echo "Installing .NET..."
+            # This would need to be handled by the runner environment
+          fi
+
+          # Find and build the project
+          PROJECT_FILE=$(find . -name "*.csproj" -type f | head -1)
+          if [ -n "$PROJECT_FILE" ]; then
+            echo "Building project: $PROJECT_FILE"
+            dotnet restore "$PROJECT_FILE"
+            dotnet build "$PROJECT_FILE" --configuration Release --no-restore
+            dotnet pack "$PROJECT_FILE" --configuration Release --output ./artifacts --no-build
+            echo "✅ Local build completed"
+          else
+            echo "❌ No .csproj file found for local build"
+            exit 1
+          fi
+
+      - name: List artifacts
+        run: |
+          echo "Available artifacts:"
+          if [ -d "artifacts" ]; then
+            ls -la artifacts/
+          else
+            echo "No artifacts directory found"
+            exit 1
+          fi
+
+      - name: Find NuGet package
+        id: find-package
+        run: |
+          # Find the .nupkg file in artifacts directory
+          PACKAGE_FILE=$(find artifacts -name "*.nupkg" -type f | head -1)
+          if [ -n "$PACKAGE_FILE" ]; then
+            echo "package_file=$PACKAGE_FILE" >> $GITHUB_OUTPUT
+            echo "Found package: $PACKAGE_FILE"
+          else
+            echo "No .nupkg files found in artifacts directory."
+            echo "Available files in artifacts:"
+            ls -la artifacts/
+            exit 1
+          fi
+
+      - name: Sign NuGet Package with CodeSignTool
+        uses: sslcom/esigner-codesign@a272724cb13abe0abc579c6c40f7899969b6942b
+        with:
+          command: sign
+          username: ${{secrets.ES_USERNAME}}
+          password: ${{secrets.ES_PASSWORD}}
+          credential_id: ${{secrets.CREDENTIAL_ID}}
+          totp_secret: ${{secrets.ES_TOTP_SECRET}}
+          file_path: ${{ steps.find-package.outputs.package_file }}
+          output_path: ${{github.workspace}}/signed-artifacts
+          malware_block: false
+          override: false
+          environment_name: PROD
+          clean_logs: true
+          jvm_max_memory: 1024M
+          signing_method: v1
+
+      - name: Upload signed artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: signed-nuget-package
+          path: signed-artifacts/
+          retention-days: 1
+
+      - name: Verify signed package
+        run: |
+          echo "Verifying signed package..."
+          ls -la signed-artifacts/
+
+          # Get the signed package name
+          SIGNED_PACKAGE=$(find signed-artifacts/ -name "*.nupkg" -type f | head -1)
+          if [ -z "$SIGNED_PACKAGE" ]; then
+            echo "❌ No signed package found in signed-artifacts/"
+            exit 1
+          fi
+
+          echo "Verifying: $SIGNED_PACKAGE"
+
+          # Verify the signed package using .NET CLI
+          echo "Verifying package signature using .NET CLI..."
+          dotnet nuget verify "$SIGNED_PACKAGE" --all
+
+          # Check for signature file in package
+          echo "Checking package contents for signature..."
+          unzip -l "$SIGNED_PACKAGE" | grep -i signature || echo "No signature file found in package"
+
+          # Production verification summary
+          echo ""
+          echo "=== PRODUCTION SIGNING VERIFICATION SUMMARY ==="
+          echo "✅ Package was successfully signed by production certificate"
+          echo "✅ Signature file (.signature.p7s) found in package"
+          echo "✅ Certificate chain validation passed"
+          echo "✅ Package structure is intact and valid"
+          echo ""
+          echo "Production signing verification completed successfully!"
