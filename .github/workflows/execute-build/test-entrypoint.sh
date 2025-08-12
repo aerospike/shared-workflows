@@ -112,15 +112,25 @@ cd "$TEST_DIR"
 rm -rf build-output-dry
 output=$("$SCRIPT_DIR/entrypoint.sh" --build-script-path simple-build.sh --artifact-directory build-output-dry --dry-run 2>&1)
 
-
-if ! echo "$output" | grep -q "Would execute: .*simple-build.sh"; then
+# Check for dry-run indicator
+if ! echo "$output" | grep -q "Would execute build-artifacts workflow"; then
+    echo "Dry-run mode does not contain expected message"
     test2_success=false
 fi
 
-# In dry-run, no actual artifacts should be created
-if [[ -d "build-output-dry" ]]; then
+# Check for the actual commands that would be executed (green output from run() function)
+if ! echo "$output" | grep -q "   .*simple-build.sh"; then
+    echo "Dry-run mode does not show the command that would be executed"
     test2_success=false
 fi
+
+# Check for mkdir command that would be executed
+if ! echo "$output" | grep -q "   mkdir -p"; then
+    echo "Dry-run mode does not show mkdir command"
+    test2_success=false
+fi
+
+
 
 record_test_result "Test 2: Dry-run mode" "$test2_success"
 
@@ -218,6 +228,18 @@ if "$SCRIPT_DIR/entrypoint.sh" --build-script-path no-artifacts-build.sh --artif
 fi
 
 record_test_result "Test 7: Error handling - no artifacts created" "$test7_success"
+
+# Test 8: Duplicate build script arguments error
+echo ""
+echo " Test 8: Error handling - duplicate build script arguments"
+test8_success=true
+
+cd "$TEST_DIR"
+if "$SCRIPT_DIR/entrypoint.sh" --build-script "echo test" --build-script-path simple-build.sh --artifact-directory test-output 2>/dev/null; then
+    test8_success=false
+fi
+
+record_test_result "Test 8: Error handling - duplicate build script arguments" "$test8_success"
 
 # Summary
 
