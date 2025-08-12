@@ -100,8 +100,5 @@ After uploading artifacts, the workflow publishes comprehensive build informatio
 
 ## Notes
 
-- The workflow expects artifacts to be in a directory called `build-artifacts`
 - All uploads use the "DEV" environment level and "local" locator
-- Build info is published once after all artifacts are uploaded
 - The workflow processes DEB and RPM files and creates structured build artifacts before uploading
-- Generic files are uploaded directly without structured processing

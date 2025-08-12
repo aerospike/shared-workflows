@@ -105,10 +105,7 @@ make clean && make all && mkdir -p dist && cp build/* dist/
 
 ## Notes
 
-- The workflow follows the established patterns from sign-artifacts and upload-artifacts workflows
-- All operations support dry-run mode for testing
 - Supports both inline commands and script files for maximum flexibility
-- Includes JFrog Artifactory integration for uploading build artifacts
 
 ## Testing
 
@@ -117,5 +114,3 @@ Run the test suite:
 ```bash
 .github/workflows/execute-build/test-entrypoint.sh
 ```
-
-The test suite will create temporary build scripts and verify all functionality works correctly.

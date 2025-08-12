@@ -49,10 +49,6 @@ jobs:
 - GitHub Actions with OIDC token access to Artifactory
 - Existing builds in JFrog Artifactory that will be included in the bundle
 
-## Notes
-
-- The workflow follows the established patterns from other shared workflows
-
 ## Testing
 
 Run the basic test suite:
@@ -61,21 +57,12 @@ Run the basic test suite:
 .github/workflows/create-release-bundle/test-entrypoint.sh
 ```
 
-The test suite validates:
-
-- Basic release bundle creation with multiple builds
-- Dry-run mode functionality
-- Error handling
-- Single build scenarios
-
-The test suite will create temporary test scenarios and verify all functionality works correctly.
-
 ## Integration
 
 This workflow is designed to be used as part of larger CI/CD pipelines:
 
 1. **Build Phase**: Use build-artifacts workflow to create builds
-2. **Sign Phase**: Gpg sign build-artifacts
+2. **Sign Phase**: GPG sign build-artifacts
 3. **Upload Phase**: Use upload-artifacts workflow to upload to JFrog
 4. **Bundle Phase**: Use this workflow to create release bundles
 

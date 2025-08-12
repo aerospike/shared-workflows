@@ -49,7 +49,3 @@ jobs:
 ## Output
 
 The workflow uploads the signed artifacts as a GitHub Actions artifact with the specified retention period.
-
-## Notes
-
-- The workflow follows the established patterns from other shared workflows
