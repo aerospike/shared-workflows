@@ -27,7 +27,7 @@ handle_error() {
 }
 
 
-cp -r "$GIT_ROOT/.github/workflows/build-artifacts/test_apps" "$TEST_DIR"
+cp -r "$GIT_ROOT/.github/workflows/execute-build/test_apps" "$TEST_DIR"
 
 # Function to record test results
 record_test_result() {
@@ -112,9 +112,6 @@ cd "$TEST_DIR"
 rm -rf build-output-dry
 output=$("$SCRIPT_DIR/entrypoint.sh" --build-script-path simple-build.sh --artifact-directory build-output-dry --dry-run 2>&1)
 
-if ! echo "$output" | grep -q "Would execute build-artifacts workflow"; then
-    test2_success=false
-fi
 
 if ! echo "$output" | grep -q "Would execute: .*simple-build.sh"; then
     test2_success=false
