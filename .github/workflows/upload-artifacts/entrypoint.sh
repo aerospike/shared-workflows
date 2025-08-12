@@ -299,6 +299,19 @@ publish_generic_build_info() {
   run jf rt build-publish "$BUILD_NAME" "$BUILD_NUMBER" --project="$PROJECT"
 }
 
+publish_build_info() {
+  if [[ "$DRY_RUN" == "true" ]]; then
+    echo "Would publish build info..." >&2
+  else
+    echo "Publishing build info..." >&2
+  fi
+
+  run jf rt build-collect-env "$BUILD_NAME" "$BUILD_NUMBER" --project="$PROJECT"
+  run jf rt build-add-git "$BUILD_NAME" "$BUILD_NUMBER" --project="$PROJECT"
+  run jf rt build-add-dependencies "$BUILD_NAME" "$BUILD_NUMBER" . --project="$PROJECT"
+  run jf rt build-publish "$BUILD_NAME" "$BUILD_NUMBER" --project="$PROJECT"
+}
+
 main() {
   if [[ "$DRY_RUN" == "true" ]]; then
     echo "Would upload artifacts to JFrog Artifactory" >&2
@@ -317,17 +330,14 @@ main() {
 
   structure_build_artifacts
   cd structured_build_artifacts
-  # Upload and publish DEB packages
+  
+  # Upload all packages (DEB, RPM, generic)
   upload_deb_packages
-  publish_deb_build_info
-
-  # Upload and publish RPM packages
   upload_rpm_packages
-  publish_rpm_build_info
-
-  # Upload and publish generic files
   upload_generic_files
-  publish_generic_build_info
+  
+  # Publish build info once for the unified build
+  publish_build_info
 
   echo "Upload complete!" >&2
   echo "Build name: $BUILD_NAME" >&2

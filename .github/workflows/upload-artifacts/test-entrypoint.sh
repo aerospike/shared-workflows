@@ -41,8 +41,8 @@ record_test_result() {
 cleanup() {
 
 
-    echo "not cleaning up"
-    # rm -rf "$TEST_DIR"
+    echo "cleaning up"
+    rm -rf "$TEST_DIR"
 }
 
 # Set trap to cleanup on exit (success or error)
@@ -244,14 +244,10 @@ target-props.*rpm.distribution=
 fi
 
 if ! verify_commands "Build info commands" "$TEST_DIR/test1_output.txt.build_commands" "
-jf rt build-collect-env.*test-build-deb.*12345
-jf rt build-add-git.*test-build-deb.*12345
-jf rt build-add-dependencies.*test-build-deb.*12345
-jf rt build-publish.*test-build-deb.*12345
-jf rt build-collect-env.*test-build-rpm.*12345
-jf rt build-add-git.*test-build-rpm.*12345
-jf rt build-add-dependencies.*test-build-rpm.*12345
-jf rt build-publish.*test-build-rpm.*12345
+jf rt build-collect-env.*test-build.*12345
+jf rt build-add-git.*test-build.*12345
+jf rt build-add-dependencies.*test-build.*12345
+jf rt build-publish.*test-build.*12345
 "; then
     test1_success=false
 fi
@@ -260,7 +256,7 @@ if ! verify_command_count "Upload commands" "$TEST_DIR/test1_output.txt.upload_c
     test1_success=false
 fi
 
-if ! verify_command_count "Build commands" "$TEST_DIR/test1_output.txt.build_commands" 12; then
+if ! verify_command_count "Build commands" "$TEST_DIR/test1_output.txt.build_commands" 4; then
     test1_success=false
 fi
 
@@ -307,10 +303,10 @@ test3_success=true
 # Generic files are not copied to structured_build_artifacts, so they won't be uploaded
 
 if ! verify_commands "All build info commands" "$TEST_DIR/test3_output.txt.build_commands" "
-jf rt build-collect-env.*test-build-generic.*12345
-jf rt build-add-git.*test-build-generic.*12345
-jf rt build-add-dependencies.*test-build-generic.*12345
-jf rt build-publish.*test-build-generic.*12345
+jf rt build-collect-env.*test-build.*12345
+jf rt build-add-git.*test-build.*12345
+jf rt build-add-dependencies.*test-build.*12345
+jf rt build-publish.*test-build.*12345
 "; then
     test3_success=false
 fi
@@ -319,7 +315,7 @@ if ! verify_command_count "All upload commands" "$TEST_DIR/test3_output.txt.uplo
     test3_success=false
 fi
 
-if ! verify_command_count "All build commands" "$TEST_DIR/test3_output.txt.build_commands" 12; then
+if ! verify_command_count "All build commands" "$TEST_DIR/test3_output.txt.build_commands" 4; then
     test3_success=false
 fi
 
@@ -340,13 +336,13 @@ else
     test4_success=false
 fi
 
-echo "  Testing missing build-prefix argument..."
+echo "  Testing missing build-name argument..."
 # shellcheck disable=SC2015
-missing_build_prefix_output=$(cd "$TEST_DIR" && "$SCRIPT_DIR/entrypoint.sh" test-project 2>&1 || true)
-if echo "$missing_build_prefix_output" | grep -q "Error: build-prefix is required"; then
-    echo "     Missing build-prefix error handled correctly"
+missing_build_name_output=$(cd "$TEST_DIR" && "$SCRIPT_DIR/entrypoint.sh" test-project 2>&1 || true)
+if echo "$missing_build_name_output" | grep -q "Error: build-name is required"; then
+    echo "     Missing build-name error handled correctly"
 else
-    echo "     Missing build-prefix error not handled correctly"
+    echo "     Missing build-name error not handled correctly"
     test4_success=false
 fi
 
