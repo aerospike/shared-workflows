@@ -30,6 +30,7 @@ jobs:
       artifactory-oidc-provider-name: gh-aerospike
       artifactory-oidc-audience: aerospike
       artifact-name: build-artifacts
+      dry-run: true
 
   run-tests:
     runs-on: ubuntu-22.04

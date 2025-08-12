@@ -32,7 +32,7 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     --help|-h)
-      echo "Usage: $0 <project> <build-prefix> <version> <build-number> [OPTIONS]" >&2
+      echo "Usage: $0 <project> <build-name> <version> <build-number> [OPTIONS]" >&2
       echo "" >&2
       echo "Uploads artifacts to JFrog Artifactory" >&2
       echo "" >&2
@@ -41,8 +41,8 @@ while [[ $# -gt 0 ]]; do
       echo "  --help, -h       Show this help message" >&2
       echo "" >&2
       echo "Examples:" >&2
-      echo "  $0  database db v1.0.0 1754566442238" >&2
-      echo "  $0  database db v1.0.0 1754566442238 --dry-run" >&2
+      echo "  $0  database my-app v1.0.0 1754566442238" >&2
+      echo "  $0  database my-app v1.0.0 1754566442238 --dry-run" >&2
       exit 0
       ;;
     -*)
@@ -54,8 +54,8 @@ while [[ $# -gt 0 ]]; do
       # Positional arguments
       if [[ -z "${PROJECT:-}" ]]; then
         PROJECT="$1"
-      elif [[ -z "${BUILD_PREFIX:-}" ]]; then
-        BUILD_PREFIX="$1"
+      elif [[ -z "${BUILD_NAME:-}" ]]; then
+        BUILD_NAME="$1"
       elif [[ -z "${VERSION:-}" ]]; then
         VERSION="$1"
       elif [[ -z "${BUILD_NUMBER:-}" ]]; then
@@ -75,8 +75,8 @@ if [[ -z "${PROJECT:-}" ]]; then
 Use --help for usage information"
 fi
 
-if [[ -z "${BUILD_PREFIX:-}" ]]; then
-  error "build-prefix is required
+if [[ -z "${BUILD_NAME:-}" ]]; then
+  error "build-name is required
 Use --help for usage information"
 fi
 
@@ -153,7 +153,7 @@ upload_deb_packages() {
     # Upload the DEB
 
     run jf rt upload "$deb" "$PROJECT-deb-dev-local" --flat=false \
-      --build-name="$BUILD_PREFIX-deb" \
+      --build-name="$BUILD_NAME" \
       --build-number="$BUILD_NUMBER" \
       --project="$PROJECT" \
       --target-props "version=$VERSION;deb.distribution=$codename;deb.component=main;deb.architecture=$arch" \
@@ -163,7 +163,7 @@ upload_deb_packages() {
     if [[ -f "$deb.asc" ]]; then
       echo "  Uploading signature: $deb.asc" >&2
       run jf rt upload "$deb.asc" "$PROJECT-deb-dev-local" --flat=false \
-        --build-name="$BUILD_PREFIX-deb" \
+        --build-name="$BUILD_NAME" \
         --build-number="$BUILD_NUMBER" \
         --project="$PROJECT"
     fi
@@ -171,7 +171,7 @@ upload_deb_packages() {
     if [[ -f "$deb.sha256" ]]; then
       echo "  Uploading checksum: $deb.sha256" >&2
       run jf rt upload "$deb.sha256" "$PROJECT-deb-dev-local" --flat=false \
-        --build-name="$BUILD_PREFIX-deb" \
+        --build-name="$BUILD_NAME" \
         --build-number="$BUILD_NUMBER" \
         --project="$PROJECT"
     fi
@@ -179,7 +179,7 @@ upload_deb_packages() {
     if [[ -f "$deb.asc.sha256" ]]; then
       echo "  Uploading signature checksum: $deb.asc.sha256" >&2
       run jf rt upload "$deb.asc.sha256" "$PROJECT-deb-dev-local" --flat=false \
-        --build-name="$BUILD_PREFIX-deb" \
+        --build-name="$BUILD_NAME" \
         --build-number="$BUILD_NUMBER" \
         --project="$PROJECT"
     fi
@@ -193,10 +193,10 @@ publish_deb_build_info() {
     echo "Publishing DEB build info..." >&2
   fi
 
-  run jf rt build-collect-env "$BUILD_PREFIX-deb" "$BUILD_NUMBER" --project="$PROJECT"
-  run jf rt build-add-git "$BUILD_PREFIX-deb" "$BUILD_NUMBER" --project="$PROJECT"
-  run jf rt build-add-dependencies "$BUILD_PREFIX-deb" "$BUILD_NUMBER" . --project="$PROJECT"
-  run jf rt build-publish "$BUILD_PREFIX-deb" "$BUILD_NUMBER" --project="$PROJECT"
+  run jf rt build-collect-env "$BUILD_NAME" "$BUILD_NUMBER" --project="$PROJECT"
+  run jf rt build-add-git "$BUILD_NAME" "$BUILD_NUMBER" --project="$PROJECT"
+  run jf rt build-add-dependencies "$BUILD_NAME" "$BUILD_NUMBER" . --project="$PROJECT"
+  run jf rt build-publish "$BUILD_NAME" "$BUILD_NUMBER" --project="$PROJECT"
 }
 
 upload_rpm_packages() {
@@ -223,7 +223,7 @@ upload_rpm_packages() {
 
     # Upload the RPM
     run jf rt upload "$rpm" "$PROJECT-rpm-dev-local" --flat=false \
-      --build-name="$BUILD_PREFIX-rpm" \
+      --build-name="$BUILD_NAME" \
       --build-number="$BUILD_NUMBER" \
       --project="$PROJECT" \
       --target-props "version=$VERSION;rpm.distribution=$dist;rpm.component=main;rpm.architecture=$arch"
@@ -232,7 +232,7 @@ upload_rpm_packages() {
     if [[ -f "$rpm.asc" ]]; then
       echo "  Uploading signature: $rpm.asc" >&2
       run jf rt upload "$rpm.asc" "$PROJECT-rpm-dev-local" --flat=false \
-        --build-name="$BUILD_PREFIX-rpm" \
+        --build-name="$BUILD_NAME" \
         --build-number="$BUILD_NUMBER" \
         --project="$PROJECT"
     fi
@@ -240,7 +240,7 @@ upload_rpm_packages() {
     if [[ -f "$rpm.sha256" ]]; then
       echo "  Uploading checksum: $rpm.sha256" >&2
       run jf rt upload "$rpm.sha256" "$PROJECT-rpm-dev-local" --flat=false \
-        --build-name="$BUILD_PREFIX-rpm" \
+        --build-name="$BUILD_NAME" \
         --build-number="$BUILD_NUMBER" \
         --project="$PROJECT"
     fi
@@ -248,7 +248,7 @@ upload_rpm_packages() {
     if [[ -f "$rpm.asc.sha256" ]]; then
       echo "  Uploading signature checksum: $rpm.asc.sha256" >&2
       run jf rt upload "$rpm.asc.sha256" "$PROJECT-rpm-dev-local" --flat=false \
-        --build-name="$BUILD_PREFIX-rpm" \
+        --build-name="$BUILD_NAME" \
         --build-number="$BUILD_NUMBER" \
         --project="$PROJECT"
     fi
@@ -262,10 +262,10 @@ publish_rpm_build_info() {
     echo "Publishing RPM build info..." >&2
   fi
 
-  run jf rt build-collect-env "$BUILD_PREFIX-rpm" "$BUILD_NUMBER" --project="$PROJECT"
-  run jf rt build-add-git "$BUILD_PREFIX-rpm" "$BUILD_NUMBER" --project="$PROJECT"
-  run jf rt build-add-dependencies "$BUILD_PREFIX-rpm" "$BUILD_NUMBER" . --project="$PROJECT"
-  run jf rt build-publish "$BUILD_PREFIX-rpm" "$BUILD_NUMBER" --project="$PROJECT"
+  run jf rt build-collect-env "$BUILD_NAME" "$BUILD_NUMBER" --project="$PROJECT"
+  run jf rt build-add-git "$BUILD_NAME" "$BUILD_NUMBER" --project="$PROJECT"
+  run jf rt build-add-dependencies "$BUILD_NAME" "$BUILD_NUMBER" . --project="$PROJECT"
+  run jf rt build-publish "$BUILD_NAME" "$BUILD_NUMBER" --project="$PROJECT"
 }
 
 upload_generic_files() {
@@ -279,7 +279,7 @@ upload_generic_files() {
     if [[ -f "$file" ]]; then
       echo "Uploading generic file: $file" >&2
       run jf rt upload "$file" "$PROJECT-generic-dev-local" --flat=false \
-        --build-name="$BUILD_PREFIX-generic" \
+        --build-name="$BUILD_NAME" \
         --build-number="$BUILD_NUMBER" \
         --project="$PROJECT"
     fi
@@ -293,10 +293,10 @@ publish_generic_build_info() {
     echo "Publishing generic build info..." >&2
   fi
 
-  run jf rt build-collect-env "$BUILD_PREFIX-generic" "$BUILD_NUMBER" --project="$PROJECT"
-  run jf rt build-add-git "$BUILD_PREFIX-generic" "$BUILD_NUMBER" --project="$PROJECT"
-  run jf rt build-add-dependencies "$BUILD_PREFIX-generic" "$BUILD_NUMBER" . --project="$PROJECT"
-  run jf rt build-publish "$BUILD_PREFIX-generic" "$BUILD_NUMBER" --project="$PROJECT"
+  run jf rt build-collect-env "$BUILD_NAME" "$BUILD_NUMBER" --project="$PROJECT"
+  run jf rt build-add-git "$BUILD_NAME" "$BUILD_NUMBER" --project="$PROJECT"
+  run jf rt build-add-dependencies "$BUILD_NAME" "$BUILD_NUMBER" . --project="$PROJECT"
+  run jf rt build-publish "$BUILD_NAME" "$BUILD_NUMBER" --project="$PROJECT"
 }
 
 main() {
@@ -306,7 +306,7 @@ main() {
     echo "Uploading artifacts to JFrog Artifactory" >&2
   fi
   echo "Project: $PROJECT" >&2
-  echo "Build prefix: $BUILD_PREFIX" >&2
+  echo "Build name: $BUILD_NAME" >&2
   echo "Version: $VERSION" >&2
   echo "Dry run: $DRY_RUN" >&2
   echo "Build number: $BUILD_NUMBER" >&2
@@ -330,7 +330,7 @@ main() {
   publish_generic_build_info
 
   echo "Upload complete!" >&2
-  echo "Build names: $BUILD_PREFIX-deb, $BUILD_PREFIX-rpm, $BUILD_PREFIX-generic" >&2
+  echo "Build name: $BUILD_NAME" >&2
   echo "Build number: $BUILD_NUMBER" >&2
 }
 
