@@ -92,7 +92,7 @@ jobs:
     uses: ./.github/workflows/reusable_upload-artifacts.yaml
     with:
       project: my-project
-      build-prefix: my-build
+      build-name: my-build
       version: v1.0.0
 
   create-release-bundle:

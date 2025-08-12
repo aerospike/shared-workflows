@@ -115,7 +115,7 @@ make clean && make all && mkdir -p dist && cp build/* dist/
 Run the test suite:
 
 ```bash
-.github/workflows/build-artifacts/test-entrypoint.sh
+.github/workflows/execute-build/test-entrypoint.sh
 ```
 
 The test suite will create temporary build scripts and verify all functionality works correctly.

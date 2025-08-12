@@ -186,19 +186,6 @@ upload_deb_packages() {
   done < <(find . -name "*.deb" -print0)
 }
 
-publish_deb_build_info() {
-  if [[ "$DRY_RUN" == "true" ]]; then
-    echo "Would publish DEB build info..." >&2
-  else
-    echo "Publishing DEB build info..." >&2
-  fi
-
-  run jf rt build-collect-env "$BUILD_NAME" "$BUILD_NUMBER" --project="$PROJECT"
-  run jf rt build-add-git "$BUILD_NAME" "$BUILD_NUMBER" --project="$PROJECT"
-  run jf rt build-add-dependencies "$BUILD_NAME" "$BUILD_NUMBER" . --project="$PROJECT"
-  run jf rt build-publish "$BUILD_NAME" "$BUILD_NUMBER" --project="$PROJECT"
-}
-
 upload_rpm_packages() {
   
   if [[ "$DRY_RUN" == "true" ]]; then
@@ -255,19 +242,6 @@ upload_rpm_packages() {
   done < <(find . -name "*.rpm" -print0)
 }
 
-publish_rpm_build_info() {
-  if [[ "$DRY_RUN" == "true" ]]; then
-    echo "Would publish RPM build info..." >&2
-  else
-    echo "Publishing RPM build info..." >&2
-  fi
-
-  run jf rt build-collect-env "$BUILD_NAME" "$BUILD_NUMBER" --project="$PROJECT"
-  run jf rt build-add-git "$BUILD_NAME" "$BUILD_NUMBER" --project="$PROJECT"
-  run jf rt build-add-dependencies "$BUILD_NAME" "$BUILD_NUMBER" . --project="$PROJECT"
-  run jf rt build-publish "$BUILD_NAME" "$BUILD_NUMBER" --project="$PROJECT"
-}
-
 upload_generic_files() {
   if [[ "$DRY_RUN" == "true" ]]; then
     echo "Would upload generic files..." >&2
@@ -286,17 +260,22 @@ upload_generic_files() {
   done < <(find . -type f \( -not -name "*.deb" -not -name "*.rpm" -not -name "*.asc" -not -name "*.sha256" \) -print0)
 }
 
-publish_generic_build_info() {
-  if [[ "$DRY_RUN" == "true" ]]; then
-    echo "Would publish generic build info..." >&2
+# Note for future: This helper that checks if the build exists is needed
+# because this functionality is not in the jf command line. There are ways to do this with the rest API but for the specific
+# purpose of checking if there is already a build with the same name and number, this looks like the cleanest solution.
+check_build_exists() {
+  local build_name="$1"
+  local build_number="$2"
+  local project="$3"
+  
+  local count
+  count=$(jf rt search "${project}-build-info/$build_name/$build_number-*" --count 2>/dev/null | tail -n 1)
+  
+  if [[ "$count" =~ ^[0-9]+$ ]] && [[ "$count" -gt 0 ]]; then
+    return 0  # Build exists
   else
-    echo "Publishing generic build info..." >&2
+    return 1  # Build does not exist
   fi
-
-  run jf rt build-collect-env "$BUILD_NAME" "$BUILD_NUMBER" --project="$PROJECT"
-  run jf rt build-add-git "$BUILD_NAME" "$BUILD_NUMBER" --project="$PROJECT"
-  run jf rt build-add-dependencies "$BUILD_NAME" "$BUILD_NUMBER" . --project="$PROJECT"
-  run jf rt build-publish "$BUILD_NAME" "$BUILD_NUMBER" --project="$PROJECT"
 }
 
 publish_build_info() {
@@ -331,11 +310,10 @@ main() {
   structure_build_artifacts
   cd structured_build_artifacts
   
-  # Upload all packages (DEB, RPM, generic)
-  upload_deb_packages
+  # Upload all packages
   upload_rpm_packages
+  upload_deb_packages
   upload_generic_files
-  
   # Publish build info once for the unified build
   publish_build_info
 
