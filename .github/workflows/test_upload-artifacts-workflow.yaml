@@ -24,7 +24,7 @@ jobs:
     uses: ./.github/workflows/reusable_upload-artifacts.yaml
     with:
       project: database
-      build-prefix: test-upload-workflow
+      build-name: test-upload-workflow
       version: v1.0.0
       artifactory-url: https://aerospike.jfrog.io
       artifactory-oidc-provider-name: gh-aerospike

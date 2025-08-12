@@ -7,8 +7,8 @@ on:
         description: JFrog Artifactory project name
         required: true
         type: string
-      build-prefix:
-        description: Prefix for the build name
+      build-name:
+        description: JFrog build name
         required: true
         type: string
       version:
@@ -88,7 +88,7 @@ jobs:
           fi
           ${{ github.workspace }}/.github/workflows/upload-artifacts/entrypoint.sh \
             "${{ inputs.project }}" \
-            "${{ inputs.build-prefix }}" \
+            "${{ inputs.build-name }}" \
             "${{ inputs.version }}" \
             "${{ github.run_id }}" \
             $dry_run_arg
