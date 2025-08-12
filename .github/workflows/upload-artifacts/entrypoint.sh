@@ -110,6 +110,7 @@ run() {
 }
 
 structure_build_artifacts() {
+  echo "Structuring build artifacts..." >&2
   mkdir -p structured_build_artifacts
   while IFS= read -r -d '' deb; do
     if [[ ! -f "$deb" ]]; then
