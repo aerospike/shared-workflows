@@ -68,6 +68,16 @@ else
 		$(BUILD_DIR)/$(TARGET)=/usr/local/bin/$(TARGET)
 endif
 
+# Common parts
+RVM_SETUP = gpg --keyserver hkp://keyserver.ubuntu.com --recv-keys 409B6B1796C275462A1703113804BB82D39DC0E3 7D2BAF1CF37B13E2069D6956105BD0E739499BDB && \
+	curl -sSL https://get.rvm.io | bash -s stable && \
+	source /etc/profile.d/rvm.sh && \
+	rvm get stable && \
+	rvm install ruby --latest && \
+	rvm --default use ruby && \
+	gem install --no-document fpm && \
+	gcc -Wall -O2 -o $(TARGET) $(SOURCE)
+
 # Build in Docker container for the target distro
 docker-build:
 	@echo "Building $(PACKAGE_TYPE) package for $(DISTRO)-$(ARCH)..."
@@ -75,38 +85,20 @@ docker-build:
 	@mkdir -p $(PACKAGE_DIR)
 ifeq ($(PACKAGE_TYPE),deb)
 	docker run --rm -v $(PWD):/workspace -w /workspace $(DOCKER_IMAGE) \
-		bash -c 'apt-get update && apt-get install -y build-essential ruby ruby-dev rubygems && \
-        gem install --no-document fpm && \
-		gcc -Wall -O2 -o hi hi.c && \
+		bash -c 'apt-get update && apt-get install -y build-essential curl gnupg procps && \
+		$(RVM_SETUP) && \
 		fpm -s dir -t deb --verbose --force --maintainer="Aerospike Team" --description="Simple hello world app" --version="$(VERSION)" --vendor="Aerospike" --name="$(TARGET)" \
 			--package="$(PACKAGE_DIR)/$(TARGET)_$(VERSION)_$(DISTRO_VERSION)_$(ARCH).deb" \
 			--deb-dist="$(DISTRO)" \
-			hi=/usr/local/bin/hi'
+			$(TARGET)=/usr/local/bin/$(TARGET)'
 else
 	docker run --rm -v $(PWD):/workspace -w /workspace $(DOCKER_IMAGE) \
-		bash -c 'yum install -y gcc make rpm-build redhat-rpm-config tar gzip xz ca-certificates && \
-		if ! ruby --version 2>/dev/null | grep -q "ruby [3-9]"; then \
-			if command -v dnf >/dev/null 2>&1 && dnf module list ruby 2>/dev/null | grep -q ruby; then \
-				yum install -y ruby ruby-devel rubygems && \
-				dnf -y module reset ruby && \
-				dnf -y module enable ruby:3.1 && \
-				dnf -y install ruby ruby-devel rubygems; \
-			else \
-				yum install -y ruby ruby-devel rubygems; \
-			fi; \
-		fi && \
-		gem update --system && \
-		gem install --no-document fpm && \
-		gcc -Wall -O2 -o hi hi.c && \
+		bash -c 'yum install -y gcc make rpm-build redhat-rpm-config tar gzip xz ca-certificates curl which gnupg procps-ng && \
+		$(RVM_SETUP) && \
 		fpm -s dir -t rpm --verbose --force --maintainer="Aerospike Team" --description="Simple hello world app" --version="$(VERSION)" --vendor="Aerospike" --name="$(TARGET)" \
 			--package="$(PACKAGE_DIR)/$(TARGET)-$(VERSION)-1.$(DISTRO_VERSION).$(ARCH).rpm" \
-			hi=/usr/local/bin/hi'
+			$(TARGET)=/usr/local/bin/$(TARGET)'
 endif
-
-# Install dependencies locally
-deps:
-	@echo "Installing dependencies..."
-	@which fpm >/dev/null 2>&1 || gem install fpm
 
 # Clean
 clean:
