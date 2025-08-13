@@ -83,6 +83,23 @@ jobs:
       artifactory-oidc-audience: aerospike # default
       dry-run: false # default
 
+  combine-artifacts:
+    needs: build-packages
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Download All Matrix Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: build-artifacts-*
+          path: ./all-packages
+          merge-multiple: true
+
+      - name: Upload Combined Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts
+          path: ./all-packages
+          retention-days: 1
 #   upload:
 #     needs: build-packages
 #     uses: ./.github/workflows/reusable_upload-artifacts.yaml
