@@ -1,0 +1,101 @@
+name: Test Create Release Bundle Workflow
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+
+permissions:
+  id-token: write
+  contents: read
+  packages: write
+
+jobs:
+  build-packages:
+    uses: ./.github/workflows/reusable_execute-build.yaml
+    strategy:
+      matrix:
+        include:
+          # DEB packages
+          - distro: jammy
+            arch: x86_64
+            package_type: deb
+          - distro: jammy
+            arch: arm64
+            package_type: deb
+          - distro: noble
+            arch: x86_64
+            package_type: deb
+          - distro: noble
+            arch: arm64
+            package_type: deb
+          - distro: focal
+            arch: x86_64
+            package_type: deb
+          - distro: focal
+            arch: arm64
+            package_type: deb
+          - distro: bullseye
+            arch: x86_64
+            package_type: deb
+          - distro: bullseye
+            arch: arm64
+            package_type: deb
+          - distro: bookworm
+            arch: x86_64
+            package_type: deb
+          - distro: bookworm
+            arch: arm64
+            package_type: deb
+          # RPM packages
+          - distro: el8
+            arch: x86_64
+            package_type: rpm
+          - distro: el8
+            arch: arm64
+            package_type: rpm
+          - distro: el9
+            arch: x86_64
+            package_type: rpm
+          - distro: el9
+            arch: arm64
+            package_type: rpm
+          - distro: amzn2023
+            arch: x86_64
+            package_type: rpm
+          - distro: amzn2023
+            arch: arm64
+            package_type: rpm
+    with:
+      project: database
+      build-name: test-build
+      build-version: v1.0.0
+      build-script: |
+        cd .github/workflows/execute-build/test_apps/hi
+        DISTRO=${{ matrix.distro }} \
+        ARCH=${{ matrix.arch }} \
+        PACKAGE_TYPE=${{ matrix.package_type }} \
+        make docker-build
+      artifact-directory: .github/workflows/execute-build/test_apps/hi/packages
+      artifact-name: build-artifacts # default
+      retention-days: 1 # default
+      artifactory-url: https://aerospike.jfrog.io # default
+      artifactory-oidc-provider-name: gh-aerospike # default
+      artifactory-oidc-audience: aerospike # default
+      dry-run: false # default
+
+#   upload:
+#     needs: build-packages
+#     uses: ./.github/workflows/reusable_upload-artifacts.yaml
+#     with:
+#       project: my-project
+#       build-name: my-build
+#       version: v1.0.0
+
+#   create-release-bundle:
+#     needs: upload
+#     uses: ./.github/workflows/reusable_create-release-bundle.yaml
+#     with:
+#       project: my-project
+#       build-names: "my-build-deb,my-build-rpm"
+#       bundle-name: my-release
+#       version: v1.0.0
