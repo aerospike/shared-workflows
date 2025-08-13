@@ -93,7 +93,7 @@ ifeq ($(PACKAGE_TYPE),deb)
 			$(TARGET)=/usr/local/bin/$(TARGET)'
 else
 	docker run --rm -v $(PWD):/workspace -w /workspace $(DOCKER_IMAGE) \
-		bash -c 'yum install -y gcc make rpm-build redhat-rpm-config tar gzip xz ca-certificates curl which gnupg procps-ng && \
+		bash -c 'yum install -y --allowerasing gcc make rpm-build redhat-rpm-config tar gzip xz ca-certificates curl which gnupg procps-ng && \
 		$(RVM_SETUP) && \
 		fpm -s dir -t rpm --verbose --force --maintainer="Aerospike Team" --description="Simple hello world app" --version="$(VERSION)" --vendor="Aerospike" --name="$(TARGET)" \
 			--package="$(PACKAGE_DIR)/$(TARGET)-$(VERSION)-1.$(DISTRO_VERSION).$(ARCH).rpm" \
