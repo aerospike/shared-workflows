@@ -55,7 +55,7 @@ jobs:
           fetch-depth: 0
 
       - name: Setup JFrog CLI
-        uses: jfrog/setup-jfrog-cli@f748a0599171a192a2668afee8d0497f7c1069df
+        uses: jfrog/setup-jfrog-cli@2bc6e55719cd37dfb2f655a1e4f16c3440182a9f
         env:
           JF_URL: ${{ inputs.artifactory-url }}
           JF_PROJECT: ${{ inputs.project }}
