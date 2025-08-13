@@ -39,6 +39,9 @@ record_test_result() {
 
 # Cleanup function
 cleanup() {
+
+
+    echo "cleaning up"
     rm -rf "$TEST_DIR"
 }
 
@@ -221,7 +224,7 @@ cd "$TEST_DIR" || error "Failed to cd to $TEST_DIR"
 
 capture_dry_run_output \
     "DEB and RPM upload test" \
-    "$SCRIPT_DIR/entrypoint.sh test-project test-build v1.0.0 --dry-run" \
+    "$SCRIPT_DIR/entrypoint.sh test-project test-build v1.0.0 12345 --dry-run" \
     "$TEST_DIR/test1_output.txt"
 
 echo ""
@@ -241,14 +244,10 @@ target-props.*rpm.distribution=
 fi
 
 if ! verify_commands "Build info commands" "$TEST_DIR/test1_output.txt.build_commands" "
-jf rt build-collect-env.*test-build-deb.*v1.0.0
-jf rt build-add-git.*test-build-deb.*v1.0.0
-jf rt build-add-dependencies.*test-build-deb.*v1.0.0
-jf rt build-publish.*test-build-deb.*v1.0.0
-jf rt build-collect-env.*test-build-rpm.*v1.0.0
-jf rt build-add-git.*test-build-rpm.*v1.0.0
-jf rt build-add-dependencies.*test-build-rpm.*v1.0.0
-jf rt build-publish.*test-build-rpm.*v1.0.0
+jf rt build-collect-env.*test-build.*12345
+jf rt build-add-git.*test-build.*12345
+jf rt build-add-dependencies.*test-build.*12345
+jf rt build-publish.*test-build.*12345
 "; then
     test1_success=false
 fi
@@ -257,7 +256,7 @@ if ! verify_command_count "Upload commands" "$TEST_DIR/test1_output.txt.upload_c
     test1_success=false
 fi
 
-if ! verify_command_count "Build commands" "$TEST_DIR/test1_output.txt.build_commands" 12; then
+if ! verify_command_count "Build commands" "$TEST_DIR/test1_output.txt.build_commands" 4; then
     test1_success=false
 fi
 
@@ -268,7 +267,7 @@ echo ""
 echo " Test 2: Uploading nested files"
 capture_dry_run_output \
     "Nested files upload test" \
-    "$SCRIPT_DIR/entrypoint.sh test-project test-build v1.0.0 --dry-run" \
+    "$SCRIPT_DIR/entrypoint.sh test-project test-build v1.0.0 12345 --dry-run" \
     "$TEST_DIR/test2_output.txt"
 
 echo ""
@@ -293,7 +292,7 @@ echo ""
 echo " Test 3: Uploading all files"
 capture_dry_run_output \
     "All files upload test" \
-    "$SCRIPT_DIR/entrypoint.sh test-project test-build v1.0.0 --dry-run" \
+    "$SCRIPT_DIR/entrypoint.sh test-project test-build v1.0.0 12345 --dry-run" \
     "$TEST_DIR/test3_output.txt"
 
 echo ""
@@ -304,10 +303,10 @@ test3_success=true
 # Generic files are not copied to structured_build_artifacts, so they won't be uploaded
 
 if ! verify_commands "All build info commands" "$TEST_DIR/test3_output.txt.build_commands" "
-jf rt build-collect-env.*test-build-generic.*v1.0.0
-jf rt build-add-git.*test-build-generic.*v1.0.0
-jf rt build-add-dependencies.*test-build-generic.*v1.0.0
-jf rt build-publish.*test-build-generic.*v1.0.0
+jf rt build-collect-env.*test-build.*12345
+jf rt build-add-git.*test-build.*12345
+jf rt build-add-dependencies.*test-build.*12345
+jf rt build-publish.*test-build.*12345
 "; then
     test3_success=false
 fi
@@ -316,7 +315,7 @@ if ! verify_command_count "All upload commands" "$TEST_DIR/test3_output.txt.uplo
     test3_success=false
 fi
 
-if ! verify_command_count "All build commands" "$TEST_DIR/test3_output.txt.build_commands" 12; then
+if ! verify_command_count "All build commands" "$TEST_DIR/test3_output.txt.build_commands" 4; then
     test3_success=false
 fi
 
@@ -337,13 +336,13 @@ else
     test4_success=false
 fi
 
-echo "  Testing missing build-prefix argument..."
+echo "  Testing missing build-name argument..."
 # shellcheck disable=SC2015
-missing_build_prefix_output=$(cd "$TEST_DIR" && "$SCRIPT_DIR/entrypoint.sh" test-project 2>&1 || true)
-if echo "$missing_build_prefix_output" | grep -q "Error: build-prefix is required"; then
-    echo "     Missing build-prefix error handled correctly"
+missing_build_name_output=$(cd "$TEST_DIR" && "$SCRIPT_DIR/entrypoint.sh" test-project 2>&1 || true)
+if echo "$missing_build_name_output" | grep -q "Error: build-name is required"; then
+    echo "     Missing build-name error handled correctly"
 else
-    echo "     Missing build-prefix error not handled correctly"
+    echo "     Missing build-name error not handled correctly"
     test4_success=false
 fi
 
@@ -357,9 +356,19 @@ else
     test4_success=false
 fi
 
+echo "  Testing missing build-number argument..."
+# shellcheck disable=SC2015
+missing_build_number_output=$(cd "$TEST_DIR" && "$SCRIPT_DIR/entrypoint.sh" test-project test-build v1.0.0 2>&1 || true)
+if echo "$missing_build_number_output" | grep -q "Error: build-number is required"; then
+    echo "     Missing build-number error handled correctly"
+else
+    echo "     Missing build-number error not handled correctly"
+    test4_success=false
+fi
+
 echo "  Testing invalid option..."
 # shellcheck disable=SC2015
-invalid_option_output=$(cd "$TEST_DIR" && "$SCRIPT_DIR/entrypoint.sh" --invalid-option test-project test-build v1.0.0 2>&1 || true)
+invalid_option_output=$(cd "$TEST_DIR" && "$SCRIPT_DIR/entrypoint.sh" --invalid-option test-project test-build v1.0.0 12345 2>&1 || true)
 if echo "$invalid_option_output" | grep -q "Unknown option"; then
     echo "     Invalid option error handled correctly"
 else
@@ -376,7 +385,7 @@ test5_success=true
 
 echo "  Testing structured build artifacts creation..."
 # shellcheck disable=SC2015
-structured_output=$(cd "$TEST_DIR" && "$SCRIPT_DIR/entrypoint.sh" test-project test-build v1.0.0 --dry-run 2>&1 || true)
+structured_output=$(cd "$TEST_DIR" && "$SCRIPT_DIR/entrypoint.sh" test-project test-build v1.0.0 12345 --dry-run 2>&1 || true)
 if echo "$structured_output" | grep -q "Processing DEB:"; then
     echo "     Structured build artifacts processing works correctly"
 else
@@ -405,5 +414,5 @@ if [[ $FAILED_TESTS -eq 0 ]]; then
 else
     echo ""
     echo "❌ Test failures."
-    return 1
+    exit 1
 fi

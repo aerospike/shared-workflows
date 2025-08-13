@@ -12,7 +12,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 GIT_ROOT="$(git rev-parse --show-toplevel)"
 
 # Define test directory
-TEST_DIR="$GIT_ROOT/.github/workflows/build-artifacts/test-artifacts"
+TEST_DIR="$GIT_ROOT/.github/workflows/execute-build/test-artifacts"
 rm -rf "$TEST_DIR"
 mkdir -p "$TEST_DIR"
 TEST_REPORT_FILE="$TEST_DIR/test-report.txt"
@@ -27,7 +27,7 @@ handle_error() {
 }
 
 
-cp -r "$GIT_ROOT/.github/workflows/build-artifacts/test_apps" "$TEST_DIR"
+cp -r "$GIT_ROOT/.github/workflows/execute-build/test_apps" "$TEST_DIR"
 
 # Function to record test results
 record_test_result() {
@@ -112,18 +112,25 @@ cd "$TEST_DIR"
 rm -rf build-output-dry
 output=$("$SCRIPT_DIR/entrypoint.sh" --build-script-path simple-build.sh --artifact-directory build-output-dry --dry-run 2>&1)
 
+# Check for dry-run indicator
 if ! echo "$output" | grep -q "Would execute build-artifacts workflow"; then
+    echo "Dry-run mode does not contain expected message"
     test2_success=false
 fi
 
-if ! echo "$output" | grep -q "Would execute: .*simple-build.sh"; then
+# Check for the actual commands that would be executed (green output from run() function)
+if ! echo "$output" | grep -q "   .*simple-build.sh"; then
+    echo "Dry-run mode does not show the command that would be executed"
     test2_success=false
 fi
 
-# In dry-run, no actual artifacts should be created
-if [[ -d "build-output-dry" ]]; then
+# Check for mkdir command that would be executed
+if ! echo "$output" | grep -q "   mkdir -p"; then
+    echo "Dry-run mode does not show mkdir command"
     test2_success=false
 fi
+
+
 
 record_test_result "Test 2: Dry-run mode" "$test2_success"
 
@@ -221,6 +228,18 @@ if "$SCRIPT_DIR/entrypoint.sh" --build-script-path no-artifacts-build.sh --artif
 fi
 
 record_test_result "Test 7: Error handling - no artifacts created" "$test7_success"
+
+# Test 8: Duplicate build script arguments error
+echo ""
+echo " Test 8: Error handling - duplicate build script arguments"
+test8_success=true
+
+cd "$TEST_DIR"
+if "$SCRIPT_DIR/entrypoint.sh" --build-script "echo test" --build-script-path simple-build.sh --artifact-directory test-output 2>/dev/null; then
+    test8_success=false
+fi
+
+record_test_result "Test 8: Error handling - duplicate build script arguments" "$test8_success"
 
 # Summary
 

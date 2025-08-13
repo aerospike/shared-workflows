@@ -24,6 +24,8 @@ error() {
 
 # Default values
 DRY_RUN="false"
+BUILD_NAME=""
+BUILD_VERSION=""
 
 show_help() {
   echo "Usage: $0 --artifact-directory <dir> (--build-script <commands> | --build-script-path <file>) [OPTIONS]" >&2
@@ -38,12 +40,14 @@ show_help() {
   echo "  --build-script-path <file>     Path to build script file to execute" >&2
   echo "" >&2
   echo "Options:" >&2
+  echo "  --build-name <name>            Build name for JFrog upload" >&2
+  echo "  --build-version <version>      Build version for JFrog upload" >&2
   echo "  --dry-run                      Show what would be done without actually doing it" >&2
   echo "  --help, -h                     Show this help message" >&2
   echo "" >&2
   echo "Examples:" >&2
-  echo "  $0 --build-script-path ./scripts/build.sh --artifact-directory build-output" >&2
-  echo "  $0 --build-script 'make all && cp build/* artifacts/' --artifact-directory artifacts" >&2
+  echo "  $0 --build-script-path ./scripts/build.sh --artifact-directory build-output --build-name my-app --build-version v1.0.0" >&2
+  echo "  $0 --build-script 'make all && cp build/* artifacts/' --artifact-directory artifacts --build-name my-app --build-version v1.0.0" >&2
   echo "  $0 --build-script-path make.sh --artifact-directory artifacts --dry-run" >&2
 }
 
@@ -68,6 +72,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     --artifact-directory)
       ARTIFACT_DIRECTORY="$2"
+      shift 2
+      ;;
+    --build-name)
+      BUILD_NAME="$2"
+      shift 2
+      ;;
+    --build-version)
+      BUILD_VERSION="$2"
       shift 2
       ;;
     --dry-run)
@@ -121,6 +133,8 @@ main() {
   echo "Build script type: $BUILD_SCRIPT_TYPE" >&2
   echo "Build script: $BUILD_SCRIPT" >&2
   echo "Artifact directory: $ARTIFACT_DIRECTORY" >&2
+  echo "Build name: $BUILD_NAME" >&2
+  echo "Build version: $BUILD_VERSION" >&2
   echo "Dry run: $DRY_RUN" >&2
   
   # Handle build script based on type
@@ -146,9 +160,6 @@ main() {
       resolved_build_script="$BUILD_SCRIPT"
     else
       resolved_build_script="$(realpath "$BUILD_SCRIPT")"
-      if [[ ! -f "$resolved_build_script" ]]; then
-        error "Build script not found: $BUILD_SCRIPT (resolved to: $resolved_build_script)"
-      fi
     fi
   fi
 
@@ -158,23 +169,9 @@ main() {
     error "Build script not found: $BUILD_SCRIPT (resolved to: $resolved_build_script)"
   fi
   
-  if [[ ! -x "$resolved_build_script" ]]; then
-    echo "Making build script executable: $resolved_build_script" >&2
-    run chmod +x "$resolved_build_script"
-  fi
-  
-  if [[ ! -d "$ARTIFACT_DIRECTORY" ]]; then
-    echo "Creating artifact directory: $ARTIFACT_DIRECTORY" >&2
-    run mkdir -p "$ARTIFACT_DIRECTORY"
-  fi
-  
-  echo "Executing build script: $resolved_build_script" >&2
-  if [[ "$DRY_RUN" == "true" ]]; then
-    echo "   Would execute: $resolved_build_script" >&2
-  else
-    echo "   Executing: $resolved_build_script" >&2
-    "$resolved_build_script"
-  fi
+  run chmod +x "$resolved_build_script"
+  run mkdir -p "$ARTIFACT_DIRECTORY"
+  run "$resolved_build_script"
   
   # Verify artifacts were created
   if [[ "$DRY_RUN" == "false" ]]; then

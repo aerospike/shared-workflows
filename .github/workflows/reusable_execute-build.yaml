@@ -1,8 +1,20 @@
-name: Build Artifacts
+name: Execute Build
 
 on:
   workflow_call:
     inputs:
+      project:
+        description: JFrog Artifactory project name
+        required: true
+        type: string
+      build-name:
+        description: Name for this build in artifactory
+        required: true
+        type: string
+      build-version:
+        description: Version for this build in artifactory
+        required: true
+        type: string
       build-script:
         description: Inline build script to execute
         required: false
@@ -14,16 +26,16 @@ on:
         type: string
         default: ""
       artifact-directory:
-        description: Directory that will contain all artifacts from this build
+        description: Build script will place artifacts in this directory and it will be uploaded to github artifacts
         required: true
         type: string
       artifact-name:
-        description: Name for the uploaded artifacts
+        description: Name for artifacts from this build. Will be used for name of uploaded github artifacts
         required: false
         type: string
         default: build-artifacts
       retention-days:
-        description: Retention days for the artifacts
+        description: Retention days for the github artifacts
         required: false
         type: number
         default: 1
@@ -50,9 +62,10 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
-  build-artifacts:
+  execute-build:
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout
@@ -60,23 +73,36 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Set up JFrog CLI
+        uses: jfrog/setup-jfrog-cli@f748a0599171a192a2668afee8d0497f7c1069df
+        env:
+          JF_URL: ${{ inputs.artifactory-url }}
+          JF_PROJECT: ${{ inputs.project }}
+        with:
+          oidc-provider-name: ${{ inputs.artifactory-oidc-provider-name }}
+          oidc-audience: ${{ inputs.artifactory-oidc-audience }}
+
       - name: Execute Build Script
         shell: bash
         run: |
-          chmod +x ${{ github.workspace }}/.github/workflows/build-artifacts/entrypoint.sh
+          chmod +x ${{ github.workspace }}/.github/workflows/execute-build/entrypoint.sh
           dry_run_arg=""
           if [ "${{ inputs.dry-run }}" = "true" ]; then
             dry_run_arg="--dry-run"
           fi
           if [ "${{ inputs.build-script }}" != "" ]; then
-            "${{ github.workspace }}/.github/workflows/build-artifacts/entrypoint.sh" \
+            "${{ github.workspace }}/.github/workflows/execute-build/entrypoint.sh" \
               --build-script "${{ inputs.build-script }}" \
               --artifact-directory "${{ inputs.artifact-directory }}" \
+              --build-name "${{ inputs.build-name }}" \
+              --build-version "${{ inputs.build-version }}" \
               $dry_run_arg
           elif [ "${{ inputs.build-script-path }}" != "" ]; then
-            "${{ github.workspace }}/.github/workflows/build-artifacts/entrypoint.sh" \
+            "${{ github.workspace }}/.github/workflows/execute-build/entrypoint.sh" \
               --build-script-path "${{ inputs.build-script-path }}" \
               --artifact-directory "${{ inputs.artifact-directory }}" \
+              --build-name "${{ inputs.build-name }}" \
+              --build-version "${{ inputs.build-version }}" \
               $dry_run_arg
           else
             echo "Error: Either build-script or build-script-path must be given"
