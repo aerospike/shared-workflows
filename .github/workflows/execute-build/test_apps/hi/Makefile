@@ -84,10 +84,17 @@ ifeq ($(PACKAGE_TYPE),deb)
 			hi=/usr/local/bin/hi'
 else
 	docker run --rm -v $(PWD):/workspace -w /workspace $(DOCKER_IMAGE) \
-		bash -c 'yum install -y gcc make ruby ruby-devel rubygems && \
-		dnf -y module reset ruby && \
-		dnf -y module enable ruby:3.1 && \
-		dnf -y install ruby ruby-devel rubygems gcc make rpm-build redhat-rpm-config tar gzip xz ca-certificates && \
+		bash -c 'yum install -y gcc make rpm-build redhat-rpm-config tar gzip xz ca-certificates && \
+		if ! ruby --version 2>/dev/null | grep -q "ruby [3-9]"; then \
+			if command -v dnf >/dev/null 2>&1 && dnf module list ruby 2>/dev/null | grep -q ruby; then \
+				yum install -y ruby ruby-devel rubygems && \
+				dnf -y module reset ruby && \
+				dnf -y module enable ruby:3.1 && \
+				dnf -y install ruby ruby-devel rubygems; \
+			else \
+				yum install -y ruby ruby-devel rubygems; \
+			fi; \
+		fi && \
 		gem update --system && \
 		gem install --no-document fpm && \
 		gcc -Wall -O2 -o hi hi.c && \
