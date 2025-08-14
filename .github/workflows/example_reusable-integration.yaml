@@ -73,6 +73,9 @@ jobs:
       build-version: v1.0.0
       build-script: |
         cd .github/workflows/execute-build/test_apps/hi
+        uname -m
+        uname -a
+        which gcc
         DISTRO=${{ matrix.distro }} \
         ARCH=${{ matrix.arch }} \
         make docker-build
