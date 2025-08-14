@@ -38,7 +38,7 @@ docker-build:
 	@echo "Building for $(DISTRO)-$(ARCH)..."
 	@echo "Using Docker image: $(DOCKER_IMAGE)"
 	@mkdir -p $(BUILD_DIR)/$(DISTRO)/$(ARCH)
-ifeq ($(filter ubuntu debian,$(DOCKER_IMAGE)),$(DOCKER_IMAGE))
+ifeq ($(filter jammy noble focal bullseye bookworm,$(DISTRO)),$(DISTRO))
 	docker run --rm -v $(PWD):/workspace -w /workspace $(DOCKER_IMAGE) \
 		bash -c 'apt-get update && apt-get install -y build-essential && \
 		$(CC) $(CFLAGS) -o $(BUILD_DIR)/$(DISTRO)/$(ARCH)/$(TARGET) $(SOURCE)'
