@@ -65,7 +65,6 @@ docker-build:
 	@echo "Emulated: $(EMULATED)"
 	@mkdir -p $(BUILD_DIR)/$(DISTRO)/$(ARCH)
 ifeq ($(filter jammy noble focal bullseye bookworm,$(DISTRO)),$(DISTRO))
-	# Debian/Ubuntu family - supports cross-compilation
 	docker run --rm -v $(PWD):/workspace -w /workspace \
 		-e ARCH=$(ARCH) -e EMULATED=$(EMULATED) \
 		$(DOCKER_IMAGE) \
@@ -74,6 +73,9 @@ ifeq ($(filter jammy noble focal bullseye bookworm,$(DISTRO)),$(DISTRO))
 			CC=aarch64-linux-gnu-gcc; \
 			echo "Installing cross-compiler and target libraries..."; \
 			apt-get install -y gcc-aarch64-linux-gnu libc6-dev-arm64-cross; \
+		else \
+			CC=${CC}; \
+			echo "Using native compiler"; \
 		fi && \
 		echo "Using CC: $$CC" && \
 		echo "ARCH: $$ARCH, EMULATED: $$EMULATED" && \
@@ -90,7 +92,7 @@ else
 		-e ARCH=$(ARCH) -e EMULATED=$(EMULATED) \
 		$(DOCKER_IMAGE) \
 		bash -c 'yum install -y --allowerasing gcc make && \
-		CC=gcc && \
+		CC=${CC} && \
 		echo "Using CC: $$CC" && \
 		echo "ARCH: $$ARCH, EMULATED: $$EMULATED" && \
 		command -v $$CC && \
