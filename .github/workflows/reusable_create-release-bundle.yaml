@@ -34,6 +34,11 @@ on:
         description: OIDC audience
         type: string
         default: aerospike
+      runs-on:
+        description: The runner to use for the build
+        required: false
+        type: string
+        default: ubuntu-22.04
       dry-run:
         description: Whether to run in dry-run mode
         required: false
@@ -47,7 +52,7 @@ permissions:
 
 jobs:
   create-release-bundle:
-    runs-on: ubuntu-22.04
+    runs-on: ${{ inputs.runs-on }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4

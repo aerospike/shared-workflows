@@ -40,6 +40,11 @@ on:
         required: false
         type: number
         default: 1
+      runs-on:
+        description: The runner to use for the build
+        required: false
+        type: string
+        default: ubuntu-22.04
       dry-run:
         description: Whether to run in dry-run mode. Dry-run mode will not upload any artifacts.
         required: false
@@ -53,7 +58,7 @@ permissions:
 
 jobs:
   upload:
-    runs-on: ubuntu-22.04
+    runs-on: ${{ inputs.runs-on }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
