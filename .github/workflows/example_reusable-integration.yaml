@@ -15,56 +15,58 @@ jobs:
     strategy:
       matrix:
         include:
-          # DEB packages
+          # Ubuntu/Debian family (x86_64)
           - distro: jammy
             arch: x86_64
-            package_type: deb
+            runs-on: ubuntu-22.04
+          - distro: noble
+            arch: x86_64
+            runs-on: ubuntu-22.04
+          - distro: focal
+            arch: x86_64
+            runs-on: ubuntu-22.04
+          - distro: bullseye
+            arch: x86_64
+            runs-on: ubuntu-22.04
+          - distro: bookworm
+            arch: x86_64
+            runs-on: ubuntu-22.04
+          # Ubuntu/Debian family (arm64)
           - distro: jammy
             arch: arm64
-            package_type: deb
-          - distro: noble
-            arch: x86_64
-            package_type: deb
+            runs-on: ubuntu-22.04-arm64
           - distro: noble
             arch: arm64
-            package_type: deb
-          - distro: focal
-            arch: x86_64
-            package_type: deb
+            runs-on: ubuntu-22.04-arm64
           - distro: focal
             arch: arm64
-            package_type: deb
-          - distro: bullseye
-            arch: x86_64
-            package_type: deb
+            runs-on: ubuntu-22.04-arm64
           - distro: bullseye
             arch: arm64
-            package_type: deb
-          - distro: bookworm
-            arch: x86_64
-            package_type: deb
+            runs-on: ubuntu-22.04-arm64
           - distro: bookworm
             arch: arm64
-            package_type: deb
-          # RPM packages
+            runs-on: ubuntu-22.04-arm64
+          # RPM family (x86_64)
           - distro: el8
             arch: x86_64
-            package_type: rpm
+            runs-on: ubuntu-22.04
+          - distro: el9
+            arch: x86_64
+            runs-on: ubuntu-22.04
+          - distro: amzn2023
+            arch: x86_64
+            runs-on: ubuntu-22.04
+          # RPM family (arm64)
           - distro: el8
             arch: arm64
-            package_type: rpm
-          - distro: el9
-            arch: x86_64
-            package_type: rpm
+            runs-on: ubuntu-22.04-arm64
           - distro: el9
             arch: arm64
-            package_type: rpm
-          - distro: amzn2023
-            arch: x86_64
-            package_type: rpm
+            runs-on: ubuntu-22.04-arm64
           - distro: amzn2023
             arch: arm64
-            package_type: rpm
+            runs-on: ubuntu-22.04-arm64
     with:
       project: database
       build-name: test-build
@@ -73,10 +75,9 @@ jobs:
         cd .github/workflows/execute-build/test_apps/hi
         DISTRO=${{ matrix.distro }} \
         ARCH=${{ matrix.arch }} \
-        PACKAGE_TYPE=${{ matrix.package_type }} \
         make docker-build
-      artifact-directory: .github/workflows/execute-build/test_apps/hi/packages
-      artifact-name: build-artifacts-${{ matrix.distro }}-${{ matrix.arch }}-${{ matrix.package_type }}
+      artifact-directory: .github/workflows/execute-build/test_apps/hi/build
+      artifact-name: build-artifacts-${{ matrix.distro }}-${{ matrix.arch }}
       retention-days: 1 # default
       artifactory-url: https://aerospike.jfrog.io # default
       artifactory-oidc-provider-name: gh-aerospike # default
