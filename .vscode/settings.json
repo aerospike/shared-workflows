@@ -1,9 +1,5 @@
 {
 	"yaml.schemas": {},
-	"cSpell.words": [
-		"aerospike",
-		"kennylong",
-		"kennylong's"
-	],
+	"cSpell.words": ["aerospike", "kennylong", "kennylong's"],
 	"postman.settings.dotenv-detection-notification-visibility": false
 }

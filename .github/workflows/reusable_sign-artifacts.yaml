@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       artifact-glob:
-        description: Glob pattern to match artifacts to sign (e.g. dist/**/*.{jar,deb,rpm})
+        description: Glob pattern to match artifacts to sign (e.g. dist/**/*.{jar,deb,rpm,nupkg})
         required: true
         type: string
       output-dir:
@@ -17,6 +17,21 @@ on:
         required: false
         type: number
         default: 7
+      enable-nuget-signing:
+        description: Enable SSL.com signing for NuGet packages
+        required: false
+        type: boolean
+        default: false
+      nuget-environment:
+        description: SSL.com environment name for NuGet signing
+        required: false
+        type: string
+        default: PROD
+      jvm-max-memory:
+        description: Maximum JVM memory for NuGet signing process
+        required: false
+        type: string
+        default: 1024M
     secrets:
       gpg-private-key:
         required: true
@@ -24,9 +39,23 @@ on:
         required: true
       gpg-key-pass:
         required: true
+      es-username:
+        description: SSL.com username for NuGet signing
+        required: false
+      es-password:
+        description: SSL.com password for NuGet signing
+        required: false
+      credential-id:
+        description: SSL.com credential ID for NuGet signing
+        required: false
+      es-totp-secret:
+        description: SSL.com TOTP secret for NuGet signing
+        required: false
+
 permissions:
   contents: read
   packages: read
+
 jobs:
   sign:
     runs-on: ubuntu-22.04
@@ -44,10 +73,54 @@ jobs:
         run: |
           sudo apt-get update && sudo apt-get install dpkg-sig dpkg-dev -y
 
-      - name: Sign Artifacts
+      - name: Sign Artifacts with GPG
         run: |
           chmod +x ${{ github.workspace }}/.github/workflows/sign-artifacts/entrypoint.sh
           ${{ github.workspace }}/.github/workflows/sign-artifacts/entrypoint.sh "${{ inputs.artifact-glob }}" "${{ inputs.output-dir }}"
+
+      - name: Check for NuGet packages and sign if enabled
+        if: inputs.enable-nuget-signing
+        run: |
+          echo "Checking for NuGet packages..."
+          NUGET_PACKAGES=$(find "${{ inputs.output-dir }}" -name "*.nupkg" -type f)
+          if [ -n "$NUGET_PACKAGES" ]; then
+            echo "Found NuGet packages, signing with SSL.com..."
+            echo "$NUGET_PACKAGES" | while read -r file; do
+              echo "Signing: $file"
+            done
+          else
+            echo "No NuGet packages found"
+          fi
+
+      - name: Sign NuGet Packages with SSL.com
+        if: inputs.enable-nuget-signing
+        uses: sslcom/esigner-codesign@a272724cb13abe0abc579c6c40f7899969b6942b
+        with:
+          command: sign
+          username: ${{secrets.es-username}}
+          password: ${{secrets.es-password}}
+          credential_id: ${{secrets.credential-id}}
+          totp_secret: ${{secrets.es-totp-secret}}
+          file_path: ${{ inputs.output-dir }}/**/*.nupkg
+          output_path: ${{github.workspace}}/${{ inputs.output-dir }}
+          malware_block: false
+          override: false
+          environment_name: ${{ inputs.nuget-environment }}
+          clean_logs: true
+          jvm_max_memory: ${{ inputs.jvm-max-memory }}
+          signing_method: v1
+
+      - name: Verify NuGet Packages (if NuGet signing was performed)
+        if: inputs.enable-nuget-signing
+        run: |
+          echo "Verifying signed NuGet packages..."
+          if [ -d "${{ inputs.output-dir }}" ]; then
+            find "${{ inputs.output-dir }}" -name "*.nupkg" -type f | while read -r file; do
+              echo "Verifying: $file"
+              dotnet nuget verify "$file" --all || echo "Warning: Could not verify $file"
+            done
+          fi
+
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:

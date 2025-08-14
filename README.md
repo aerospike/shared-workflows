@@ -4,36 +4,34 @@ This repository contains reusable GitHub Actions workflows for common CI/CD task
 
 ## Available Workflows
 
-### Sign Artifacts
+### Sign Packages
+
 - **File**: `.github/workflows/reusable_sign-artifacts.yaml`
-- **Purpose**: Sign RPM and DEB packages with GPG
+- **Purpose**: Sign RPM, DEB, and NuGet packages with GPG and SSL.com certificates
 - **Usage**: See [Sign Artifacts Documentation](#sign-artifacts)
 
-### Sign NuGet Packages
-- **File**: `.github/workflows/reusable_sign-nuget.yaml`
-- **Purpose**: Sign NuGet packages with SSL.com certificates
-- **Usage**: See [Sign NuGet Packages Documentation](#sign-nuget-packages)
-
 ### Upload Artifacts
+
 - **File**: `.github/workflows/reusable_upload-artifacts.yaml`
 - **Purpose**: Upload artifacts to various destinations
 - **Usage**: See [Upload Artifacts Documentation](#upload-artifacts)
 
-## Sign NuGet Packages
+## Sign Artifacts
 
-The reusable NuGet signing workflow automatically detects .csproj files in your repository and signs the resulting NuGet packages using SSL.com certificates.
+The reusable sign artifacts workflow signs RPM, DEB, and NuGet packages using GPG and SSL.com certificates. This workflow is designed to be called after a build workflow that produces packages as artifacts.
 
 ### Features
 
-- **Auto-detection**: Automatically finds .csproj files and extracts package information
-- **Flexible configuration**: Supports custom project paths, package names, and build settings
-- **Secure signing**: Uses SSL.com certificates for professional code signing
+- **Multi-format support**: Signs RPM and DEB packages with GPG, optionally signs NuGet packages with SSL.com certificates
+- **Automatic detection**: Automatically detects NuGet packages and signs them when enabled
+- **Flexible configuration**: Supports custom artifact patterns, paths, and signing settings
+- **Secure signing**: Uses GPG for RPM/DEB and SSL.com certificates for NuGet packages
 - **Verification**: Includes built-in package verification steps
 
 ### Basic Usage
 
 ```yaml
-name: Sign My NuGet Package
+name: Build and Sign My Packages
 
 on:
   workflow_dispatch:
@@ -41,82 +39,113 @@ on:
     branches: [main]
 
 jobs:
-  sign-nuget:
-    uses: aerospike/shared-workflows/.github/workflows/reusable_sign-nuget.yaml@main
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      # Your build steps here that produce packages
+      - name: Build Packages
+        run: |
+          # Build RPM/DEB packages
+          # Build NuGet packages
+          dotnet pack --output artifacts
+
+      - name: Upload Packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: packages
+          path: artifacts/
+
+  sign:
+    needs: build
+    uses: aerospike/shared-workflows/.github/workflows/reusable_sign-artifacts.yaml@main
+    with:
+      artifact-glob: artifacts/**/*.{deb,rpm,nupkg}
+      enable-nuget-signing: true
     secrets:
-      ssl-username: ${{ secrets.SSL_USERNAME }}
-      ssl-password: ${{ secrets.SSL_PASSWORD }}
-      ssl-credential-id: ${{ secrets.SSL_CREDENTIAL_ID }}
-      ssl-totp-secret: ${{ secrets.SSL_TOTP_SECRET }}
-      ssl-client-id: ${{ secrets.SSL_CLIENT_ID }}
+      gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
+      gpg-public-key: ${{ secrets.GPG_PUBLIC_KEY }}
+      gpg-key-pass: ${{ secrets.GPG_KEY_PASS }}
+      es-username: ${{ secrets.ES_USERNAME }}
+      es-password: ${{ secrets.ES_PASSWORD }}
+      credential-id: ${{ secrets.CREDENTIAL_ID }}
+      es-totp-secret: ${{ secrets.ES_TOTP_SECRET }}
 ```
 
 ### Advanced Usage
 
 ```yaml
-name: Sign My NuGet Package
+name: Build and Sign My Packages
 
 on:
   workflow_dispatch:
 
 jobs:
-  sign-nuget:
-    uses: aerospike/shared-workflows/.github/workflows/reusable_sign-nuget.yaml@main
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      # Your build steps here
+      - name: Upload Packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: my-custom-packages
+          path: dist/
+
+  sign:
+    needs: build
+    uses: aerospike/shared-workflows/.github/workflows/reusable_sign-artifacts.yaml@main
     with:
-      # Specify a specific .csproj file (optional)
-      project-path: 'src/MyProject/MyProject.csproj'
-      
-      # Specify custom package name (optional)
-      package-name: 'MyCustomPackage.2.1.0.nupkg'
-      
-      # Customize output directory
-      output-dir: 'signed-packages'
-      
-      # Customize retention period
-      retention-days: 90
-      
-      # Specify .NET version
-      dotnet-version: '8.0.x'
-      
-      # Specify build configuration
-      build-configuration: 'Release'
+      artifact-glob: dist/**/*.{deb,rpm,nupkg}
+      output-dir: signed-packages
+      retention-days: 30
+      enable-nuget-signing: true
+      nuget-environment: PROD
+      jvm-max-memory: 2048M
     secrets:
-      ssl-username: ${{ secrets.SSL_USERNAME }}
-      ssl-password: ${{ secrets.SSL_PASSWORD }}
-      ssl-credential-id: ${{ secrets.SSL_CREDENTIAL_ID }}
-      ssl-totp-secret: ${{ secrets.SSL_TOTP_SECRET }}
-      ssl-client-id: ${{ secrets.SSL_CLIENT_ID }}
+      gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
+      gpg-public-key: ${{ secrets.GPG_PUBLIC_KEY }}
+      gpg-key-pass: ${{ secrets.GPG_KEY_PASS }}
+      es-username: ${{ secrets.ES_USERNAME }}
+      es-password: ${{ secrets.ES_PASSWORD }}
+      credential-id: ${{ secrets.CREDENTIAL_ID }}
+      es-totp-secret: ${{ secrets.ES_TOTP_SECRET }}
 ```
 
 ### Required Secrets
 
 You need to set up the following secrets in your repository:
 
-- `SSL_USERNAME`: Your SSL.com username
-- `SSL_PASSWORD`: Your SSL.com password
-- `SSL_CREDENTIAL_ID`: Your SSL.com credential ID
-- `SSL_TOTP_SECRET`: Your SSL.com TOTP secret
-- `SSL_CLIENT_ID`: Your SSL.com client ID
+**For GPG signing (RPM/DEB packages):**
+
+- `GPG_PRIVATE_KEY`: Your GPG private key
+- `GPG_PUBLIC_KEY`: Your GPG public key
+- `GPG_KEY_PASS`: Your GPG key passphrase
+
+**For SSL.com signing (NuGet packages):**
+
+- `ES_USERNAME`: Your SSL.com username
+- `ES_PASSWORD`: Your SSL.com password
+- `CREDENTIAL_ID`: Your SSL.com credential ID
+- `ES_TOTP_SECRET`: Your SSL.com TOTP secret
+
+### Input Parameters
+
+| Parameter              | Description                               | Required | Default            |
+| ---------------------- | ----------------------------------------- | -------- | ------------------ |
+| `artifact-glob`        | Glob pattern to match artifacts to sign   | Yes      | -                  |
+| `output-dir`           | Output directory for signed artifacts     | No       | `signed-artifacts` |
+| `retention-days`       | Number of days to retain artifacts        | No       | `7`                |
+| `enable-nuget-signing` | Enable SSL.com signing for NuGet packages | No       | `false`            |
+| `nuget-environment`    | SSL.com environment for NuGet signing     | No       | `PROD`             |
+| `jvm-max-memory`       | Maximum JVM memory for NuGet signing      | No       | `1024M`            |
 
 ### How It Works
 
-1. **Auto-detection**: The workflow automatically finds .csproj files in your repository
-2. **Package extraction**: Extracts package name and version from the .csproj file
-3. **Build**: Restores dependencies, builds the project, and creates the NuGet package
-4. **Signing**: Signs the package using SSL.com certificates
-5. **Verification**: Verifies the signed package and uploads it as an artifact
-
-### Supported .csproj Properties
-
-The workflow automatically extracts these properties from your .csproj file:
-
-- `<PackageId>`: The package name (preferred)
-- `<AssemblyName>`: Fallback for package name
-- `<Version>`: The package version
-
-If these properties are not found, the workflow uses sensible defaults.
-
-# shared-workflows
+1. **Download artifacts**: Downloads the specified artifacts containing packages
+2. **GPG signing**: Signs RPM and DEB packages with GPG, creates detached signatures and checksums
+3. **NuGet detection**: Automatically detects NuGet packages in the artifacts
+4. **SSL.com signing**: Signs NuGet packages with SSL.com certificates (if enabled)
+5. **Upload results**: Uploads all signed packages as artifacts
+6. **Verify signatures**: Verifies signed packages and provides summaries
 
 ## Introduction
 
@@ -179,18 +208,18 @@ GitHub Actions and Workflows in the same repository necessarily share a version.
 We suggest that you pin these actions/workflows to a specific sha with a comment of the semver tag. This way you can use dependabot to keep your workflows up to date. See [dependabot.yml](.github/dependabot.yml) for an example of this.
 
 ```yaml
-# GOOD
+# ✅ GOOD
 uses: aerospike/shared-workflows/actions/setup-gpg@ed780e9928d56ef074532dbc6877166d5460587a # v0.1.0
 # pro: reproducible builds, allows you to specify a known version of the action
 # pro: dependabot can auto-PR updates to your repo, will also update version comment
 # pro: official GitHub security hardening best practice
 
-# BAD
+# ❌ BAD
 uses: aerospike/shared-workflows/actions/setup-gpg@v0.1.0
 # pro: dependabot can auto-PR updates to your repo
 # con: tags are not immutable. 'semver' hint not usable with semver niceties (pessimistic versioning, etc)
 
-# BAD
+# ❌ BAD
 uses: aerospike/shared-workflows/actions/setup-gpg@main
 # con: unsupported versioning usage: if this breaks for you, you will be told you should've pinned to a sha
 # con: Requires that main is always backwards compatible and never breaks anything ever (not possible)

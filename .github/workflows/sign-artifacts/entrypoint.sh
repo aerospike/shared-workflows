@@ -40,7 +40,6 @@ echo "Processing all files in target directory: $TARGET_DIR"
 find "$TARGET_DIR" -type f | while read -r file; do
   echo "Processing: $file"
 
-
   # Skip signature and checksum files to prevent infinite loops
   if [[ "$file" =~ \.(asc|sha256)$ ]]; then
     continue
@@ -80,8 +79,13 @@ find "$TARGET_DIR" -type f | while read -r file; do
   # SHA256 checksum for signature file
   shasum -a 256 "$file.asc" > "$file.asc.sha256"
 
-  echo "Signed: $file"
+  echo "GPG Signed: $file"
   echo "  Signature: $file.asc"
   echo "  Checksum:  $file.sha256"
   echo "  Sig Checksum: $file.asc.sha256"
+
+  # Note about NuGet packages
+  if [[ "$ext" == "nupkg" ]]; then
+    echo "  Note: NuGet package detected - will be signed by SSL.com if enabled in workflow"
+  fi
 done
