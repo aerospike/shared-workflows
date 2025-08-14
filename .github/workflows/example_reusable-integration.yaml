@@ -68,6 +68,7 @@ jobs:
             arch: arm64
             runs-on: ubuntu-latest-arm64
     with:
+      runs-on: ${{ matrix.runs-on }}
       project: database
       build-name: test-build
       build-version: v1.0.0
