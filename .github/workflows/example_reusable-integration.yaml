@@ -34,19 +34,19 @@ jobs:
           # Ubuntu/Debian family (arm64)
           - distro: jammy
             arch: arm64
-            runs-on: ubuntu-22.04-arm64
+            runs-on: ubuntu-latest-arm64
           - distro: noble
             arch: arm64
-            runs-on: ubuntu-22.04-arm64
+            runs-on: ubuntu-latest-arm64
           - distro: focal
             arch: arm64
-            runs-on: ubuntu-22.04-arm64
+            runs-on: ubuntu-latest-arm64
           - distro: bullseye
             arch: arm64
-            runs-on: ubuntu-22.04-arm64
+            runs-on: ubuntu-latest-arm64
           - distro: bookworm
             arch: arm64
-            runs-on: ubuntu-22.04-arm64
+            runs-on: ubuntu-latest-arm64
           # RPM family (x86_64)
           - distro: el8
             arch: x86_64
@@ -60,19 +60,24 @@ jobs:
           # RPM family (arm64)
           - distro: el8
             arch: arm64
-            runs-on: ubuntu-22.04-arm64
+            runs-on: ubuntu-latest-arm64
           - distro: el9
             arch: arm64
-            runs-on: ubuntu-22.04-arm64
+            runs-on: ubuntu-latest-arm64
           - distro: amzn2023
             arch: arm64
-            runs-on: ubuntu-22.04-arm64
+            runs-on: ubuntu-latest-arm64
     with:
       project: database
       build-name: test-build
       build-version: v1.0.0
       build-script: |
         cd .github/workflows/execute-build/test_apps/hi
+        uname -m
+        uname -a
+        which gcc
+        gcc --version
+        which aarch64-linux-gnu-gcc 
         DISTRO=${{ matrix.distro }} \
         ARCH=${{ matrix.arch }} \
         make docker-build
