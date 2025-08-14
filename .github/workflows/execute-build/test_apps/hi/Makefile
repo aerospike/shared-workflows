@@ -7,6 +7,7 @@ SOURCE = hi.c
 # Single distro/arch to build for (set via environment variables)
 DISTRO ?= jammy
 ARCH ?= x86_64
+EMULATED ?= false
 
 # Docker image mapping
 DOCKER_IMAGE_jammy = ubuntu:22.04
@@ -24,6 +25,30 @@ DOCKER_IMAGE = $(DOCKER_IMAGE_$(DISTRO))
 # Directories
 BUILD_DIR = build
 
+# Determine cross-compilation setup
+ifeq ($(ARCH),arm64)
+    ifeq ($(EMULATED),true)
+        # x86_64 runner with emulation - use cross-compiler
+        CC = aarch64-linux-gnu-gcc
+        # Cross-compiler setup varies by distro
+        ifeq ($(filter jammy noble focal,$(DISTRO)),$(DISTRO))
+            # Ubuntu family
+            CROSS_COMPILE_CMD = apt-get update && apt-get install -y gcc-aarch64-linux-gnu
+        else ifeq ($(filter bullseye bookworm,$(DISTRO)),$(DISTRO))
+            # Debian family
+            CROSS_COMPILE_CMD = apt-get update && apt-get install -y gcc-aarch64-linux-gnu
+        else
+            # RPM family (el8, el9, amzn2023)
+        endif
+    else
+        # Real ARM runner - use native compiler
+        CROSS_COMPILE_CMD = echo "Using native ARM compiler"
+    endif
+else
+    # x86_64 builds - no cross-compilation needed
+    CROSS_COMPILE_CMD = echo "Using native x86_64 compiler"
+endif
+
 # Default target
 all: docker-build
 
@@ -37,17 +62,41 @@ build:
 docker-build:
 	@echo "Building for $(DISTRO)-$(ARCH)..."
 	@echo "Using Docker image: $(DOCKER_IMAGE)"
+	@echo "Emulated: $(EMULATED)"
 	@mkdir -p $(BUILD_DIR)/$(DISTRO)/$(ARCH)
 ifeq ($(filter jammy noble focal bullseye bookworm,$(DISTRO)),$(DISTRO))
-	docker run --rm -v $(PWD):/workspace -w /workspace $(DOCKER_IMAGE) \
+	# Debian/Ubuntu family - supports cross-compilation
+	docker run --rm -v $(PWD):/workspace -w /workspace \
+		-e ARCH=$(ARCH) -e EMULATED=$(EMULATED) \
+		$(DOCKER_IMAGE) \
 		bash -c 'apt-get update && apt-get install -y build-essential && \
-		$(CC) $(CFLAGS) -o $(BUILD_DIR)/$(DISTRO)/$(ARCH)/$(TARGET) $(SOURCE)'
+		if [ "$$ARCH" = "arm64" ] && [ "$$EMULATED" = "true" ]; then \
+			CC=aarch64-linux-gnu-gcc; \
+			echo "Installing cross-compiler and target libraries..."; \
+			apt-get install -y gcc-aarch64-linux-gnu libc6-dev-arm64-cross; \
+		fi && \
+		echo "Using CC: $$CC" && \
+		echo "ARCH: $$ARCH, EMULATED: $$EMULATED" && \
+		command -v $$CC && \
+		$$CC $(CFLAGS) -o $(BUILD_DIR)/$(DISTRO)/$(ARCH)/$(TARGET) $(SOURCE)'
 else
-	docker run --rm -v $(PWD):/workspace -w /workspace $(DOCKER_IMAGE) \
+	# RPM family - no cross-compilation support
+	@if [ "$(ARCH)" = "arm64" ] && [ "$(EMULATED)" = "true" ]; then \
+		echo "ERROR: Cross-compilation not supported for RPM distros (el8, el9, amzn2023)"; \
+		echo "Use real ARM runners or Debian/Ubuntu distros for ARM64 builds"; \
+		exit 1; \
+	fi
+	docker run --rm -v $(PWD):/workspace -w /workspace \
+		-e ARCH=$(ARCH) -e EMULATED=$(EMULATED) \
+		$(DOCKER_IMAGE) \
 		bash -c 'yum install -y --allowerasing gcc make && \
-		$(CC) $(CFLAGS) -o $(BUILD_DIR)/$(DISTRO)/$(ARCH)/$(TARGET) $(SOURCE)'
+		CC=gcc && \
+		echo "Using CC: $$CC" && \
+		echo "ARCH: $$ARCH, EMULATED: $$EMULATED" && \
+		command -v $$CC && \
+		$$CC --version && \
+		$$CC $(CFLAGS) -o $(BUILD_DIR)/$(DISTRO)/$(ARCH)/$(TARGET) $(SOURCE)'
 endif
-
 # Clean
 clean:
 	@rm -rf $(BUILD_DIR)
