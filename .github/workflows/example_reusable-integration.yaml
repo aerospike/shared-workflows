@@ -118,6 +118,7 @@ jobs:
           merge-multiple: true
       - name: Package Artifacts
         run: |
+          find .github
           cd .github/workflows/execute-build/test_apps/hi
           ./package.sh --target hi --version v1.0.0 --packages-dir build-artifacts \
             --output-dir packaged-artifacts
