@@ -107,12 +107,12 @@ create_deb_package() {
     local distro="$1"
     local arch="$2"
     local binary_path="$3"
-    local version="${DISTRO_VERSIONS[$distro]}"
+    local distro_version="${DISTRO_VERSIONS[$distro]}"
     
     # Ensure binary is executable
     chmod +x "$binary_path"
     
-    local package_name="${TARGET}_${VERSION}_${version}_${arch}.deb"
+    local package_name="${TARGET}_${VERSION}_${distro_version}_${arch}.deb"
     local output_path="$OUTPUT_DIR/$package_name"
     
     echo "Creating DEB package: $package_name"
@@ -131,12 +131,12 @@ create_rpm_package() {
     local distro="$1"
     local arch="$2"
     local binary_path="$3"
-    local version="${DISTRO_VERSIONS[$distro]}"
+    local distro_version="${DISTRO_VERSIONS[$distro]}"
     
     # Ensure binary is executable
     chmod +x "$binary_path"
     
-    local package_name="${TARGET}-${VERSION}-1.${version}.${arch}.rpm"
+    local package_name="${TARGET}-${VERSION}-1.${distro_version}.${arch}.rpm"
     local output_path="$OUTPUT_DIR/$package_name"
     
     echo "Creating RPM package: $package_name"
