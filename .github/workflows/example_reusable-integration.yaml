@@ -106,7 +106,7 @@ jobs:
       artifactory-oidc-audience: aerospike # default
       dry-run: false # default
 
-  combine-artifacts:
+  package-built-artifacts:
     needs: build-packages
     runs-on: ubuntu-22.04
     steps:
@@ -114,14 +114,19 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           pattern: build-artifacts-*
-          path: ./all-packages
+          path: .github/workflows/execute-build/test_apps/hi/build-artifacts
           merge-multiple: true
-
-      - name: Upload Combined Artifacts
+      - name: Package Artifacts
+        run: |
+          cd .github/workflows/execute-build/test_apps/hi
+          ./package.sh --target hi --version v1.0.0 --packages-dir build-artifacts \
+            --output-dir packaged-artifacts
+          ls -l packaged-artifacts
+      - name: Upload packaged Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: build-artifacts
-          path: ./all-packages
+          name: packaged-artifacts
+          path: .github/workflows/execute-build/test_apps/hi/packaged-artifacts
           retention-days: 1
 #   upload:
 #     needs: build-packages

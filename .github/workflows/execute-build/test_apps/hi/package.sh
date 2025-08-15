@@ -11,18 +11,76 @@ handle_error() {
     exit 1
 }
 
-# Packaging script for hi application
-# Takes binaries from packages/<distro>/<arch>/ and creates appropriate packages
-# Usage: ./package.sh [version]
+error() {
+    local reason="${1:-}"
+    if [[ -n "$reason" ]]; then
+        echo "Error: $reason" >&2
+    else
+        echo "Error" >&2
+    fi
+    exit 1
+}
+
+# Default values
+VERSION="1.0.0"
+TARGET="hi"
+PACKAGES_DIR="packages"
+OUTPUT_DIR="packaged"
+
+show_help() {
+    echo "Usage: $0 [OPTIONS]" >&2
+    echo "" >&2
+    echo "Package binaries into DEB and RPM packages" >&2
+    echo "" >&2
+    echo "Options:" >&2
+    echo "  --version <version>           Package version (default: 1.0.0)" >&2
+    echo "  --target <name>               Binary target name (default: hi)" >&2
+    echo "  --packages-dir <dir>          Directory containing binaries (default: packages)" >&2
+    echo "  --output-dir <dir>            Output directory for packages (default: packaged)" >&2
+    echo "  --help, -h                    Show this help message" >&2
+    echo "" >&2
+    echo "Examples:" >&2
+    echo "  $0 --version 2.0.0 --target myapp" >&2
+    echo "  $0 --packages-dir build --output-dir dist" >&2
+}
+
+# Parse command line arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --version)
+            VERSION="$2"
+            shift 2
+            ;;
+        --target)
+            TARGET="$2"
+            shift 2
+            ;;
+        --packages-dir)
+            PACKAGES_DIR="$2"
+            shift 2
+            ;;
+        --output-dir)
+            OUTPUT_DIR="$2"
+            shift 2
+            ;;
+        --help|-h)
+            show_help
+            exit 0
+            ;;
+        -*)
+            echo "Unknown option: $1" >&2
+            show_help
+            exit 1
+            ;;
+        *)
+            echo "Unexpected positional argument: $1" >&2
+            show_help
+            exit 1
+            ;;
+    esac
+done
 
 set -euo pipefail
-
-VERSION=${1:-1.0.0}
-
-# Configuration
-TARGET=hi
-PACKAGES_DIR=packages
-OUTPUT_DIR=packaged
 
 # FPM options
 FPM_OPTS=(--verbose --force --maintainer="Aerospike Team" --description="Simple hello world app" --version="$VERSION" --vendor="Aerospike" --name="$TARGET")
@@ -78,37 +136,8 @@ create_rpm_package() {
         "$binary_path=/usr/local/bin/$TARGET"
 }
 
-# Function to process a single binary
-process_binary() {
-    local binary_path="$1"
-    local rel_path="${binary_path#"$PACKAGES_DIR/"}"
-
-    local distro_arch="${rel_path%/"$TARGET"}"
-    local distro="${distro_arch%/*}"
-    local arch="${distro_arch#*/}"
-    
-    echo "Processing: $binary_path"
-    echo "  Distro: $distro"
-    echo "  Arch: $arch"
-    
-    if [[ ! -v DISTRO_VERSIONS[$distro] ]]; then
-        echo "ERROR: Unknown distro: $distro"
-        return 1
-    fi
-    
-    case "$distro" in
-        el*|amzn*)
-            create_rpm_package "$distro" "$arch" "$binary_path"
-            ;;
-        *)
-            create_deb_package "$distro" "$arch" "$binary_path"
-            ;;
-    esac
-}
-
-# Main function
 main() {
-    echo "Packaging hi application"
+    echo "Packaging $TARGET application"
     echo "Version: $VERSION"
     echo "Packages directory: $PACKAGES_DIR"
     echo "Output directory: $OUTPUT_DIR"
@@ -116,48 +145,42 @@ main() {
     
     # Check if packages directory exists
     if [[ ! -d "$PACKAGES_DIR" ]]; then
-        echo "ERROR: Packages directory not found: $PACKAGES_DIR"
-        exit 1
+        error "Packages directory not found: $PACKAGES_DIR"
     fi
     
     # Create output directory
     mkdir -p "$OUTPUT_DIR"
     
     # Find all binaries and process them
-    local binary_count=0
-    local error_count=0
-    
     while IFS= read -r -d '' binary; do
-        echo ""
-        if process_binary "$binary"; then
-            ((binary_count++)) || true
-        else
-            ((error_count++)) || true
+        local rel_path="${binary#"$PACKAGES_DIR/"}"
+        local distro_arch="${rel_path%/"$TARGET"}"
+        local distro="${distro_arch%/*}"
+        local arch="${distro_arch#*/}"
+        
+        echo "Processing: $binary"
+        echo "  Distro: $distro"
+        echo "  Arch: $arch"
+        
+        if [[ ! -v DISTRO_VERSIONS[$distro] ]]; then
+            error "Unknown distro: $distro"
         fi
+        
+        case "$distro" in
+            el*|amzn*)
+                create_rpm_package "$distro" "$arch" "$binary"
+                ;;
+            *)
+                create_deb_package "$distro" "$arch" "$binary"
+                ;;
+        esac
+        echo ""
     done < <(find "$PACKAGES_DIR" -name "$TARGET" -type f -print0)
     
-    echo ""
     echo "Packaging complete!"
-    echo "  Binaries processed: $binary_count"
-    echo "  Errors: $error_count"
-    
     echo ""
     echo "Generated packages:"
     find "$OUTPUT_DIR" -name "*.deb" -o -name "*.rpm" | sort
 }
 
-# Show usage
-if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
-    echo "Usage: $0 [version]"
-    echo ""
-    echo "Arguments:"
-    echo "  version   Package version (default: 1.0.0)"
-    echo ""
-    echo "Examples:"
-    echo "  $0         # Package with version 1.0.0"
-    echo "  $0 2.0.0   # Package with version 2.0.0"
-    exit 0
-fi
-
-# Run main function
 main "$@"
