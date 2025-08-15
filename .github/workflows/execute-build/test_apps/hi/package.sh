@@ -96,6 +96,11 @@ declare -A DISTRO_VERSIONS=(
     [el9]="el9"
     [amzn2023]="amzn2023"
 )
+install_fpm() {
+    sudo apt-get update
+    sudo apt-get install -y ruby-dev build-essential
+    sudo gem install fpm
+}
 
 # Function to create DEB package
 create_deb_package() {
@@ -142,7 +147,7 @@ main() {
     echo "Packages directory: $PACKAGES_DIR"
     echo "Output directory: $OUTPUT_DIR"
     echo ""
-    
+    install_fpm
     # Check if packages directory exists
     if [[ ! -d "$PACKAGES_DIR" ]]; then
         error "Packages directory not found: $PACKAGES_DIR"
