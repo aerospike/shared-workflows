@@ -109,6 +109,9 @@ create_deb_package() {
     local binary_path="$3"
     local version="${DISTRO_VERSIONS[$distro]}"
     
+    # Ensure binary is executable
+    chmod +x "$binary_path"
+    
     local package_name="${TARGET}_${VERSION}_${version}_${arch}.deb"
     local output_path="$OUTPUT_DIR/$package_name"
     
@@ -119,6 +122,7 @@ create_deb_package() {
     fpm -s dir -t deb "${FPM_OPTS[@]}" \
         --package="$output_path" \
         --deb-dist="$distro" \
+        --deb-use-file-permissions \
         "$binary_path=/usr/local/bin/$TARGET"
 }
 
@@ -129,6 +133,9 @@ create_rpm_package() {
     local binary_path="$3"
     local version="${DISTRO_VERSIONS[$distro]}"
     
+    # Ensure binary is executable
+    chmod +x "$binary_path"
+    
     local package_name="${TARGET}-${VERSION}-1.${version}.${arch}.rpm"
     local output_path="$OUTPUT_DIR/$package_name"
     
@@ -138,6 +145,7 @@ create_rpm_package() {
     
     fpm -s dir -t rpm "${FPM_OPTS[@]}" \
         --package="$output_path" \
+        --rpm-use-file-permissions \
         "$binary_path=/usr/local/bin/$TARGET"
 }
 
