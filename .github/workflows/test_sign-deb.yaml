@@ -14,7 +14,7 @@ jobs:
           - ubuntu-22.04
           #- ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4 # this was the dependabot update but the error is in signing
       - name: Check Ubuntu version
         # This action only supports Ubuntu 22.04. 24.04 has removed dpkg-sig
         run: |
