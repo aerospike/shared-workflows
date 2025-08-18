@@ -1,0 +1,149 @@
+name: Example Reusable Integration
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+
+permissions:
+  id-token: write
+  contents: read
+  packages: write
+
+jobs:
+  build-packages:
+    uses: ./.github/workflows/reusable_execute-build.yaml
+    strategy:
+      matrix:
+        include:
+          # Ubuntu/Debian family (x86_64)
+          - distro: jammy
+            arch: x86_64
+            runs-on: ubuntu-22.04
+            emulated: false
+          - distro: noble
+            arch: x86_64
+            runs-on: ubuntu-22.04
+            emulated: false
+          - distro: focal
+            arch: x86_64
+            runs-on: ubuntu-22.04
+            emulated: false
+          - distro: bullseye
+            arch: x86_64
+            runs-on: ubuntu-22.04
+            emulated: false
+          - distro: bookworm
+            arch: x86_64
+            runs-on: ubuntu-22.04
+            emulated: false
+          # Ubuntu/Debian family (arm64) - emulated by default
+          # set emulated to false to run on real arm64 runners but as of 8/14/2025, the queue times are too long
+          - distro: jammy
+            arch: arm64
+            runs-on: ubuntu-22.04
+            emulated: true
+          - distro: noble
+            arch: arm64
+            runs-on: ubuntu-22.04
+            emulated: true
+          - distro: focal
+            arch: arm64
+            runs-on: ubuntu-22.04
+            emulated: true
+          - distro: bullseye
+            arch: arm64
+            runs-on: ubuntu-22.04
+            emulated: true
+          - distro: bookworm
+            arch: arm64
+            runs-on: ubuntu-22.04
+            emulated: true
+          # RPM family (x86_64 only - no ARM support)
+          - distro: el8
+            arch: x86_64
+            runs-on: ubuntu-22.04
+            emulated: false
+          - distro: el9
+            arch: x86_64
+            runs-on: ubuntu-22.04
+            emulated: false
+          - distro: amzn2023
+            arch: x86_64
+            runs-on: ubuntu-22.04
+            emulated: false
+          # RPM family (arm64) - requires real ARM runners (commented out due to queue times)
+          # - distro: el8
+          #   arch: arm64
+          #   runs-on: ubuntu-latest-arm64
+          #   emulated: false
+          # - distro: el9
+          #   arch: arm64
+          #   runs-on: ubuntu-latest-arm64
+          #   emulated: false
+          # - distro: amzn2023
+          #   arch: arm64
+          #   runs-on: ubuntu-latest-arm64
+          #   emulated: false
+    with:
+      runs-on: ${{ matrix.runs-on }}
+      project: database
+      build-name: test-build
+      build-version: v1.0.0
+      build-script: |
+        cd .github/workflows/execute-build/test_apps/hi
+        uname -m
+        uname -a
+        which gcc
+        DISTRO=${{ matrix.distro }} \
+        ARCH=${{ matrix.arch }} \
+        EMULATED=${{ matrix.emulated }} \
+        make docker-build
+      artifact-directory: .github/workflows/execute-build/test_apps/hi/build
+      artifact-name: build-artifacts-${{ matrix.distro }}-${{ matrix.arch }}
+      retention-days: 1 # default
+      artifactory-url: https://aerospike.jfrog.io # default
+      artifactory-oidc-provider-name: gh-aerospike # default
+      artifactory-oidc-audience: aerospike # default
+      dry-run: false # default
+  # the "package-built-artifacts" workflow is just an example of how one might package the built artifacts.
+  # In this case it is using fpm to generate debs and rpms and uploading them to be processed further
+  package-built-artifacts:
+    needs: build-packages
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Download All Matrix Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: build-artifacts-*
+          path: build-artifacts
+          merge-multiple: true
+      - name: Package Artifacts
+        run: |
+          .github/workflows/execute-build/test_apps/hi/package.sh --target hi --version v1.0.0 \
+            --packages-dir build-artifacts --output-dir packaged-artifacts
+      - name: Upload packaged Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: packaged-artifacts
+          path: packaged-artifacts
+          retention-days: 1
+#   upload:
+#     needs: build-packages
+#     uses: ./.github/workflows/reusable_upload-artifacts.yaml
+#     with:
+#       project: my-project
+#       build-name: my-build
+#       version: v1.0.0
+
+#   create-release-bundle:
+#     needs: upload
+#     uses: ./.github/workflows/reusable_create-release-bundle.yaml
+#     with:
+#       project: my-project
+#       build-names: "my-build-deb,my-build-rpm"
+#       bundle-name: my-release
+#       version: v1.0.0

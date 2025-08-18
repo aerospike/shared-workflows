@@ -32,6 +32,11 @@ on:
         description: OIDC audience
         type: string
         default: aerospike
+      runs-on:
+        description: The runner to use for the build
+        required: false
+        type: string
+        default: ubuntu-22.04
 
     secrets:
       gpg-private-key:
@@ -45,7 +50,7 @@ permissions:
   packages: read
 jobs:
   sign:
-    runs-on: ubuntu-22.04
+    runs-on: ${{ inputs.runs-on }}
     steps:
       - uses: actions/checkout@v4
 

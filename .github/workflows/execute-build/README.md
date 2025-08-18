@@ -103,10 +103,6 @@ make clean && make all && mkdir -p dist && cp build/* dist/
 - Build script should create artifacts in the specified directory
 - No additional system dependencies (build script handles its own requirements)
 
-## Notes
-
-- Supports both inline commands and script files for maximum flexibility
-
 ## Testing
 
 Run the test suite:
@@ -114,3 +110,7 @@ Run the test suite:
 ```bash
 .github/workflows/execute-build/test-entrypoint.sh
 ```
+
+## Notes on packaging
+
+Packages should adhere to [standard aerospike naming conventions](https://aerospike.atlassian.net/wiki/spaces/~745351144/pages/4464574503/Aerospike+Package+Naming+Guidelines)
