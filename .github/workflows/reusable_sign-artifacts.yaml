@@ -7,8 +7,8 @@ on:
         description: Glob pattern to match artifacts to sign (e.g. dist/**/*.{jar,deb,rpm,nupkg})
         required: true
         type: string
-      output-dir:
-        description: Output directory where signed artifacts will be placed (e.g. signed-artifacts)
+      artifact-name:
+        description: Name for the uploaded artifacts
         required: false
         type: string
         default: signed-artifacts
@@ -32,6 +32,26 @@ on:
         required: false
         type: string
         default: 1024M
+      artifactory-url:
+        required: false
+        description: JFrog Artifactory URL
+        type: string
+        default: https://aerospike.jfrog.io
+      artifactory-oidc-provider-name:
+        required: false
+        description: OIDC provider name
+        type: string
+        default: gh-aerospike
+      artifactory-oidc-audience:
+        required: false
+        description: OIDC audience
+        type: string
+        default: aerospike
+      runs-on:
+        description: The runner to use for the build
+        required: false
+        type: string
+        default: ubuntu-22.04
     secrets:
       gpg-private-key:
         required: true
@@ -58,7 +78,7 @@ permissions:
 
 jobs:
   sign:
-    runs-on: ubuntu-22.04
+    runs-on: ${{ inputs.runs-on }}
     steps:
       - uses: actions/checkout@v4
 
@@ -76,13 +96,13 @@ jobs:
       - name: Sign Artifacts with GPG
         run: |
           chmod +x ${{ github.workspace }}/.github/workflows/sign-artifacts/entrypoint.sh
-          ${{ github.workspace }}/.github/workflows/sign-artifacts/entrypoint.sh "${{ inputs.artifact-glob }}" "${{ inputs.output-dir }}"
+          ${{ github.workspace }}/.github/workflows/sign-artifacts/entrypoint.sh "${{ inputs.artifact-glob }}" "${{ inputs.artifact-name }}"
 
       - name: Check for NuGet packages and sign if enabled
         if: inputs.enable-nuget-signing
         run: |
           echo "Checking for NuGet packages..."
-          NUGET_PACKAGES=$(find "${{ inputs.output-dir }}" -name "*.nupkg" -type f)
+          NUGET_PACKAGES=$(find "${{ inputs.artifact-name }}" -name "*.nupkg" -type f)
           if [ -n "$NUGET_PACKAGES" ]; then
             echo "Found NuGet packages, signing with SSL.com..."
             echo "$NUGET_PACKAGES" | while read -r file; do
@@ -101,8 +121,8 @@ jobs:
           password: ${{secrets.es-password}}
           credential_id: ${{secrets.credential-id}}
           totp_secret: ${{secrets.es-totp-secret}}
-          file_path: ${{ inputs.output-dir }}/**/*.nupkg
-          output_path: ${{github.workspace}}/${{ inputs.output-dir }}
+          file_path: ${{ inputs.artifact-name }}/**/*.nupkg
+          output_path: ${{github.workspace}}/${{ inputs.artifact-name }}
           malware_block: false
           override: false
           environment_name: ${{ inputs.nuget-environment }}
@@ -114,8 +134,8 @@ jobs:
         if: inputs.enable-nuget-signing
         run: |
           echo "Verifying signed NuGet packages..."
-          if [ -d "${{ inputs.output-dir }}" ]; then
-            find "${{ inputs.output-dir }}" -name "*.nupkg" -type f | while read -r file; do
+          if [ -d "${{ inputs.artifact-name }}" ]; then
+            find "${{ inputs.artifact-name }}" -name "*.nupkg" -type f | while read -r file; do
               echo "Verifying: $file"
               dotnet nuget verify "$file" --all || echo "Warning: Could not verify $file"
             done
@@ -124,6 +144,6 @@ jobs:
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ inputs.output-dir }}
-          path: ${{ inputs.output-dir }}
+          name: ${{ inputs.artifact-name }}
+          path: ${{ inputs.artifact-name }}
           retention-days: ${{ inputs.retention-days }}

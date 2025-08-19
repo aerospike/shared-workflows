@@ -12,7 +12,23 @@ This workflow uploads build artifacts to JFrog Artifactory. It automatically cat
 
 The workflow processes artifacts from a `build-artifacts` directory and creates structured build artifacts before uploading.
 
-### Debian/Ubuntu Structure
+## Inputs
+
+| Input                            | Description                           | Required | Default                      |
+| -------------------------------- | ------------------------------------- | -------- | ---------------------------- |
+| `project`                        | JFrog Artifactory project name        | Yes      | -                            |
+| `build-name`                     | Name for the unified build            | Yes      | -                            |
+| `version`                        | Version string for build info         | Yes      | -                            |
+| `artifactory-url`                | JFrog Artifactory URL                 | No       | `https://aerospike.jfrog.io` |
+| `artifactory-oidc-provider-name` | OIDC provider name for authentication | No       | `gh-citrusleaf`              |
+| `artifactory-oidc-audience`      | OIDC audience for authentication      | No       | `citrusleaf`                 |
+| `artifact-name`                  | Name of the artifacts to download     | No       | `build-artifacts`            |
+| `retention-days`                 | Retention days for the artifacts      | No       | `1`                          |
+| `dry-run`                        | Whether to run in dry-run mode        | No       | `false`                      |
+
+## Structure
+
+### Debian/Ubuntu
 
 ```text
 pool/
@@ -31,7 +47,7 @@ pool/
         └── {package-name}_version_ubuntu24.04_arch.deb
 ```
 
-### RPM/Yum Structure
+### RPM/Yum
 
 ```text
 repo/
@@ -48,19 +64,6 @@ repo/
     └── …
 ```
 
-## Inputs
-
-| Input                            | Description                           | Required | Default                      |
-| -------------------------------- | ------------------------------------- | -------- | ---------------------------- |
-| `project`                        | JFrog Artifactory project name        | Yes      | -                            |
-| `build-prefix`                   | Prefix for the build name             | Yes      | -                            |
-| `version`                        | Version string for build info         | Yes      | -                            |
-| `artifactory-url`                | JFrog Artifactory URL                 | No       | `https://aerospike.jfrog.io` |
-| `artifactory-oidc-provider-name` | OIDC provider name for authentication | No       | `gh-citrusleaf`              |
-| `artifactory-oidc-audience`      | OIDC audience for authentication      | No       | `citrusleaf`                 |
-| `build-artifacts-name`           | Name of the artifacts to download     | No       | `build-artifacts`            |
-| `dry-run`                        | Whether to run in dry-run mode        | No       | `false`                      |
-
 ## Example Usage
 
 ```yaml
@@ -75,29 +78,19 @@ jobs:
     uses: ./.github/workflows/reusable_upload-artifacts.yaml
     with:
       project: database
-      build-prefix: database
+      build-name: database
       version: ${{ github.ref_name }}
       artifactory-url: https://aerospike.jfrog.io
       artifactory-oidc-provider-name: gh-citrusleaf
       artifactory-oidc-audience: citrusleaf
-      build-artifacts-name: build-artifacts
+      artifact-name: build-artifacts
+      retention-days: 1
       dry-run: false
 ```
 
 ### Build Info Publishing
 
 After uploading artifacts, the workflow publishes comprehensive build information:
-
-- Environment variables
-- Git information
-- Dependencies
-- Build metadata
-
-The workflow creates separate build info for each artifact type:
-
-- `{build-prefix}-deb` for DEB packages
-- `{build-prefix}-rpm` for RPM packages
-- `{build-prefix}-generic` for generic files
 
 ## Prerequisites
 
@@ -107,8 +100,5 @@ The workflow creates separate build info for each artifact type:
 
 ## Notes
 
-- The workflow expects artifacts to be in a directory called `build-artifacts`
 - All uploads use the "DEV" environment level and "local" locator
-- Build info is published for each artifact type separately
 - The workflow processes DEB and RPM files and creates structured build artifacts before uploading
-- Generic files are uploaded directly without structured processing

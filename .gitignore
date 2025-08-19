@@ -1,3 +1,9 @@
+**/build-artifacts
+**/build-output
 .DS_Store
-test-artifacts
-build-artifacts
+**/test-artifacts
+
+.cursorrules
+memory-bank
+memory-bank-external
+.cursorrules-external

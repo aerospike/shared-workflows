@@ -1,4 +1,4 @@
-name: Upload to JFrog Artifactory
+name: Create Release Bundle
 
 on:
   workflow_call:
@@ -7,12 +7,16 @@ on:
         description: JFrog Artifactory project name
         required: true
         type: string
-      build-name:
-        description: JFrog build name
+      build-names:
+        description: Comma-separated list of build names to include in the release bundle
+        required: true
+        type: string
+      bundle-name:
+        description: Name for the release bundle
         required: true
         type: string
       version:
-        description: Version of the artifact to upload
+        description: Version of the release bundle
         required: true
         type: string
       artifactory-url:
@@ -24,29 +28,19 @@ on:
         required: false
         description: OIDC provider name
         type: string
-        default: gh-citrusleaf
+        default: gh-aerospike
       artifactory-oidc-audience:
         required: false
         description: OIDC audience
         type: string
-        default: citrusleaf
-      artifact-name:
-        description: Name of downloaded/uploaded artifacts
-        required: false
-        type: string
-        default: build-artifacts
-      retention-days:
-        description: Retention days for the artifacts
-        required: false
-        type: number
-        default: 1
+        default: aerospike
       runs-on:
         description: The runner to use for the build
         required: false
         type: string
         default: ubuntu-22.04
       dry-run:
-        description: Whether to run in dry-run mode. Dry-run mode will not upload any artifacts.
+        description: Whether to run in dry-run mode
         required: false
         type: boolean
         default: false
@@ -57,15 +51,16 @@ permissions:
   id-token: write
 
 jobs:
-  upload:
+  create-release-bundle:
     runs-on: ${{ inputs.runs-on }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
       - name: Setup JFrog CLI
-        uses: jfrog/setup-jfrog-cli@f748a0599171a192a2668afee8d0497f7c1069df # v4.5.6
+        uses: jfrog/setup-jfrog-cli@f748a0599171a192a2668afee8d0497f7c1069df
         env:
           JF_URL: ${{ inputs.artifactory-url }}
           JF_PROJECT: ${{ inputs.project }}
@@ -77,23 +72,18 @@ jobs:
         run: |
           jf c show
           jf rt ping
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: ${{ inputs.artifact-name }}
-          path: ./build-artifacts
 
-      - name: Upload Artifacts
+      - name: Create Release Bundle
         shell: bash
         run: |
-          chmod +x ${{ github.workspace }}/.github/workflows/upload-artifacts/entrypoint.sh
+          chmod +x ${{ github.workspace }}/.github/workflows/create-release-bundle/entrypoint.sh
           dry_run_arg=""
           if [ "${{ inputs.dry-run }}" = "true" ]; then
             dry_run_arg="--dry-run"
           fi
-          ${{ github.workspace }}/.github/workflows/upload-artifacts/entrypoint.sh \
-            "${{ inputs.project }}" \
-            "${{ inputs.build-name }}" \
-            "${{ inputs.version }}" \
-            "${{ github.run_id }}" \
+          "${{ github.workspace }}/.github/workflows/create-release-bundle/entrypoint.sh" \
+            --project "${{ inputs.project }}" \
+            --build-names "${{ inputs.build-names }}" \
+            --bundle-name "${{ inputs.bundle-name }}" \
+            --version "${{ inputs.version }}" \
             $dry_run_arg

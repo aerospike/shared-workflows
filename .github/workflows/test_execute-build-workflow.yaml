@@ -1,0 +1,34 @@
+name: Test Execute Build Workflow
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test-execute-build-workflow:
+    uses: ./.github/workflows/reusable_execute-build.yaml
+    with:
+      project: database
+      build-name: test-build
+      build-version: v1.0.0
+      build-script: cd .github/workflows/execute-build/test_apps/hi && make
+      artifact-directory: .github/workflows/execute-build/test_apps/hi/build
+      artifact-name: test-execute-build
+      retention-days: 1 # default
+      artifactory-url: https://aerospike.jfrog.io # default
+      artifactory-oidc-provider-name: gh-aerospike # default
+      artifactory-oidc-audience: aerospike # default
+      dry-run: false # default
+
+  # Test the entrypoint script directly
+  run-tests:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Test Entrypoint
+        run: |
+          .github/workflows/execute-build/test-entrypoint.sh

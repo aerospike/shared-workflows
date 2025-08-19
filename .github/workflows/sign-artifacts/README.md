@@ -10,11 +10,12 @@ This is a reusable GitHub Actions workflow that signs binary artifacts using GPG
 
 ## Inputs
 
-| Name             | Type     | Required | Description                                                                         |
-| ---------------- | -------- | -------- | ----------------------------------------------------------------------------------- |
-| `artifact-glob`  | `string` | ✅       | Glob pattern to match artifacts for signing. Example: `dist/**/*.{deb,rpm}`         |
-| `output-dir`     | `string` | ❌       | Output directory where signed artifacts will be placed. Default: `signed-artifacts` |
-| `retention-days` | `number` | ❌       | Number of days to retain the signed artifacts. Default: `7`                         |
+| Name             | Type      | Required | Description                                                                 |
+| ---------------- | --------- | -------- | --------------------------------------------------------------------------- |
+| `artifact-glob`  | `string`  | Yes      | Glob pattern to match artifacts for signing. Example: `dist/**/*.{deb,rpm}` |
+| `artifact-name`  | `string`  | No       | Name for the uploaded artifacts. Default: `signed-artifacts`                |
+| `retention-days` | `number`  | No       | Number of days to retain the signed artifacts. Default: `7`                 |
+| `dry-run`        | `boolean` | No       | Whether to run in dry-run mode (for future compatibility). Default: `false` |
 
 ## Secrets
 
@@ -36,8 +37,9 @@ jobs:
     uses: aerospike/shared-workflows/.github/workflows/reusable_sign-artifacts.yaml@CURRENTGITSHA # vn.n.n
     with:
       artifact-glob: dist/**/*.{deb,rpm}
-      # output-dir: signed-artifacts  # optional, defaults to signed-artifacts
-      # retention-days: 7            # optional, defaults to 7
+      # artifact-name: signed-artifacts  # optional, defaults to signed-artifacts
+      # retention-days: 7               # optional, defaults to 7
+      # dry-run: false                  # optional, for future compatibility
     secrets:
       gpg-private-key: ${{ secrets.GPG_SECRET_KEY }}
       gpg-public-key: ${{ secrets.GPG_PUBLIC_KEY }}
