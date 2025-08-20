@@ -60,7 +60,7 @@ echo "Test 1: Basic successful release bundle creation"
 test1_success=true
 
 cd "$TEST_DIR"
-output=$("$SCRIPT_DIR/entrypoint.sh" --project test-project --build-names "test-build-1,test-build-2" --bundle-name test-bundle --version v1.0.0 --dry-run 2>&1)
+output=$("$SCRIPT_DIR/entrypoint.sh" --project test-project --build-names "test-build-1:1728052628123,test-build-2:1728052628123" --bundle-name test-bundle --version v1.0.0 --dry-run 2>&1)
 
 if ! echo "$output" | grep -q "Would execute create-release-bundle workflow"; then
     test1_success=false
@@ -86,13 +86,13 @@ echo "Test 2: Dry-run mode with single build"
 test2_success=true
 
 cd "$TEST_DIR"
-output=$("$SCRIPT_DIR/entrypoint.sh" --project single-project --build-names "single-build" --bundle-name single-bundle --version v2.0.0 --dry-run 2>&1)
+output=$("$SCRIPT_DIR/entrypoint.sh" --project single-project --build-names "single-build:1728052628123" --bundle-name single-bundle --version v2.0.0 --dry-run 2>&1)
 
 if ! echo "$output" | grep -q "Would execute create-release-bundle workflow"; then
     test2_success=false
 fi
 
-if ! echo "$output" | grep -q "Build names: single-build"; then
+if ! echo "$output" | grep -q "Build names: single-build:1728052628123"; then
     test2_success=false
 fi
 
@@ -116,16 +116,35 @@ if "$SCRIPT_DIR/entrypoint.sh" --project test-project --bundle-name test-bundle 
 fi
 
 # Test missing bundle name
-if "$SCRIPT_DIR/entrypoint.sh" --project test-project --build-names "test-build" --version v1.0.0 2>/dev/null; then
+if "$SCRIPT_DIR/entrypoint.sh" --project test-project --build-names "test-build:1728052628123" --version v1.0.0 2>/dev/null; then
     test3_success=false
 fi
 
 # Test missing version
-if "$SCRIPT_DIR/entrypoint.sh" --project test-project --build-names "test-build" --bundle-name test-bundle 2>/dev/null; then
+if "$SCRIPT_DIR/entrypoint.sh" --project test-project --build-names "test-build:1728052628123" --bundle-name test-bundle 2>/dev/null; then
     test3_success=false
 fi
 
 record_test_result "Test 3: Error handling - missing required parameters" "$test3_success"
+
+# Test 4: Error handling - invalid build name format (missing version)
+echo ""
+echo "Test 4: Error handling - invalid build name format (missing version)"
+test4_success=true
+
+cd "$TEST_DIR"
+
+# Test build name without version
+if "$SCRIPT_DIR/entrypoint.sh" --project test-project --build-names "test-build" --bundle-name test-bundle --version v1.0.0 2>/dev/null; then
+    test4_success=false
+fi
+
+# Test build name with invalid format
+if "$SCRIPT_DIR/entrypoint.sh" --project test-project --build-names "test-build-v1.0.0" --bundle-name test-bundle --version v1.0.0 2>/dev/null; then
+    test4_success=false
+fi
+
+record_test_result "Test 4: Error handling - invalid build name format (missing version)" "$test4_success"
 
 # Summary
 echo ""

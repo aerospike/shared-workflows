@@ -8,7 +8,10 @@ on:
         required: true
         type: string
       build-names:
-        description: Comma-separated list of build names to include in the release bundle
+        description: |
+          Comma-separated list of build name:version pairs to include in the release bundle.
+          Format: "build-name1:version1,build-name2:version2"
+          Example: "database-build:v1.2.3,app-build:v2.1.0"
         required: true
         type: string
       bundle-name:
@@ -58,7 +61,7 @@ jobs:
   create-release-bundle:
     runs-on: ${{ inputs.runs-on }}
     env:
-      CHECKOUT_REF: 9ffdad1fb4a16a6bc7484889f11155c124744672 # Latest commit hash for development
+      CHECKOUT_REF: feature/INFRA-165-examples-for-shared-workflows # Latest commit hash for development
     steps:
       - name: Checkout shared-workflows repository
         uses: actions/checkout@v5

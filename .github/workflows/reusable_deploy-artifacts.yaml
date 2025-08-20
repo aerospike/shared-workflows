@@ -55,16 +55,22 @@ on:
         required: false
         type: boolean
         default: false
+    outputs:
+      build-id:
+        description: The generated build ID
+        value: ${{ jobs.deploy.outputs.build-id }}
 
 permissions:
   contents: read
   id-token: write
 
 jobs:
-  upload:
+  deploy:
     runs-on: ${{ inputs.runs-on }}
+    outputs:
+      build-id: ${{ steps.deploy.outputs.build-id }}
     env:
-      CHECKOUT_REF: 9ffdad1fb4a16a6bc7484889f11155c124744672 # Latest commit hash for development
+      CHECKOUT_REF: feature/INFRA-165-examples-for-shared-workflows # Latest commit hash for development
     steps:
       - name: Checkout shared-workflows repository
         uses: actions/checkout@v5
@@ -94,6 +100,7 @@ jobs:
           path: ./build-artifacts
 
       - name: Deploy Artifacts
+        id: deploy
         shell: bash
         run: |
           chmod +x ${{ inputs.checkout-path }}/.github/workflows/deploy-artifacts/entrypoint.sh
@@ -101,10 +108,11 @@ jobs:
           if [ "${{ inputs.dry-run }}" = "true" ]; then
             dry_run_arg="--dry-run"
           fi
-
+          BUILD_ID=$(date +%s%3N) # timestamp in milliseconds (hex)
           ${{ inputs.checkout-path }}/.github/workflows/deploy-artifacts/entrypoint.sh \
             "${{ inputs.project }}" \
             "${{ inputs.build-name }}" \
             "${{ inputs.version }}" \
-            "${{ github.run_id }}" \
-            $dry_run_arg 2>&1
+            "$BUILD_ID" \
+            $dry_run_arg
+          echo "build-id=$BUILD_ID" >> $GITHUB_OUTPUT
