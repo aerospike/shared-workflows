@@ -59,11 +59,17 @@ permissions:
 jobs:
   upload:
     runs-on: ${{ inputs.runs-on }}
+    env:
+      CHECKOUT_REF: fix/external-calls # On release *must* change this to the actual release tag
     steps:
-      - name: Checkout
+      - name: Checkout shared-workflows repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          repository: aerospike/shared-workflows
+          ref: ${{ env.CHECKOUT_REF }}
+          path: shared-workflows
+          fetch-depth: 1
+
       - name: Setup JFrog CLI
         uses: jfrog/setup-jfrog-cli@f748a0599171a192a2668afee8d0497f7c1069df # v4.5.6
         env:
@@ -86,12 +92,12 @@ jobs:
       - name: Upload Artifacts
         shell: bash
         run: |
-          chmod +x ${{ github.workspace }}/.github/workflows/upload-artifacts/entrypoint.sh
+          chmod +x ${{ github.workspace }}/shared-workflows/.github/workflows/upload-artifacts/entrypoint.sh
           dry_run_arg=""
           if [ "${{ inputs.dry-run }}" = "true" ]; then
             dry_run_arg="--dry-run"
           fi
-          ${{ github.workspace }}/.github/workflows/upload-artifacts/entrypoint.sh \
+          ${{ github.workspace }}/shared-workflows/.github/workflows/upload-artifacts/entrypoint.sh \
             "${{ inputs.project }}" \
             "${{ inputs.build-name }}" \
             "${{ inputs.version }}" \

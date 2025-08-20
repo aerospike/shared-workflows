@@ -72,17 +72,14 @@ permissions:
 jobs:
   execute-build:
     runs-on: ${{ inputs.runs-on }}
+    env:
+      CHECKOUT_REF: fix/external-calls # On release *must* change this to the actual release tag
     steps:
-      - name: Checkout caller repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
-
       - name: Checkout shared-workflows repository
         uses: actions/checkout@v4
         with:
           repository: aerospike/shared-workflows
-          ref: fix/external-calls
+          ref: ${{ env.CHECKOUT_REF }}
           path: shared-workflows
           fetch-depth: 1
 
