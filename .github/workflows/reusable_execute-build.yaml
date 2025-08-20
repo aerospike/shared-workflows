@@ -82,7 +82,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: aerospike/shared-workflows
-          ref: ${{ github.ref }}
+          ref: fix/external-calls
           path: shared-workflows
           fetch-depth: 1
 
