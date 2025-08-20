@@ -73,10 +73,18 @@ jobs:
   execute-build:
     runs-on: ${{ inputs.runs-on }}
     steps:
-      - name: Checkout
+      - name: Checkout caller repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 1
+
+      - name: Checkout shared-workflows repository
+        uses: actions/checkout@v4
+        with:
+          repository: aerospike/shared-workflows
+          ref: ${{ github.ref }}
+          path: shared-workflows
+          fetch-depth: 1
 
       - name: Set up JFrog CLI
         uses: jfrog/setup-jfrog-cli@f748a0599171a192a2668afee8d0497f7c1069df
@@ -90,20 +98,20 @@ jobs:
       - name: Execute Build Script
         shell: bash
         run: |
-          chmod +x ${{ github.workspace }}/.github/workflows/execute-build/entrypoint.sh
+          chmod +x ${{ github.workspace }}/shared-workflows/.github/workflows/execute-build/entrypoint.sh
           dry_run_arg=""
           if [ "${{ inputs.dry-run }}" = "true" ]; then
             dry_run_arg="--dry-run"
           fi
           if [ "${{ inputs.build-script }}" != "" ]; then
-            "${{ github.workspace }}/.github/workflows/execute-build/entrypoint.sh" \
+            "${{ github.workspace }}/shared-workflows/.github/workflows/execute-build/entrypoint.sh" \
               --build-script "${{ inputs.build-script }}" \
               --artifact-directory "${{ inputs.artifact-directory }}" \
               --build-name "${{ inputs.build-name }}" \
               --build-version "${{ inputs.build-version }}" \
               $dry_run_arg
           elif [ "${{ inputs.build-script-path }}" != "" ]; then
-            "${{ github.workspace }}/.github/workflows/execute-build/entrypoint.sh" \
+            "${{ github.workspace }}/shared-workflows/.github/workflows/execute-build/entrypoint.sh" \
               --build-script-path "${{ inputs.build-script-path }}" \
               --artifact-directory "${{ inputs.artifact-directory }}" \
               --build-name "${{ inputs.build-name }}" \
