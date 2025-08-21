@@ -10,7 +10,8 @@ jobs:
   test-sign-workflow:
     uses: ./.github/workflows/reusable_sign-artifacts.yaml
     with:
-      artifact-glob: tests/**/*.{deb,rpm}
+      checkout-path: project-location # explicitly name this rather than depend on default since we are using it by name
+      artifact-glob: project-location/tests/**/*.{deb,rpm}
       artifact-name: signed-artifacts
       retention-days: 1
     secrets:
