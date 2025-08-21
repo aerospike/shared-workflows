@@ -39,6 +39,11 @@ on:
         required: false
         type: string
         default: ubuntu-22.04
+      checkout-path:
+        description: Directory to checkout the shared-workflows repository into
+        required: false
+        type: string
+        default: shared-workflows
       dry-run:
         description: Whether to run in dry-run mode
         required: false
@@ -47,7 +52,6 @@ on:
 
 permissions:
   contents: read
-  packages: write
   id-token: write
 
 jobs:
@@ -61,7 +65,7 @@ jobs:
         with:
           repository: aerospike/shared-workflows
           ref: ${{ env.CHECKOUT_REF }}
-          path: shared-workflows
+          path: ${{ inputs.checkout-path }}
           fetch-depth: 1
 
       - name: Setup JFrog CLI

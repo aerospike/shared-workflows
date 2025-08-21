@@ -89,8 +89,9 @@ jobs:
       project: database
       build-name: test-build
       build-version: v1.0.0
+      checkout-path: project-location
       build-script: |
-        cd ${{ github.workspace }}/shared-workflows/.github/workflows/execute-build/test_apps/hi
+        cd project-location/.github/workflows/execute-build/test_apps/hi
         uname -m
         uname -a
         which gcc
