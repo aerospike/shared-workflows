@@ -100,20 +100,20 @@ jobs:
       - name: Execute Build Script
         shell: bash
         run: |
-          chmod +x ${{ github.workspace }}/${{ inputs.checkout-path }}/.github/workflows/execute-build/entrypoint.sh
+          chmod +x ${{ inputs.checkout-path }}/.github/workflows/execute-build/entrypoint.sh
           dry_run_arg=""
           if [ "${{ inputs.dry-run }}" = "true" ]; then
             dry_run_arg="--dry-run"
           fi
           if [ "${{ inputs.build-script }}" != "" ]; then
-            "${{ github.workspace }}/${{ inputs.checkout-path }}/.github/workflows/execute-build/entrypoint.sh" \
+            "${{ inputs.checkout-path }}/.github/workflows/execute-build/entrypoint.sh" \
               --build-script "${{ inputs.build-script }}" \
               --artifact-directory "${{ inputs.artifact-directory }}" \
               --build-name "${{ inputs.build-name }}" \
               --build-version "${{ inputs.build-version }}" \
               $dry_run_arg
           elif [ "${{ inputs.build-script-path }}" != "" ]; then
-            "${{ github.workspace }}/${{ inputs.checkout-path }}/.github/workflows/execute-build/entrypoint.sh" \
+            "${{ inputs.checkout-path }}/.github/workflows/execute-build/entrypoint.sh" \
               --build-script-path "${{ inputs.build-script-path }}" \
               --artifact-directory "${{ inputs.artifact-directory }}" \
               --build-name "${{ inputs.build-name }}" \

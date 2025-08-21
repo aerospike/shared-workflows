@@ -96,12 +96,12 @@ jobs:
       - name: Upload Artifacts
         shell: bash
         run: |
-          chmod +x ${{ github.workspace }}/${{ inputs.checkout-path }}/.github/workflows/upload-artifacts/entrypoint.sh
+          chmod +x ${{ inputs.checkout-path }}/.github/workflows/upload-artifacts/entrypoint.sh
           dry_run_arg=""
           if [ "${{ inputs.dry-run }}" = "true" ]; then
             dry_run_arg="--dry-run"
           fi
-          ${{ github.workspace }}/shared-workflows/.github/workflows/upload-artifacts/entrypoint.sh \
+          ${{ inputs.checkout-path }}/.github/workflows/upload-artifacts/entrypoint.sh \
             "${{ inputs.project }}" \
             "${{ inputs.build-name }}" \
             "${{ inputs.version }}" \

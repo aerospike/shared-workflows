@@ -85,12 +85,12 @@ jobs:
       - name: Create Release Bundle
         shell: bash
         run: |
-          chmod +x ${{ github.workspace }}/shared-workflows/.github/workflows/create-release-bundle/entrypoint.sh
+          chmod +x ${{ inputs.checkout-path }}/.github/workflows/create-release-bundle/entrypoint.sh
           dry_run_arg=""
           if [ "${{ inputs.dry-run }}" = "true" ]; then
             dry_run_arg="--dry-run"
           fi
-          "${{ github.workspace }}/shared-workflows/.github/workflows/create-release-bundle/entrypoint.sh" \
+          "${{ inputs.checkout-path }}/.github/workflows/create-release-bundle/entrypoint.sh" \
             --project "${{ inputs.project }}" \
             --build-names "${{ inputs.build-names }}" \
             --bundle-name "${{ inputs.bundle-name }}" \
