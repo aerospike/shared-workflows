@@ -75,7 +75,7 @@ on:
 
 jobs:
   upload:
-    uses: ./.github/workflows/reusable_upload-artifacts.yaml
+    uses: aerospike/shared-workflows/.github/workflows/reusable_upload-artifacts.yaml@CURRENTGITSHA # vn.n.n
     with:
       project: database
       build-name: database

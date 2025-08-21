@@ -39,6 +39,11 @@ on:
         required: false
         type: string
         default: ubuntu-22.04
+      checkout-path:
+        description: Directory to checkout the shared-workflows repository into
+        required: false
+        type: string
+        default: shared-workflows
       dry-run:
         description: Whether to run in dry-run mode
         required: false
@@ -47,17 +52,21 @@ on:
 
 permissions:
   contents: read
-  packages: write
   id-token: write
 
 jobs:
   create-release-bundle:
     runs-on: ${{ inputs.runs-on }}
+    env:
+      CHECKOUT_REF: v1.1.0 # On release *must* change this to the actual release tag
     steps:
-      - name: Checkout
+      - name: Checkout shared-workflows repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          repository: aerospike/shared-workflows
+          ref: ${{ env.CHECKOUT_REF }}
+          path: ${{ inputs.checkout-path }}
+          fetch-depth: 1
 
       - name: Setup JFrog CLI
         uses: jfrog/setup-jfrog-cli@2bc6e55719cd37dfb2f655a1e4f16c3440182a9f
@@ -76,12 +85,12 @@ jobs:
       - name: Create Release Bundle
         shell: bash
         run: |
-          chmod +x ${{ github.workspace }}/.github/workflows/create-release-bundle/entrypoint.sh
+          chmod +x ${{ inputs.checkout-path }}/.github/workflows/create-release-bundle/entrypoint.sh
           dry_run_arg=""
           if [ "${{ inputs.dry-run }}" = "true" ]; then
             dry_run_arg="--dry-run"
           fi
-          "${{ github.workspace }}/.github/workflows/create-release-bundle/entrypoint.sh" \
+          "${{ inputs.checkout-path }}/.github/workflows/create-release-bundle/entrypoint.sh" \
             --project "${{ inputs.project }}" \
             --build-names "${{ inputs.build-names }}" \
             --bundle-name "${{ inputs.bundle-name }}" \

@@ -45,6 +45,11 @@ on:
         required: false
         type: string
         default: ubuntu-22.04
+      checkout-path:
+        description: Directory to checkout the shared-workflows repository into
+        required: false
+        type: string
+        default: shared-workflows
       dry-run:
         description: Whether to run in dry-run mode. Dry-run mode will not upload any artifacts.
         required: false
@@ -53,17 +58,22 @@ on:
 
 permissions:
   contents: read
-  packages: write
   id-token: write
 
 jobs:
   upload:
     runs-on: ${{ inputs.runs-on }}
+    env:
+      CHECKOUT_REF: v1.1.0 # On release *must* change this to the actual release tag
     steps:
-      - name: Checkout
+      - name: Checkout shared-workflows repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          repository: aerospike/shared-workflows
+          ref: ${{ env.CHECKOUT_REF }}
+          path: ${{ inputs.checkout-path }}
+          fetch-depth: 1
+
       - name: Setup JFrog CLI
         uses: jfrog/setup-jfrog-cli@2bc6e55719cd37dfb2f655a1e4f16c3440182a9f # v4.5.13
         env:
@@ -86,12 +96,12 @@ jobs:
       - name: Upload Artifacts
         shell: bash
         run: |
-          chmod +x ${{ github.workspace }}/.github/workflows/upload-artifacts/entrypoint.sh
+          chmod +x ${{ inputs.checkout-path }}/.github/workflows/upload-artifacts/entrypoint.sh
           dry_run_arg=""
           if [ "${{ inputs.dry-run }}" = "true" ]; then
             dry_run_arg="--dry-run"
           fi
-          ${{ github.workspace }}/.github/workflows/upload-artifacts/entrypoint.sh \
+          ${{ inputs.checkout-path }}/.github/workflows/upload-artifacts/entrypoint.sh \
             "${{ inputs.project }}" \
             "${{ inputs.build-name }}" \
             "${{ inputs.version }}" \

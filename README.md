@@ -32,7 +32,7 @@ shared-workflows/
 | `.github/actions/`                  | Composite GitHub Actions, each in its own directory           |
 | `.github/workflows/reusable_*.yaml` | Reusable workflows (called via `workflow_call`)               |
 | `.github/workflows/test_*.yaml`     | Test workflows that validate the reusable workflows           |
-| `.github/workflows/<name>/`         | Shell scripts, test harnesses, and documentation per workflow |
+| `.github/workflows/<name>/*`        | Shell scripts, test harnesses, and documentation per workflow |
 
 ### Naming Conventions
 
@@ -40,6 +40,7 @@ To simulate namespacing in a flat structure (since GitHub requires reusable work
 
 - `reusable_`: workflows designed for reuse via `workflow_call`
 - `test_`: workflows that test the (reusable) workflows in CI
+- `example_`: workflows that give a working example of how to use other workflows
 
 This convention allows us to organize as we add more workflows and actions.
 [!WARNING]

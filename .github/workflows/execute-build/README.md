@@ -32,7 +32,7 @@ on:
 
 jobs:
   build:
-    uses: ./.github/workflows/reusable_execute-build.yaml
+    uses: aerospike/shared-workflows/.github/workflows/reusable_execute-build.yaml
     with:
       project: my-project
       build-name: my-app
@@ -49,7 +49,7 @@ jobs:
 ```yaml
 jobs:
   build:
-    uses: ./.github/workflows/reusable_execute-build.yaml
+    uses: aerospike/shared-workflows/.github/workflows/reusable_execute-build.yaml
     with:
       project: my-project
       build-name: my-app
@@ -69,33 +69,6 @@ Your build script should:
 - Create artifacts in the specified `artifact-directory`
 - Exit with code 0 on success, non-zero on failure
 - Handle its own dependency installation
-
-### Example build script file
-
-```bash
-#!/bin/bash
-set -euo pipefail
-
-echo "Starting build..."
-
-# Your build commands here
-make clean
-make all
-
-# Copy artifacts to the specified directory
-mkdir -p build-output
-cp build/*.tar.gz build-output/
-cp build/*.deb build-output/
-
-echo "Build completed successfully"
-```
-
-### Example inline build commands
-
-```bash
-# These commands will be executed directly
-make clean && make all && mkdir -p dist && cp build/* dist/
-```
 
 ## Prerequisites
 
