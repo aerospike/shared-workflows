@@ -85,7 +85,7 @@ jobs:
         with:
           repository: aerospike/shared-workflows
           ref: ${{ env.CHECKOUT_REF }}
-          path: shared-workflows
+          path: ${{ inputs.checkout-path }}
           fetch-depth: 1
 
       - name: Set up JFrog CLI
