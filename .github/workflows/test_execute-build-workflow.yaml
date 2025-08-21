@@ -31,4 +31,4 @@ jobs:
         uses: actions/checkout@v4
       - name: Test Entrypoint
         run: |
-          ${{ github.workspace }}/shared-workflows/.github/workflows/execute-build/test-entrypoint.sh
+          .github/workflows/execute-build/test-entrypoint.sh

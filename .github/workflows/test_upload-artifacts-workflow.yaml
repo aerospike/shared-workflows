@@ -42,4 +42,4 @@ jobs:
           sudo apt-get update && sudo apt-get install dpkg-dev rpm -y
       - name: Test Entrypoint
         run: |
-          ${{ github.workspace }}/shared-workflows/.github/workflows/upload-artifacts/test-entrypoint.sh
+          .github/workflows/upload-artifacts/test-entrypoint.sh
