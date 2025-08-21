@@ -14,8 +14,8 @@ jobs:
       project: database
       build-name: test-build
       build-version: v1.0.0
-      build-script: cd .github/workflows/execute-build/test_apps/hi && make
-      artifact-directory: .github/workflows/execute-build/test_apps/hi/build
+      build-script: cd ${{ github.workspace }}/shared-workflows/.github/workflows/execute-build/test_apps/hi && make
+      artifact-directory: ${{ github.workspace }}/shared-workflows/.github/workflows/execute-build/test_apps/hi/build
       artifact-name: test-execute-build
       retention-days: 1 # default
       artifactory-url: https://aerospike.jfrog.io # default
@@ -31,4 +31,4 @@ jobs:
         uses: actions/checkout@v4
       - name: Test Entrypoint
         run: |
-          .github/workflows/execute-build/test-entrypoint.sh
+          ${{ github.workspace }}/shared-workflows/.github/workflows/execute-build/test-entrypoint.sh

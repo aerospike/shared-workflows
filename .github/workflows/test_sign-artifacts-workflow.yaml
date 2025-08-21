@@ -28,4 +28,4 @@ jobs:
           sudo apt-get update && sudo apt-get install dpkg-sig dpkg-dev -y
       - name: Test Entrypoint
         run: |
-          .github/workflows/sign-artifacts/test-entrypoint.sh
+          ${{ github.workspace }}/shared-workflows/.github/workflows/sign-artifacts/test-entrypoint.sh

@@ -32,4 +32,4 @@ jobs:
           sudo apt-get update && sudo apt-get install jq -y
       - name: Test Entrypoint
         run: |
-          .github/workflows/create-release-bundle/test-entrypoint.sh
+          ${{ github.workspace }}/shared-workflows/.github/workflows/create-release-bundle/test-entrypoint.sh
