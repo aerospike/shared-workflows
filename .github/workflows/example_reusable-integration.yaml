@@ -91,6 +91,7 @@ jobs:
       build-version: v1.0.0
       checkout-path: project-location
       build-script: |
+        find .
         cd project-location/.github/workflows/execute-build/test_apps/hi
         uname -m
         uname -a
