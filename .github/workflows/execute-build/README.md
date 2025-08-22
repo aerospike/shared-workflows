@@ -8,14 +8,25 @@ This workflow executes a custom build script and uploads the resulting artifacts
 
 ## Inputs
 
-| Input                | Description                                               | Required | Default           |
-| -------------------- | --------------------------------------------------------- | -------- | ----------------- |
-| `build-script`       | Inline bash commands to execute                           | No\*     | -                 |
-| `build-script-path`  | Path to the build script file to execute                  | No\*     | -                 |
-| `artifact-directory` | Directory that will contain all artifacts from this build | Yes      | -                 |
-| `artifact-name`      | Name for the uploaded artifacts                           | No       | `build-artifacts` |
-| `retention-days`     | Retention days for the artifacts                          | No       | `1`               |
-| `dry-run`            | Whether to run in dry-run mode                            | No       | `false`           |
+| Input                            | Description                                                          | Required | Default                      |
+| -------------------------------- | -------------------------------------------------------------------- | -------- | ---------------------------- |
+| `project`                        | JFrog Artifactory project name                                       | Yes      | -                            |
+| `build-name`                     | Name for this build in artifactory                                   | Yes      | -                            |
+| `build-version`                  | Version for this build in artifactory                                | Yes      | -                            |
+| `build-script`                   | Inline bash commands to execute                                      | No\*     | -                            |
+| `build-script-path`              | Path to the build script file to execute                             | No\*     | -                            |
+| `artifact-directory`             | Directory that will contain all artifacts from this build            | Yes      | -                            |
+| `artifact-name`                  | Name for the uploaded artifacts                                      | No       | `build-artifacts`            |
+| `retention-days`                 | Retention days for the artifacts                                     | No       | `1`                          |
+| `artifactory-url`                | JFrog Artifactory URL                                                | No       | `https://aerospike.jfrog.io` |
+| `artifactory-oidc-provider-name` | OIDC provider name                                                   | No       | `gh-aerospike`               |
+| `artifactory-oidc-audience`      | OIDC audience                                                        | No       | `aerospike`                  |
+| `runs-on`                        | The runner to use for the build                                      | No       | `ubuntu-22.04`               |
+| `checkout-path`                  | Directory to checkout the shared-workflows repository into           | No       | `shared-workflows`           |
+| `source-repository`              | Repository to checkout for source code (format owner/repo)           | No       | -                            |
+| `source-ref`                     | Reference to checkout for source repository (branch, tag, or commit) | No       | -                            |
+| `source-path`                    | Directory to checkout the source repository into                     | No       | `.`                          |
+| `dry-run`                        | Whether to run in dry-run mode                                       | No       | `false`                      |
 
 \*Either `build-script` or `build-script-path` is required, but not both.
 

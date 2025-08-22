@@ -64,11 +64,6 @@ on:
         required: false
         type: string
         default: shared-workflows
-      dry-run:
-        description: Whether to run in dry-run mode
-        required: false
-        type: boolean
-        default: false
       source-repository:
         description: Repository to checkout for source code (format owner/repo)
         required: false
@@ -84,6 +79,11 @@ on:
         required: false
         type: string
         default: .
+      dry-run:
+        description: Whether to run in dry-run mode
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
