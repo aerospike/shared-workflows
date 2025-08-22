@@ -69,6 +69,21 @@ on:
         required: false
         type: boolean
         default: false
+      source-repository:
+        description: Repository to checkout for source code (format owner/repo)
+        required: false
+        type: string
+        default: ""
+      source-ref:
+        description: Reference to checkout for source repository (branch, tag, or commit)
+        required: false
+        type: string
+        default: ""
+      source-path:
+        description: Directory to checkout the source repository into
+        required: false
+        type: string
+        default: .
 
 permissions:
   contents: read
@@ -86,6 +101,15 @@ jobs:
           repository: aerospike/shared-workflows
           ref: ${{ env.CHECKOUT_REF }}
           path: ${{ inputs.checkout-path }}
+          fetch-depth: 1
+
+      - name: Checkout source repository
+        if: inputs.source-repository != ''
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.source-repository }}
+          ref: ${{ inputs.source-ref }}
+          path: ${{ inputs.source-path }}
           fetch-depth: 1
 
       - name: Set up JFrog CLI
