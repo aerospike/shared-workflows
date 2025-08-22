@@ -75,7 +75,7 @@ on:
         type: string
         default: ""
       source-path:
-        description: Directory to checkout the source repository into
+        description: Directory to checkout the source repository into. If set to empty string it will not checkout the current repository.
         required: false
         type: string
         default: local
