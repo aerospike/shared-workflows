@@ -14,7 +14,7 @@ jobs:
           - ubuntu-22.04
           # - ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: setup GPG
         uses: aerospike/shared-workflows/.github/actions/setup-gpg@dda8173aca1f1e73f95267572a7d3849cd00f1b8 # v1.0.0

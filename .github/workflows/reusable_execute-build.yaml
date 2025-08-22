@@ -96,7 +96,7 @@ jobs:
       CHECKOUT_REF: 722626ac96e0e8569ba587bd228b9468f6e49ead # Latest commit hash for development
     steps:
       - name: Checkout shared-workflows repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: aerospike/shared-workflows
           ref: ${{ env.CHECKOUT_REF }}
@@ -105,7 +105,7 @@ jobs:
 
       - name: Checkout source repository
         if: inputs.source-path != ''
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: ${{ inputs.source-repository }}
           ref: ${{ inputs.source-ref }}
