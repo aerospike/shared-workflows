@@ -90,9 +90,9 @@ jobs:
       build-name: test-build
       build-version: v1.0.0
       checkout-path: project-location # In the case of running in shared_wokflows checkout-path and source-path will have the same content but we put them here by way of example.
-      source-path: current-source
+      source-path: repo-source
       build-script: |
-        cd current-source/.github/workflows/execute-build/test_apps/hi
+        cd repo-source/.github/workflows/execute-build/test_apps/hi
         uname -m
         uname -a
         which gcc
@@ -100,7 +100,7 @@ jobs:
         ARCH=${{ matrix.arch }} \
         EMULATED=${{ matrix.emulated }} \
         make docker-build
-      artifact-directory: project-location/.github/workflows/execute-build/test_apps/hi/build
+      artifact-directory: repo-source/.github/workflows/execute-build/test_apps/hi/build
       artifact-name: build-artifacts-${{ matrix.distro }}-${{ matrix.arch }}
       retention-days: 1 # default
       artifactory-url: https://aerospike.jfrog.io # default

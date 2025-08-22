@@ -23,7 +23,7 @@ This workflow executes a custom build script and uploads the resulting artifacts
 | `artifactory-oidc-audience`      | OIDC audience                                                        | No       | `aerospike`                  |
 | `runs-on`                        | The runner to use for the build                                      | No       | `ubuntu-22.04`               |
 | `checkout-path`                  | Directory to checkout the shared-workflows repository into           | No       | `shared-workflows`           |
-| `source-repository`              | Repository to checkout for source code (format owner/repo)           | No       | -                            |
+| `source-repository`              | Repository to checkout for source code (format owner/repo)           | No       | `${{ github.repository }}`   |
 | `source-ref`                     | Reference to checkout for source repository (branch, tag, or commit) | No       | -                            |
 | `source-path`                    | Directory to checkout the source repository into                     | No       | `local`                      |
 | `dry-run`                        | Whether to run in dry-run mode                                       | No       | `false`                      |
