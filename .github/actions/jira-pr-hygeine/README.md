@@ -1,7 +1,6 @@
 # Setup GPG composite Action
 
-In this folder you will find two actions; one for checking that PR titles start with a reference to a Jira ticket, and one that relies on that check to extract that Jira ticket and prepend it to the git commit message on merge or squash. I recommend using both on repos to improve the git history and commit hygiene. 
-
+In this folder you will find two actions; one for checking that PR titles start with a reference to a Jira ticket, and one that relies on that check to extract that Jira ticket and prepend it to the git commit message on merge or squash. I recommend using both on repos to improve the git history and commit hygiene.
 
 ## Example Usage
 
@@ -23,12 +22,11 @@ jobs:
     uses: ./.github/workflows/hygiene.yml
     with:
       pr_title: ${{ github.event.pull_request.title }}
-
 ```
 
 ### Example of workflow using PR merge check
 
-How to use the merge workflow to change a commit message to include the same Jira reference as the PR title if one is available. 
+How to use the merge workflow to change a commit message to include the same Jira reference as the PR title if one is available.
 
 ```yaml
 name: PR Squash and Merge - Prepend Jira ticket
