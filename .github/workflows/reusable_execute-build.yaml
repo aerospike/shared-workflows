@@ -93,7 +93,7 @@ jobs:
   execute-build:
     runs-on: ${{ inputs.runs-on }}
     env:
-      CHECKOUT_REF: feature/INFRA-168-enable-duel-checkout-in-shared-workflows # Latest commit hash for development
+      CHECKOUT_REF: 722626ac96e0e8569ba587bd228b9468f6e49ead # Latest commit hash for development
     steps:
       - name: Checkout shared-workflows repository
         uses: actions/checkout@v4
