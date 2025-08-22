@@ -25,7 +25,7 @@ This workflow executes a custom build script and uploads the resulting artifacts
 | `checkout-path`                  | Directory to checkout the shared-workflows repository into           | No       | `shared-workflows`           |
 | `source-repository`              | Repository to checkout for source code (format owner/repo)           | No       | -                            |
 | `source-ref`                     | Reference to checkout for source repository (branch, tag, or commit) | No       | -                            |
-| `source-path`                    | Directory to checkout the source repository into                     | No       | `.`                          |
+| `source-path`                    | Directory to checkout the source repository into                     | No       | `local`                      |
 | `dry-run`                        | Whether to run in dry-run mode                                       | No       | `false`                      |
 
 \*Either `build-script` or `build-script-path` is required, but not both.

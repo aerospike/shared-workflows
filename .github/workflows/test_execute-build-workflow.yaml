@@ -14,8 +14,11 @@ jobs:
       project: database
       build-name: test-build
       build-version: v1.0.0
-      build-script: cd project-location/.github/workflows/execute-build/test_apps/hi && make
+      build-script: |
+        cd ${{ github.workspace }}/project-location/.github/workflows/execute-build/test_apps/hi && make
+        cd ${{ github.workspace }}/content-source && cat README.md
       checkout-path: project-location
+      source-path: current-source
       artifact-directory: project-location/.github/workflows/execute-build/test_apps/hi/build
       artifact-name: test-execute-build
       retention-days: 1 # default

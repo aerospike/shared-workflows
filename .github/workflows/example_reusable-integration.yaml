@@ -89,9 +89,10 @@ jobs:
       project: database
       build-name: test-build
       build-version: v1.0.0
-      checkout-path: project-location
+      checkout-path: project-location # In the case of running in shared_wokflows checkout-path and source-path will have the same content but we put them here by way of example.
+      source-path: current-source
       build-script: |
-        cd project-location/.github/workflows/execute-build/test_apps/hi
+        cd current-source/.github/workflows/execute-build/test_apps/hi
         uname -m
         uname -a
         which gcc
