@@ -64,6 +64,21 @@ on:
         required: false
         type: string
         default: shared-workflows
+      source-repository:
+        description: Repository to checkout for source code (format owner/repo)
+        required: false
+        type: string
+        default: ${{ github.repository }}
+      source-ref:
+        description: Reference to checkout for source repository (branch, tag, or commit)
+        required: false
+        type: string
+        default: ""
+      source-path:
+        description: Directory to checkout the source repository into. If set to empty string it will not checkout the current repository.
+        required: false
+        type: string
+        default: local
       dry-run:
         description: Whether to run in dry-run mode
         required: false
@@ -78,7 +93,7 @@ jobs:
   execute-build:
     runs-on: ${{ inputs.runs-on }}
     env:
-      CHECKOUT_REF: v1.1.0 # On release *must* change this to the actual release tag
+      CHECKOUT_REF: 722626ac96e0e8569ba587bd228b9468f6e49ead # Latest commit hash for development
     steps:
       - name: Checkout shared-workflows repository
         uses: actions/checkout@v4
@@ -86,6 +101,15 @@ jobs:
           repository: aerospike/shared-workflows
           ref: ${{ env.CHECKOUT_REF }}
           path: ${{ inputs.checkout-path }}
+          fetch-depth: 1
+
+      - name: Checkout source repository
+        if: inputs.source-path != ''
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.source-repository }}
+          ref: ${{ inputs.source-ref }}
+          path: ${{ inputs.source-path }}
           fetch-depth: 1
 
       - name: Set up JFrog CLI

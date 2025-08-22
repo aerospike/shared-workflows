@@ -14,17 +14,19 @@ The workflow processes artifacts from a `build-artifacts` directory and creates 
 
 ## Inputs
 
-| Input                            | Description                           | Required | Default                      |
-| -------------------------------- | ------------------------------------- | -------- | ---------------------------- |
-| `project`                        | JFrog Artifactory project name        | Yes      | -                            |
-| `build-name`                     | Name for the unified build            | Yes      | -                            |
-| `version`                        | Version string for build info         | Yes      | -                            |
-| `artifactory-url`                | JFrog Artifactory URL                 | No       | `https://aerospike.jfrog.io` |
-| `artifactory-oidc-provider-name` | OIDC provider name for authentication | No       | `gh-citrusleaf`              |
-| `artifactory-oidc-audience`      | OIDC audience for authentication      | No       | `citrusleaf`                 |
-| `artifact-name`                  | Name of the artifacts to download     | No       | `build-artifacts`            |
-| `retention-days`                 | Retention days for the artifacts      | No       | `1`                          |
-| `dry-run`                        | Whether to run in dry-run mode        | No       | `false`                      |
+| Input                            | Description                                                | Required | Default                      |
+| -------------------------------- | ---------------------------------------------------------- | -------- | ---------------------------- |
+| `project`                        | JFrog Artifactory project name                             | Yes      | -                            |
+| `build-name`                     | Name for the unified build                                 | Yes      | -                            |
+| `version`                        | Version string for build info                              | Yes      | -                            |
+| `artifactory-url`                | JFrog Artifactory URL                                      | No       | `https://aerospike.jfrog.io` |
+| `artifactory-oidc-provider-name` | OIDC provider name for authentication                      | No       | `gh-citrusleaf`              |
+| `artifactory-oidc-audience`      | OIDC audience for authentication                           | No       | `citrusleaf`                 |
+| `artifact-name`                  | Name of the artifacts to download                          | No       | `build-artifacts`            |
+| `retention-days`                 | Retention days for the artifacts                           | No       | `1`                          |
+| `runs-on`                        | The runner to use for the build                            | No       | `ubuntu-22.04`               |
+| `checkout-path`                  | Directory to checkout the shared-workflows repository into | No       | `shared-workflows`           |
+| `dry-run`                        | Whether to run in dry-run mode                             | No       | `false`                      |
 
 ## Structure
 

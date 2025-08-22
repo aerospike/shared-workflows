@@ -10,12 +10,16 @@ This is a reusable GitHub Actions workflow that signs binary artifacts using GPG
 
 ## Inputs
 
-| Name             | Type      | Required | Description                                                                 |
-| ---------------- | --------- | -------- | --------------------------------------------------------------------------- |
-| `artifact-glob`  | `string`  | Yes      | Glob pattern to match artifacts for signing. Example: `dist/**/*.{deb,rpm}` |
-| `artifact-name`  | `string`  | No       | Name for the uploaded artifacts. Default: `signed-artifacts`                |
-| `retention-days` | `number`  | No       | Number of days to retain the signed artifacts. Default: `7`                 |
-| `dry-run`        | `boolean` | No       | Whether to run in dry-run mode (for future compatibility). Default: `false` |
+| Name                             | Type     | Required | Description                                                                             |
+| -------------------------------- | -------- | -------- | --------------------------------------------------------------------------------------- |
+| `artifact-glob`                  | `string` | Yes      | Glob pattern to match artifacts for signing. Example: `dist/**/*.{deb,rpm}`             |
+| `artifact-name`                  | `string` | No       | Name for the uploaded artifacts. Default: `signed-artifacts`                            |
+| `retention-days`                 | `number` | No       | Number of days to retain the signed artifacts. Default: `1`                             |
+| `artifactory-url`                | `string` | No       | JFrog Artifactory URL. Default: `https://aerospike.jfrog.io`                            |
+| `artifactory-oidc-provider-name` | `string` | No       | OIDC provider name. Default: `gh-aerospike`                                             |
+| `artifactory-oidc-audience`      | `string` | No       | OIDC audience. Default: `aerospike`                                                     |
+| `checkout-path`                  | `string` | No       | Directory to checkout the shared-workflows repository into. Default: `shared-workflows` |
+| `runs-on`                        | `string` | No       | The runner to use for the build. Default: `ubuntu-22.04`                                |
 
 ## Secrets
 
