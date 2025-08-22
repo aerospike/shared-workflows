@@ -78,7 +78,7 @@ on:
         description: Directory to checkout the source repository into
         required: false
         type: string
-        default: .
+        default: local
       dry-run:
         description: Whether to run in dry-run mode
         required: false
@@ -124,7 +124,6 @@ jobs:
       - name: Execute Build Script
         shell: bash
         run: |
-          find .
           chmod +x ${{ inputs.checkout-path }}/.github/workflows/execute-build/entrypoint.sh
           dry_run_arg=""
           if [ "${{ inputs.dry-run }}" = "true" ]; then
