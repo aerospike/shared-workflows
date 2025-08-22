@@ -1,0 +1,32 @@
+name: Check for Jira Ticket in PR Title
+
+on:
+  workflow_call:
+    inputs:
+      pr_title:
+        required: true
+        type: string
+        description: 'PR title to check for JIRA ticket'
+
+jobs:
+  hygiene-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check for JIRA ticket in PR title
+        run: |
+          # Extract PR title
+          PR_TITLE="${{ inputs.pr_title }}"
+          echo "PR Title: $PR_TITLE"
+          
+          # Extract JIRA ticket from PR title (ABC-123 format)
+          JIRA_TICKET=$(echo "$PR_TITLE" | grep -oE '([A-Za-z0-9]+-[0-9]+)' | head -1)
+          
+          if [ -z "$JIRA_TICKET" ]; then
+            echo "❌ ERROR: No JIRA ticket found in PR title!"
+            echo "Please include a JIRA ticket in the format 'ABC-123 in your PR title."
+            echo "Examples: ABC-123: Add new feature for database management'"
+            exit 1
+          else
+            echo "✅ JIRA ticket found: $JIRA_TICKET"
+            echo "PR hygiene check passed!"
+          fi
