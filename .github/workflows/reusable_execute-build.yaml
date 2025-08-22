@@ -68,7 +68,7 @@ on:
         description: Repository to checkout for source code (format owner/repo)
         required: false
         type: string
-        default: ""
+        default: ${{ github.repository }}
       source-ref:
         description: Reference to checkout for source repository (branch, tag, or commit)
         required: false
@@ -104,7 +104,7 @@ jobs:
           fetch-depth: 1
 
       - name: Checkout source repository
-        if: inputs.source-repository != ''
+        if: inputs.source-path != ''
         uses: actions/checkout@v4
         with:
           repository: ${{ inputs.source-repository }}
