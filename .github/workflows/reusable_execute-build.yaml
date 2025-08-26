@@ -93,7 +93,7 @@ jobs:
   execute-build:
     runs-on: ${{ inputs.runs-on }}
     env:
-      CHECKOUT_REF: 722626ac96e0e8569ba587bd228b9468f6e49ead # Latest commit hash for development
+      CHECKOUT_REF: c75407f2cd34683f69f302aaf8fa425a5623ea11 # Latest commit hash for development
     steps:
       - name: Checkout shared-workflows repository
         uses: actions/checkout@v5

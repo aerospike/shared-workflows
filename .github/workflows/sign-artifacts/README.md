@@ -12,7 +12,7 @@ This is a reusable GitHub Actions workflow that signs binary artifacts using GPG
 
 | Name                             | Type     | Required | Description                                                                             |
 | -------------------------------- | -------- | -------- | --------------------------------------------------------------------------------------- |
-| `artifact-glob`                  | `string` | Yes      | Glob pattern to match artifacts for signing. Example: `dist/**/*.{deb,rpm}`             |
+| `unsigned-artifact-pattern`      | `string` | No       | Pattern of uploaded artifacts to sign. Default: `unsigned-artifacts*`                   |
 | `artifact-name`                  | `string` | No       | Name for the uploaded artifacts. Default: `signed-artifacts`                            |
 | `retention-days`                 | `number` | No       | Number of days to retain the signed artifacts. Default: `1`                             |
 | `artifactory-url`                | `string` | No       | JFrog Artifactory URL. Default: `https://aerospike.jfrog.io`                            |
@@ -40,10 +40,9 @@ jobs:
   sign:
     uses: aerospike/shared-workflows/.github/workflows/reusable_sign-artifacts.yaml@CURRENTGITSHA # vn.n.n
     with:
-      artifact-glob: dist/**/*.{deb,rpm}
-      # artifact-name: signed-artifacts  # optional, defaults to signed-artifacts
-      # retention-days: 7               # optional, defaults to 7
-      # dry-run: false                  # optional, for future compatibility
+      unsigned-artifact-pattern: test-fixtures**
+      artifact-name: signed-artifacts # optional, defaults to signed-artifacts
+      retention-days: 7 # optional, defaults to 1
     secrets:
       gpg-private-key: ${{ secrets.GPG_SECRET_KEY }}
       gpg-public-key: ${{ secrets.GPG_PUBLIC_KEY }}

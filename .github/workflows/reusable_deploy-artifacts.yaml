@@ -1,4 +1,4 @@
-name: Upload to JFrog Artifactory
+name: Deploy to Artifactory
 
 on:
   workflow_call:
@@ -31,10 +31,10 @@ on:
         type: string
         default: citrusleaf
       artifact-name:
-        description: Name of downloaded/uploaded artifacts
+        description: Name of signed artifacts on github
         required: false
         type: string
-        default: build-artifacts
+        default: signed-artifacts
       retention-days:
         description: Retention days for the artifacts
         required: false
@@ -64,7 +64,7 @@ jobs:
   upload:
     runs-on: ${{ inputs.runs-on }}
     env:
-      CHECKOUT_REF: 722626ac96e0e8569ba587bd228b9468f6e49ead # Latest commit hash for development
+      CHECKOUT_REF: c75407f2cd34683f69f302aaf8fa425a5623ea11 # Latest commit hash for development
     steps:
       - name: Checkout shared-workflows repository
         uses: actions/checkout@v5
@@ -96,12 +96,12 @@ jobs:
       - name: Upload Artifacts
         shell: bash
         run: |
-          chmod +x ${{ inputs.checkout-path }}/.github/workflows/upload-artifacts/entrypoint.sh
+          chmod +x ${{ inputs.checkout-path }}/.github/workflows/deploy-artifacts/entrypoint.sh
           dry_run_arg=""
           if [ "${{ inputs.dry-run }}" = "true" ]; then
             dry_run_arg="--dry-run"
           fi
-          ${{ inputs.checkout-path }}/.github/workflows/upload-artifacts/entrypoint.sh \
+          ${{ inputs.checkout-path }}/.github/workflows/deploy-artifacts/entrypoint.sh \
             "${{ inputs.project }}" \
             "${{ inputs.build-name }}" \
             "${{ inputs.version }}" \

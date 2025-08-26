@@ -11,7 +11,7 @@ jobs:
   test-execute-build-workflow:
     uses: ./.github/workflows/reusable_execute-build.yaml
     with:
-      project: database
+      project: test
       build-name: test-build
       build-version: v1.0.0
       build-script: |

@@ -12,7 +12,7 @@ jobs:
   test-create-release-bundle-workflow:
     uses: ./.github/workflows/reusable_create-release-bundle.yaml
     with:
-      project: database
+      project: test
       build-names: test-build-1,test-build-2
       bundle-name: test-release-bundle
       version: v1.0.0
