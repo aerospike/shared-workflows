@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-
+set -x
 export PS4='+($LINENO): ${FUNCNAME[0]:+${FUNCNAME[0]}(): }'
 trap 'handle_error ${LINENO}' ERR
 # shellcheck disable=SC2317
@@ -107,6 +107,10 @@ run() {
   else
     "$@"
   fi
+}
+
+run_optional() {
+    "$@" || echo "Warning: $*" >&2
 }
 
 structure_build_artifacts() {
@@ -284,10 +288,10 @@ publish_build_info() {
   else
     echo "Publishing build info..." >&2
   fi
-
-  run jf rt build-collect-env "$BUILD_NAME" "$BUILD_NUMBER" --project="$PROJECT"
-  run jf rt build-add-git "$BUILD_NAME" "$BUILD_NUMBER" --project="$PROJECT"
-  run jf rt build-add-dependencies "$BUILD_NAME" "$BUILD_NUMBER" . --project="$PROJECT"
+  echo "about to add optional build info and publishing"
+  run_optional jf rt build-collect-env "$BUILD_NAME" "$BUILD_NUMBER" --project="$PROJECT"
+  run_optional jf rt build-add-git "$BUILD_NAME" "$BUILD_NUMBER" --project="$PROJECT"
+  run_optional jf rt build-add-dependencies "$BUILD_NAME" "$BUILD_NUMBER" . --project="$PROJECT"
   run jf rt build-publish "$BUILD_NAME" "$BUILD_NUMBER" --project="$PROJECT"
 }
 
