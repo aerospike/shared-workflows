@@ -12,7 +12,7 @@ This is a reusable GitHub Actions workflow that signs binary artifacts using GPG
 
 | Name                             | Type     | Required | Description                                                                             |
 | -------------------------------- | -------- | -------- | --------------------------------------------------------------------------------------- |
-| `unsigned-artifact-pattern`      | `string` | No       | Pattern of uploaded artifacts to sign. Default: `unsigned-artifacts*`                   |
+| `unsigned-artifacts`             | `string` | No       | Previously uploaded artifacts to sign. Default: `unsigned-artifacts*`                   |
 | `artifact-name`                  | `string` | No       | Name for the uploaded artifacts. Default: `signed-artifacts`                            |
 | `retention-days`                 | `number` | No       | Number of days to retain the signed artifacts. Default: `1`                             |
 | `artifactory-url`                | `string` | No       | JFrog Artifactory URL. Default: `https://aerospike.jfrog.io`                            |
@@ -40,7 +40,7 @@ jobs:
   sign:
     uses: aerospike/shared-workflows/.github/workflows/reusable_sign-artifacts.yaml@CURRENTGITSHA # vn.n.n
     with:
-      unsigned-artifact-pattern: test-fixtures**
+      unsigned-artifacts: test-fixtures
       artifact-name: signed-artifacts # optional, defaults to signed-artifacts
       retention-days: 7 # optional, defaults to 1
     secrets:

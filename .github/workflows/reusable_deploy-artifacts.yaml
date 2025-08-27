@@ -93,7 +93,7 @@ jobs:
           name: ${{ inputs.artifact-name }}
           path: ./build-artifacts
 
-      - name: Upload Artifacts
+      - name: Deploy Artifacts
         shell: bash
         run: |
           chmod +x ${{ inputs.checkout-path }}/.github/workflows/deploy-artifacts/entrypoint.sh

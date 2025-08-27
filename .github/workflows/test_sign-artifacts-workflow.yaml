@@ -28,7 +28,7 @@ jobs:
       gpg-public-key: ${{ secrets.GPG_PUBLIC_KEY }}
       gpg-key-pass: ${{ secrets.GPG_PASS }}
     with:
-      unsigned-artifact-pattern: test-fixtures**
+      unsigned-artifacts: test-fixtures
 
   run-tests:
     needs: test-sign-workflow
@@ -39,7 +39,7 @@ jobs:
       - name: Download Test Fixtures
         uses: actions/download-artifact@v4
         with:
-          pattern: test-fixtures**
+          name: test-fixtures
           path: test-fixtures
       - name: Install dpkg-sig
         run: |

@@ -3,11 +3,11 @@ name: Sign Artifacts
 on:
   workflow_call:
     inputs:
-      unsigned-artifact-pattern:
-        description: pattern of uploaded artifacts to sign
+      unsigned-artifacts:
+        description: uploaded artifacts to sign
         required: false
         type: string
-        default: unsigned-artifacts*
+        default: build-artifacts
       artifact-name:
         description: Name to upload signed artifacts as
         required: false
@@ -64,7 +64,7 @@ jobs:
       - name: Download Unsigned Artifacts
         uses: actions/download-artifact@v4
         with:
-          pattern: ${{ inputs.unsigned-artifact-pattern }}
+          name: ${{ inputs.unsigned-artifacts }}
           path: unsigned-artifacts
           merge-multiple: true
 

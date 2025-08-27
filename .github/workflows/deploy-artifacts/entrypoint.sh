@@ -302,8 +302,6 @@ main() {
   echo "Version: $VERSION" >&2
   echo "Dry run: $DRY_RUN" >&2
   echo "Build number: $BUILD_NUMBER" >&2
-  # Expand glob pattern to find files in build-artifacts
-#   cd build-artifacts
   mkdir -p structured_build_artifacts
   shopt -s globstar nullglob
 
