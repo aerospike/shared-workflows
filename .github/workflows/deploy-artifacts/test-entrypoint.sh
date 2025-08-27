@@ -42,7 +42,7 @@ cleanup() {
 
 
     echo "cleaning up"
-    rm -rf "$TEST_DIR"
+#    rm -rf "$TEST_DIR"
 }
 
 # Set trap to cleanup on exit (success or error)
