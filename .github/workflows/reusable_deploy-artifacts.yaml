@@ -64,7 +64,7 @@ jobs:
   upload:
     runs-on: ${{ inputs.runs-on }}
     env:
-      CHECKOUT_REF: 4b83a9de3d3605446f625dcb20ae5c5b89e84253 # Latest commit hash for development
+      CHECKOUT_REF: 9ffdad1fb4a16a6bc7484889f11155c124744672 # Latest commit hash for development
     steps:
       - name: Checkout shared-workflows repository
         uses: actions/checkout@v5
