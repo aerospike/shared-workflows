@@ -77,9 +77,6 @@ else
     exit 1
 fi
 
-# # Create test directory and fixtures
-# "$SCRIPT_DIR/create-test-fixtures.sh"
-
 # Define expected test files explicitly
 declare -a TEST_FILES=(
     "$UNSIGNED_ARTIFACTS_DIR/test.deb"
