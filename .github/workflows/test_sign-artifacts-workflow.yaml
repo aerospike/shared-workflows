@@ -7,26 +7,43 @@ on:
 permissions: read-all
 
 jobs:
-  test-sign-workflow:
-    uses: ./.github/workflows/reusable_sign-artifacts.yaml
-    with:
-      checkout-path: project-location # explicitly name this rather than depend on default since we are using it by name
-      artifact-glob: project-location/tests/**/*.{deb,rpm}
-      artifact-name: signed-artifacts
-      retention-days: 1
-    secrets:
-      gpg-private-key: ${{ secrets.GPG_SECRET_KEY }}
-      gpg-public-key: ${{ secrets.GPG_PUBLIC_KEY }}
-      gpg-key-pass: ${{ secrets.GPG_PASS }}
-
-  run-tests:
+  upload-test-gh-artifacts:
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+      - name: Create Test Fixtures
+        run: |
+          .github/workflows/deploy-artifacts/create-test-fixtures.sh test-fixtures
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-fixtures
+          path: test-fixtures
+  test-sign-workflow:
+    uses: ./.github/workflows/reusable_sign-artifacts.yaml
+    needs: upload-test-gh-artifacts
+    secrets:
+      gpg-private-key: ${{ secrets.GPG_SECRET_KEY }}
+      gpg-public-key: ${{ secrets.GPG_PUBLIC_KEY }}
+      gpg-key-pass: ${{ secrets.GPG_PASS }}
+    with:
+      unsigned-artifacts: test-fixtures
+
+  run-tests:
+    needs: test-sign-workflow
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+      - name: Download Test Fixtures
+        uses: actions/download-artifact@v4
+        with:
+          name: test-fixtures
+          path: test-fixtures
       - name: Install dpkg-sig
         run: |
           sudo apt-get update && sudo apt-get install dpkg-sig dpkg-dev -y
       - name: Test Entrypoint
         run: |
-          .github/workflows/sign-artifacts/test-entrypoint.sh
+          .github/workflows/sign-artifacts/test-entrypoint.sh test-fixtures

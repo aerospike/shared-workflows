@@ -56,38 +56,3 @@ Run the basic test suite:
 ```bash
 .github/workflows/create-release-bundle/test-entrypoint.sh
 ```
-
-## Integration
-
-This workflow is designed to be used as part of larger CI/CD pipelines:
-
-1. **Build Phase**: Use build-artifacts workflow to create builds
-2. **Sign Phase**: GPG sign build-artifacts
-3. **Upload Phase**: Use upload-artifacts workflow to upload to JFrog
-4. **Bundle Phase**: Use this workflow to create release bundles
-
-```yaml
-jobs:
-  build:
-    uses: ./.github/workflows/reusable_execute-build.yaml
-    with:
-      build-script: ./build.sh
-      artifact-directory: dist
-
-  upload:
-    needs: build
-    uses: ./.github/workflows/reusable_upload-artifacts.yaml
-    with:
-      project: my-project
-      build-name: my-build
-      version: v1.0.0
-
-  create-release-bundle:
-    needs: upload
-    uses: ./.github/workflows/reusable_create-release-bundle.yaml
-    with:
-      project: my-project
-      build-names: "my-build-deb,my-build-rpm"
-      bundle-name: my-release
-      version: v1.0.0
-```

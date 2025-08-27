@@ -26,17 +26,25 @@ if [[ ${#FILES[@]} -eq 0 ]]; then
   echo "No matching artifacts found for pattern: $ARTIFACT_GLOB"
   exit 1
 fi
+# Debug: Print what files were found
+echo "Debug: Found ${#FILES[@]} files matching pattern '$ARTIFACT_GLOB':"
+printf '  %s\n' "${FILES[@]}"
 
 mkdir -p "$TARGET_DIR"
   
 for file in "${FILES[@]}"; do
     if [[ -f "$file" ]]; then
-      cp --parents "$file" "$TARGET_DIR/"
+      cp -v --parents "$file" "$TARGET_DIR/"
+    else 
+      echo "not copying $file (directory?)"
     fi
+
 done
 
 # Process all files in the target directory
 echo "Processing all files in target directory: $TARGET_DIR"
+echo "Target directory contents:"
+ls -la "$TARGET_DIR"
 find "$TARGET_DIR" -type f | while read -r file; do
   echo "Processing: $file"
 

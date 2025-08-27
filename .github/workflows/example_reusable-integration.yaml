@@ -86,7 +86,7 @@ jobs:
           #   emulated: false
     with:
       runs-on: ${{ matrix.runs-on }}
-      project: database
+      project: test
       build-name: test-build
       build-version: v1.0.0
       checkout-path: project-location # In the case of running in shared_workflows checkout-path and source-path will have the same content but we put them here by way of example.

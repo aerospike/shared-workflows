@@ -3,12 +3,13 @@ name: Sign Artifacts
 on:
   workflow_call:
     inputs:
-      artifact-glob:
-        description: Glob pattern to match artifacts to sign (e.g. dist/**/*.{jar,deb,rpm})
-        required: true
+      unsigned-artifacts:
+        description: uploaded artifacts to sign
+        required: false
         type: string
+        default: build-artifacts
       artifact-name:
-        description: Name for the uploaded artifacts
+        description: Name to upload signed artifacts as
         required: false
         type: string
         default: signed-artifacts
@@ -58,8 +59,15 @@ jobs:
   sign:
     runs-on: ${{ inputs.runs-on }}
     env:
-      CHECKOUT_REF: 722626ac96e0e8569ba587bd228b9468f6e49ead # Latest commit hash for development
+      CHECKOUT_REF: 5d338b59c75489025372fb07a80e52237181d8be # Latest commit hash for development
     steps:
+      - name: Download Unsigned Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.unsigned-artifacts }}
+          path: unsigned-artifacts
+          merge-multiple: true
+
       - name: Checkout shared-workflows repository
         uses: actions/checkout@v5
         with:
@@ -78,11 +86,10 @@ jobs:
       - name: Install dpkg-sig
         run: |
           sudo apt-get update && sudo apt-get install dpkg-sig dpkg-dev -y
-
       - name: Sign Artifacts
         run: |
           chmod +x ${{ inputs.checkout-path }}/.github/workflows/sign-artifacts/entrypoint.sh
-          ${{ inputs.checkout-path }}/.github/workflows/sign-artifacts/entrypoint.sh "${{ inputs.artifact-glob }}" "${{ inputs.artifact-name }}"
+          ${{ inputs.checkout-path }}/.github/workflows/sign-artifacts/entrypoint.sh 'unsigned-artifacts/**/*' '${{ inputs.artifact-name }}'
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
