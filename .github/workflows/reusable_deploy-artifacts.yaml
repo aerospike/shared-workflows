@@ -70,7 +70,7 @@ jobs:
     outputs:
       build-id: ${{ steps.deploy.outputs.build-id }}
     env:
-      CHECKOUT_REF: feature/INFRA-165-examples-for-shared-workflows # Latest commit hash for development
+      CHECKOUT_REF: f0466e0e56dade3ffbd1b45491a93e8276abc43c # Latest commit hash for development
     steps:
       - name: Checkout shared-workflows repository
         uses: actions/checkout@v5
