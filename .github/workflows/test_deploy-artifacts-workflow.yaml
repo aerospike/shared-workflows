@@ -29,7 +29,7 @@ jobs:
       project: test
       build-name: test-upload-workflow
       version: v1.0.0
-      artifactory-url: https://aerospike.jfrog.io
+      artifactory-url: https://artifact.aerospike.io
       artifactory-oidc-provider-name: gh-aerospike
       artifactory-oidc-audience: aerospike
       artifact-name: test-fixtures

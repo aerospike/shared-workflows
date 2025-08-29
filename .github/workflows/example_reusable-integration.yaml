@@ -117,9 +117,9 @@ jobs:
       artifact-directory: repo-source/.github/workflows/execute-build/test_apps/hi/build
       artifact-name: build-artifacts-${{ matrix.distro }}-${{ matrix.arch }}
       retention-days: 1 # default
-      artifactory-url: https://aerospike.jfrog.io # default
-      artifactory-oidc-provider-name: gh-aerospike # default
-      artifactory-oidc-audience: aerospike # default
+      artifactory-url: https://artifact.aerospike.io # default
+      artifactory-oidc-provider-name: gh-dev-test
+      artifactory-oidc-audience: aerospike/testing
       dry-run: false # default
   # the "package-built-artifacts" workflow is just an example of how one might package the built artifacts.
   # In this case it is using fpm to generate debs and rpms and uploading them to be processed further
@@ -152,8 +152,8 @@ jobs:
     uses: ./.github/workflows/reusable_sign-artifacts.yaml
     with:
       retention-days: 1
-      artifactory-oidc-provider-name: gh-aerospike
-      artifactory-oidc-audience: aerospike
+      artifactory-oidc-provider-name: gh-dev-test
+      artifactory-oidc-audience: aerospike/testing
     secrets:
       gpg-private-key: ${{ secrets.GPG_SECRET_KEY }}
       gpg-public-key: ${{ secrets.GPG_PUBLIC_KEY }}
