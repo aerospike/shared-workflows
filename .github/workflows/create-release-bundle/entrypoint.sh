@@ -32,7 +32,7 @@ show_help() {
   echo "" >&2
   echo "Required Arguments:" >&2
   echo "  --project <project>        JFrog Artifactory project name" >&2
-  echo "  --build-names <builds>     Comma-separated list of build names to include" >&2
+  echo "  --build-names <builds>     Comma-separated list of build name:version pairs to include" >&2
   echo "  --bundle-name <name>       Name for the release bundle" >&2
   echo "  --version <version>        Version of the release bundle" >&2
   echo "" >&2
@@ -41,9 +41,11 @@ show_help() {
   echo "  --help, -h                 Show this help message" >&2
   echo "" >&2
   echo "Examples:" >&2
-  echo "  $0 --project database --build-names 'db-build-1,db-build-2' --bundle-name database-release --version v1.0.0" >&2
-  echo "  $0 --project app --build-names 'app-build' --bundle-name app-release --version v2.1.0 --dry-run" >&2
-}
+  echo "  $0 --project database --build-names 'db-build-1:1728052628123,db-build-2:1728052628123' --bundle-name database-release --version v1.0.0" >&2
+  echo "  $0 --project app --build-names 'app-build:1728052628123' --bundle-name app-release --version v2.1.0 --dry-run" >&2
+  }
+
+
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -119,11 +121,36 @@ run() {
   else
     "$@"
   fi
+  }
+
+# Function to generate the files array JSON
+generate_files_json() {
+  echo "["
+  for ((i=0; i<${#BUILD_ARRAY[@]}; i++)); do
+    build_pair="${BUILD_ARRAY[i]}"
+    build_pair=$(echo "$build_pair" | tr -d '[:space:]')
+    if [[ "$build_pair" == *":"* ]]; then
+      build_name="${build_pair%:*}"
+      build_version="${build_pair#*:}"
+      echo "    {"
+      echo "      \"project\": \"$PROJECT\","
+      echo "      \"build\": \"$build_name/$build_version\""
+      if [[ $i -lt $((${#BUILD_ARRAY[@]}-1)) ]]; then
+        echo "    },"
+      else
+        echo "    }"
+      fi
+    else
+      echo "Error: Build pair '$build_pair' must be in format 'name:version'" >&2
+      exit 1
+    fi
+  done
+  echo "]"
 }
 
 main() {
   echo "Command line: $0 $*" >&2
-  
+
   if [[ "$DRY_RUN" == "true" ]]; then
     echo "Would execute create-release-bundle workflow" >&2
     echo "The following JFrog commands would be executed:" >&2
@@ -131,37 +158,27 @@ main() {
   else
     echo "Executing create-release-bundle workflow" >&2
   fi
-  
+
   echo "Project: $PROJECT" >&2
   echo "Build names: $BUILD_NAMES" >&2
   echo "Bundle name: $BUNDLE_NAME" >&2
   echo "Version: $VERSION" >&2
   echo "Dry run: $DRY_RUN" >&2
-  
-  # Convert comma-separated build names to array
+
+  # Convert comma-separated build name:version pairs to array
   IFS=',' read -ra BUILD_ARRAY <<< "$BUILD_NAMES"
   mkdir -p build-artifacts
+
+  # Generate the files JSON content
+  FILES_JSON=$(generate_files_json)
+
   # Create the release bundle spec file
   cat > build-artifacts/release-bundle-spec.json <<EOF
 {
   "name": "$BUNDLE_NAME",
   "version": "$VERSION",
   "description": "Release for build version $VERSION",
-  "files": [
-$(for ((i=0; i<${#BUILD_ARRAY[@]}; i++)); do
-  build_name=$(echo "${BUILD_ARRAY[i]}" | xargs)
-  if [[ -n "$build_name" ]]; then
-    echo "    {"
-    echo "      \"project\": \"$PROJECT\","
-    echo "      \"build\": \"$build_name/$VERSION\""
-    if [[ $i -lt $((${#BUILD_ARRAY[@]}-1)) ]]; then
-      echo "    },"
-    else
-      echo "    }"
-    fi
-  fi
-done)
-  ]
+  "files": $FILES_JSON
 }
 EOF
 
@@ -173,8 +190,8 @@ EOF
       --spec build-artifacts/release-bundle-spec.json \
       --project="$PROJECT" \
       --signing-key="aerospike"
-  
+
   echo "Create release bundle workflow completed successfully!" >&2
 }
 
-main "$@" 
+main "$@"

@@ -172,22 +172,25 @@ test5_success=true
 cd "$TEST_DIR/test_apps/hi"
 rm -rf build
 if ! "$SCRIPT_DIR/entrypoint.sh" --build-script "make clean && make all" --artifact-directory build; then
+    echo "Test 5: Real build using test app failed"
     test5_success=false
 fi
-
+app_location=$(find build -name "hi")
 # Check if the hi executable was built
-if [[ ! -f "build/hi" ]]; then
+if [[ ! -f $app_location ]]; then
+    echo "Test app was not in $app_location"
     test5_success=false
 fi
 
 # Test that the program works
 if [[ "$test5_success" == "true" ]]; then
-    output=$(build/hi 2>&1)
+    output=$($app_location 2>&1)
     if [[ "$output" != "Hello, world!" ]]; then
+        echo "Test app output was not 'Hello, world!'"
         test5_success=false
     fi
 fi
-
+find .
 record_test_result "Test 5: Real build using test app" "$test5_success"
 
 # Test 6: Script permissions handling

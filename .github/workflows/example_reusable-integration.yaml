@@ -1,17 +1,31 @@
 name: Example Reusable Integration
 on:
   workflow_dispatch:
-  pull_request:
-    branches: [main]
 
 permissions:
   id-token: write
   contents: read
-  packages: write
 
 jobs:
+  # Manual dispatches should not take arguments.
+  # here we use a file (VERSION.example) to set the test version that will be used.
+  # Since this action actually produces an immutable release bundle you must remove it or change the version
+  # to remove the test bundle use the command `jf rbdell test-release --project test 1.2.3`
+  extract-version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract Version
+        id: extract
+        uses: ./.github/actions/extract-version-from-tag
+        with:
+          version-file: .github/workflows/VERSION.example
+    outputs:
+      version: ${{ steps.extract.outputs.version }}
+      git_tag: ${{ steps.extract.outputs.git_tag }}
   build-packages:
     uses: ./.github/workflows/reusable_execute-build.yaml
+    needs: extract-version
     strategy:
       matrix:
         include:
@@ -110,7 +124,7 @@ jobs:
   # the "package-built-artifacts" workflow is just an example of how one might package the built artifacts.
   # In this case it is using fpm to generate debs and rpms and uploading them to be processed further
   package-built-artifacts:
-    needs: build-packages
+    needs: [build-packages, extract-version]
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout
@@ -125,27 +139,44 @@ jobs:
           merge-multiple: true
       - name: Package Artifacts
         run: |
-          .github/workflows/execute-build/test_apps/hi/package.sh --target hi --version v1.0.0 \
+          .github/workflows/execute-build/test_apps/hi/package.sh --target hi --version ${{ needs.extract-version.outputs.version }} \
             --packages-dir build-artifacts --output-dir packaged-artifacts
       - name: Upload packaged Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: packaged-artifacts
+          name: build-artifacts
           path: packaged-artifacts
           retention-days: 1
-#   upload:
-#     needs: build-packages
-#     uses: aerospike/shared-workflows/.github/workflows/reusable_upload-artifacts.yaml@CURRENTGITSHA # vn.n.n
-#     with:
-#       project: my-project
-#       build-name: my-build
-#       version: v1.0.0
-
-#   create-release-bundle:
-#     needs: upload
-#     uses: ./.github/workflows/reusable_create-release-bundle.yaml
-#     with:
-#       project: my-project
-#       build-names: "my-build-deb,my-build-rpm"
-#       bundle-name: my-release
-#       version: v1.0.0
+  sign-artifacts:
+    needs: package-built-artifacts
+    uses: ./.github/workflows/reusable_sign-artifacts.yaml
+    with:
+      retention-days: 1
+      artifactory-oidc-provider-name: gh-aerospike
+      artifactory-oidc-audience: aerospike
+    secrets:
+      gpg-private-key: ${{ secrets.GPG_SECRET_KEY }}
+      gpg-public-key: ${{ secrets.GPG_PUBLIC_KEY }}
+      gpg-key-pass: ${{ secrets.GPG_PASS }}
+  deploy-artifacts:
+    needs: [sign-artifacts, extract-version]
+    uses: ./.github/workflows/reusable_deploy-artifacts.yaml
+    with:
+      project: test
+      build-name: test-build
+      version: ${{ needs.extract-version.outputs.version }}
+      retention-days: 1
+      artifactory-oidc-provider-name: gh-dev-test
+      artifactory-oidc-audience: aerospike/testing
+      dry-run: false
+  create-release-bundle:
+    needs: [deploy-artifacts, extract-version]
+    uses: ./.github/workflows/reusable_create-release-bundle.yaml
+    with:
+      project: test
+      build-names: test-build:${{ needs.deploy-artifacts.outputs.build-id }} # for multiple builds it would be test-build-1:build_id1,test-build-2:build_id2"
+      bundle-name: test-release
+      version: ${{ needs.extract-version.outputs.version }}
+      artifactory-oidc-provider-name: gh-dev-test
+      artifactory-oidc-audience: aerospike/testing
+      dry-run: false

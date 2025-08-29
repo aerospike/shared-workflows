@@ -93,7 +93,7 @@ jobs:
   execute-build:
     runs-on: ${{ inputs.runs-on }}
     env:
-      CHECKOUT_REF: 9ffdad1fb4a16a6bc7484889f11155c124744672 # Latest commit hash for development
+      CHECKOUT_REF: f0466e0e56dade3ffbd1b45491a93e8276abc43c # Latest commit hash for development
     steps:
       - name: Checkout shared-workflows repository
         uses: actions/checkout@v5
@@ -123,21 +123,24 @@ jobs:
 
       - name: Execute Build Script
         shell: bash
+        working-directory: ${{ github.workspace }}
         run: |
           chmod +x ${{ inputs.checkout-path }}/.github/workflows/execute-build/entrypoint.sh
+
           dry_run_arg=""
           if [ "${{ inputs.dry-run }}" = "true" ]; then
             dry_run_arg="--dry-run"
           fi
-          if [ "${{ inputs.build-script }}" != "" ]; then
-            "${{ inputs.checkout-path }}/.github/workflows/execute-build/entrypoint.sh" \
-              --build-script "${{ inputs.build-script }}" \
+
+          if ${{ inputs.build-script != '' }}; then
+            ${{ inputs.checkout-path }}/.github/workflows/execute-build/entrypoint.sh \
+              --build-script '${{ inputs.build-script }}' \
               --artifact-directory "${{ inputs.artifact-directory }}" \
               --build-name "${{ inputs.build-name }}" \
               --build-version "${{ inputs.build-version }}" \
               $dry_run_arg
-          elif [ "${{ inputs.build-script-path }}" != "" ]; then
-            "${{ inputs.checkout-path }}/.github/workflows/execute-build/entrypoint.sh" \
+          elif ${{ inputs.build-script-path != '' }}; then
+            ${{ inputs.checkout-path }}/.github/workflows/execute-build/entrypoint.sh \
               --build-script-path "${{ inputs.build-script-path }}" \
               --artifact-directory "${{ inputs.artifact-directory }}" \
               --build-name "${{ inputs.build-name }}" \

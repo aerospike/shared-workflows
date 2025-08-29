@@ -54,12 +54,12 @@ on:
         required: true
 permissions:
   contents: read
-  packages: read
+  id-token: write
 jobs:
   sign:
     runs-on: ${{ inputs.runs-on }}
     env:
-      CHECKOUT_REF: 9ffdad1fb4a16a6bc7484889f11155c124744672 # Latest commit hash for development
+      CHECKOUT_REF: f0466e0e56dade3ffbd1b45491a93e8276abc43c # Latest commit hash for development
     steps:
       - name: Download Unsigned Artifacts
         uses: actions/download-artifact@v4
@@ -82,7 +82,6 @@ jobs:
           gpg-private-key: ${{ secrets.gpg-private-key }}
           gpg-public-key: ${{ secrets.gpg-public-key }}
           gpg-key-pass: ${{ secrets.gpg-key-pass }}
-
       - name: Install dpkg-sig
         run: |
           sudo apt-get update && sudo apt-get install dpkg-sig dpkg-dev -y
@@ -95,4 +94,5 @@ jobs:
         with:
           name: ${{ inputs.artifact-name }}
           path: ${{ inputs.artifact-name }}
+          overwrite: true
           retention-days: ${{ inputs.retention-days }}
