@@ -18,8 +18,8 @@ shared-workflows/
     │       └── README.md
     │
     └── workflows/
-        ├── reusable_<name>.yaml           # ✅ Entry points for reusable workflows
-        ├── test_<name>.yaml               # ✅ Workflow tests for reusable workflows
+        ├── reusable_<name>.yaml           #  Entry points for reusable workflows
+        ├── test_<name>.yaml               #  Workflow tests for reusable workflows
         └── <name>/                        # Supporting scripts and README per workflow
             ├── entrypoint.sh, test runners, etc.
             └── README.md
