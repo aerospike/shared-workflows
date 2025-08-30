@@ -6,11 +6,32 @@ permissions:
   id-token: write
   contents: read
 
+# This workflow demonstrates the complete CI/CD pipeline using all four reusable
+# workflows from shared-workflows. It shows how to chain workflows together to
+# create a production-ready artifact pipeline.
+# See the complementary docs/CICD-with-shared-actions.md for more details.
+#
+# WORKFLOW FLOW:
+# 1. extract-version: The examples need a version to work with and this provides one from a test file.
+# 2. build-packages: Build packages across multiple platforms using matrix strategy (uses reusable_execute-build.yaml)
+# 3. package-built-artifacts: Package built artifacts into distributable formats (handles packaging in this example but could be done in the build step)
+# 4. sign-artifacts: GPG sign the packaged artifacts for security (uses reusable_sign-artifacts.yaml)
+# 5. deploy-artifacts: Deploy signed artifacts to JFrog Artifactory (uses reusable_deploy-artifacts.yaml)
+# 6. create-release-bundle: Create a release bundle from deployed artifacts (uses reusable_create-release-bundle.yaml)
+#
+#
+# USAGE:
+# This is an example workflow that consumers can copy and adapt for their own
+# projects. It demonstrates best practices for integrating shared-workflows
+# components into a complete CI/CD pipeline.
+# =============================================================================
+
 jobs:
   # Manual dispatches should not take arguments.
   # here we use a file (VERSION.example) to set the test version that will be used.
   # Since this action actually produces an immutable release bundle you must remove it or change the version
   # to remove the test bundle use the command `jf rbdell test-release --project test 1.2.3`
+  # In a real CI/CD pipeline you could trigger on version tag or commit also. Here we use the file so we can show the behaviour on demand.
   extract-version:
     runs-on: ubuntu-latest
     steps:
@@ -23,9 +44,14 @@ jobs:
     outputs:
       version: ${{ steps.extract.outputs.version }}
       git_tag: ${{ steps.extract.outputs.git_tag }}
+  # reusable_execute-build.yaml is a reusable workflow that enables building the project. This step
+  # could be done another way, but the advantage of using the reusable workflow is that it allows
+  # a single workflow that can be instrumented in the future.
+  # This is also an example of using a matrix strategy to build in GHA
   build-packages:
     uses: ./.github/workflows/reusable_execute-build.yaml
     needs: extract-version
+    # Matrix strategy: Multi-platform builds across Ubuntu/Debian/RPM families (x86_64 native, ARM64 emulated)
     strategy:
       matrix:
         include:
@@ -121,8 +147,11 @@ jobs:
       artifactory-oidc-provider-name: gh-dev-test
       artifactory-oidc-audience: aerospike/testing
       dry-run: false # default
-  # the "package-built-artifacts" workflow is just an example of how one might package the built artifacts.
-  # In this case it is using fpm to generate debs and rpms and uploading them to be processed further
+  # This job demonstrates custom packaging logic using standard GitHub Actions (actions/checkout, actions/download-artifact, actions/upload-artifact)
+  # No reusable actions from shared-workflows are used here - this is custom packaging logic that could be done in the build step
+  # In this case it is using fpm to generate debs and rpms and uploading them to be processed further.
+  # building and packaging could be done in the build step if we wanted to package on the distro as the build
+  # but here we do it separate. It takes the output from the matrix builds and uploads them to gitub in a single directory.
   package-built-artifacts:
     needs: [build-packages, extract-version]
     runs-on: ubuntu-22.04
@@ -146,6 +175,7 @@ jobs:
         with:
           name: build-artifacts
           path: packaged-artifacts
+          overwrite: true
           retention-days: 1
   sign-artifacts:
     needs: package-built-artifacts
@@ -158,6 +188,7 @@ jobs:
       gpg-private-key: ${{ secrets.GPG_SECRET_KEY }}
       gpg-public-key: ${{ secrets.GPG_PUBLIC_KEY }}
       gpg-key-pass: ${{ secrets.GPG_PASS }}
+
   deploy-artifacts:
     needs: [sign-artifacts, extract-version]
     uses: ./.github/workflows/reusable_deploy-artifacts.yaml
@@ -169,6 +200,7 @@ jobs:
       artifactory-oidc-provider-name: gh-dev-test
       artifactory-oidc-audience: aerospike/testing
       dry-run: false
+  # create-release-bundle - Create a release bundle from deployed artifacts for distribution
   create-release-bundle:
     needs: [deploy-artifacts, extract-version]
     uses: ./.github/workflows/reusable_create-release-bundle.yaml
