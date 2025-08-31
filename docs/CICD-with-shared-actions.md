@@ -80,7 +80,7 @@ jobs:
 ```
 
 [!NOTE]
-This is just an abreviated example. See the working example at [https://github.com/aerospike/shared-workflows/.github/workflows/example_reusable-integration.yaml](https://github.com/aerospike/shared-workflows/.github/workflows/example_reusable-integration.yaml)
+This is just an abbreviated example. See the working example at [https://github.com/aerospike/shared-workflows/.github/workflows/example_reusable-integration.yaml](https://github.com/aerospike/shared-workflows/.github/workflows/example_reusable-integration.yaml)
 
 ---
 
