@@ -91,12 +91,12 @@ There are two complementary ways we move files through the pipeline:
 1. **GitHub Actions artifacts — in‑runner handoff**
 
    - **Use for:** Passing build outputs between jobs in the _same run_ (Build → Sign → Deploy).
-   - **How:** `actions/upload-artifact` → `actions/download-artifact` using consistent `artifact-name`s (e.g., `build-artifacts` → `signed-artifacts`).
+   - **How:** `actions/upload-artifact` → `actions/download-artifact` using consistent `artifact-name`s (e.g., `build-artifacts` upload → GHA artifacts → download `signed-artifacts`).
    - **Scope/Lifetime:** Tied to a run; retention is configurable but not a long‑term store.
 
 2. **Artifactory coordinates — external, durable store**
 
-   - **What "coordinates" means:** The address that uniquely identifies items in JFrog, e.g. `{project}/{repo}/{path}/{filename}` (and often `{build-name}:{version}` via Build Info).
+   - **What "coordinates" means:** The address that uniquely identifies items in JFrog, e.g. `{project}/{repo}/{path}/{filename}` (and often `{build-name}:{version}` via Build Info). Java calls this sort of thing 'coordinates'
    - **Use for:** Anything other systems/users should consume (CD, other repos, release bundles).
    - **How:** Deploy from the pipeline (OIDC auth) with `project`, `build-name`, `version`; downstream steps and tools resolve items by those coordinates.
    - **Examples:**
@@ -111,6 +111,6 @@ There are two complementary ways we move files through the pipeline:
 
 - **Signing fails** → verify `gpg-private-key`, `gpg-public-key`, `gpg-key-pass` are set and valid. Ensure the workflow correctly imports ASCII‑armored keys and that the passphrase matches.&#x20;
 - **Deploy fails (auth)** → confirm GitHub→JFrog **OIDC** trust/policy is configured and that the workflow’s identity has deploy permission to the target project/repo. (example mistakes often around wrong audience or incorrect token permissions)
-- **Bundle creation issues** → confirm the `artifacts` input is a comma‑separated list of `name:version` pairs that exist for the specified `version`, and that your JFrog project/repo permissions allow bundle creation.
+- **Bundle creation issues** → confirm the `artifacts` input is a comma‑separated list of `name:version` pairs that exist for the specified `version`, and that your JFrog project/repo permissions allow bundle creation. This permission is higher than upload/download so often a source of error.
 
 ---
