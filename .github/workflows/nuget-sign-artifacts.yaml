@@ -1,0 +1,119 @@
+name: Sign NuGet Artifacts
+
+on:
+  workflow_call:
+    inputs:
+      artifact-glob:
+        description: Directory path containing NuGet packages to sign (e.g. ./sign or ./artifacts)
+        required: true
+        type: string
+      output-path:
+        description: Output directory for signed packages (e.g. ./artifacts)
+        required: false
+        type: string
+        default: ${{ github.workspace }}
+      artifact-name:
+        description: Name for the uploaded artifacts
+        required: false
+        type: string
+        default: signed-nuget-artifacts
+      retention-days:
+        description: Retention days for the artifacts
+        required: false
+        type: number
+        default: 7
+      nuget-environment:
+        description: SSL.com environment name for NuGet signing
+        required: false
+        type: string
+        default: PROD
+      jvm-max-memory:
+        description: Maximum JVM memory for NuGet signing process
+        required: false
+        type: string
+        default: 1024M
+      malware-block:
+        description: Enable malware blocking during signing
+        required: false
+        type: boolean
+        default: false
+      override:
+        description: Override existing signatures
+        required: false
+        type: boolean
+        default: false
+      runs-on:
+        description: The runner to use for the build
+        required: false
+        type: string
+        default: ubuntu-latest
+    secrets:
+      ES_USERNAME:
+        description: SSL.com username for NuGet signing
+        required: true
+      ES_PASSWORD:
+        description: SSL.com password for NuGet signing
+        required: true
+      CREDENTIAL_ID:
+        description: SSL.com credential ID for NuGet signing
+        required: true
+      ES_TOTP_SECRET:
+        description: SSL.com TOTP secret for NuGet signing
+        required: true
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  sign-nuget:
+    runs-on: ${{ inputs.runs-on }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for NuGet packages
+        run: |
+          echo "Checking for NuGet packages..."
+          NUGET_PACKAGES=$(find . -name "*.nupkg" -type f)
+          if [ -n "$NUGET_PACKAGES" ]; then
+            echo "Found NuGet packages:"
+            echo "$NUGET_PACKAGES"
+          else
+            echo "No NuGet packages found"
+            exit 1
+          fi
+
+      - name: Sign NuGet Packages with SSL.com
+        uses: sslcom/esigner-codesign@a272724cb13abe0abc579c6c40f7899969b6942b
+        with:
+          command: batch_sign
+          username: ${{secrets.ES_USERNAME}}
+          password: ${{secrets.ES_PASSWORD}}
+          credential_id: ${{secrets.CREDENTIAL_ID}}
+          totp_secret: ${{secrets.ES_TOTP_SECRET}}
+          dir_path: ${{ inputs.artifact-glob }}
+          output_path: ${{ inputs.output-path || github.workspace }}
+          malware_block: ${{ inputs.malware-block || false }}
+          override: ${{ inputs.override || false }}
+          environment_name: ${{ inputs.nuget-environment }}
+          clean_logs: true
+          jvm_max_memory: ${{ inputs.jvm-max-memory }}
+          signing_method: v1
+
+      - name: Verify NuGet Packages
+        run: |
+          echo "Verifying signed NuGet packages..."
+          OUTPUT_DIR="${{ inputs.output-path || github.workspace }}"
+          if [ -d "$OUTPUT_DIR" ]; then
+            find "$OUTPUT_DIR" -name "*.nupkg" -type f | while read -r file; do
+              echo "Verifying: $file"
+              dotnet nuget verify "$file" --all || echo "Warning: Could not verify $file"
+            done
+          fi
+
+      - name: Upload Signed NuGet Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.artifact-name }}
+          path: ${{ inputs.output-path || github.workspace }}
+          retention-days: ${{ inputs.retention-days }}
