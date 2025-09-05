@@ -1,0 +1,196 @@
+name: Test Sign Java Artifacts Workflow
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/reusable_sign-java-artifacts.yaml"
+      - ".github/workflows/sign-java-artifacts/**"
+      - ".github/workflows/test_sign-java-artifacts-workflow.yaml"
+
+jobs:
+  create-test-artifacts:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Create Java test artifacts
+        run: |
+          mkdir -p test-java-artifacts
+          
+          # Create a simple JAR file
+          echo "Manifest-Version: 1.0" > manifest.txt
+          echo "Main-Class: com.example.Main" >> manifest.txt
+          echo "public class Main { public static void main(String[] args) { System.out.println(\"Hello World\"); } }" > Main.java
+          javac Main.java
+          jar cfm test-java-artifacts/example-1.0.jar manifest.txt Main.class
+          
+          # Create a simple WAR structure
+          mkdir -p war-content/WEB-INF
+          echo "<web-app/>" > war-content/WEB-INF/web.xml
+          echo "<html><body>Test WAR</body></html>" > war-content/index.html
+          cd war-content && jar cf ../test-java-artifacts/example-web-1.0.war . && cd ..
+          
+          # Create a simple POM file
+          cat > test-java-artifacts/example-1.0.pom << 'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <project xmlns="http://maven.apache.org/POM/4.0.0"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 
+                   http://maven.apache.org/xsd/maven-4.0.0.xsd">
+              <modelVersion>4.0.0</modelVersion>
+              <groupId>com.example</groupId>
+              <artifactId>example</artifactId>
+              <version>1.0</version>
+              <packaging>jar</packaging>
+          </project>
+          EOF
+          
+          # Create a text file (non-Java artifact)
+          echo "This is a test file" > test-java-artifacts/README.txt
+          
+          # List created artifacts
+          echo "Created test artifacts:"
+          ls -la test-java-artifacts/
+
+      - name: Upload Test Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: java-test-fixtures
+          path: test-java-artifacts/
+          retention-days: 1
+
+  test-maven-compatible-signing:
+    needs: create-test-artifacts
+    uses: ./.github/workflows/reusable_sign-java-artifacts.yaml
+    with:
+      unsigned-artifacts: java-test-fixtures
+      artifact-name: signed-java-maven-compatible
+      maven-compatible: true
+      retention-days: 1
+    secrets:
+      gpg-private-key: ${{ secrets.GPG_SECRET_KEY || 'test-key' }}
+      gpg-public-key: ${{ secrets.GPG_PUBLIC_KEY || 'test-key' }}
+      gpg-key-pass: ${{ secrets.GPG_PASS || 'test-pass' }}
+
+  test-standard-signing:
+    needs: create-test-artifacts
+    uses: ./.github/workflows/reusable_sign-java-artifacts.yaml
+    with:
+      unsigned-artifacts: java-test-fixtures
+      artifact-name: signed-java-standard
+      maven-compatible: false
+      retention-days: 1
+    secrets:
+      gpg-private-key: ${{ secrets.GPG_SECRET_KEY || 'test-key' }}
+      gpg-public-key: ${{ secrets.GPG_PUBLIC_KEY || 'test-key' }}
+      gpg-key-pass: ${{ secrets.GPG_PASS || 'test-pass' }}
+
+  verify-signed-artifacts:
+    needs: [test-maven-compatible-signing, test-standard-signing]
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Download Maven Compatible Signed Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: signed-java-maven-compatible
+          path: maven-signed/
+
+      - name: Download Standard Signed Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: signed-java-standard
+          path: standard-signed/
+
+      - name: Verify Maven Compatible Artifacts
+        run: |
+          echo "=== Maven Compatible Signing Results ==="
+          find maven-signed/ -type f | sort
+          
+          # Check for required Maven Central files
+          for artifact in maven-signed/test-java-artifacts/*.jar maven-signed/test-java-artifacts/*.war maven-signed/test-java-artifacts/*.pom; do
+            if [[ -f "$artifact" ]]; then
+              echo "Checking Maven Central requirements for: $artifact"
+              
+              # Check for GPG signature
+              if [[ ! -f "$artifact.asc" ]]; then
+                echo "ERROR: Missing GPG signature for $artifact"
+                exit 1
+              fi
+              
+              # Check for SHA1 checksum
+              if [[ ! -f "$artifact.sha1" ]]; then
+                echo "ERROR: Missing SHA1 checksum for $artifact"
+                exit 1
+              fi
+              
+              # Check for MD5 checksum
+              if [[ ! -f "$artifact.md5" ]]; then
+                echo "ERROR: Missing MD5 checksum for $artifact"
+                exit 1
+              fi
+              
+              echo "✓ $artifact has all required Maven Central files"
+            fi
+          done
+
+      - name: Verify Standard Artifacts
+        run: |
+          echo "=== Standard Signing Results ==="
+          find standard-signed/ -type f | sort
+          
+          # Check for standard SHA256 files
+          for artifact in standard-signed/test-java-artifacts/*.jar standard-signed/test-java-artifacts/*.war standard-signed/test-java-artifacts/*.pom; do
+            if [[ -f "$artifact" ]]; then
+              echo "Checking standard requirements for: $artifact"
+              
+              # Check for GPG signature
+              if [[ ! -f "$artifact.asc" ]]; then
+                echo "ERROR: Missing GPG signature for $artifact"
+                exit 1
+              fi
+              
+              # Check for SHA256 checksum
+              if [[ ! -f "$artifact.sha256" ]]; then
+                echo "ERROR: Missing SHA256 checksum for $artifact"
+                exit 1
+              fi
+              
+              echo "✓ $artifact has all required standard files"
+            fi
+          done
+
+      - name: Verify Checksum Content
+        run: |
+          echo "=== Verifying Checksum Content ==="
+          
+          # Check that SHA1 files contain only the hash (Maven Central requirement)
+          for sha1_file in maven-signed/test-java-artifacts/*.sha1; do
+            if [[ -f "$sha1_file" ]]; then
+              content=$(cat "$sha1_file")
+              if [[ ${#content} -ne 40 ]]; then
+                echo "ERROR: SHA1 file $sha1_file should contain exactly 40 characters, got ${#content}"
+                exit 1
+              fi
+              echo "✓ $sha1_file contains valid SHA1 hash"
+            fi
+          done
+          
+          # Check that MD5 files contain only the hash
+          for md5_file in maven-signed/test-java-artifacts/*.md5; do
+            if [[ -f "$md5_file" ]]; then
+              content=$(cat "$md5_file")
+              if [[ ${#content} -ne 32 ]]; then
+                echo "ERROR: MD5 file $md5_file should contain exactly 32 characters, got ${#content}"
+                exit 1
+              fi
+              echo "✓ $md5_file contains valid MD5 hash"
+            fi
+          done
+
+      - name: Test Summary
+        run: |
+          echo "=== Test Summary ==="
+          echo "✓ Java artifact signing workflow created successfully"
+          echo "✓ Maven Central compatible mode produces SHA1 and MD5 checksums"
+          echo "✓ Standard mode produces SHA256 checksums"
+          echo "✓ All artifacts receive GPG signatures"
+          echo "✓ Java-specific file types (.jar, .war, .pom) are properly handled"

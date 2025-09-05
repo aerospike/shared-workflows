@@ -1,0 +1,112 @@
+---
+name: Sign Java Artifacts
+
+"on":
+  workflow_call:
+    inputs:
+      unsigned-artifacts:
+        description: uploaded artifacts to sign
+        required: false
+        type: string
+        default: build-artifacts
+      artifact-name:
+        description: Name to upload signed artifacts as
+        required: false
+        type: string
+        default: signed-java-artifacts
+      retention-days:
+        description: Retention days for the artifacts
+        required: false
+        type: number
+        default: 1
+      artifactory-url:
+        required: false
+        description: JFrog Artifactory URL
+        type: string
+        default: https://aerospike.jfrog.io
+      artifactory-oidc-provider-name:
+        required: false
+        description: OIDC provider name
+        type: string
+        default: gh-aerospike
+      artifactory-oidc-audience:
+        required: false
+        description: OIDC audience
+        type: string
+        default: aerospike
+      checkout-path:
+        description: Directory to checkout the shared-workflows repository into
+        required: false
+        type: string
+        default: shared-workflows
+      runs-on:
+        description: The runner to use for the build
+        required: false
+        type: string
+        default: ubuntu-22.04
+      maven-compatible:
+        description: Create Maven Central compatible signatures and checksums
+        required: false
+        type: boolean
+        default: true
+
+    secrets:
+      gpg-private-key:
+        required: true
+      gpg-public-key:
+        required: true
+      gpg-key-pass:
+        required: true
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  sign:
+    runs-on: ${{ inputs.runs-on }}
+    env:
+      # Latest commit hash for development
+      CHECKOUT_REF: f0466e0e56dade3ffbd1b45491a93e8276abc43c
+    steps:
+      - name: Download Unsigned Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.unsigned-artifacts }}
+          path: unsigned-artifacts
+          merge-multiple: true
+
+      - name: Checkout shared-workflows repository
+        uses: actions/checkout@v5
+        with:
+          repository: aerospike/shared-workflows
+          ref: ${{ env.CHECKOUT_REF }}
+          path: ${{ inputs.checkout-path }}
+          fetch-depth: 1
+
+      - name: Set up GPG
+        # v1.0.0
+        uses: >-
+          aerospike/shared-workflows/.github/actions/setup-gpg@dda8173aca1f1e73f95267572a7d3849cd00f1b8
+        with:
+          gpg-private-key: ${{ secrets.gpg-private-key }}
+          gpg-public-key: ${{ secrets.gpg-public-key }}
+          gpg-key-pass: ${{ secrets.gpg-key-pass }}
+
+      - name: Sign Java Artifacts
+        run: |
+          CHECKOUT_PATH="${{ inputs.checkout-path }}"
+          SCRIPT_PATH="$CHECKOUT_PATH/.github/workflows/sign-java-artifacts/entrypoint.sh"
+          chmod +x "$SCRIPT_PATH"
+          "$SCRIPT_PATH" \
+            'unsigned-artifacts/**/*' \
+            '${{ inputs.artifact-name }}' \
+            '${{ inputs.maven-compatible }}'
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.artifact-name }}
+          path: ${{ inputs.artifact-name }}
+          overwrite: true
+          retention-days: ${{ inputs.retention-days }}
