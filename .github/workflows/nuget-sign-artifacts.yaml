@@ -73,13 +73,13 @@ jobs:
 
       - name: Check for NuGet packages
         run: |
-          echo "Checking for NuGet packages..."
-          NUGET_PACKAGES=$(find . -name "*.nupkg" -type f)
+          echo "Checking for NuGet packages in: ${{ inputs.artifact-glob }}"
+          NUGET_PACKAGES=$(find "${{ inputs.artifact-glob }}" -name "*.nupkg" -type f 2>/dev/null || echo "")
           if [ -n "$NUGET_PACKAGES" ]; then
             echo "Found NuGet packages:"
             echo "$NUGET_PACKAGES"
           else
-            echo "No NuGet packages found"
+            echo "No NuGet packages found in ${{ inputs.artifact-glob }}"
             exit 1
           fi
 
