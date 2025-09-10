@@ -8,6 +8,9 @@ on:
         type: string
         description: PR title to check for JIRA ticket
 
+permissions:
+  contents: read
+
 jobs:
   hygiene-check:
     runs-on: ubuntu-latest
