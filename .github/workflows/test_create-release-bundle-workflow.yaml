@@ -16,7 +16,7 @@ jobs:
       build-names: test-build-1:1728052628123,test-build-2:1728052628123
       bundle-name: test-release-bundle
       version: v1.0.0
-      artifactory-url: https://aerospike.jfrog.io
+      artifactory-url: https://artifact.aerospike.io
       artifactory-oidc-provider-name: gh-aerospike
       artifactory-oidc-audience: aerospike
       dry-run: true
