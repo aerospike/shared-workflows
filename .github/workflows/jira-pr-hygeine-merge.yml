@@ -27,7 +27,7 @@ permissions:
 jobs:
   # First job: Call the hygiene check workflow
   hygiene-check:
-    uses: ./.github/workflows/jira-pr-hygeine/hygiene.yml
+    uses: ./.github/workflows/jira-pr-hygeine-title.yml
     with:
       pr_title: ${{ inputs.pr_title }}
 
