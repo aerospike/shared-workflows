@@ -1,0 +1,77 @@
+name: Add Jira ID to commit message during PR merge
+
+on:
+  workflow_call:
+    inputs:
+      pr_title:
+        required: true
+        type: string
+        description: PR title to extract JIRA ticket from
+      merge_commit_sha:
+        required: true
+        type: string
+        description: Merge commit SHA to update
+      base_ref:
+        required: true
+        type: string
+        description: Base branch reference
+    secrets:
+      passed_github_token:
+        required: true
+        description: GitHub token for repository access
+
+jobs:
+  # First job: Call the hygiene check workflow
+  hygiene-check:
+    uses: ./.github/actions/jira-pr-hygiene/hygiene.yml
+    with:
+      pr_title: ${{ inputs.pr_title }}
+
+  # Second job: Update commit message (depends on hygiene check)
+  update-commit:
+    runs-on: ubuntu-latest
+    needs: hygiene-check
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.passed_github_token }}
+
+      - name: Extract JIRA ticket and update commit message
+        run: |
+          # Extract PR title and merge commit SHA
+          PR_TITLE="${{ inputs.pr_title }}"
+          MERGE_COMMIT_SHA="${{ inputs.merge_commit_sha }}"
+          BASE_REF="${{ inputs.base_ref }}"
+
+          # Extract JIRA ticket from PR title (ABC-123 format)
+          JIRA_TICKET=$(echo "$PR_TITLE" | grep -oE '([A-Za-z0-9]+-[0-9]+)' | head -1)
+          if [ -n "$JIRA_TICKET" ]; then
+            echo "Found JIRA ticket: $JIRA_TICKET"
+            echo "Merge commit SHA: $MERGE_COMMIT_SHA"
+            echo "Base ref: $BASE_REF"
+            
+            # Get current commit message
+            CURRENT_MESSAGE=$(git log --format=%B -n 1 $MERGE_COMMIT_SHA)
+            
+            # Check if JIRA ticket is already in the commit message
+            if [[ "$CURRENT_MESSAGE" != *"$JIRA_TICKET"* ]]; then
+              # Prepend JIRA ticket to commit message
+              NEW_MESSAGE="$JIRA_TICKET: $CURRENT_MESSAGE"
+              echo "Updating commit message to: $NEW_MESSAGE"
+              
+              # Configure git
+              git config user.name "github-actions[bot]"
+              git config user.email "github-actions[bot]@users.noreply.github.com"
+              
+              # Amend the commit message
+              git checkout $MERGE_COMMIT_SHA
+              git commit --amend -m "$NEW_MESSAGE"
+              git push --force-with-lease origin $BASE_REF
+            else
+              echo "JIRA ticket already present in commit message"
+            fi
+          else
+            echo "No JIRA ticket found in PR title"
+          fi
