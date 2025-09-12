@@ -92,6 +92,7 @@ declare -A DISTRO_VERSIONS=(
     [focal]="ubuntu20.04"
     [bullseye]="debian11"
     [bookworm]="debian12"
+    [trixie]="debian13"
     [el8]="el8"
     [el9]="el9"
     [amzn2023]="amzn2023"

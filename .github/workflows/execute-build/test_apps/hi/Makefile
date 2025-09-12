@@ -15,6 +15,7 @@ DOCKER_IMAGE_noble = ubuntu:24.04
 DOCKER_IMAGE_focal = ubuntu:20.04
 DOCKER_IMAGE_bullseye = debian:11
 DOCKER_IMAGE_bookworm = debian:12
+DOCKER_IMAGE_trixie = debian:13
 DOCKER_IMAGE_el8 = rockylinux:8
 DOCKER_IMAGE_el9 = rockylinux:9
 DOCKER_IMAGE_amzn2023 = amazonlinux:2023
