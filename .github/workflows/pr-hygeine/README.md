@@ -23,7 +23,7 @@ on:
 
 jobs:
   validate-jira-ticket:
-    uses: ./.github/workflows/hygiene.yml
+    uses: ./.github/workflows/reusable_pr-hygiene.yml
     with:
       pr_title: ${{ github.event.pull_request.title }}
 ```
@@ -53,7 +53,7 @@ jobs:
   call-merge-workflow:
     needs: merge-with-jira
     if: ${{ needs.merge-with-jira.outputs.pr_title != null }}
-    uses: ./.github/workflows/merge.yml
+    uses: ./.github/workflows/reusable_pr-hygiene-merge.yml
     with:
       pr_title: ${{ needs.merge-with-jira.outputs.pr_title }}
       merge_commit_sha: ${{ github.event.pull_request.merge_commit_sha }}
