@@ -58,6 +58,7 @@ get_codename_for_deb() {
     *ubuntu24.04*) echo "noble" ;;
     *debian11*)    echo "bullseye" ;;
     *debian12*)    echo "bookworm" ;;
+    *debian13*)    echo "trixie" ;;
     *) echo "distro $1 not supported" >&2 ; return 1 ;;
   esac
 }
