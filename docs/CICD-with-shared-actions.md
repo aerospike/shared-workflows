@@ -15,6 +15,28 @@ A typical pipeline chains these reusable workflows:
 
 Each step is independent and composable; you can run them all or just the subset your repo needs.
 
+```mermaid
+sequenceDiagram
+  participant WF as Caller Workflow
+  participant SW1 as Execute Build (reusable)
+  participant SW2 as Sign Artifacts (reusable)
+  participant SW3 as Deploy Artifacts (reusable)
+  participant GA as GitHub Artifacts
+  participant JF as JFrog
+  participant SW4 as Create Release Bundle (reusable)
+
+  WF->>SW1: uses reusable_execute-build (artifact-name=build-artifacts)
+  SW1-->>GA: upload "build-artifacts"
+  WF->>SW2: uses reusable_sign-artifacts (unsigned-artifacts=build-artifacts, artifact-name=signed-artifacts)
+  SW2-->>GA: download "build-artifacts"
+  SW2-->>GA: upload "signed-artifacts"
+  WF->>SW3: uses reusable_deploy-artifacts (artifact-name=signed-artifacts, project/build-name/version)
+  SW3-->>GA: download "signed-artifacts"
+  SW3-->>JF: deploy via OIDC
+  WF->>SW4: uses reusable_create-release-bundle (bundle-name, version, artifacts="name:version,...")
+  SW4-->>JF: create bundle from published artifacts
+```
+
 ---
 
 ## Short example
