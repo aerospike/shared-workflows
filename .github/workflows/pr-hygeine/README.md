@@ -4,7 +4,7 @@ In this folder you will find two actions; one for checking that PR titles start 
 
 The reason for having these is so that we can get strong automatic linking to the new Jira Deployments feature; which according to Atlassian support is the best way to make sure that linkage is granular and appropriate.
 
-The command `git push --force-with-lease origin $BASE_REF` may raise concerns; the `--force-with-least` option should make sure that no code can be over-written with it; it is intended to just modify the commit message with a prefix.
+The command `git push --force-with-lease origin $BASE_REF` may raise concerns; the `--force-with-lease` option should make sure that no code can be over-written with it; it is intended to just modify the commit message with a prefix.
 
 ## Example Usage
 
@@ -23,7 +23,7 @@ on:
 
 jobs:
   validate-jira-ticket:
-    uses: ./.github/workflows/hygiene.yml
+    uses: ./.github/workflows/reusable_pr-hygiene.yml
     with:
       pr_title: ${{ github.event.pull_request.title }}
 ```
@@ -53,7 +53,7 @@ jobs:
   call-merge-workflow:
     needs: merge-with-jira
     if: ${{ needs.merge-with-jira.outputs.pr_title != null }}
-    uses: ./.github/workflows/merge.yml
+    uses: ./.github/workflows/reusable_pr-hygiene-merge.yml
     with:
       pr_title: ${{ needs.merge-with-jira.outputs.pr_title }}
       merge_commit_sha: ${{ github.event.pull_request.merge_commit_sha }}
