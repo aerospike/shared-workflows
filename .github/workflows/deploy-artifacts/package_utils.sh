@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -eo pipefail
+set -xeo pipefail
 if [ -n "${DEBUG:-}" ]; then set -x; fi
 # Function to extract RPM metadata and distribution
 # Unlike for debs this requires parsing the name (because the distro name is not standard)
