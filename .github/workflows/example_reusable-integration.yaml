@@ -136,6 +136,8 @@ jobs:
         uname -m
         uname -a
         which gcc
+        pwd
+        find .
         DISTRO=${{ matrix.distro }} \
         ARCH=${{ matrix.arch }} \
         EMULATED=${{ matrix.emulated }} \
