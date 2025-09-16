@@ -147,9 +147,12 @@ jobs:
         shell: bash
         working-directory: ${{ inputs.working-directory != '' && inputs.working-directory || github.workspace }}
         run: |
-          pwd
-          ls -la
-          chmod +x ${{ inputs.checkout-path }}/.github/workflows/execute-build/entrypoint.sh
+          # Get the absolute path to the entrypoint script
+          entrypoint=$(realpath ${{ inputs.checkout-path }}/.github/workflows/execute-build/entrypoint.sh)
+          chmod +x "$entrypoint"
+          # Show current working directory for debugging
+          echo "Working directory: $(pwd)"
+          echo "Entrypoint script: $entrypoint"
 
           if ${{ inputs.build-script != '' }}; then # Inline build script
             script_arg="--build-script"
@@ -161,7 +164,7 @@ jobs:
             echo "Error: Either build-script or build-script-path must be given"
             exit 1
           fi
-          ${{ inputs.checkout-path }}/.github/workflows/execute-build/entrypoint.sh \
+          "$entrypoint" \
             "$script_arg" "$script_value" \
             --artifact-directory "${{ inputs.artifact-directory }}" \
             --build-name "${{ inputs.build-name }}" \
