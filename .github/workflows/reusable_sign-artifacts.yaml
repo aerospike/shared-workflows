@@ -59,7 +59,7 @@ jobs:
   sign:
     runs-on: ${{ inputs.runs-on }}
     env:
-      CHECKOUT_REF: 8fa7b46c484ec4330adc5c0b5916d1dfadda83de # Latest commit hash for development
+      CHECKOUT_REF: feature/INFRA-189-build-info-in-build-step # Latest commit hash for development
     steps:
       - name: Download Unsigned Artifacts
         uses: actions/download-artifact@v4

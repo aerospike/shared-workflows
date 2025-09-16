@@ -115,7 +115,7 @@ jobs:
       build-name: ${{ steps.build-info.outputs.build-name }}
       build-version: ${{ steps.build-info.outputs.build-version }}
     env:
-      CHECKOUT_REF: 8fa7b46c484ec4330adc5c0b5916d1dfadda83de # Latest commit hash for development
+      CHECKOUT_REF: feature/INFRA-189-build-info-in-build-step # Latest commit hash for development
     steps:
       - name: Checkout shared-workflows repository
         uses: actions/checkout@v5
