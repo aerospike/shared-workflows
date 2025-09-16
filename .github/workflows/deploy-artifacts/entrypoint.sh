@@ -110,7 +110,7 @@ run() {
 }
 
 run_optional() {
-    "$@" || echo "Warning: $*" >&2
+    run "$@" || echo "Warning: $*" >&2
 }
 
 structure_build_artifacts() {

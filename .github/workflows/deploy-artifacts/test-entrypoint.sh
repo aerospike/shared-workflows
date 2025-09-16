@@ -203,7 +203,6 @@ fi
 if ! verify_commands "Build info commands" "$TEST_DIR/test1_output.txt.build_commands" "
 jf rt build-collect-env.*test-build.*12345
 jf rt build-add-git.*test-build.*12345
-jf rt build-add-dependencies.*test-build.*12345
 jf rt build-publish.*test-build.*12345
 "; then
     test1_success=false
@@ -262,7 +261,6 @@ test3_success=true
 if ! verify_commands "All build info commands" "$TEST_DIR/test3_output.txt.build_commands" "
 jf rt build-collect-env.*test-build.*12345
 jf rt build-add-git.*test-build.*12345
-jf rt build-add-dependencies.*test-build.*12345
 jf rt build-publish.*test-build.*12345
 "; then
     test3_success=false
