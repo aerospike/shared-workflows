@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+
 export PS4='+($LINENO): ${FUNCNAME[0]:+${FUNCNAME[0]}(): }'
 trap 'handle_error ${LINENO}' ERR
 # shellcheck disable=SC2317
@@ -282,16 +283,15 @@ check_build_exists() {
 }
 
 publish_build_info() {
-  if [[ "$DRY_RUN" == "true" ]]; then
-    echo "Would publish build info..." >&2
+  if check_build_exists "$BUILD_NAME" "$BUILD_NUMBER" "$PROJECT"; then
+    echo "Build already exists, updating build info with uploaded artifacts" >&2
+    run jf rt build-update "$BUILD_NAME" "$BUILD_NUMBER" --project="$PROJECT"
   else
     echo "Publishing build info..." >&2
+    run_optional jf rt build-collect-env "$BUILD_NAME" "$BUILD_NUMBER" --project="$PROJECT"
+    run_optional jf rt build-add-git "$BUILD_NAME" "$BUILD_NUMBER" --project="$PROJECT"
+    run jf rt build-publish "$BUILD_NAME" "$BUILD_NUMBER" --project="$PROJECT"
   fi
-  echo "about to add optional build info and publishing"
-  run_optional jf rt build-collect-env "$BUILD_NAME" "$BUILD_NUMBER" --project="$PROJECT"
-  run_optional jf rt build-add-git "$BUILD_NAME" "$BUILD_NUMBER" --project="$PROJECT"
-  run_optional jf rt build-add-dependencies "$BUILD_NAME" "$BUILD_NUMBER" . --project="$PROJECT"
-  run jf rt build-publish "$BUILD_NAME" "$BUILD_NUMBER" --project="$PROJECT"
 }
 
 main() {

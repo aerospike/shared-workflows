@@ -11,6 +11,11 @@ on:
         description: JFrog build name
         required: true
         type: string
+      build-version:
+        description: JFrog build version (if not provided, will be generated)
+        required: false
+        type: string
+        default: ""
       version:
         description: Version of the artifact to upload
         required: true
@@ -108,7 +113,14 @@ jobs:
           if [ "${{ inputs.dry-run }}" = "true" ]; then
             dry_run_arg="--dry-run"
           fi
-          BUILD_ID=$(date +%s%3N) # timestamp in milliseconds (hex)
+
+          # Use provided build-version or generate one
+          if [[ -n "${{ inputs.build-version }}" ]]; then
+            BUILD_ID="${{ inputs.build-version }}"
+          else
+            BUILD_ID=$(date +%s%3N) # timestamp in milliseconds
+          fi
+
           ${{ inputs.checkout-path }}/.github/workflows/deploy-artifacts/entrypoint.sh \
             "${{ inputs.project }}" \
             "${{ inputs.build-name }}" \

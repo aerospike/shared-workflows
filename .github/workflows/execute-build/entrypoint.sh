@@ -26,6 +26,8 @@ error() {
 DRY_RUN="false"
 BUILD_NAME=""
 BUILD_VERSION=""
+PROJECT=""
+PUBLISH_BUILD_INFO="false"
 
 show_help() {
   echo "Usage: $0 --artifact-directory <dir> (--build-script <commands> | --build-script-path <file>) [OPTIONS]" >&2
@@ -40,8 +42,10 @@ show_help() {
   echo "  --build-script-path <file>     Path to build script file to execute" >&2
   echo "" >&2
   echo "Options:" >&2
-  echo "  --build-name <name>            Build name for JFrog upload" >&2
-  echo "  --build-version <version>      Build version for JFrog upload" >&2
+  echo "  --build-name <name>            Build name for JFrog build-info" >&2
+  echo "  --build-version <version>      Build version for JFrog build-info" >&2
+  echo "  --project <project>            JFrog project for build-info" >&2
+  echo "  --publish-build-info           Publish build-info to JFrog (without uploading artifacts)" >&2
   echo "  --dry-run                      Show what would be done without actually doing it" >&2
   echo "  --help, -h                     Show this help message" >&2
   echo "" >&2
@@ -82,6 +86,14 @@ while [[ $# -gt 0 ]]; do
       BUILD_VERSION="$2"
       shift 2
       ;;
+    --project)
+      PROJECT="$2"
+      shift 2
+      ;;
+    --publish-build-info)
+      PUBLISH_BUILD_INFO="true"
+      shift
+      ;;
     --dry-run)
       DRY_RUN="true"
       shift
@@ -110,6 +122,19 @@ fi
 
 if [[ -z "${ARTIFACT_DIRECTORY:-}" ]]; then
   error "--artifact-directory is required. Use --help for usage information"
+fi
+
+# Validate build-info parameters if publishing
+if [[ "$PUBLISH_BUILD_INFO" == "true" ]]; then
+  if [[ -z "${BUILD_NAME:-}" ]]; then
+    error "--build-name is required when --publish-build-info is specified"
+  fi
+  if [[ -z "${BUILD_VERSION:-}" ]]; then
+    error "--build-version is required when --publish-build-info is specified"
+  fi
+  if [[ -z "${PROJECT:-}" ]]; then
+    error "--project is required when --publish-build-info is specified"
+  fi
 fi
 
 # Wrapper function that either executes or echoes commands
@@ -141,9 +166,6 @@ main() {
   local resolved_build_script
 
   if [[ "$BUILD_SCRIPT_TYPE" == "inline" ]]; then
-    # Create a temporary script file from inline commands
-    # is_inline_script=true
-    
     local temp_script="/tmp/build-script-$$.sh"
     echo "#!/bin/bash" > "$temp_script"
     echo "set -euo pipefail" >> "$temp_script"
@@ -181,6 +203,23 @@ main() {
     find "$ARTIFACT_DIRECTORY" -type f 
   else
     echo "   Would verify artifacts in: $ARTIFACT_DIRECTORY" >&2
+  fi
+  
+  # Collect and publish build-info if requested
+  if [[ "$PUBLISH_BUILD_INFO" == "true" ]]; then
+    echo "Collecting build-info for $BUILD_NAME/$BUILD_VERSION..." >&2
+    echo "Publishing from working directory: $(pwd)" >&2
+    
+    # Collect environment variables for build-info
+    run jf rt build-collect-env "$BUILD_NAME" "$BUILD_VERSION" --project="$PROJECT" || true
+    
+    # Add git information to build-info
+    run jf rt build-add-git "$BUILD_NAME" "$BUILD_VERSION" --project="$PROJECT" || true
+    
+    # Publish build-info to JFrog (without uploading artifacts)
+    run jf rt build-publish "$BUILD_NAME" "$BUILD_VERSION" --project="$PROJECT" || true
+    
+    echo "Published build-info: $BUILD_NAME/$BUILD_VERSION" >&2
   fi
   
   echo "Build-artifacts workflow completed successfully!" >&2
