@@ -72,17 +72,14 @@ jobs:
         run: |
           PARENT_BUILD_NAME="${{ inputs.parent-build-name }}"
           PARENT_BUILD_VERSION="${{ inputs.parent-build-version }}"
-          BUILD_PATTERN="${{ inputs.build-name-pattern }}"
 
           echo "parent-build-name=$PARENT_BUILD_NAME" >> $GITHUB_OUTPUT
           echo "parent-build-version=$PARENT_BUILD_VERSION" >> $GITHUB_OUTPUT
 
           echo "Aggregating child builds into parent build: $PARENT_BUILD_NAME/$PARENT_BUILD_VERSION"
-          echo "Searching for child builds matching pattern: $BUILD_PATTERN"
-
+          JFROG_CLI_LOG_LEVEL=DEBUG
           # Query JFrog to find all child builds matching the pattern
-          # This will find builds like test-build-jammy-x86_64, test-build-noble-x86_64, etc.
-          jf rt search --spec='{"name": "'"$BUILD_PATTERN"'", "type": "build"}' --project="${{ inputs.project }}" | jq -r '.[] | "\(.name) \(.number)"' | while read build_name build_version; do
+          jf rt search --fail-no-op --spec=<(echo '{"name": "${{ inputs.build-name-pattern }}", "type": "build"}') --project="${{ inputs.project }}" | jq -r '.[] | "\(.name) \(.number)"' | while read build_name build_version; do
             if [[ -n "$build_name" && -n "$build_version" ]]; then
               echo "Found child build: $build_name/$build_version"
               echo "Appending to parent build: $PARENT_BUILD_NAME/$PARENT_BUILD_VERSION"
