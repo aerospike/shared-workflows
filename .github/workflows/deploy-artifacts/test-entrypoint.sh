@@ -213,7 +213,7 @@ if ! verify_command_count "Upload commands" "$TEST_DIR/test1_output.txt.upload_c
     test1_success=false
 fi
 
-if ! verify_command_count "Build commands" "$TEST_DIR/test1_output.txt.build_commands" 4; then
+if ! verify_command_count "Build commands" "$TEST_DIR/test1_output.txt.build_commands" 3; then
     test1_success=false
 fi
 
@@ -272,7 +272,7 @@ if ! verify_command_count "All upload commands" "$TEST_DIR/test3_output.txt.uplo
     test3_success=false
 fi
 
-if ! verify_command_count "All build commands" "$TEST_DIR/test3_output.txt.build_commands" 4; then
+if ! verify_command_count "All build commands" "$TEST_DIR/test3_output.txt.build_commands" 3; then
     test3_success=false
 fi
 
