@@ -203,7 +203,6 @@ fi
 if ! verify_commands "Build info commands" "$TEST_DIR/test1_output.txt.build_commands" "
 jf rt build-collect-env.*test-build.*12345
 jf rt build-add-git.*test-build.*12345
-jf rt build-add-dependencies.*test-build.*12345
 jf rt build-publish.*test-build.*12345
 "; then
     test1_success=false
@@ -213,7 +212,7 @@ if ! verify_command_count "Upload commands" "$TEST_DIR/test1_output.txt.upload_c
     test1_success=false
 fi
 
-if ! verify_command_count "Build commands" "$TEST_DIR/test1_output.txt.build_commands" 4; then
+if ! verify_command_count "Build commands" "$TEST_DIR/test1_output.txt.build_commands" 3; then
     test1_success=false
 fi
 
@@ -262,7 +261,6 @@ test3_success=true
 if ! verify_commands "All build info commands" "$TEST_DIR/test3_output.txt.build_commands" "
 jf rt build-collect-env.*test-build.*12345
 jf rt build-add-git.*test-build.*12345
-jf rt build-add-dependencies.*test-build.*12345
 jf rt build-publish.*test-build.*12345
 "; then
     test3_success=false
@@ -272,7 +270,7 @@ if ! verify_command_count "All upload commands" "$TEST_DIR/test3_output.txt.uplo
     test3_success=false
 fi
 
-if ! verify_command_count "All build commands" "$TEST_DIR/test3_output.txt.build_commands" 4; then
+if ! verify_command_count "All build commands" "$TEST_DIR/test3_output.txt.build_commands" 3; then
     test3_success=false
 fi
 

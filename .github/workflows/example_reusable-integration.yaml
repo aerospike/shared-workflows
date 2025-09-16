@@ -127,12 +127,12 @@ jobs:
     with:
       runs-on: ${{ matrix.runs-on }}
       project: test
-      build-name: test-build
-      build-version: v1.0.0
+      build-name: test-build-${{ matrix.distro }}-${{ matrix.arch }}
+      build-version: ${{ github.run_number }}-${{ matrix.distro }}-${{ matrix.arch }}
       checkout-path: project-location # In the case of running in shared_workflows checkout-path and source-path will have the same content but we put them here by way of example.
       source-path: repo-source
+      working-directory: repo-source/.github/workflows/execute-build/test_apps/hi
       build-script: |
-        cd repo-source/.github/workflows/execute-build/test_apps/hi
         uname -m
         uname -a
         which gcc
@@ -146,7 +146,20 @@ jobs:
       artifactory-url: https://artifact.aerospike.io # default
       artifactory-oidc-provider-name: gh-dev-test
       artifactory-oidc-audience: aerospike/testing
+      publish-build-info: true
       dry-run: false # default
+  # Aggregate all matrix build-infos into a parent build using reusable workflow
+  aggregate-build-info:
+    needs: build-packages
+    uses: ./.github/workflows/reusable_aggregate-build-info.yaml
+    with:
+      project: test
+      parent-build-name: test-build
+      parent-build-version: ${{ github.run_number }}
+      build-name-pattern: test-build-*
+      artifactory-url: https://artifact.aerospike.io
+      artifactory-oidc-provider-name: gh-dev-test
+      artifactory-oidc-audience: aerospike/testing
   # This job demonstrates custom packaging logic using standard GitHub Actions (actions/checkout, actions/download-artifact, actions/upload-artifact)
   # No reusable actions from shared-workflows are used here - this is custom packaging logic that could be done in the build step
   # In this case it is using fpm to generate debs and rpms and uploading them to be processed further.
@@ -190,11 +203,12 @@ jobs:
       gpg-key-pass: ${{ secrets.GPG_PASS }}
 
   deploy-artifacts:
-    needs: [sign-artifacts, extract-version]
+    needs: [sign-artifacts, extract-version, aggregate-build-info]
     uses: ./.github/workflows/reusable_deploy-artifacts.yaml
     with:
       project: test
-      build-name: test-build
+      build-name: ${{ needs.aggregate-build-info.outputs.parent-build-name }}
+      build-version: ${{ needs.aggregate-build-info.outputs.parent-build-version }}
       version: ${{ needs.extract-version.outputs.version }}
       retention-days: 1
       artifactory-oidc-provider-name: gh-dev-test

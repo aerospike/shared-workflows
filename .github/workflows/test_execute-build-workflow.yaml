@@ -16,7 +16,7 @@ jobs:
       build-name: test-build
       build-version: v1.0.0
       build-script: |
-        echo "checking that current-source is correctly present and building"
+        echo "Need ensure current-source is correctly present and building"
         cat current-source/README.md &&\
         cd project-location/.github/workflows/execute-build/test_apps/hi && make
       checkout-path: project-location

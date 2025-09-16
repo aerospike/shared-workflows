@@ -84,6 +84,25 @@ on:
         required: false
         type: boolean
         default: false
+      publish-build-info:
+        description: |
+          Whether to publish build-info to JFrog. If true will publish build-info to JFrog without uploading artifacts.
+        required: false
+        type: boolean
+        default: false
+      working-directory:
+        description: Working directory for build script execution
+        required: false
+        type: string
+        default: ""
+
+    outputs:
+      build-name:
+        description: The build name used for JFrog build-info
+        value: ${{ jobs.execute-build.outputs.build-name }}
+      build-version:
+        description: The build version used for JFrog build-info
+        value: ${{ jobs.execute-build.outputs.build-version }}
 
 permissions:
   contents: read
@@ -92,8 +111,11 @@ permissions:
 jobs:
   execute-build:
     runs-on: ${{ inputs.runs-on }}
+    outputs:
+      build-name: ${{ steps.build-info.outputs.build-name }}
+      build-version: ${{ steps.build-info.outputs.build-version }}
     env:
-      CHECKOUT_REF: 8fa7b46c484ec4330adc5c0b5916d1dfadda83de # Latest commit hash for development
+      CHECKOUT_REF: feature/INFRA-189-build-info-in-build-step # Latest commit hash for development
     steps:
       - name: Checkout shared-workflows repository
         uses: actions/checkout@v5
@@ -127,30 +149,24 @@ jobs:
         run: |
           chmod +x ${{ inputs.checkout-path }}/.github/workflows/execute-build/entrypoint.sh
 
-          dry_run_arg=""
-          if [ "${{ inputs.dry-run }}" = "true" ]; then
-            dry_run_arg="--dry-run"
-          fi
-
-          if ${{ inputs.build-script != '' }}; then
-            ${{ inputs.checkout-path }}/.github/workflows/execute-build/entrypoint.sh \
-              --build-script '${{ inputs.build-script }}' \
-              --artifact-directory "${{ inputs.artifact-directory }}" \
-              --build-name "${{ inputs.build-name }}" \
-              --build-version "${{ inputs.build-version }}" \
-              $dry_run_arg
-          elif ${{ inputs.build-script-path != '' }}; then
-            ${{ inputs.checkout-path }}/.github/workflows/execute-build/entrypoint.sh \
-              --build-script-path "${{ inputs.build-script-path }}" \
-              --artifact-directory "${{ inputs.artifact-directory }}" \
-              --build-name "${{ inputs.build-name }}" \
-              --build-version "${{ inputs.build-version }}" \
-              $dry_run_arg
+          if ${{ inputs.build-script != '' }}; then # Inline build script
+            script_arg="--build-script"
+            script_value='${{ inputs.build-script }}'
+          elif ${{ inputs.build-script-path != '' }}; then # Build script file
+            script_arg="--build-script-path"
+            script_value="${{ inputs.build-script-path }}"
           else
             echo "Error: Either build-script or build-script-path must be given"
             exit 1
           fi
-
+          ${{ inputs.checkout-path }}/.github/workflows/execute-build/entrypoint.sh \
+            "$script_arg" "$script_value" \
+            --artifact-directory "${{ inputs.artifact-directory }}" \
+            --build-name "${{ inputs.build-name }}" \
+            --build-version "${{ inputs.build-version }}" \
+            --project "${{ inputs.project }}" \
+            ${{ inputs.publish-build-info && '--publish-build-info' || '' }} \
+            ${{ inputs.dry-run && '--dry-run' || '' }}
       - name: Upload Artifacts
         if: inputs.dry-run != true
         uses: actions/upload-artifact@v4
@@ -158,3 +174,10 @@ jobs:
           name: ${{ inputs.artifact-name }}
           path: ${{ inputs.artifact-directory }}
           retention-days: ${{ inputs.retention-days }}
+
+      - name: Set Build Info Outputs
+        if: inputs.publish-build-info == true
+        id: build-info
+        run: |
+          echo "build-name=${{ inputs.build-name }}" >> $GITHUB_OUTPUT
+          echo "build-version=${{ inputs.build-version }}" >> $GITHUB_OUTPUT
