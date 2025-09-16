@@ -11,8 +11,8 @@ on:
         description: Name for the parent aggregated build
         required: true
         type: string
-      parent-build-version:
-        description: Version for the parent aggregated build
+      parent-build-id:
+        description: Build ID for the parent aggregated build
         required: true
         type: string
       build-name-pattern:
@@ -38,9 +38,9 @@ on:
       parent-build-name:
         description: The parent build name
         value: ${{ jobs.aggregate.outputs.parent-build-name }}
-      parent-build-version:
-        description: The parent build version
-        value: ${{ jobs.aggregate.outputs.parent-build-version }}
+      parent-build-id:
+        description: The parent build ID
+        value: ${{ jobs.aggregate.outputs.parent-build-id }}
 
 permissions:
   contents: read
@@ -51,7 +51,7 @@ jobs:
     runs-on: ubuntu-22.04
     outputs:
       parent-build-name: ${{ steps.aggregate.outputs.parent-build-name }}
-      parent-build-version: ${{ steps.aggregate.outputs.parent-build-version }}
+      parent-build-id: ${{ steps.aggregate.outputs.parent-build-id }}
     steps:
       - name: Setup JFrog CLI
         uses: jfrog/setup-jfrog-cli@751c204e8e1d3fe053e30218a2143ab4fe100d95 # v4.6.0
@@ -71,27 +71,27 @@ jobs:
         id: aggregate
         run: |
           PARENT_BUILD_NAME="${{ inputs.parent-build-name }}"
-          PARENT_BUILD_VERSION="${{ inputs.parent-build-version }}"
-          BUILD_PATTERN="${{ inputs.build-name-pattern }}"
+          PARENT_BUILD_ID="${{ inputs.parent-build-id }}"
 
           echo "parent-build-name=$PARENT_BUILD_NAME" >> $GITHUB_OUTPUT
-          echo "parent-build-version=$PARENT_BUILD_VERSION" >> $GITHUB_OUTPUT
+          echo "parent-build-id=$PARENT_BUILD_ID" >> $GITHUB_OUTPUT
 
-          echo "Aggregating child builds into parent build: $PARENT_BUILD_NAME/$PARENT_BUILD_VERSION"
-          echo "Searching for child builds matching pattern: $BUILD_PATTERN"
-
+          echo "Aggregating child builds into parent build: $PARENT_BUILD_NAME/$PARENT_BUILD_ID"
           # Query JFrog to find all child builds matching the pattern
-          # This will find builds like test-build-jammy-x86_64, test-build-noble-x86_64, etc.
-          jf rt search --spec='{"name": "'"$BUILD_PATTERN"'", "type": "build"}' --project="${{ inputs.project }}" | jq -r '.[] | "\(.name) \(.number)"' | while read build_name build_version; do
-            if [[ -n "$build_name" && -n "$build_version" ]]; then
-              echo "Found child build: $build_name/$build_version"
-              echo "Appending to parent build: $PARENT_BUILD_NAME/$PARENT_BUILD_VERSION"
-              
-              jf rt build-append "$PARENT_BUILD_NAME" "$PARENT_BUILD_VERSION" "$build_name" "$build_version" --project="${{ inputs.project }}" || true
+          PROJECT="${{ inputs.project }}"
+          PREFIX="${{ inputs.build-name-pattern }}"
+          # list build names in the project and filter by prefix
+          jf rt curl "api/build?project=$PROJECT" |
+          jq -r --arg p "/$PREFIX" '.builds[] | select(.uri|startswith($p)) | .uri[1:]' |
+          jq -r '.[] | "\(.name) \(.number)"' | while read build_name build_id; do
+            if [[ -n "$build_name" && -n "$build_id" ]]; then
+              echo "Found child build: $build_name/$build_id"
+              echo "Appending to parent build: $PARENT_BUILD_NAME/$PARENT_BUILD_ID"
+              jf rt build-append "$PARENT_BUILD_NAME" "$PARENT_BUILD_ID" "$build_name" "$build_id" --project="${{ inputs.project }}" || true
             fi
           done
 
           # Publish the parent build
-          jf rt build-publish "$PARENT_BUILD_NAME" "$PARENT_BUILD_VERSION" --project="${{ inputs.project }}" || true
+          jf rt build-publish "$PARENT_BUILD_NAME" "$PARENT_BUILD_ID" --project="${{ inputs.project }}" || true
 
-          echo "Parent build published: $PARENT_BUILD_NAME/$PARENT_BUILD_VERSION"
+          echo "Parent build published: $PARENT_BUILD_NAME/$PARENT_BUILD_ID"

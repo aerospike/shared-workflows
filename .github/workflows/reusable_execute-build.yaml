@@ -11,8 +11,8 @@ on:
         description: Name for this build in artifactory
         required: true
         type: string
-      build-version:
-        description: Version for this build in artifactory
+      build-id:
+        description: Build ID for this build in artifactory
         required: true
         type: string
       build-script:
@@ -94,15 +94,15 @@ on:
         description: Working directory for build script execution
         required: false
         type: string
-        default: ""
+        default: .
 
     outputs:
       build-name:
         description: The build name used for JFrog build-info
         value: ${{ jobs.execute-build.outputs.build-name }}
-      build-version:
-        description: The build version used for JFrog build-info
-        value: ${{ jobs.execute-build.outputs.build-version }}
+      build-id:
+        description: The build ID used for JFrog build-info
+        value: ${{ jobs.execute-build.outputs.build-id }}
 
 permissions:
   contents: read
@@ -113,7 +113,7 @@ jobs:
     runs-on: ${{ inputs.runs-on }}
     outputs:
       build-name: ${{ steps.build-info.outputs.build-name }}
-      build-version: ${{ steps.build-info.outputs.build-version }}
+      build-id: ${{ steps.build-info.outputs.build-id }}
     env:
       CHECKOUT_REF: feature/INFRA-189-build-info-in-build-step # Latest commit hash for development
     steps:
@@ -145,9 +145,14 @@ jobs:
 
       - name: Execute Build Script
         shell: bash
-        working-directory: ${{ github.workspace }}
         run: |
-          chmod +x ${{ inputs.checkout-path }}/.github/workflows/execute-build/entrypoint.sh
+          entrypoint=$(realpath ${{ inputs.checkout-path }}/.github/workflows/execute-build/entrypoint.sh)
+          chmod +x "$entrypoint"
+          if [[ -n "${{ inputs.working-directory }}" ]]; then
+            cd "${{ inputs.working-directory }}"
+          fi
+          echo "Working directory: $(pwd)"
+          echo "Entrypoint script: $entrypoint"
 
           if ${{ inputs.build-script != '' }}; then # Inline build script
             script_arg="--build-script"
@@ -159,11 +164,12 @@ jobs:
             echo "Error: Either build-script or build-script-path must be given"
             exit 1
           fi
-          ${{ inputs.checkout-path }}/.github/workflows/execute-build/entrypoint.sh \
+
+          "$entrypoint" \
             "$script_arg" "$script_value" \
             --artifact-directory "${{ inputs.artifact-directory }}" \
             --build-name "${{ inputs.build-name }}" \
-            --build-version "${{ inputs.build-version }}" \
+            --build-id "${{ inputs.build-id }}" \
             --project "${{ inputs.project }}" \
             ${{ inputs.publish-build-info && '--publish-build-info' || '' }} \
             ${{ inputs.dry-run && '--dry-run' || '' }}
@@ -172,7 +178,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ inputs.artifact-name }}
-          path: ${{ inputs.artifact-directory }}
+          path: ${{ inputs.working-directory }}/${{ inputs.artifact-directory }}
           retention-days: ${{ inputs.retention-days }}
 
       - name: Set Build Info Outputs
@@ -180,4 +186,4 @@ jobs:
         id: build-info
         run: |
           echo "build-name=${{ inputs.build-name }}" >> $GITHUB_OUTPUT
-          echo "build-version=${{ inputs.build-version }}" >> $GITHUB_OUTPUT
+          echo "build-id=${{ inputs.build-id }}" >> $GITHUB_OUTPUT
