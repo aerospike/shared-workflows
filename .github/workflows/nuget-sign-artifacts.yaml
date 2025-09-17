@@ -74,12 +74,25 @@ jobs:
       - name: Check for NuGet packages
         run: |
           echo "Checking for NuGet packages in: ${{ inputs.artifact-glob }}"
-          NUGET_PACKAGES=$(find "${{ inputs.artifact-glob }}" -name "*.nupkg" -type f 2>/dev/null || echo "")
+          echo "Current working directory: $(pwd)"
+          echo "Workspace directory: ${{ github.workspace }}"
+
+          # Handle both relative and absolute paths
+          if [[ "${{ inputs.artifact-glob }}" == /* ]]; then
+            SEARCH_PATH="${{ inputs.artifact-glob }}"
+          else
+            SEARCH_PATH="${{ github.workspace }}/${{ inputs.artifact-glob }}"
+          fi
+
+          echo "Searching in: $SEARCH_PATH"
+          NUGET_PACKAGES=$(find "$SEARCH_PATH" -name "*.nupkg" -type f 2>/dev/null || echo "")
           if [ -n "$NUGET_PACKAGES" ]; then
             echo "Found NuGet packages:"
             echo "$NUGET_PACKAGES"
           else
-            echo "No NuGet packages found in ${{ inputs.artifact-glob }}"
+            echo "No NuGet packages found in $SEARCH_PATH"
+            echo "Directory contents:"
+            ls -la "$SEARCH_PATH" 2>/dev/null || echo "Directory does not exist"
             exit 1
           fi
 
