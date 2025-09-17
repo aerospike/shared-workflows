@@ -87,7 +87,6 @@ jobs:
             --parent-build-id "${{ inputs.parent-build-id }}" \
             --build-name-pattern "${{ inputs.build-name-pattern }}" \
             --build-info-repo "${{ inputs.project }}-build-info" \
-            --lookback "90d"
 
           echo "parent-build-name=${{ inputs.parent-build-name }}" >> $GITHUB_OUTPUT
           echo "parent-build-id=${{ inputs.parent-build-id }}" >> $GITHUB_OUTPUT

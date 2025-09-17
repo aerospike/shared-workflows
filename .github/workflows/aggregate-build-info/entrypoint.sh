@@ -29,7 +29,6 @@ PARENT_BUILD_NAME=""
 PARENT_BUILD_ID=""
 BUILD_NAME_PATTERN=""
 BUILD_INFO_REPO=""
-LOOKBACK="90d"
 
 show_help() {
   echo "Usage: $0 --project <project> --parent-build-name <name> --parent-build-id <id> --build-name-pattern <pattern> [OPTIONS]" >&2
@@ -44,7 +43,6 @@ show_help() {
   echo "" >&2
   echo "Options:" >&2
   echo "  --build-info-repo <repo>         Project-scoped build-info repo (default: <project>-build-info)" >&2
-  echo "  --lookback <days>                Only consider builds from last N days (default: 90d)" >&2
   echo "  --dry-run                        Show what would be done without actually doing it" >&2
   echo "  --help, -h                       Show this help message" >&2
   echo "" >&2
@@ -54,7 +52,6 @@ show_help() {
 }
 
 # Parse command line arguments
-echo "Command line: $0 $*" >&2
 while [[ $# -gt 0 ]]; do
   case $1 in
     --project)
@@ -75,10 +72,6 @@ while [[ $# -gt 0 ]]; do
       ;;
     --build-info-repo)
       BUILD_INFO_REPO="$2"
-      shift 2
-      ;;
-    --lookback)
-      LOOKBACK="$2"
       shift 2
       ;;
     --dry-run)
@@ -121,9 +114,6 @@ if [[ -z "${BUILD_INFO_REPO:-}" ]]; then
   BUILD_INFO_REPO="${PROJECT}-build-info"
 fi
 
-# === Derived ===
-SUFFIX_PREFIX="${PARENT_BUILD_NAME}-"
-
 # Run function for dry-run support
 run() {
   if [[ "$DRY_RUN" == "true" ]]; then
@@ -136,9 +126,7 @@ run() {
 
 echo "Build-info repo:     $BUILD_INFO_REPO"
 echo "Parent build:        $PARENT_BUILD_NAME/$PARENT_BUILD_ID"
-echo "Suffix prefix:       $SUFFIX_PREFIX"
 echo "Project:             $PROJECT"
-echo "Lookback:            $LOOKBACK"
 
 # === Construct AQL ===
 # Calculate the date 90 days ago for proper AQL syntax
@@ -155,42 +143,25 @@ items.find({
 }).include("path","name")
 AQL
 
-# === Run query ===
+# Query for build-info JSON files
 RESP=$(jf rt curl -XPOST api/search/aql \
   -H 'Content-Type: text/plain' \
   -d "$AQL")
 
-# === Extract child names from file names ===
+# Extract child build IDs from JSON file names
 if echo "$RESP" | jq -e '.results' > /dev/null 2>&1; then
-  echo "Raw AQL results:"
-  echo "$RESP" | jq '.results[] | {path: .path, name: .name}'
-  echo "---"
-  
-  # Extract child build IDs from file names like "132-amzn2023-x86_64-1758073733638.json"
-  # The pattern is: ${MATRIX_BUILD_ID}-${TIMESTAMP}.json
-  # We want to extract the matrix build ID (which includes the parent build ID + matrix suffix)
-  # Filter out the parent build ID itself (e.g., "132" without matrix suffix)
+  # Extract matrix build IDs from JSON file names (filter out parent build ID)
   mapfile -t CHILD_BUILD_IDS < <(echo "$RESP" | jq -r '.results[] | .name' | sed 's/-[0-9]*\.json$//' | grep -v "^${PARENT_BUILD_ID}$" | sort -u)
 
-  # All matrix builds have the same build name (the parent build name)
-  # Create array of build names (all the same) corresponding to each build ID
+  # All matrix builds use the same build name
   CHILD_NAMES=()
   for _ in "${CHILD_BUILD_IDS[@]}"; do
     CHILD_NAMES+=("$PARENT_BUILD_NAME")
   done
 
-  echo "Extracted build IDs:"
-  for i in "${!CHILD_BUILD_IDS[@]}"; do
-    echo "  - ${CHILD_BUILD_IDS[$i]}"
-  done
-
-  echo "Found ${#CHILD_NAMES[@]} child builds"
-  echo "Child builds found:"
-  for i in "${!CHILD_NAMES[@]}"; do
-    echo "  - ${CHILD_NAMES[$i]}/${CHILD_BUILD_IDS[$i]}"
-  done
+  echo "Found ${#CHILD_NAMES[@]} child builds to aggregate"
 else
-  echo "Invalid JSON response or no results field"
+  echo "No build-info files found"
   CHILD_NAMES=()
 fi
 
@@ -199,33 +170,24 @@ if (( ${#CHILD_NAMES[@]} == 0 )); then
   exit 0
 fi
 
-# === First, let's see what builds actually exist ===
-echo "Listing all builds for build name: ${PARENT_BUILD_NAME}"
-LIST_BUILDS=$(run jf rt curl "api/build?buildName=${PARENT_BUILD_NAME}&project=${PROJECT}" 2>/dev/null)
-echo "Available builds for ${PARENT_BUILD_NAME}: $LIST_BUILDS"
-
-# === Append each child build to the parent ===
+# Append each child build to the parent
 for i in "${!CHILD_NAMES[@]}"; do
   child_name="${CHILD_NAMES[$i]}"
   child_build_id="${CHILD_BUILD_IDS[$i]}"
 
-  echo "$child_name is a child build with ID $child_build_id"
-  
-  # Check if the child build exists in Artifactory
-  echo "Checking if build ${child_name}/${child_build_id} exists..."
-  echo "API URL: api/build/${child_name}/${child_build_id}?project=${PROJECT}"
+  # Check if build exists and append to parent
   BUILD_CHECK=$(run jf rt curl "api/build/${child_name}/${child_build_id}?project=${PROJECT}" 2>/dev/null)
-  echo "Build check response: $BUILD_CHECK"
 
   if echo "$BUILD_CHECK" | jq -e '.errors' >/dev/null 2>&1; then
-    echo "Build ${child_name}/${child_build_id} not found in Artifactory, skipping..."
+    echo "Skipping ${child_name}/${child_build_id} - not found in Artifactory"
   else
-    echo "Build ${child_name}/${child_build_id} found! Appending to parent..."
-    echo "Appending ${child_name}/${child_build_id} -> ${PARENT_BUILD_NAME}/${PARENT_BUILD_ID}"
+    echo "Appending ${child_name}/${child_build_id} to parent build"
     run jf rt build-append "$PARENT_BUILD_NAME" "$PARENT_BUILD_ID" \
                           "$child_name" "$child_build_id" \
                           --project="$PROJECT"
-    echo "Append command completed for ${child_name}/${child_build_id}"
   fi
 done
+
+# Publish the aggregated parent build
+echo "Publishing aggregated parent build ${PARENT_BUILD_NAME}/${PARENT_BUILD_ID}"
 run jf rt build-publish "$PARENT_BUILD_NAME" "$PARENT_BUILD_ID" --project="$PROJECT"
