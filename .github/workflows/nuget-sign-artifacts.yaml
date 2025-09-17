@@ -47,6 +47,10 @@ on:
         required: false
         type: string
         default: ubuntu-latest
+      download-artifact-name:
+        description: Name of the artifact to download before signing (optional)
+        required: false
+        type: string
     secrets:
       ES_USERNAME:
         description: SSL.com username for NuGet signing
@@ -70,6 +74,13 @@ jobs:
     runs-on: ${{ inputs.runs-on }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Download artifacts (if specified)
+        if: ${{ inputs.download-artifact-name != '' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.download-artifact-name }}
+          path: ${{ inputs.artifact-glob }}
 
       - name: Check for NuGet packages
         run: |
@@ -108,6 +119,7 @@ jobs:
           output_path: ${{ inputs.output-path == 'artifacts' && format('{0}/artifacts', github.workspace) || inputs.output-path || github.workspace }}
           malware_block: ${{ inputs.malware-block || false }}
           override: ${{ inputs.override || false }}
+
           environment_name: ${{ inputs.nuget-environment }}
           clean_logs: true
           jvm_max_memory: ${{ inputs.jvm-max-memory }}
