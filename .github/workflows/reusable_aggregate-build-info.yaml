@@ -77,7 +77,6 @@ jobs:
           echo "parent-build-id=$PARENT_BUILD_ID" >> $GITHUB_OUTPUT
 
           echo "Aggregating child builds into parent build: $PARENT_BUILD_NAME/$PARENT_BUILD_ID"
-          JFROG_CLI_LOG_LEVEL=DEBUG
           # Query JFrog to find all child builds matching the pattern
           PROJECT="${{ inputs.project }}"
           PREFIX="${{ inputs.build-name-pattern }}"
