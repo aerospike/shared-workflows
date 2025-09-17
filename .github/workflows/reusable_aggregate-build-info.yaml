@@ -67,31 +67,27 @@ jobs:
           jf c show
           jf rt ping
 
+      - name: Checkout shared-workflows repository
+        uses: actions/checkout@v5
+        with:
+          repository: aerospike/shared-workflows
+          ref: feature/INFRA-189-build-info-in-build-step
+          path: shared-workflows
+          fetch-depth: 1
+
       - name: Aggregate Matrix Builds
         id: aggregate
         run: |
-          PARENT_BUILD_NAME="${{ inputs.parent-build-name }}"
-          PARENT_BUILD_ID="${{ inputs.parent-build-id }}"
+          entrypoint=$(realpath shared-workflows/.github/workflows/aggregate-build-info/entrypoint.sh)
+          chmod +x "$entrypoint"
 
-          echo "parent-build-name=$PARENT_BUILD_NAME" >> $GITHUB_OUTPUT
-          echo "parent-build-id=$PARENT_BUILD_ID" >> $GITHUB_OUTPUT
+          "$entrypoint" \
+            --project "${{ inputs.project }}" \
+            --parent-build-name "${{ inputs.parent-build-name }}" \
+            --parent-build-id "${{ inputs.parent-build-id }}" \
+            --build-name-pattern "${{ inputs.build-name-pattern }}" \
+            --build-info-repo "${{ inputs.project }}-build-info" \
+            --lookback "90d"
 
-          echo "Aggregating child builds into parent build: $PARENT_BUILD_NAME/$PARENT_BUILD_ID"
-          # Query JFrog to find all child builds matching the pattern
-          PROJECT="${{ inputs.project }}"
-          PREFIX="${{ inputs.build-name-pattern }}"
-          # list build names in the project and filter by prefix
-          jf rt curl "api/build?project=$PROJECT" |
-          jq -r --arg p "/$PREFIX" '.builds[] | select(.uri|startswith($p)) | .uri[1:]' |
-          jq -r '.[] | "\(.name) \(.number)"' | while read build_name build_id; do
-            if [[ -n "$build_name" && -n "$build_id" ]]; then
-              echo "Found child build: $build_name/$build_id"
-              echo "Appending to parent build: $PARENT_BUILD_NAME/$PARENT_BUILD_ID"
-              jf rt build-append "$PARENT_BUILD_NAME" "$PARENT_BUILD_ID" "$build_name" "$build_id" --project="${{ inputs.project }}" || true
-            fi
-          done
-
-          # Publish the parent build
-          jf rt build-publish "$PARENT_BUILD_NAME" "$PARENT_BUILD_ID" --project="${{ inputs.project }}" || true
-
-          echo "Parent build published: $PARENT_BUILD_NAME/$PARENT_BUILD_ID"
+          echo "parent-build-name=${{ inputs.parent-build-name }}" >> $GITHUB_OUTPUT
+          echo "parent-build-id=${{ inputs.parent-build-id }}" >> $GITHUB_OUTPUT
