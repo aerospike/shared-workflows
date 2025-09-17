@@ -11,8 +11,8 @@ on:
         description: JFrog build name
         required: true
         type: string
-      build-version:
-        description: JFrog build version (if not provided, will be generated)
+      build-id:
+        description: JFrog build ID (if not provided, will be generated)
         required: false
         type: string
         default: ""
@@ -114,9 +114,9 @@ jobs:
             dry_run_arg="--dry-run"
           fi
 
-          # Use provided build-version or generate one
-          if [[ -n "${{ inputs.build-version }}" ]]; then
-            BUILD_ID="${{ inputs.build-version }}"
+          # Use provided build-id or generate one
+          if [[ -n "${{ inputs.build-id }}" ]]; then
+            BUILD_ID="${{ inputs.build-id }}"
           else
             BUILD_ID=$(date +%s%3N) # timestamp in milliseconds
           fi
