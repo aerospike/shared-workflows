@@ -103,6 +103,9 @@ on:
       build-id:
         description: The build ID used for JFrog build-info
         value: ${{ jobs.execute-build.outputs.build-id }}
+      artifact-name:
+        description: The name of the uploaded artifacts on github
+        value: ${{ jobs.execute-build.outputs.artifact-name }}
 
 permissions:
   contents: read
@@ -114,6 +117,7 @@ jobs:
     outputs:
       build-name: ${{ steps.build-info.outputs.build-name }}
       build-id: ${{ steps.build-info.outputs.build-id }}
+      artifact-name: ${{ steps.build-info.outputs.artifact-name }}
     env:
       CHECKOUT_REF: feature/INFRA-189-build-info-in-build-step # Latest commit hash for development
     steps:
@@ -187,3 +191,4 @@ jobs:
         run: |
           echo "build-name=${{ inputs.build-name }}" >> $GITHUB_OUTPUT
           echo "build-id=${{ inputs.build-id }}" >> $GITHUB_OUTPUT
+          echo "artifact-name=${{ inputs.artifact-name }}" >> $GITHUB_OUTPUT
