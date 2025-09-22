@@ -12,10 +12,9 @@ on:
         required: true
         type: string
       build-id:
-        description: JFrog build ID (if not provided, will be generated)
-        required: false
+        description: JFrog build ID
+        required: true
         type: string
-        default: ""
       version:
         description: Version of the artifact to upload
         required: true
@@ -60,11 +59,6 @@ on:
         required: false
         type: boolean
         default: false
-    outputs:
-      build-id:
-        description: The generated build ID
-        value: ${{ jobs.deploy.outputs.build-id }}
-
 permissions:
   contents: read
   id-token: write
@@ -112,13 +106,6 @@ jobs:
           dry_run_arg=""
           if [ "${{ inputs.dry-run }}" = "true" ]; then
             dry_run_arg="--dry-run"
-          fi
-
-          # Use provided build-id or generate one
-          if [[ -n "${{ inputs.build-id }}" ]]; then
-            BUILD_ID="${{ inputs.build-id }}"
-          else
-            BUILD_ID=$(date +%s%3N) # timestamp in milliseconds
           fi
 
           ${{ inputs.checkout-path }}/.github/workflows/deploy-artifacts/entrypoint.sh \

@@ -7,18 +7,28 @@ on:
         description: JFrog Artifactory project name
         required: true
         type: string
-      parent-build-name:
+      build-name:
         description: Name for the parent aggregated build
         required: true
         type: string
-      parent-build-id:
+      build-id:
         description: Build ID for the parent aggregated build
         required: true
         type: string
-      build-name-pattern:
+      build-name-search-pattern:
         description: Pattern to match matrix build names (e.g., "test-build-*")
         required: true
         type: string
+      combine-artifacts:
+        description: Whether to combine artifacts into a single directory
+        required: false
+        type: boolean
+        default: false
+      artifact-name:
+        description: Name for the artifacts
+        required: false
+        type: string
+        default: build-artifacts
       artifactory-url:
         description: JFrog Artifactory URL
         required: false
@@ -34,13 +44,21 @@ on:
         required: false
         type: string
         default: aerospike
+      retention-days:
+        description: Retention days for the artifacts
+        required: false
+        type: number
+        default: 1
     outputs:
-      parent-build-name:
+      build-name:
         description: The parent build name
-        value: ${{ jobs.aggregate.outputs.parent-build-name }}
-      parent-build-id:
+        value: ${{ jobs.aggregate.outputs.build-name }}
+      build-id:
         description: The parent build ID
-        value: ${{ jobs.aggregate.outputs.parent-build-id }}
+        value: ${{ jobs.aggregate.outputs.build-id }}
+      artifact-name:
+        description: The parent artifact name
+        value: ${{ jobs.aggregate.outputs.artifact-name }}
 
 permissions:
   contents: read
@@ -50,8 +68,9 @@ jobs:
   aggregate:
     runs-on: ubuntu-22.04
     outputs:
-      parent-build-name: ${{ steps.aggregate.outputs.parent-build-name }}
-      parent-build-id: ${{ steps.aggregate.outputs.parent-build-id }}
+      build-name: ${{ steps.aggregate-outputs.outputs.build-name }}
+      build-id: ${{ steps.aggregate-outputs.outputs.build-id }}
+      artifact-name: ${{ steps.aggregate-outputs.outputs.artifact-name }}
     steps:
       - name: Setup JFrog CLI
         uses: jfrog/setup-jfrog-cli@751c204e8e1d3fe053e30218a2143ab4fe100d95 # v4.6.0
@@ -74,8 +93,7 @@ jobs:
           ref: feature/INFRA-189-build-info-in-build-step
           path: shared-workflows
           fetch-depth: 1
-
-      - name: Aggregate Matrix Builds
+      - name: Aggregate matrix builds
         id: aggregate
         run: |
           entrypoint=$(realpath shared-workflows/.github/workflows/aggregate-build-info/entrypoint.sh)
@@ -83,10 +101,29 @@ jobs:
 
           "$entrypoint" \
             --project "${{ inputs.project }}" \
-            --parent-build-name "${{ inputs.parent-build-name }}" \
-            --parent-build-id "${{ inputs.parent-build-id }}" \
-            --build-name-pattern "${{ inputs.build-name-pattern }}" \
+            --build-name "${{ inputs.build-name }}" \
+            --build-id "${{ inputs.build-id }}" \
+            --build-name-search-pattern "${{ inputs.build-name-search-pattern }}" \
             --build-info-repo "${{ inputs.project }}-build-info" \
 
-          echo "parent-build-name=${{ inputs.parent-build-name }}" >> $GITHUB_OUTPUT
-          echo "parent-build-id=${{ inputs.parent-build-id }}" >> $GITHUB_OUTPUT
+      - name: Download All Matrix Artifacts
+        id: download-artifacts
+        if: inputs.combine-artifacts == true
+        uses: actions/download-artifact@v4
+        with:
+          pattern: ${inputs.build-name-search-pattern}
+          path: ${inputs.artifact-name}
+          merge-multiple: true
+      - name: Upload Combined Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts
+          path: build-artifacts
+          overwrite: true
+          retention-days: ${{ inputs.retention-days }}
+      - name: Set Outputs
+        id: aggregate-outputs
+        run: |
+          echo "build-name=${{ inputs.build-name }}" >> $GITHUB_OUTPUT
+          echo "build-id=${{ inputs.build-id }}" >> $GITHUB_OUTPUT
+          echo "artifact-name=${{ inputs.artifact-name }}" >> $GITHUB_OUTPUT
