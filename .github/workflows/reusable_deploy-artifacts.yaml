@@ -12,7 +12,13 @@ on:
         required: true
         type: string
       build-id:
-        description: JFrog build ID
+        description: |
+          JFrog build ID for the overall build info. This will be the parent build info with sub build infos for build metadata and artifacts.
+          This should be a unique build ID for the overall build info and will be uploaded to JFrog as the parent build info.
+        required: true
+        type: string
+      metadata-build-id:
+        description: JFrog build ID for the build metadata
         required: true
         type: string
       version:
@@ -112,6 +118,7 @@ jobs:
             "${{ inputs.project }}" \
             "${{ inputs.build-name }}" \
             "${{ inputs.version }}" \
-            "$BUILD_ID" \
+            "${{ inputs.build-id }}" \
+            "${{ inputs.metadata-build-id }}" \
             $dry_run_arg
           echo "build-id=$BUILD_ID" >> $GITHUB_OUTPUT

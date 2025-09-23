@@ -130,8 +130,8 @@ echo "Project:             $PROJECT"
 
 # === Construct AQL ===
 # Calculate the date 90 days ago for proper AQL syntax
-LOOKBACK_DATE=$(date -d "90 days ago" -u +"%Y-%m-%dT%H:%M:%S.000Z" 2>/dev/null || date -u -v-90d +"%Y-%m-%dT%H:%M:%S.000Z" 2>/dev/null || echo "2024-01-01T00:00:00.000Z")
 
+LOOKBACK_DATE=$(date -d "90 days ago" -u +"%Y-%m-%dT%H:%M:%S.000Z")
 read -r -d '' AQL <<AQL || true
 items.find({
   "\$and":[

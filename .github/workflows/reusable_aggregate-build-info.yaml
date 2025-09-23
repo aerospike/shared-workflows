@@ -101,8 +101,8 @@ jobs:
 
           "$entrypoint" \
             --project "${{ inputs.project }}" \
-            --build-name "${{ inputs.build-name }}" \
-            --build-id "${{ inputs.build-id }}" \
+            --parent-build-name "${{ inputs.build-name }}" \
+            --parent-build-id "${{ inputs.build-id }}" \
             --build-name-search-pattern "${{ inputs.build-name-search-pattern }}" \
             --build-info-repo "${{ inputs.project }}-build-info" \
 
