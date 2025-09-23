@@ -15,7 +15,7 @@ on:
         description: Build ID for the parent aggregated build
         required: true
         type: string
-      build-name-search-pattern:
+      build-info-search-pattern:
         description: Pattern to match matrix build names (e.g., "test-build-*")
         required: true
         type: string
@@ -103,7 +103,7 @@ jobs:
             --project "${{ inputs.project }}" \
             --parent-build-name "${{ inputs.build-name }}" \
             --parent-build-id "${{ inputs.build-id }}" \
-            --build-name-search-pattern "${{ inputs.build-name-search-pattern }}" \
+            --build-info-search-pattern "${{ inputs.build-info-search-pattern }}" \
             --build-info-repo "${{ inputs.project }}-build-info" \
 
       - name: Download All Matrix Artifacts
@@ -111,8 +111,8 @@ jobs:
         if: inputs.combine-artifacts == true
         uses: actions/download-artifact@v4
         with:
-          pattern: ${inputs.build-name-search-pattern}
-          path: ${inputs.artifact-name}
+          pattern: ${{inputs.build-info-search-pattern}}
+          path: ${{inputs.artifact-name}}
           merge-multiple: true
       - name: Upload Combined Artifacts
         uses: actions/upload-artifact@v4

@@ -151,19 +151,19 @@ jobs:
       publish-build-info: true
       dry-run: false # default
   # Aggregate all matrix build-infos into a parent build using reusable workflow
-  aggregate-build-info:
-    needs: build-packages
-    uses: ./.github/workflows/reusable_aggregate-build-info.yaml
-    with:
-      project: test
-      build-name: ${{needs.build-packages.outputs.build-name}}
-      build-id: ${{github.run_number}}-buildinfo
-      build-name-search-pattern: ${{needs.build-packages.outputs.build-name}}*
-      artifact-name: ${{needs.build-packages.outputs.artifact-name}}
-      combine-artifacts: true
-      artifactory-url: https://artifact.aerospike.io
-      artifactory-oidc-provider-name: gh-dev-test
-      artifactory-oidc-audience: aerospike/testing
+  #   aggregate-build-info:
+  #     needs: build-packages
+  #     uses: ./.github/workflows/reusable_aggregate-build-info.yaml
+  #     with:
+  #       project: test
+  #       build-name: ${{needs.build-packages.outputs.build-name}}
+  #       build-id: ${{github.run_number}}-buildinfo
+  #       build-info-search-pattern: ${{needs.build-packages.outputs.build-id}}*
+  #       artifact-name: ${{needs.build-packages.outputs.artifact-name}}
+  #       combine-artifacts: true
+  #       artifactory-url: https://artifact.aerospike.io
+  #       artifactory-oidc-provider-name: gh-dev-test
+  #       artifactory-oidc-audience: aerospike/testing
   # This job demonstrates custom packaging logic using standard GitHub Actions (actions/checkout, actions/download-artifact, actions/upload-artifact)
   # No reusable actions from shared-workflows are used here - this is custom packaging logic that could be done in the build step
   # In this case it is using fpm to generate debs and rpms and uploading them to be processed further.
@@ -180,7 +180,6 @@ jobs:
       - name: Download All Matrix Artifacts
         uses: actions/download-artifact@v4
         with:
-          pattern: build-artifacts-*
           path: build-artifacts
           merge-multiple: true
       - name: Package Artifacts
@@ -208,12 +207,12 @@ jobs:
       gpg-key-pass: ${{ secrets.GPG_PASS }}
 
   deploy-artifacts:
-    needs: [sign-artifacts, extract-version, aggregate-build-info]
+    needs: [sign-artifacts, extract-version]
     uses: ./.github/workflows/reusable_deploy-artifacts.yaml
     with:
       project: test
-      build-name: ${{ needs.aggregate-build-info.outputs.build-name }}
-      metadata-build-id: ${{ needs.aggregate-build-info.outputs.build-id }}
+      build-name: test-build
+      metadata-build-id: ${{ github.run_number }}-buildinfo
       build-id: ${{ github.run_number }}
       artifact-name: ${{ needs.sign-artifacts.outputs.artifact-name }}
       version: ${{ needs.extract-version.outputs.version }}
@@ -223,11 +222,11 @@ jobs:
       dry-run: false
   # create-release-bundle - Create a release bundle from deployed artifacts for distribution
   create-release-bundle:
-    needs: [deploy-artifacts, extract-version, aggregate-build-info]
+    needs: [deploy-artifacts, extract-version]
     uses: ./.github/workflows/reusable_create-release-bundle.yaml
     with:
       project: test
-      build-names: ${{needs.aggregate-build-info.outputs.build-name}}:${{ needs.aggregate-build-info.outputs.build-id }} # for multiple builds it would be test-build-1:build_id1,test-build-2:build_id2"
+      build-names: test-build:${{ github.run_number }} # for multiple builds it would be test-build-1:build_id1,test-build-2:build_id2"
       bundle-name: test-release
       version: ${{ needs.extract-version.outputs.version }}
       artifactory-oidc-provider-name: gh-dev-test

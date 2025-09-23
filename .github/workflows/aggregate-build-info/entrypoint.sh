@@ -22,16 +22,12 @@ error() {
     exit 1
 }
 
-# Default values
+# Default values for optional arguments
 DRY_RUN="false"
-PROJECT=""
-PARENT_BUILD_NAME=""
-PARENT_BUILD_ID=""
-BUILD_NAME_PATTERN=""
 BUILD_INFO_REPO=""
 
 show_help() {
-  echo "Usage: $0 --project <project> --parent-build-name <name> --parent-build-id <id> --build-name-pattern <pattern> [OPTIONS]" >&2
+  echo "Usage: $0 --project <project> --parent-build-name <name> --parent-build-id <id> --build-info-search-pattern <pattern> [OPTIONS]" >&2
   echo "" >&2
   echo "Aggregates multiple JFrog build-infos into a single parent build using jf rt build-append" >&2
   echo "" >&2
@@ -39,7 +35,7 @@ show_help() {
   echo "  --project <project>              JFrog Artifactory project name" >&2
   echo "  --parent-build-name <name>       Name for the parent aggregated build" >&2
   echo "  --parent-build-id <id>           Build ID for the parent aggregated build" >&2
-  echo "  --build-name-pattern <pattern>   Pattern to match matrix build names (e.g., 'test-build-*')" >&2
+  echo "  --build-info-search-pattern <pattern>   Pattern to match matrix build names (e.g., 'test-build-*')" >&2
   echo "" >&2
   echo "Options:" >&2
   echo "  --build-info-repo <repo>         Project-scoped build-info repo (default: <project>-build-info)" >&2
@@ -47,8 +43,8 @@ show_help() {
   echo "  --help, -h                       Show this help message" >&2
   echo "" >&2
   echo "Examples:" >&2
-  echo "  $0 --project test --parent-build-name myapp --parent-build-id 123 --build-name-pattern 'myapp-*'" >&2
-  echo "  $0 --project test --parent-build-name myapp --parent-build-id 123 --build-name-pattern 'myapp-*' --dry-run" >&2
+  echo "  $0 --project test --parent-build-name myapp --parent-build-id 123 --build-info-search-pattern 'myapp-*'" >&2
+  echo "  $0 --project test --parent-build-name myapp --parent-build-id 123 --build-info-search-pattern 'myapp-*' --dry-run" >&2
 }
 
 # Parse command line arguments
@@ -66,8 +62,8 @@ while [[ $# -gt 0 ]]; do
       PARENT_BUILD_ID="$2"
       shift 2
       ;;
-    --build-name-pattern)
-      BUILD_NAME_PATTERN="$2"
+    --build-info-search-pattern)
+      BUILD_INFO_SEARCH_PATTERN="$2"
       shift 2
       ;;
     --build-info-repo)
@@ -105,8 +101,8 @@ fi
 if [[ -z "${PARENT_BUILD_ID:-}" ]]; then
   error "--parent-build-id is required"
 fi
-if [[ -z "${BUILD_NAME_PATTERN:-}" ]]; then
-  error "--build-name-pattern is required"
+if [[ -z "${BUILD_INFO_SEARCH_PATTERN:-}" ]]; then
+  error "--build-info-search-pattern is required"
 fi
 
 # Set defaults
@@ -130,14 +126,13 @@ echo "Project:             $PROJECT"
 
 # === Construct AQL ===
 # Calculate the date 90 days ago for proper AQL syntax
-
 LOOKBACK_DATE=$(date -d "90 days ago" -u +"%Y-%m-%dT%H:%M:%S.000Z")
 read -r -d '' AQL <<AQL || true
 items.find({
   "\$and":[
     {"repo":{"\$eq":"$BUILD_INFO_REPO"}},
     {"path":{"\$eq":"$PARENT_BUILD_NAME"}},
-    {"name":{"\$match":"$PARENT_BUILD_ID-*.json"}},
+    {"name":{"\$match":"$BUILD_INFO_SEARCH_PATTERN.json"}},
     {"created":{"\$gte":"$LOOKBACK_DATE"}}
   ]
 }).include("path","name")

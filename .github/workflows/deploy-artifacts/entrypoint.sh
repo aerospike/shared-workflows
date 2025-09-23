@@ -242,6 +242,9 @@ upload_generic_files() {
   done < <(find . -type f \( -not -name "*.deb" -not -name "*.rpm" -not -name "*.asc" \) -print0)
 }
 
+
+
+
 # Note for future: This helper that checks if the build exists is needed
 # because this functionality is not in the jf command line. There are ways to do this with the rest API but for the specific
 # purpose of checking if there is already a build with the same name and number, this looks like the cleanest solution.
@@ -251,7 +254,7 @@ check_build_exists() {
   local project="$3"
   
   local count
-  count=$(jf rt search "${project}-build-info/$build_name/$build_number" --count 2>/dev/null | tail -n 1)
+  count=$(jf rt search "${project}-build-info/$build_name/$build_number*" --count 2>/dev/null | tail -n 1)
   
   if [[ "$count" =~ ^[0-9]+$ ]] && [[ "$count" -gt 0 ]]; then
     return 0  # Build exists
@@ -260,18 +263,92 @@ check_build_exists() {
   fi
 }
 
+
+discover_build_infos() {
+  local project="$1"
+  local parent_build_name="$2"
+  local build_info_search_pattern="$3"
+  local build_info_repo="${4:-${project}-build-info}"
+
+  echo "Discovering build-infos for project: $project" >&2
+  echo "Parent build name: $parent_build_name" >&2
+  echo "Search pattern: $build_info_search_pattern" >&2
+  echo "Build-info repo: $build_info_repo" >&2
+
+  # Construct AQL query using relative date operator (much simpler!)
+  read -r -d '' AQL <<AQL || true
+items.find({
+  "\$and":[
+    {"repo":{"\$eq":"$build_info_repo"}},
+    {"path":{"\$eq":"$parent_build_name"}},
+    {"name":{"\$match":"$build_info_search_pattern.json"}},
+    {"created":{"\$last":"1d"}}
+  ]
+}).include("path","name")
+AQL
+  echo jf rt curl -XPOST api/search/aql \
+    -H 'Content-Type: text/plain' \
+    -d "$AQL" >&2
+  # Query for build-info JSON files
+  local resp
+  resp=$(jf rt curl -XPOST api/search/aql \
+    -H 'Content-Type: text/plain' \
+    -d "$AQL")
+  echo "search response: $resp" >&2
+  # Extract child build IDs from JSON file names
+  if echo "$resp" | jq -e '.results' > /dev/null 2>&1; then
+    # Extract matrix build IDs from JSON file names
+    mapfile -t CHILD_BUILD_IDS < <(echo "$resp" | jq -r '.results[] | .name' | sed 's/-[0-9]*\.json$//' | sort -u)
+
+    # All matrix builds use the same build name
+    local child_names=()
+    for _ in "${CHILD_BUILD_IDS[@]}"; do
+      child_names+=("$parent_build_name")
+    done
+
+    echo "Found ${#child_names[@]} child builds" >&2
+
+    # Return results as global arrays (bash limitation)
+    CHILD_BUILD_IDS_RESULT=("${CHILD_BUILD_IDS[@]}")
+    CHILD_NAMES_RESULT=("${child_names[@]}")
+    return 0
+  else
+    echo "No build-info files found" >&2
+    echo "$resp" | jq -e '.results' >&2
+    CHILD_BUILD_IDS_RESULT=()
+    CHILD_NAMES_RESULT=()
+    return 1
+  fi
+}
+
+
 # This function handles publishing the tree of build info to jfrog
 # 1. publish the signed artifacts
 # 2. append metadata and artifact builld infos to new build info
 # 3. publish the new build info
 
 publish_build_info() {
+
+  # discover_build_infos(project, parent_build_name, build_info_search_pattern, build_info_repo)
+  # Discover build-infos for a matrix build
+
   if check_build_exists "$BUILD_NAME" "$METADATA_BUILD_NUMBER" "$PROJECT"; then
     run jf rt build-publish "$BUILD_NAME" "$ARTIFACT_BUILD_NUMBER" --project="$PROJECT"
+
+    discover_build_infos "$PROJECT" "$BUILD_NAME" "$METADATA_BUILD_NUMBER*" "$PROJECT-build-info"
+
+    # Access the results
+    if [[ ${#CHILD_BUILD_IDS_RESULT[@]} -gt 0 ]]; then
+      echo "Found ${#CHILD_BUILD_IDS_RESULT[@]} child builds:"
+      for i in "${!CHILD_BUILD_IDS_RESULT[@]}"; do
+        echo "  ${CHILD_NAMES_RESULT[$i]}/${CHILD_BUILD_IDS_RESULT[$i]}"
+        run jf rt build-append "$BUILD_NAME" "$BUILD_NUMBER" \
+                          "${CHILD_NAMES_RESULT[$i]}" "${CHILD_BUILD_IDS_RESULT[$i]}" --project="$PROJECT"
+      done
+    fi
+
     run jf rt build-append "$BUILD_NAME" "$BUILD_NUMBER" \
                           "$BUILD_NAME" "$ARTIFACT_BUILD_NUMBER" --project="$PROJECT"
-    run jf rt build-append "$BUILD_NAME" "$BUILD_NUMBER" \
-                          "$BUILD_NAME" "$METADATA_BUILD_NUMBER" --project="$PROJECT"
     run jf rt build-publish "$BUILD_NAME" "$BUILD_NUMBER" --project="$PROJECT"
   else
     echo "Metadata build info not found. Aborting..." >&2

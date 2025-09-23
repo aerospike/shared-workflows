@@ -12,7 +12,7 @@ This workflow aggregates multiple JFrog build-infos into a single parent build u
 | `project`                        | JFrog Artifactory project name                        | Yes      | -                               |
 | `parent-build-name`              | Name for the parent aggregated build                  | Yes      | -                               |
 | `parent-build-id`                | Build ID for the parent aggregated build              | Yes      | -                               |
-| `build-name-pattern`             | Pattern to match child build names (e.g., "myapp-\*") | Yes      | -                               |
+| `build-names-search-pattern`     | Pattern to match child build names (e.g., "myapp-\*") | Yes      | -                               |
 | `artifactory-url`                | JFrog Artifactory URL                                 | No       | `https://artifact.aerospike.io` |
 | `artifactory-oidc-provider-name` | OIDC provider name                                    | No       | `gh-aerospike`                  |
 | `artifactory-oidc-audience`      | OIDC audience                                         | No       | `aerospike`                     |
