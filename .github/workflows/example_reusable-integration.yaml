@@ -128,7 +128,7 @@ jobs:
       runs-on: ${{ matrix.runs-on }}
       project: test
       build-name: test-build
-      build-id: ${{ github.run_number }}-${{ matrix.distro }}-${{ matrix.arch }}
+      build-id: ${{ github.run_number }}-buildinfo-${{ matrix.distro }}-${{ matrix.arch }}
       checkout-path: project-location # In the case of running in shared_workflows checkout-path and source-path will have the same content but we put them here by way of example.
       source-path: repo-source
       working-directory: repo-source/.github/workflows/execute-build/test_apps/hi
@@ -157,7 +157,7 @@ jobs:
     with:
       project: test
       build-name: ${{needs.build-packages.outputs.build-name}}
-      build-id: ${{needs.build-packages.outputs.build-id}}
+      build-id: ${{github.run_number}}-buildinfo
       build-name-search-pattern: ${{needs.build-packages.outputs.build-name}}*
       artifact-name: ${{needs.build-packages.outputs.artifact-name}}
       combine-artifacts: true
@@ -213,7 +213,8 @@ jobs:
     with:
       project: test
       build-name: ${{ needs.aggregate-build-info.outputs.build-name }}
-      build-id: ${{ needs.aggregate-build-info.outputs.build-id }}
+      metadata-build-id: ${{ needs.aggregate-build-info.outputs.build-id }}
+      build-id: ${{ github.run_number }}
       artifact-name: ${{ needs.sign-artifacts.outputs.artifact-name }}
       version: ${{ needs.extract-version.outputs.version }}
       retention-days: 1

@@ -29,6 +29,8 @@ jobs:
       project: test
       build-name: test-upload-workflow
       version: v1.0.0
+      build-id: ${{ github.run_number }}
+      metadata-build-id: ${{ github.run_number }}-metadata
       artifactory-url: https://artifact.aerospike.io
       artifactory-oidc-provider-name: gh-aerospike
       artifactory-oidc-audience: aerospike
