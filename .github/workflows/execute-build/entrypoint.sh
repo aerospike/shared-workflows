@@ -147,6 +147,9 @@ run() {
     "$@"
   fi
 }
+run_optional() {
+    run "$@" || echo "Warning: $*" >&2
+}
 
 main() {
   if [[ "$DRY_RUN" == "true" ]]; then

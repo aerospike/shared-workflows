@@ -232,6 +232,7 @@ upload_generic_files() {
   fi
 
   while IFS= read -r -d '' file; do
+
     if [[ -f "$file" ]]; then
       echo "Uploading generic file: $file" >&2
       run jf rt upload "$file" "$PROJECT-generic-dev-local" --flat=false \
@@ -278,7 +279,6 @@ AQL
   echo "search response: $resp" >&2
   # Extract child build IDs from JSON file names
   if echo "$resp" | jq -e '.results' > /dev/null 2>&1; then
-    # Extract matrix build IDs from JSON file names
     mapfile -t CHILD_BUILD_IDS < <(echo "$resp" | jq -r '.results[] | .name' | sed 's/-[0-9]*\.json$//' | sort -u)
 
     echo "Found ${#CHILD_BUILD_IDS[@]} child builds" >&2
