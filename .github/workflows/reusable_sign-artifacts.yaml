@@ -63,7 +63,7 @@ jobs:
   sign:
     runs-on: ${{ inputs.runs-on }}
     outputs:
-      artifact-name: ${{ steps.sign-outputs.outputs.artifact-name}}
+      artifact-name: ${{ steps.sign-outputs.outputs.artifact-name }}
     env:
       CHECKOUT_REF: feature/INFRA-189-build-info-in-build-step # Latest commit hash for development
     steps:

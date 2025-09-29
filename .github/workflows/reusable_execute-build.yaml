@@ -182,7 +182,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ inputs.artifact-name }}
-          path: ${{ inputs.working-directory }}/${{ inputs.artifact-directory }}
+          path: ${{ inputs.working-directory != '' && format('{0}/{1}', inputs.working-directory, inputs.artifact-directory) || inputs.artifact-directory }}
           retention-days: ${{ inputs.retention-days }}
 
       - name: Set Build Info Outputs

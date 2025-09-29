@@ -209,8 +209,8 @@ main() {
     echo "Collecting build-info for $BUILD_NAME/$BUILD_ID..." >&2
     echo "Publishing from working directory: $(pwd)" >&2
     
-    run-optional jf rt build-collect-env "$BUILD_NAME" "$BUILD_ID" --project="$PROJECT"
-    run-optional jf rt build-add-git "$BUILD_NAME" "$BUILD_ID" --project="$PROJECT"
+    run_optional jf rt build-collect-env "$BUILD_NAME" "$BUILD_ID" --project="$PROJECT"
+    run_optional jf rt build-add-git "$BUILD_NAME" "$BUILD_ID" --project="$PROJECT"
     run jf rt build-publish "$BUILD_NAME" "$BUILD_ID" --project="$PROJECT"
     
     echo "Published build-info: $BUILD_NAME/$BUILD_ID" >&2
