@@ -172,7 +172,6 @@ main() {
     echo "$BUILD_SCRIPT" >> "$temp_script"
     chmod +x "$temp_script"
     echo "temp_script: $temp_script"
-    cat "$temp_script"
     resolved_build_script="$temp_script"
     
     echo "Created temporary script from inline commands: $temp_script" >&2
@@ -210,14 +209,9 @@ main() {
     echo "Collecting build-info for $BUILD_NAME/$BUILD_ID..." >&2
     echo "Publishing from working directory: $(pwd)" >&2
     
-    # Collect environment variables for build-info
-    run jf rt build-collect-env "$BUILD_NAME" "$BUILD_ID" --project="$PROJECT" || true
-    
-    # Add git information to build-info
-    run jf rt build-add-git "$BUILD_NAME" "$BUILD_ID" --project="$PROJECT" || true
-    
-    # Publish build-info to JFrog (without uploading artifacts)
-    run jf rt build-publish "$BUILD_NAME" "$BUILD_ID" --project="$PROJECT" || true
+    run-optional jf rt build-collect-env "$BUILD_NAME" "$BUILD_ID" --project="$PROJECT"
+    run-optional jf rt build-add-git "$BUILD_NAME" "$BUILD_ID" --project="$PROJECT"
+    run jf rt build-publish "$BUILD_NAME" "$BUILD_ID" --project="$PROJECT"
     
     echo "Published build-info: $BUILD_NAME/$BUILD_ID" >&2
   fi
