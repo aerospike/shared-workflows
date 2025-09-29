@@ -121,4 +121,4 @@ jobs:
             "${{ inputs.build-id }}" \
             "${{ inputs.metadata-build-id }}" \
             $dry_run_arg
-          echo "build-id=$BUILD_ID" >> $GITHUB_OUTPUT
+          echo "build-id=${{ inputs.build-id }}" >> $GITHUB_OUTPUT
