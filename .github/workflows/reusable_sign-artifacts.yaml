@@ -65,7 +65,7 @@ jobs:
     outputs:
       artifact-name: ${{ steps.sign-outputs.outputs.artifact-name }}
     env:
-      CHECKOUT_REF: feature/INFRA-189-build-info-in-build-step # Latest commit hash for development
+      CHECKOUT_REF: 9528942eff580457800a2ca2a9a0bb5e309fa80c # Latest commit hash for latest release
     steps:
       - name: Download Unsigned Artifacts
         uses: actions/download-artifact@v4
