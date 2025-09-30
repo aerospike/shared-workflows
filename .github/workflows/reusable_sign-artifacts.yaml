@@ -77,7 +77,7 @@ jobs:
           fetch-depth: 1
 
       - name: Set up GPG
-        uses: aerospike/shared-workflows/.github/actions/setup-gpg@dda8173aca1f1e73f95267572a7d3849cd00f1b8 # v1.0.0
+        uses: aerospike/shared-workflows/.github/actions/setup-gpg@9528942eff580457800a2ca2a9a0bb5e309fa80c # v1.3.0
         with:
           gpg-private-key: ${{ secrets.gpg-private-key }}
           gpg-public-key: ${{ secrets.gpg-public-key }}
