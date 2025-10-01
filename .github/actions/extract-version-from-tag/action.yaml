@@ -8,7 +8,9 @@ inputs:
   version-file:
     description: "Path to VERSION file (default: 'VERSION')"
     required: false
-    default: VERSION
+  default-version:
+    description: Default version to use if no version is found
+    required: false
 outputs:
   version:
     description: Extracted version
@@ -36,8 +38,14 @@ runs:
           TAG=${GITHUB_REF##*/}
           SOURCE="tag"
         else
-          echo "No version sources found, exiting"
-          exit 1
+          echo "No version sources found"
+          if [[ -n "${{ inputs.default-version }}" ]]; then
+            VERSION="${{ inputs.default-version }}"
+            SOURCE="fallback"
+          else
+            echo "No version sources found, exiting"
+            exit 1
+          fi
         fi
 
         # Strip the prefix if it exists
