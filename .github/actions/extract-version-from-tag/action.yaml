@@ -37,10 +37,10 @@ runs:
           SOURCE="tag"
         else
           echo "No version sources found. Using fallback generated from latest tag."
-            VERSION="$( git describe --tags )"
-            SOURCE="fallback"
+          TAG=$(git describe --tags)
+          VERSION=$TAG
+          SOURCE="fallback"
         fi
-
         # Strip the prefix if it exists
         if [[ "$VERSION" == "${{ inputs.tag-prefix }}"* ]]; then
             VERSION=${VERSION#${{ inputs.tag-prefix }}}
