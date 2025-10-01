@@ -8,9 +8,7 @@ inputs:
   version-file:
     description: "Path to VERSION file (default: 'VERSION')"
     required: false
-  default-version:
-    description: Default version to use if no version is found
-    required: false
+    default: VERSION
 outputs:
   version:
     description: Extracted version
@@ -18,9 +16,6 @@ outputs:
   git_tag:
     description: Full git tag or source
     value: ${{ steps.extract.outputs.git_tag }}
-  source:
-    description: Where version came from (file, tag, or fallback)
-    value: ${{ steps.extract.outputs.source }}
 runs:
   using: composite
   steps:
@@ -38,21 +33,14 @@ runs:
           TAG=${GITHUB_REF##*/}
           SOURCE="tag"
         else
-          echo "No version sources found"
-          if [[ -n "${{ inputs.default-version }}" ]]; then
-            VERSION="${{ inputs.default-version }}"
+          echo "No version sources found. Using fallback generated from latest tag."
+            VERSION="$( git describe --tags )"
             SOURCE="fallback"
-          else
-            echo "No version sources found, exiting"
-            exit 1
-          fi
         fi
 
         # Strip the prefix if it exists
-        if [[ "$TAG" == "${{ inputs.tag-prefix }}"* ]]; then
-            VERSION=${TAG#${{ inputs.tag-prefix }}}
-        else
-            VERSION=$TAG
+        if [[ "$VERSION" == "${{ inputs.tag-prefix }}"* ]]; then
+            VERSION=${VERSION#${{ inputs.tag-prefix }}}
         fi
 
         echo "version=$VERSION" >> $GITHUB_OUTPUT
