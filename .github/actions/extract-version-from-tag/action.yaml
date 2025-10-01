@@ -16,6 +16,9 @@ outputs:
   git_tag:
     description: Full git tag or source
     value: ${{ steps.extract.outputs.git_tag }}
+  source:
+    description: Where version came from (file, tag, or fallback)
+    value: ${{ steps.extract.outputs.source }}
 runs:
   using: composite
   steps:
