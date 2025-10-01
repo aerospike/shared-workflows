@@ -136,6 +136,8 @@ jobs:
           repository: ${{ inputs.source-repository }}
           ref: ${{ inputs.source-ref }}
           path: ${{ inputs.source-path }}
+          fetch-tags: true
+          recursive: true
           fetch-depth: 1
 
       - name: Set up JFrog CLI
