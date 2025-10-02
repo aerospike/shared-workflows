@@ -61,7 +61,7 @@ jobs:
   create-release-bundle:
     runs-on: ${{ inputs.runs-on }}
     env:
-      CHECKOUT_REF: 9528942eff580457800a2ca2a9a0bb5e309fa80c # Latest commit hash for latest release
+      CHECKOUT_REF: feature/INFRA-189-build-info-in-build-step # Latest commit hash for latest release
     steps:
       - name: Checkout shared-workflows repository
         uses: actions/checkout@v5

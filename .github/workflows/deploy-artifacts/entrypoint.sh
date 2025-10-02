@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-
+set -x
 export PS4='+($LINENO): ${FUNCNAME[0]:+${FUNCNAME[0]}(): }'
 trap 'handle_error ${LINENO}' ERR
 # shellcheck disable=SC2317
