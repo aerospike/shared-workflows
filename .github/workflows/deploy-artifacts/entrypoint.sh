@@ -232,7 +232,7 @@ upload_generic_files() {
   fi
 
   while IFS= read -r -d '' file; do
-
+    echo "Processing generic file: $file" >&2
     if [[ -f "$file" ]]; then
       echo "Uploading generic file: $file" >&2
       run jf rt upload "$file" "$PROJECT-generic-dev-local" --flat=false \
@@ -240,7 +240,7 @@ upload_generic_files() {
         --build-number="$ARTIFACT_BUILD_NUMBER" \
         --project="$PROJECT"
     fi
-  done < <(find . -type f \( -not -name "*.deb" -not -name "*.rpm" -not -name "*.asc" \) -print0)
+  done < <(find . \( -not -name "*.deb" -not -name "*.rpm" -not -name "*.asc" \) -print0)
 }
 
 
@@ -334,7 +334,8 @@ main() {
 
   structure_build_artifacts
   cd structured_build_artifacts
-  
+  echo "Structured build artifacts:" >&2
+  find . >&2
   # Upload all packages
   upload_rpm_packages
   upload_deb_packages
