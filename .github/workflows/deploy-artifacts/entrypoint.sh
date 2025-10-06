@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 set -euo pipefail
-set -x
 export PS4='+($LINENO): ${FUNCNAME[0]:+${FUNCNAME[0]}(): }'
 trap 'handle_error ${LINENO}' ERR
 # shellcheck disable=SC2317
@@ -300,7 +299,7 @@ AQL
 publish_build_info() {
     run jf rt build-publish "$BUILD_NAME" "$ARTIFACT_BUILD_NUMBER" --project="$PROJECT"
 
-    discover_build_infos "$PROJECT" "$BUILD_NAME" "$METADATA_BUILD_NUMBER*" "$PROJECT-build-info"
+    discover_build_infos "$PROJECT" "$BUILD_NAME" "$METADATA_BUILD_NUMBER*" "$PROJECT-build-info" || true
 
     # Access the results
     if [[ ${#CHILD_BUILD_IDS_RESULT[@]} -gt 0 ]]; then
