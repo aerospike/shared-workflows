@@ -5,6 +5,6 @@ useradd -r -s /bin/false builder
 USER builder
 COPY hi.c Makefile ./
 RUN make build
-FROM distroless/static-debian11:nonroot
+FROM gcr.io/distroless/static-debian12:debug-nonroot
 COPY --from=builder hi /usr/local/bin/hi
 CMD ["hi"]
