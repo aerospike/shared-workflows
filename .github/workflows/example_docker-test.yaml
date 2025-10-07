@@ -9,7 +9,7 @@ env:
   OIDC_PROVIDER_NAME: gh-dev-test
   OIDC_AUDIENCE: aerospike/testing
   JF_URL: https://artifact.aerospike.io
-  JF_REGISTRY: artifactory.aerospike.io
+  JF_REGISTRY: artifact.aerospike.io
   JF_PROJECT: test
   IMAGE_NAME: test-image
   BUILD_NAME: test-build-docker
