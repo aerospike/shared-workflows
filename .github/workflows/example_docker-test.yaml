@@ -6,7 +6,7 @@ on:
     branches: [main]
 
 env:
-  OIDC_PROVIDER_NAME: gh-aerospike
+  OIDC_PROVIDER_NAME: gh-dev-test
   OIDC_AUDIENCE: aerospike/testing
   JF_URL: https://artifact.aerospike.io
   JF_REGISTRY: artifactory.aerospike.io
