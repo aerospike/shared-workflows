@@ -51,7 +51,6 @@ jobs:
         with:
           context: .github/workflows/execute-build/test_apps/hi
           push: true
-          # artifact.aerospike.io/ecosystem-container-dev-local/aerospike-vector-search:1.1.1-main-SNAPSHOT
           tags: ${{ env.JF_REGISTRY }}/${{ env.JF_PROJECT }}-container-dev-local/${{ env.IMAGE_NAME }}:${{ github.run_number }}
 
       - name: Attest docker image
