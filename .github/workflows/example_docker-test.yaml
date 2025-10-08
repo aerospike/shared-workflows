@@ -12,7 +12,6 @@ env:
   JF_REGISTRY: artifact.aerospike.io
   JF_PROJECT: test
   IMAGE_NAME: test-image
-  BUILD_NAME: test-build-docker
 
 jobs:
   build-test-deploy:
@@ -20,8 +19,8 @@ jobs:
     permissions:
       contents: read
       packages: write
-      attestations: write # Required for attestation
-      id-token: write # Added for OIDC token access
+      attestations: write
+      id-token: write
 
     steps:
       - name: Checkout code
@@ -32,6 +31,7 @@ jobs:
         uses: jfrog/setup-jfrog-cli@v4.5.13
         env:
           JF_URL: ${{ env.JF_URL }}
+          JF_PROJECT: ${{ env.JF_PROJECT }}
         with:
           version: 2.78.8
           oidc-provider-name: ${{ env.OIDC_PROVIDER_NAME }}
@@ -46,6 +46,8 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
 
       - name: Build and push Docker image
         id: build-and-push
@@ -53,7 +55,25 @@ jobs:
         with:
           context: .github/workflows/execute-build/test_apps/hi
           push: true
+          platforms: linux/amd64,linux/arm64
           tags: ${{ env.JF_REGISTRY }}/${{ env.JF_PROJECT }}-container-dev-local/${{ env.IMAGE_NAME }}:${{ github.run_number }}
+
+      - name: Process image metadata
+        run: |
+          image_name="$JF_REGISTRY/${JF_PROJECT}-container-dev-local/$IMAGE_NAME:${GITHUB_RUN_NUMBER}"
+          image_digest="${{ steps.build-and-push.outputs.digest }}"
+          image_ref="${image_name}@${image_digest}"
+          echo "Processing image: $image_ref"
+          jf rt build-docker-create \
+            --image-file <(echo "$image_ref") \
+            "${JF_PROJECT}-container-dev-local"
+
+      - name: Publish Build Info
+        run: |
+          export JFROG_CLI_LOG_LEVEL=INFO
+          jf rt build-collect-env  "$JFROG_CLI_BUILD_NAME" "$JFROG_CLI_BUILD_NUMBER"
+          jf rt build-add-git      "$JFROG_CLI_BUILD_NAME" "$JFROG_CLI_BUILD_NUMBER"
+          jf rt build-publish --detailed-summary "$JFROG_CLI_BUILD_NAME" "$JFROG_CLI_BUILD_NUMBER"
 
       - name: Attest docker image
         uses: actions/attest-build-provenance@v2
