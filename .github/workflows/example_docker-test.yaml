@@ -1,0 +1,35 @@
+name: Example Docker Build & Deploy
+permissions:
+  contents: read
+  packages: write
+  attestations: write
+  id-token: write
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+
+jobs:
+  extract-version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Extract Version
+        id: extract
+        uses: ./.github/actions/extract-version-from-tag
+        with:
+          version-file: .github/workflows/VERSION.example
+    outputs:
+      version: ${{ steps.extract.outputs.version }}
+      git_tag: ${{ steps.extract.outputs.git_tag }}
+
+  build-test-deploy:
+    uses: ./.github/workflows/reusable_docker-build-deploy.yaml
+    needs: extract-version
+    with:
+      jf_project: test
+      image_name: test-image
+      tag: artifact.aerospike.io/test-container-dev-local/test-image:${{ needs.extract-version.outputs.version }}
+      context: ./.github/workflows/execute-build/test_apps/hi
+      file: ./.github/workflows/execute-build/test_apps/hi/Dockerfile
+      jf_build_name: test-container
