@@ -47,7 +47,7 @@ jobs:
   # a single workflow that can be instrumented in the future.
   # This is also an example of using a matrix strategy to build in GHA
   build-packages:
-    uses: aerospike/shared-workflows/.github/workflows/reusable_execute-build.yaml@105988bdd509acb03f070ab5fafe98e1a53bee69
+    uses: aerospike/shared-workflows/.github/workflows/reusable_execute-build.yaml@feature/INFRA-206-docker-builds
     needs: extract-version
     # Matrix strategy: Multi-platform builds across Ubuntu/Debian/RPM families (x86_64 native, ARM64 emulated)
     strategy:
@@ -179,7 +179,7 @@ jobs:
           retention-days: 1
   sign-artifacts:
     needs: package-built-artifacts
-    uses: aerospike/shared-workflows/.github/workflows/reusable_sign-artifacts.yaml@105988bdd509acb03f070ab5fafe98e1a53bee69
+    uses: aerospike/shared-workflows/.github/workflows/reusable_sign-artifacts.yaml@feature/INFRA-206-docker-builds
     with:
       retention-days: 1
       artifactory-oidc-provider-name: gh-dev-test
@@ -192,7 +192,7 @@ jobs:
 
   deploy-artifacts:
     needs: [sign-artifacts, extract-version]
-    uses: aerospike/shared-workflows/.github/workflows/reusable_deploy-artifacts.yaml@105988bdd509acb03f070ab5fafe98e1a53bee69
+    uses: aerospike/shared-workflows/.github/workflows/reusable_deploy-artifacts.yaml@feature/INFRA-206-docker-builds
     with:
       project: test
       build-name: test-build
@@ -207,7 +207,7 @@ jobs:
   # create-release-bundle - Create a release bundle from deployed artifacts for distribution
   create-release-bundle:
     needs: [deploy-artifacts, extract-version]
-    uses: aerospike/shared-workflows/.github/workflows/reusable_create-release-bundle.yaml@105988bdd509acb03f070ab5fafe98e1a53bee69
+    uses: aerospike/shared-workflows/.github/workflows/reusable_create-release-bundle.yaml@feature/INFRA-206-docker-builds
     with:
       project: test
       build-names: test-build:${{ github.run_number }} # for multiple builds it would be test-build-1:build_id1,test-build-2:build_id2"

@@ -119,7 +119,7 @@ jobs:
       build-id: ${{ steps.build-info.outputs.build-id }}
       artifact-name: ${{ steps.build-info.outputs.artifact-name }}
     env:
-      CHECKOUT_REF: 105988bdd509acb03f070ab5fafe98e1a53bee69 # Latest commit hash for latest release
+      CHECKOUT_REF: feature/INFRA-206-docker-builds # Latest commit hash for latest release
     steps:
       - name: Checkout shared-workflows repository
         uses: actions/checkout@v5
@@ -141,7 +141,7 @@ jobs:
           fetch-depth: 1
 
       - name: Set up JFrog CLI
-        uses: jfrog/setup-jfrog-cli@c32bf10843e4071112c4ea3abf622d3b27cd8c17
+        uses: jfrog/setup-jfrog-cli@751c204e8e1d3fe053e30218a2143ab4fe100d95 # v4.6.0
         env:
           JF_URL: ${{ inputs.artifactory-url }}
           JF_PROJECT: ${{ inputs.project }}
