@@ -1,0 +1,129 @@
+name: Reusable Docker Build, Publish & Attest (minimal)
+
+on:
+  workflow_call:
+    inputs:
+      # Registry & image
+      jf_url: { type: string, default: https://artifact.aerospike.io }
+      jf_project: { type: string, required: true }
+      jf_registry: { type: string, default: artifact.aerospike.io }
+      jf_build_name: { type: string, required: false }
+      repo_scope: { type: string, default: -container-dev-local } # e.g. "-container-preview-public-local"
+      image_name: { type: string, required: true }
+
+      # Build
+      context: { type: string, default: . }
+      file: { type: string, default: Dockerfile }
+      platforms: { type: string, default: "linux/amd64,linux/arm64" } # pass-through
+      push: { type: boolean, default: true }
+      tag: { type: string, required: true } # explicit tag required
+
+      # Security / metadata
+      provenance: { type: string, default: mode=max } # "", "false", or "mode=max"
+      sbom: { type: string, default: "true" }
+      attest: { type: boolean, default: true }
+
+      # Escape hatches
+      build_args_json: { type: string, default: "{}" } # {"KEY":"VALUE",...}
+      labels_json: { type: string, default: "{}" } # {"key":"value",...}
+
+      # OIDC defaults
+      oidc_provider_name: { type: string, default: gh-dev-test }
+      oidc_audience: { type: string, default: aerospike/testing }
+
+    outputs:
+      digest:
+        description: Image manifest digest
+        value: ${{ jobs.build.outputs.digest }}
+      image_ref:
+        description: Primary tag with @digest
+        value: ${{ jobs.build.outputs.image_ref }}
+      tag:
+        description: Primary tag used
+        value: ${{ jobs.build.outputs.tag }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
+      image_ref: ${{ steps.meta.outputs.image_ref }}
+      tag: ${{ inputs.tag }}
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install JFrog CLI (OIDC)
+        id: jf
+        uses: jfrog/setup-jfrog-cli@751c204e8e1d3fe053e30218a2143ab4fe100d95 # v4.6.0
+        env:
+          JF_URL: ${{ inputs.jf_url }}
+          JF_PROJECT: ${{ inputs.jf_project }}
+          JF_BUILD_NAME: ${{ inputs.jf_build_name || github.workflow }}
+        with:
+          version: 2.78.8
+          oidc-provider-name: ${{ inputs.oidc_provider_name }}
+          oidc-audience: ${{ inputs.oidc_audience }}
+
+      - name: Docker login to Artifactory
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ inputs.jf_registry }}
+          username: ${{ steps.jf.outputs.oidc-user }}
+          password: ${{ steps.jf.outputs.oidc-token }}
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Prepare build args/labels
+        shell: bash
+        run: |
+          set -euo pipefail
+          to_kv() { jq -r 'to_entries|map("\(.key)=\(.value)")|.[]'; }
+          echo '${{ inputs.build_args_json }}' | to_kv > /tmp/build_args
+          echo '${{ inputs.labels_json }}' | to_kv > /tmp/labels
+          echo "BUILD_ARGS=$(cat /tmp/build_args)" >> "$GITHUB_ENV"
+          echo "LABELS=$(cat /tmp/labels)" >> "$GITHUB_ENV"
+
+      - name: Build & (optionally) push
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ inputs.context }}
+          file: ${{ inputs.file }}
+          platforms: ${{ inputs.platforms }}
+          push: ${{ inputs.push }}
+          tags: ${{ inputs.tag }}
+          provenance: ${{ inputs.provenance }}
+          sbom: ${{ inputs.sbom }}
+          build-args: ${{ env.BUILD_ARGS }}
+          labels: ${{ env.LABELS }}
+
+      - name: Register image with JFrog (build-docker-create)
+        id: meta
+        shell: bash
+        run: |
+          image_ref="${{ inputs.tag }}@${{ steps.build.outputs.digest }}"
+          echo "image_ref=${image_ref}" >> "$GITHUB_OUTPUT"
+          jf rt build-docker-create --image-file <(echo "$image_ref") "${{ inputs.jf_project }}${{ inputs.repo_scope }}"
+
+      - name: Publish Build Info
+        shell: bash
+        run: |
+          export JFROG_CLI_LOG_LEVEL=INFO
+          jf rt build-collect-env  "$JFROG_CLI_BUILD_NAME" "$JFROG_CLI_BUILD_NUMBER"
+          jf rt build-add-git      "$JFROG_CLI_BUILD_NAME" "$JFROG_CLI_BUILD_NUMBER"
+          jf rt build-publish --detailed-summary "$JFROG_CLI_BUILD_NAME" "$JFROG_CLI_BUILD_NUMBER"
+
+      - name: Attest OCI Image
+        if: ${{ inputs.attest }}
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: oci://${{ inputs.tag }}
+          subject-digest: ${{ steps.build.outputs.digest }}

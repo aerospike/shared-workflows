@@ -1,82 +1,34 @@
-name: Build, Test & Attest
-
+name: Example Docker Build & Deploy
+permissions:
+  contents: read
+  packages: write
+  attestations: write
+  id-token: write
 on:
   workflow_dispatch:
   pull_request:
     branches: [main]
 
-env:
-  OIDC_PROVIDER_NAME: gh-dev-test
-  OIDC_AUDIENCE: aerospike/testing
-  JF_URL: https://artifact.aerospike.io
-  JF_REGISTRY: artifact.aerospike.io
-  JF_PROJECT: test
-  IMAGE_NAME: test-image
-
 jobs:
-  build-test-deploy:
+  extract-version:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-      attestations: write
-      id-token: write
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v5
-
-      - name: Install JFrog CLI
-        id: setup-jfrog-cli
-        uses: jfrog/setup-jfrog-cli@v4.5.13
-        env:
-          JF_URL: ${{ env.JF_URL }}
-          JF_PROJECT: ${{ env.JF_PROJECT }}
+      - uses: actions/checkout@v5
+      - name: Extract Version
+        id: extract
+        uses: ./.github/actions/extract-version-from-tag
         with:
-          version: 2.78.8
-          oidc-provider-name: ${{ env.OIDC_PROVIDER_NAME }}
-          oidc-audience: ${{ env.OIDC_AUDIENCE }}
+          version-file: .github/workflows/VERSION.example
+    outputs:
+      version: ${{ steps.extract.outputs.version }}
+      git_tag: ${{ steps.extract.outputs.git_tag }}
 
-      - name: Docker login
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.JF_REGISTRY }}
-          username: ${{ steps.setup-jfrog-cli.outputs.oidc-user }}
-          password: ${{ steps.setup-jfrog-cli.outputs.oidc-token }}
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
-      - name: Build and push Docker image
-        id: build-and-push
-        uses: docker/build-push-action@v6
-        with:
-          context: .github/workflows/execute-build/test_apps/hi
-          push: true
-          platforms: linux/amd64,linux/arm64
-          tags: ${{ env.JF_REGISTRY }}/${{ env.JF_PROJECT }}-container-dev-local/${{ env.IMAGE_NAME }}:${{ github.run_number }}
-
-      - name: Process image metadata
-        run: |
-          image_name="$JF_REGISTRY/${JF_PROJECT}-container-dev-local/$IMAGE_NAME:${GITHUB_RUN_NUMBER}"
-          image_digest="${{ steps.build-and-push.outputs.digest }}"
-          image_ref="${image_name}@${image_digest}"
-          echo "Processing image: $image_ref"
-          jf rt build-docker-create \
-            --image-file <(echo "$image_ref") \
-            "${JF_PROJECT}-container-dev-local"
-
-      - name: Publish Build Info
-        run: |
-          export JFROG_CLI_LOG_LEVEL=INFO
-          jf rt build-collect-env  "$JFROG_CLI_BUILD_NAME" "$JFROG_CLI_BUILD_NUMBER"
-          jf rt build-add-git      "$JFROG_CLI_BUILD_NAME" "$JFROG_CLI_BUILD_NUMBER"
-          jf rt build-publish --detailed-summary "$JFROG_CLI_BUILD_NAME" "$JFROG_CLI_BUILD_NUMBER"
-
-      - name: Attest docker image
-        uses: actions/attest-build-provenance@v2
-        with:
-          subject-name: oci://${{ env.JF_REGISTRY }}/${{ env.JF_PROJECT }}-container-dev-local/${{ env.IMAGE_NAME }}
-          subject-digest: ${{ steps.build-and-push.outputs.digest }}
+  build-test-deploy:
+    uses: ./.github/workflows/reusable_docker-build-deploy.yaml
+    needs: extract-version
+    with:
+      jf_project: test
+      image_name: test-image
+      tag: artifact.aerospike.io/test-container-dev-local/test-image:${{ needs.extract-version.outputs.version }}
+      context: .github/workflows/execute-build/test_apps/hi
+      jf_build_name: test-container
