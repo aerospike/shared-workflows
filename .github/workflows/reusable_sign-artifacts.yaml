@@ -52,14 +52,20 @@ on:
         required: true
       gpg-key-pass:
         required: true
+    outputs:
+      artifact-name:
+        description: The name of the uploaded signed artifacts on github
+        value: ${{ jobs.sign.outputs.artifact-name }}
 permissions:
   contents: read
   id-token: write
 jobs:
   sign:
     runs-on: ${{ inputs.runs-on }}
+    outputs:
+      artifact-name: ${{ steps.sign-outputs.outputs.artifact-name }}
     env:
-      CHECKOUT_REF: 8fa7b46c484ec4330adc5c0b5916d1dfadda83de # Latest commit hash for development
+      CHECKOUT_REF: 105988bdd509acb03f070ab5fafe98e1a53bee69 # Latest commit hash for latest release
     steps:
       - name: Download Unsigned Artifacts
         uses: actions/download-artifact@v4
@@ -96,3 +102,7 @@ jobs:
           path: ${{ inputs.artifact-name }}
           overwrite: true
           retention-days: ${{ inputs.retention-days }}
+      - name: Set Outputs
+        id: sign-outputs
+        run: |
+          echo "artifact-name=${{ inputs.artifact-name }}" >> $GITHUB_OUTPUT

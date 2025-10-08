@@ -12,12 +12,13 @@ This workflow executes a custom build script and uploads the resulting artifacts
 | -------------------------------- | -------------------------------------------------------------------- | -------- | ------------------------------- |
 | `project`                        | JFrog Artifactory project name                                       | Yes      | -                               |
 | `build-name`                     | Name for this build in artifactory                                   | Yes      | -                               |
-| `build-version`                  | Version for this build in artifactory                                | Yes      | -                               |
+| `build-id`                       | Build ID for this build in artifactory                               | Yes      | -                               |
 | `build-script`                   | Inline bash commands to execute                                      | No\*     | -                               |
 | `build-script-path`              | Path to the build script file to execute                             | No\*     | -                               |
 | `artifact-directory`             | Directory that will contain all artifacts from this build            | Yes      | -                               |
 | `artifact-name`                  | Name for the uploaded artifacts                                      | No       | `build-artifacts`               |
 | `retention-days`                 | Retention days for the artifacts                                     | No       | `1`                             |
+| `working-directory`              | Working directory for build script execution                         | No       | -                               |
 | `artifactory-url`                | JFrog Artifactory URL                                                | No       | `https://artifact.aerospike.io` |
 | `artifactory-oidc-provider-name` | OIDC provider name                                                   | No       | `gh-aerospike`                  |
 | `artifactory-oidc-audience`      | OIDC audience                                                        | No       | `aerospike`                     |
@@ -47,7 +48,7 @@ jobs:
     with:
       project: my-project
       build-name: my-app
-      build-version: v1.0.0
+       build-id: 1234567890
       build-script: make clean && make all && cp build/* dist/
       artifact-directory: dist
       artifact-name: my-build-artifacts
@@ -64,7 +65,7 @@ jobs:
     with:
       project: my-project
       build-name: my-app
-      build-version: v1.0.0
+       build-id: 1234567890
       build-script-path: ./scripts/build.sh
       artifact-directory: dist
       artifact-name: my-build-artifacts

@@ -36,15 +36,14 @@ runs:
           TAG=${GITHUB_REF##*/}
           SOURCE="tag"
         else
-          echo "No version sources found, exiting"
-          exit 1
+          echo "No version sources found. Using fallback generated from latest tag."
+          TAG=$(git describe --tags)
+          SOURCE="fallback"
         fi
-
+        VERSION=$TAG
         # Strip the prefix if it exists
-        if [[ "$TAG" == "${{ inputs.tag-prefix }}"* ]]; then
-            VERSION=${TAG#${{ inputs.tag-prefix }}}
-        else
-            VERSION=$TAG
+        if [[ "$VERSION" == "${{ inputs.tag-prefix }}"* ]]; then
+            VERSION=${VERSION#${{ inputs.tag-prefix }}}
         fi
 
         echo "version=$VERSION" >> $GITHUB_OUTPUT

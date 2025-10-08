@@ -25,7 +25,9 @@ error() {
 # Default values
 DRY_RUN="false"
 BUILD_NAME=""
-BUILD_VERSION=""
+BUILD_ID=""
+PROJECT=""
+PUBLISH_BUILD_INFO="false"
 
 show_help() {
   echo "Usage: $0 --artifact-directory <dir> (--build-script <commands> | --build-script-path <file>) [OPTIONS]" >&2
@@ -40,14 +42,16 @@ show_help() {
   echo "  --build-script-path <file>     Path to build script file to execute" >&2
   echo "" >&2
   echo "Options:" >&2
-  echo "  --build-name <name>            Build name for JFrog upload" >&2
-  echo "  --build-version <version>      Build version for JFrog upload" >&2
+  echo "  --build-name <name>            Build name for JFrog build-info" >&2
+  echo "  --build-id <id>                 Build ID for JFrog build-info" >&2
+  echo "  --project <project>            JFrog project for build-info" >&2
+  echo "  --publish-build-info           Publish build-info to JFrog (without uploading artifacts)" >&2
   echo "  --dry-run                      Show what would be done without actually doing it" >&2
   echo "  --help, -h                     Show this help message" >&2
   echo "" >&2
   echo "Examples:" >&2
-  echo "  $0 --build-script-path ./scripts/build.sh --artifact-directory build-output --build-name my-app --build-version v1.0.0" >&2
-  echo "  $0 --build-script 'make all && cp build/* artifacts/' --artifact-directory artifacts --build-name my-app --build-version v1.0.0" >&2
+  echo "  $0 --build-script-path ./scripts/build.sh --artifact-directory build-output --build-name my-app --build-id 123" >&2
+  echo "  $0 --build-script 'make all && cp build/* artifacts/' --artifact-directory artifacts --build-name my-app --build-id 123" >&2
   echo "  $0 --build-script-path make.sh --artifact-directory artifacts --dry-run" >&2
 }
 
@@ -78,9 +82,17 @@ while [[ $# -gt 0 ]]; do
       BUILD_NAME="$2"
       shift 2
       ;;
-    --build-version)
-      BUILD_VERSION="$2"
+    --build-id)
+      BUILD_ID="$2"
       shift 2
+      ;;
+    --project)
+      PROJECT="$2"
+      shift 2
+      ;;
+    --publish-build-info)
+      PUBLISH_BUILD_INFO="true"
+      shift
       ;;
     --dry-run)
       DRY_RUN="true"
@@ -112,6 +124,19 @@ if [[ -z "${ARTIFACT_DIRECTORY:-}" ]]; then
   error "--artifact-directory is required. Use --help for usage information"
 fi
 
+# Validate build-info parameters if publishing
+if [[ "$PUBLISH_BUILD_INFO" == "true" ]]; then
+  if [[ -z "${BUILD_NAME:-}" ]]; then
+    error "--build-name is required when --publish-build-info is specified"
+  fi
+  if [[ -z "${BUILD_ID:-}" ]]; then
+    error "--build-id is required when --publish-build-info is specified"
+  fi
+  if [[ -z "${PROJECT:-}" ]]; then
+    error "--project is required when --publish-build-info is specified"
+  fi
+fi
+
 # Wrapper function that either executes or echoes commands
 run() {
   if [[ "$DRY_RUN" == "true" ]]; then
@@ -121,6 +146,9 @@ run() {
   else
     "$@"
   fi
+}
+run_optional() {
+    run "$@" || echo "Warning: $*" >&2
 }
 
 main() {
@@ -134,23 +162,19 @@ main() {
   echo "Build script: $BUILD_SCRIPT" >&2
   echo "Artifact directory: $ARTIFACT_DIRECTORY" >&2
   echo "Build name: $BUILD_NAME" >&2
-  echo "Build version: $BUILD_VERSION" >&2
+  echo "Build ID: $BUILD_ID" >&2
   echo "Dry run: $DRY_RUN" >&2
   
   # Handle build script based on type
   local resolved_build_script
 
   if [[ "$BUILD_SCRIPT_TYPE" == "inline" ]]; then
-    # Create a temporary script file from inline commands
-    # is_inline_script=true
-    
     local temp_script="/tmp/build-script-$$.sh"
     echo "#!/bin/bash" > "$temp_script"
     echo "set -euo pipefail" >> "$temp_script"
     echo "$BUILD_SCRIPT" >> "$temp_script"
     chmod +x "$temp_script"
     echo "temp_script: $temp_script"
-    cat "$temp_script"
     resolved_build_script="$temp_script"
     
     echo "Created temporary script from inline commands: $temp_script" >&2
@@ -181,6 +205,18 @@ main() {
     find "$ARTIFACT_DIRECTORY" -type f 
   else
     echo "   Would verify artifacts in: $ARTIFACT_DIRECTORY" >&2
+  fi
+  
+  # Collect and publish build-info if requested
+  if [[ "$PUBLISH_BUILD_INFO" == "true" ]]; then
+    echo "Collecting build-info for $BUILD_NAME/$BUILD_ID..." >&2
+    echo "Publishing from working directory: $(pwd)" >&2
+    
+    run_optional jf rt build-collect-env "$BUILD_NAME" "$BUILD_ID" --project="$PROJECT"
+    run_optional jf rt build-add-git "$BUILD_NAME" "$BUILD_ID" --project="$PROJECT"
+    run jf rt build-publish "$BUILD_NAME" "$BUILD_ID" --project="$PROJECT"
+    
+    echo "Published build-info: $BUILD_NAME/$BUILD_ID" >&2
   fi
   
   echo "Build-artifacts workflow completed successfully!" >&2

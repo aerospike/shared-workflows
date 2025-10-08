@@ -6,13 +6,12 @@ permissions:
   id-token: write
   contents: read
 
-# This workflow demonstrates the complete CI/CD pipeline using all four reusable
+# This workflow demonstrates the complete CI/CD pipeline using all reusable
 # workflows from shared-workflows. It shows how to chain workflows together to
-# create a production-ready artifact pipeline.
-# See the complementary docs/CICD-with-shared-actions.md for more details.
+# create a production-ready artifact pipeline with build-info aggregation.
 #
 # WORKFLOW FLOW:
-# 1. extract-version: The examples need a version to work with and this provides one from a test file.
+# 1. extract-version: Extract version from test file
 # 2. build-packages: Build packages across multiple platforms using matrix strategy (uses reusable_execute-build.yaml)
 # 3. package-built-artifacts: Package built artifacts into distributable formats (handles packaging in this example but could be done in the build step)
 # 4. sign-artifacts: GPG sign the packaged artifacts for security (uses reusable_sign-artifacts.yaml)
@@ -21,9 +20,8 @@ permissions:
 #
 #
 # USAGE:
-# This is an example workflow that consumers can copy and adapt for their own
-# projects. It demonstrates best practices for integrating shared-workflows
-# components into a complete CI/CD pipeline.
+# This example demonstrates best practices for integrating shared-workflows
+# components into a complete CI/CD pipeline with build-info aggregation.
 # =============================================================================
 
 jobs:
@@ -49,7 +47,7 @@ jobs:
   # a single workflow that can be instrumented in the future.
   # This is also an example of using a matrix strategy to build in GHA
   build-packages:
-    uses: ./.github/workflows/reusable_execute-build.yaml
+    uses: aerospike/shared-workflows/.github/workflows/reusable_execute-build.yaml@105988bdd509acb03f070ab5fafe98e1a53bee69
     needs: extract-version
     # Matrix strategy: Multi-platform builds across Ubuntu/Debian/RPM families (x86_64 native, ARM64 emulated)
     strategy:
@@ -128,24 +126,27 @@ jobs:
       runs-on: ${{ matrix.runs-on }}
       project: test
       build-name: test-build
-      build-version: v1.0.0
+      build-id: ${{ github.run_number }}-buildinfo-${{ matrix.distro }}-${{ matrix.arch }}
       checkout-path: project-location # In the case of running in shared_workflows checkout-path and source-path will have the same content but we put them here by way of example.
       source-path: repo-source
+      working-directory: repo-source/.github/workflows/execute-build/test_apps/hi
       build-script: |
-        cd repo-source/.github/workflows/execute-build/test_apps/hi
         uname -m
         uname -a
         which gcc
+        pwd
+        find .
         DISTRO=${{ matrix.distro }} \
         ARCH=${{ matrix.arch }} \
         EMULATED=${{ matrix.emulated }} \
         make docker-build
-      artifact-directory: repo-source/.github/workflows/execute-build/test_apps/hi/build
+      artifact-directory: build
       artifact-name: build-artifacts-${{ matrix.distro }}-${{ matrix.arch }}
       retention-days: 1 # default
       artifactory-url: https://artifact.aerospike.io # default
       artifactory-oidc-provider-name: gh-dev-test
       artifactory-oidc-audience: aerospike/testing
+      publish-build-info: true
       dry-run: false # default
   # This job demonstrates custom packaging logic using standard GitHub Actions (actions/checkout, actions/download-artifact, actions/upload-artifact)
   # No reusable actions from shared-workflows are used here - this is custom packaging logic that could be done in the build step
@@ -163,7 +164,6 @@ jobs:
       - name: Download All Matrix Artifacts
         uses: actions/download-artifact@v4
         with:
-          pattern: build-artifacts-*
           path: build-artifacts
           merge-multiple: true
       - name: Package Artifacts
@@ -179,11 +179,12 @@ jobs:
           retention-days: 1
   sign-artifacts:
     needs: package-built-artifacts
-    uses: ./.github/workflows/reusable_sign-artifacts.yaml
+    uses: aerospike/shared-workflows/.github/workflows/reusable_sign-artifacts.yaml@105988bdd509acb03f070ab5fafe98e1a53bee69
     with:
       retention-days: 1
       artifactory-oidc-provider-name: gh-dev-test
       artifactory-oidc-audience: aerospike/testing
+      artifact-name: packaged-artifacts
     secrets:
       gpg-private-key: ${{ secrets.GPG_SECRET_KEY }}
       gpg-public-key: ${{ secrets.GPG_PUBLIC_KEY }}
@@ -191,10 +192,13 @@ jobs:
 
   deploy-artifacts:
     needs: [sign-artifacts, extract-version]
-    uses: ./.github/workflows/reusable_deploy-artifacts.yaml
+    uses: aerospike/shared-workflows/.github/workflows/reusable_deploy-artifacts.yaml@105988bdd509acb03f070ab5fafe98e1a53bee69
     with:
       project: test
       build-name: test-build
+      metadata-build-id: ${{ github.run_number }}-buildinfo
+      build-id: ${{ github.run_number }}
+      artifact-name: ${{ needs.sign-artifacts.outputs.artifact-name }}
       version: ${{ needs.extract-version.outputs.version }}
       retention-days: 1
       artifactory-oidc-provider-name: gh-dev-test
@@ -203,10 +207,10 @@ jobs:
   # create-release-bundle - Create a release bundle from deployed artifacts for distribution
   create-release-bundle:
     needs: [deploy-artifacts, extract-version]
-    uses: ./.github/workflows/reusable_create-release-bundle.yaml
+    uses: aerospike/shared-workflows/.github/workflows/reusable_create-release-bundle.yaml@105988bdd509acb03f070ab5fafe98e1a53bee69
     with:
       project: test
-      build-names: test-build:${{ needs.deploy-artifacts.outputs.build-id }} # for multiple builds it would be test-build-1:build_id1,test-build-2:build_id2"
+      build-names: test-build:${{ github.run_number }} # for multiple builds it would be test-build-1:build_id1,test-build-2:build_id2"
       bundle-name: test-release
       version: ${{ needs.extract-version.outputs.version }}
       artifactory-oidc-provider-name: gh-dev-test

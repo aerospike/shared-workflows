@@ -36,12 +36,13 @@ while [[ $# -gt 0 ]]; do
       echo "Uploads artifacts to JFrog Artifactory" >&2
       echo "" >&2
       echo "Options:" >&2
+      echo "  --metadata-build-number <number> JFrog build ID for the build metadata" >&2
       echo "  --dry-run        Show what would be uploaded without actually uploading" >&2
       echo "  --help, -h       Show this help message" >&2
       echo "" >&2
       echo "Examples:" >&2
-      echo "  $0  database my-app v1.0.0 1754566442238" >&2
-      echo "  $0  database my-app v1.0.0 1754566442238 --dry-run" >&2
+      echo "  $0  database my-app v1.0.0 1754566442238 1754566442238-metadata" >&2
+      echo "  $0  database my-app v1.0.0 1754566442238 1754566442238-metadata --dry-run" >&2
       exit 0
       ;;
     -*)
@@ -59,6 +60,8 @@ while [[ $# -gt 0 ]]; do
         VERSION="$1"
       elif [[ -z "${BUILD_NUMBER:-}" ]]; then
         BUILD_NUMBER="$1"
+      elif [[ -z "${METADATA_BUILD_NUMBER:-}" ]]; then
+        METADATA_BUILD_NUMBER="$1"
       else
         echo "Use --help for usage information" >&2
         exit 1
@@ -67,7 +70,6 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
-
 
 if [[ -z "${PROJECT:-}" ]]; then
   error "project is required
@@ -89,6 +91,12 @@ if [[ -z "${BUILD_NUMBER:-}" ]]; then
 Use --help for usage information"
 fi
 
+if [[ -z "${METADATA_BUILD_NUMBER:-}" ]]; then
+  error "metadata-build-number is required
+Use --help for usage information"
+fi
+ARTIFACT_BUILD_NUMBER="$BUILD_NUMBER-artifacts"
+
 # Source the package utilities
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
@@ -109,7 +117,7 @@ run() {
 }
 
 run_optional() {
-    "$@" || echo "Warning: $*" >&2
+    run "$@" || echo "Warning: $*" >&2
 }
 
 structure_build_artifacts() {
@@ -157,7 +165,7 @@ upload_deb_packages() {
 
     run jf rt upload "$deb" "$PROJECT-deb-dev-local" --flat=false \
       --build-name="$BUILD_NAME" \
-      --build-number="$BUILD_NUMBER" \
+      --build-number="$ARTIFACT_BUILD_NUMBER" \
       --project="$PROJECT" \
       --target-props "version=$VERSION;deb.distribution=$codename;deb.component=main;deb.architecture=$arch" \
       --deb "$codename/main/$arch"
@@ -167,25 +175,10 @@ upload_deb_packages() {
       echo "  Uploading signature: $deb.asc" >&2
       run jf rt upload "$deb.asc" "$PROJECT-deb-dev-local" --flat=false \
         --build-name="$BUILD_NAME" \
-        --build-number="$BUILD_NUMBER" \
+        --build-number="$ARTIFACT_BUILD_NUMBER" \
         --project="$PROJECT"
     fi
 
-    if [[ -f "$deb.sha256" ]]; then
-      echo "  Uploading checksum: $deb.sha256" >&2
-      run jf rt upload "$deb.sha256" "$PROJECT-deb-dev-local" --flat=false \
-        --build-name="$BUILD_NAME" \
-        --build-number="$BUILD_NUMBER" \
-        --project="$PROJECT"
-    fi
-
-    if [[ -f "$deb.asc.sha256" ]]; then
-      echo "  Uploading signature checksum: $deb.asc.sha256" >&2
-      run jf rt upload "$deb.asc.sha256" "$PROJECT-deb-dev-local" --flat=false \
-        --build-name="$BUILD_NAME" \
-        --build-number="$BUILD_NUMBER" \
-        --project="$PROJECT"
-    fi
   done < <(find . -name "*.deb" -print0)
 }
 
@@ -214,7 +207,7 @@ upload_rpm_packages() {
     # Upload the RPM
     run jf rt upload "$rpm" "$PROJECT-rpm-dev-local" --flat=false \
       --build-name="$BUILD_NAME" \
-      --build-number="$BUILD_NUMBER" \
+      --build-number="$ARTIFACT_BUILD_NUMBER" \
       --project="$PROJECT" \
       --target-props "version=$VERSION;rpm.distribution=$dist;rpm.component=main;rpm.architecture=$arch"
 
@@ -223,25 +216,10 @@ upload_rpm_packages() {
       echo "  Uploading signature: $rpm.asc" >&2
       run jf rt upload "$rpm.asc" "$PROJECT-rpm-dev-local" --flat=false \
         --build-name="$BUILD_NAME" \
-        --build-number="$BUILD_NUMBER" \
+        --build-number="$ARTIFACT_BUILD_NUMBER" \
         --project="$PROJECT"
     fi
 
-    if [[ -f "$rpm.sha256" ]]; then
-      echo "  Uploading checksum: $rpm.sha256" >&2
-      run jf rt upload "$rpm.sha256" "$PROJECT-rpm-dev-local" --flat=false \
-        --build-name="$BUILD_NAME" \
-        --build-number="$BUILD_NUMBER" \
-        --project="$PROJECT"
-    fi
-
-    if [[ -f "$rpm.asc.sha256" ]]; then
-      echo "  Uploading signature checksum: $rpm.asc.sha256" >&2
-      run jf rt upload "$rpm.asc.sha256" "$PROJECT-rpm-dev-local" --flat=false \
-        --build-name="$BUILD_NAME" \
-        --build-number="$BUILD_NUMBER" \
-        --project="$PROJECT"
-    fi
   done < <(find . -name "*.rpm" -print0)
 }
 
@@ -253,45 +231,89 @@ upload_generic_files() {
   fi
 
   while IFS= read -r -d '' file; do
+    echo "Processing generic file: $file" >&2
     if [[ -f "$file" ]]; then
       echo "Uploading generic file: $file" >&2
       run jf rt upload "$file" "$PROJECT-generic-dev-local" --flat=false \
         --build-name="$BUILD_NAME" \
-        --build-number="$BUILD_NUMBER" \
+        --build-number="$ARTIFACT_BUILD_NUMBER" \
         --project="$PROJECT"
     fi
-  done < <(find . -type f \( -not -name "*.deb" -not -name "*.rpm" -not -name "*.asc" -not -name "*.sha256" \) -print0)
+  done < <(find . \( -not -name "*.deb" -not -name "*.rpm" -not -name "*.asc" \) -print0)
 }
 
-# Note for future: This helper that checks if the build exists is needed
-# because this functionality is not in the jf command line. There are ways to do this with the rest API but for the specific
-# purpose of checking if there is already a build with the same name and number, this looks like the cleanest solution.
-check_build_exists() {
-  local build_name="$1"
-  local build_number="$2"
-  local project="$3"
-  
-  local count
-  count=$(jf rt search "${project}-build-info/$build_name/$build_number-*" --count 2>/dev/null | tail -n 1)
-  
-  if [[ "$count" =~ ^[0-9]+$ ]] && [[ "$count" -gt 0 ]]; then
-    return 0  # Build exists
+
+# Collects build-info metadata by querying Artifactory for JSON files.
+# JFrog API doesn't support wildcarding build IDs, so we fetch the JSON
+# files to extract the collection of build IDs for this parent build.
+discover_build_infos() {
+  local project="$1"
+  local parent_build_name="$2"
+  local build_info_search_pattern="$3"
+  local build_info_repo="${4:-${project}-build-info}"
+
+  echo "Discovering build-infos for project: $project" >&2
+  echo "Parent build name: $parent_build_name" >&2
+  echo "Search pattern: $build_info_search_pattern" >&2
+  echo "Build-info repo: $build_info_repo" >&2
+
+  read -r -d '' AQL <<AQL || true
+items.find({
+  "\$and":[
+    {"repo":{"\$eq":"$build_info_repo"}},
+    {"path":{"\$eq":"$parent_build_name"}},
+    {"name":{"\$match":"$build_info_search_pattern.json"}},
+    {"created":{"\$last":"1d"}}
+  ]
+}).include("repo","path","name")
+AQL
+  echo run jf rt curl -XPOST api/search/aql \
+    -H 'Content-Type: text/plain' \
+    -d "$AQL" >&2
+  # Query for build-info JSON files
+  local resp
+  resp=$(run jf rt curl -XPOST api/search/aql \
+    -H 'Content-Type: text/plain' \
+    -d "$AQL")
+  echo "search response: $resp" >&2
+  # Extract child build IDs from JSON file names
+  if echo "$resp" | jq -e '.results' > /dev/null 2>&1; then
+    mapfile -t CHILD_BUILD_IDS < <(echo "$resp" | jq -r '.results[] | .name' | sed 's/-[0-9]*\.json$//' | sort -u)
+
+    echo "Found ${#CHILD_BUILD_IDS[@]} child builds" >&2
+
+    CHILD_BUILD_IDS_RESULT=("${CHILD_BUILD_IDS[@]}")
+    return 0
   else
-    return 1  # Build does not exist
+    echo "No build-info files found" >&2
+    CHILD_BUILD_IDS_RESULT=()
+    return 1
   fi
 }
 
+
+# This function handles publishing the tree of build info to jfrog
+# 1. publish the signed artifacts
+# 2. append metadata and artifact builld infos to new build info
+# 3. publish the new build info
 publish_build_info() {
-  if [[ "$DRY_RUN" == "true" ]]; then
-    echo "Would publish build info..." >&2
-  else
-    echo "Publishing build info..." >&2
-  fi
-  echo "about to add optional build info and publishing"
-  run_optional jf rt build-collect-env "$BUILD_NAME" "$BUILD_NUMBER" --project="$PROJECT"
-  run_optional jf rt build-add-git "$BUILD_NAME" "$BUILD_NUMBER" --project="$PROJECT"
-  run_optional jf rt build-add-dependencies "$BUILD_NAME" "$BUILD_NUMBER" . --project="$PROJECT"
-  run jf rt build-publish "$BUILD_NAME" "$BUILD_NUMBER" --project="$PROJECT"
+    run jf rt build-publish "$BUILD_NAME" "$ARTIFACT_BUILD_NUMBER" --project="$PROJECT"
+
+    discover_build_infos "$PROJECT" "$BUILD_NAME" "$METADATA_BUILD_NUMBER*" "$PROJECT-build-info" || true
+
+    # Access the results
+    if [[ ${#CHILD_BUILD_IDS_RESULT[@]} -gt 0 ]]; then
+      echo "Found ${#CHILD_BUILD_IDS_RESULT[@]} child builds:" >&2
+      for build_id in "${CHILD_BUILD_IDS_RESULT[@]}"; do
+        echo "  $BUILD_NAME/$build_id"
+        run jf rt build-append "$BUILD_NAME" "$BUILD_NUMBER" \
+                          "$BUILD_NAME" "$build_id" --project="$PROJECT"
+      done
+    fi
+
+    run jf rt build-append "$BUILD_NAME" "$BUILD_NUMBER" \
+                          "$BUILD_NAME" "$ARTIFACT_BUILD_NUMBER" --project="$PROJECT"
+    run jf rt build-publish "$BUILD_NAME" "$BUILD_NUMBER" --project="$PROJECT"
 }
 
 main() {
@@ -305,12 +327,14 @@ main() {
   echo "Version: $VERSION" >&2
   echo "Dry run: $DRY_RUN" >&2
   echo "Build number: $BUILD_NUMBER" >&2
+  echo "Metadata build number: $METADATA_BUILD_NUMBER" >&2
   mkdir -p structured_build_artifacts
   shopt -s globstar nullglob
 
   structure_build_artifacts
   cd structured_build_artifacts
-  
+  echo "Structured build artifacts:" >&2
+  find . >&2
   # Upload all packages
   upload_rpm_packages
   upload_deb_packages

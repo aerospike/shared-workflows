@@ -17,16 +17,24 @@ The workflow processes artifacts from a `build-artifacts` directory and creates 
 | Input                            | Description                                                | Required | Default                         |
 | -------------------------------- | ---------------------------------------------------------- | -------- | ------------------------------- |
 | `project`                        | JFrog Artifactory project name                             | Yes      | -                               |
-| `build-name`                     | Name for the unified build                                 | Yes      | -                               |
+| `build-name`                     | JFrog build name                                           | Yes      | -                               |
+| `build-id`                       | JFrog build ID for the overall build info                  | Yes      | -                               |
+| `metadata-build-id`              | JFrog build ID for the build metadata                      | Yes      | -                               |
 | `version`                        | Version string for build info                              | Yes      | -                               |
 | `artifactory-url`                | JFrog Artifactory URL                                      | No       | `https://artifact.aerospike.io` |
 | `artifactory-oidc-provider-name` | OIDC provider name for authentication                      | No       | `gh-citrusleaf`                 |
 | `artifactory-oidc-audience`      | OIDC audience for authentication                           | No       | `citrusleaf`                    |
-| `artifact-name`                  | Name of the artifacts to download                          | No       | `build-artifacts`               |
+| `artifact-name`                  | Name of the artifacts to download                          | No       | `signed-artifacts`              |
 | `retention-days`                 | Retention days for the artifacts                           | No       | `1`                             |
 | `runs-on`                        | The runner to use for the build                            | No       | `ubuntu-22.04`                  |
 | `checkout-path`                  | Directory to checkout the shared-workflows repository into | No       | `shared-workflows`              |
 | `dry-run`                        | Whether to run in dry-run mode                             | No       | `false`                         |
+
+## Outputs
+
+| Output     | Description       |
+| ---------- | ----------------- |
+| `build-id` | The build ID used |
 
 ## Structure
 
@@ -79,13 +87,15 @@ jobs:
   upload:
     uses: aerospike/shared-workflows/.github/workflows/reusable_deploy-artifacts.yaml@CURRENTGITSHA # vn.n.n
     with:
-      project: database
-      build-name: database
-      version: ${{ github.ref_name }}
+       project: database
+       build-name: database
+       build-id: 1234567890
+       metadata-build-id: 1234567890-metadata
+       version: ${{ github.ref_name }}
       artifactory-url: https://artifact.aerospike.io
       artifactory-oidc-provider-name: gh-citrusleaf
       artifactory-oidc-audience: citrusleaf
-      artifact-name: build-artifacts
+      artifact-name: signed-artifacts
       retention-days: 1
       dry-run: false
 ```

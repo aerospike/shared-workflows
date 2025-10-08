@@ -61,7 +61,7 @@ jobs:
   create-release-bundle:
     runs-on: ${{ inputs.runs-on }}
     env:
-      CHECKOUT_REF: 8fa7b46c484ec4330adc5c0b5916d1dfadda83de # Latest commit hash for development
+      CHECKOUT_REF: 105988bdd509acb03f070ab5fafe98e1a53bee69 # Latest commit hash for latest release
     steps:
       - name: Checkout shared-workflows repository
         uses: actions/checkout@v5

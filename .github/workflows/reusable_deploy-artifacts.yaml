@@ -11,6 +11,16 @@ on:
         description: JFrog build name
         required: true
         type: string
+      build-id:
+        description: |
+          JFrog build ID for the overall build info. This will be the parent build info with sub build infos for build metadata and artifacts.
+          This should be a unique build ID for the overall build info and will be uploaded to JFrog as the parent build info.
+        required: true
+        type: string
+      metadata-build-id:
+        description: JFrog build ID for the build metadata
+        required: true
+        type: string
       version:
         description: Version of the artifact to upload
         required: true
@@ -55,11 +65,6 @@ on:
         required: false
         type: boolean
         default: false
-    outputs:
-      build-id:
-        description: The generated build ID
-        value: ${{ jobs.deploy.outputs.build-id }}
-
 permissions:
   contents: read
   id-token: write
@@ -70,7 +75,7 @@ jobs:
     outputs:
       build-id: ${{ steps.deploy.outputs.build-id }}
     env:
-      CHECKOUT_REF: 8fa7b46c484ec4330adc5c0b5916d1dfadda83de # Latest commit hash for development
+      CHECKOUT_REF: 105988bdd509acb03f070ab5fafe98e1a53bee69 # Latest commit hash for latest release
     steps:
       - name: Checkout shared-workflows repository
         uses: actions/checkout@v5
@@ -108,11 +113,12 @@ jobs:
           if [ "${{ inputs.dry-run }}" = "true" ]; then
             dry_run_arg="--dry-run"
           fi
-          BUILD_ID=$(date +%s%3N) # timestamp in milliseconds (hex)
+
           ${{ inputs.checkout-path }}/.github/workflows/deploy-artifacts/entrypoint.sh \
             "${{ inputs.project }}" \
             "${{ inputs.build-name }}" \
             "${{ inputs.version }}" \
-            "$BUILD_ID" \
+            "${{ inputs.build-id }}" \
+            "${{ inputs.metadata-build-id }}" \
             $dry_run_arg
-          echo "build-id=$BUILD_ID" >> $GITHUB_OUTPUT
+          echo "build-id=${{ inputs.build-id }}" >> $GITHUB_OUTPUT
