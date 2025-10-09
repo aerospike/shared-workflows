@@ -168,7 +168,10 @@ jobs:
           sbom: ${{ inputs.sbom }}
           build-args: ${{ env.BUILD_ARGS }}
           labels: ${{ env.LABELS }}
-
+      - name: xray scan
+        shell: bash
+        run: |
+          jf docker scan ${{ inputs.tag }}
       - name: Create build info for docker image
         id: meta
         shell: bash
