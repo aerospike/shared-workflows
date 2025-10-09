@@ -65,7 +65,7 @@ jobs:
     outputs:
       artifact-name: ${{ steps.sign-outputs.outputs.artifact-name }}
     env:
-      CHECKOUT_REF: feature/INFRA-206-docker-builds # Latest commit hash for latest release
+      CHECKOUT_REF: feature/INFRA-206-docker-builds-merged # Latest commit hash for latest release
     steps:
       - name: Download Unsigned Artifacts
         uses: actions/download-artifact@v4
