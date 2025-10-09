@@ -51,7 +51,7 @@ jobs:
   # a single workflow that can be instrumented in the future.
   # This is also an example of using a matrix strategy to build in GHA
   build-packages:
-    uses: aerospike/shared-workflows/.github/workflows/reusable_execute-build.yaml@feature/INFRA-206-docker-builds
+    uses: aerospike/shared-workflows/.github/workflows/reusable_execute-build.yaml@feature/INFRA-206-docker-builds-merged
     needs: extract-version
     # Matrix strategy: Multi-platform builds across Ubuntu/Debian/RPM families (x86_64 native, ARM64 emulated)
     strategy:
@@ -183,7 +183,7 @@ jobs:
           retention-days: 1
   sign-artifacts:
     needs: package-built-artifacts
-    uses: aerospike/shared-workflows/.github/workflows/reusable_sign-artifacts.yaml@feature/INFRA-206-docker-builds
+    uses: aerospike/shared-workflows/.github/workflows/reusable_sign-artifacts.yaml@feature/INFRA-206-docker-builds-merged
     with:
       retention-days: 1
       artifactory-oidc-provider-name: gh-dev-test
@@ -196,7 +196,7 @@ jobs:
 
   deploy-artifacts:
     needs: [sign-artifacts, extract-version]
-    uses: aerospike/shared-workflows/.github/workflows/reusable_deploy-artifacts.yaml@feature/INFRA-206-docker-builds
+    uses: aerospike/shared-workflows/.github/workflows/reusable_deploy-artifacts.yaml@feature/INFRA-206-docker-builds-merged
     with:
       project: test
       build-name: test-build
@@ -209,7 +209,7 @@ jobs:
       artifactory-oidc-audience: aerospike/testing
       dry-run: false
   build-docker-deploy:
-    uses: aerospike/shared-workflows/.github/workflows/reusable_docker-build-deploy.yaml@feature/INFRA-206-docker-builds
+    uses: aerospike/shared-workflows/.github/workflows/reusable_docker-build-deploy.yaml@feature/INFRA-206-docker-builds-merged
     needs: extract-version
     with:
       jf_project: test
@@ -220,7 +220,7 @@ jobs:
       jf_build_name: test-build-container
   create-release-bundle:
     needs: [deploy-artifacts, build-docker-deploy, extract-version]
-    uses: aerospike/shared-workflows/.github/workflows/reusable_create-release-bundle.yaml@feature/INFRA-206-docker-builds
+    uses: aerospike/shared-workflows/.github/workflows/reusable_create-release-bundle.yaml@feature/INFRA-206-docker-builds-merged
     with:
       project: test
       build-names: test-build:${{ github.run_number }},test-build-container:${{ github.run_number }}

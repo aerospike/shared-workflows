@@ -75,7 +75,7 @@ jobs:
     outputs:
       build-id: ${{ steps.deploy.outputs.build-id }}
     env:
-      CHECKOUT_REF: feature/INFRA-206-docker-builds # Latest commit hash for latest release
+      CHECKOUT_REF: feature/INFRA-206-docker-builds-merged # Latest commit hash for latest release
     steps:
       - name: Checkout shared-workflows repository
         uses: actions/checkout@v5
