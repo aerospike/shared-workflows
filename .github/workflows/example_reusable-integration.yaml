@@ -218,20 +218,8 @@ jobs:
       context: ./.github/workflows/execute-build/test_apps/hi
       file: ./.github/workflows/execute-build/test_apps/hi/Dockerfile
       jf_build_name: test-build-container
-  create-release-bundle:
-    needs: [deploy-artifacts, build-docker-deploy, extract-version]
-    uses: aerospike/shared-workflows/.github/workflows/reusable_create-release-bundle.yaml@feature/INFRA-206-docker-builds-merged
-    with:
-      project: test
-      build-names: test-build:${{ github.run_number }},test-build-container:${{ github.run_number }}
-      bundle-name: test-release
-      version: ${{ needs.extract-version.outputs.version }}
-      artifactory-oidc-provider-name: gh-dev-test
-      artifactory-oidc-audience: aerospike/testing
-      dry-run: false
-
   use-artifacts:
-    needs: [create-release-bundle, extract-version]
+    needs: [build-docker-deploy, extract-version, deploy-artifacts]
     runs-on: ubuntu-22.04
     steps:
       - name: Install JFrog CLI
@@ -240,9 +228,7 @@ jobs:
         env:
           JF_URL: https://artifact.aerospike.io
           JF_PROJECT: test
-          JFROG_CLI_BUILD_NAME: test-build
         with:
-          version: 2.78.8
           oidc-provider-name: gh-dev-test
           oidc-audience: aerospike/testing
       - name: execute-docker-build
@@ -264,3 +250,15 @@ jobs:
           sudo apt-get update && sudo apt-get install hi -y
           echo "the test binary says:"
           hi
+
+  create-release-bundle:
+    needs: [use-artifacts, extract-version, deploy-artifacts]
+    uses: aerospike/shared-workflows/.github/workflows/reusable_create-release-bundle.yaml@feature/INFRA-206-docker-builds-merged
+    with:
+      project: test
+      build-names: test-build:${{ github.run_number }},test-build-container:${{ github.run_number }}
+      bundle-name: test-release
+      version: ${{ needs.extract-version.outputs.version }}
+      artifactory-oidc-provider-name: gh-dev-test
+      artifactory-oidc-audience: aerospike/testing
+      dry-run: false
