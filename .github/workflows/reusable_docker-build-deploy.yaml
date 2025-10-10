@@ -156,7 +156,6 @@ jobs:
           echo '${{ inputs.labels_json }}' | to_kv > /tmp/labels
           echo "BUILD_ARGS=$(cat /tmp/build_args)" >> "$GITHUB_ENV"
           echo "LABELS=$(cat /tmp/labels)" >> "$GITHUB_ENV"
-          find .
 
       - name: Build and push
         id: build
