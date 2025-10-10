@@ -245,14 +245,9 @@ jobs:
           version: 2.78.8
           oidc-provider-name: gh-dev-test
           oidc-audience: aerospike/testing
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: test-release
-          path: ./test-release
       - name: execute-docker-build
         run: |
-          docker run --rm --platform linux/amd64 artifact.aerospike.io/test-container-dev-local/test-image:${{ needs.extract-version.outputs.version }}
+          jf docker run --rm --platform linux/amd64 artifact.aerospike.io/test-container-dev-local/test-image:${{ needs.extract-version.outputs.version }}
       - name: Install packages
         run: |
           wget -qO - https://artifact.aerospike.io/artifactory/api/security/keypair/aerospike/public \
