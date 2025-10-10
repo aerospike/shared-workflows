@@ -229,3 +229,43 @@ jobs:
       artifactory-oidc-provider-name: gh-dev-test
       artifactory-oidc-audience: aerospike/testing
       dry-run: false
+
+  use-artifacts:
+    needs: [create-release-bundle, extract-version]
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Install JFrog CLI
+        id: jf
+        uses: jfrog/setup-jfrog-cli@751c204e8e1d3fe053e30218a2143ab4fe100d95 # v4.6.0
+        env:
+          JF_URL: https://artifact.aerospike.io
+          JF_PROJECT: test
+          JFROG_CLI_BUILD_NAME: test-build
+        with:
+          version: 2.78.8
+          oidc-provider-name: gh-dev-test
+          oidc-audience: aerospike/testing
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: test-release
+          path: ./test-release
+      - name: execute-docker-build
+        run: |
+          docker run --rm --platform linux/amd64 artifact.aerospike.io/test-container-dev-local/test-image:${{ needs.extract-version.outputs.version }}
+      - name: Install packages
+        run: |
+          wget -qO - https://artifact.aerospike.io/artifactory/api/security/keypair/aerospike/public \
+          | sudo gpg --dearmor -o /usr/share/keyrings/aerospike.gpg
+          CODENAME=$(lsb_release -sc)             # e.g. bookworm, jammy, noble
+          ARCH=$(dpkg --print-architecture)       # e.g. amd64, arm64
+          KEYRING=/usr/share/keyrings/aerospike.gpg
+          REPO_URL="https://artifact.aerospike.io/artifactory/test-deb-dev-local"
+
+          cat <<EOF | sudo tee /etc/apt/sources.list.d/aerospike.list
+          deb [arch=$ARCH signed-by=$KEYRING] https://${{ steps.jf.outputs.oidc-user }}:${{ steps.jf.outputs.oidc-token }}@$REPO_URL $CODENAME main
+          EOF
+
+          sudo apt-get update && sudo apt-get install hi -y
+          echo "the test binary says:"
+          hi

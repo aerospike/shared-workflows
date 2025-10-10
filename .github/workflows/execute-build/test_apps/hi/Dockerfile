@@ -14,6 +14,6 @@ ENV DISTRO=jammy
 ENV ARCH=x86_64
 RUN make build
 
-FROM gcr.io/distroless/static-debian12:debug-nonroot
+FROM gcr.io/distroless/cc-debian12:debug-nonroot
 COPY --from=builder /work/build/jammy/x86_64/hi /usr/local/bin/hi
 ENTRYPOINT ["/usr/local/bin/hi"]
