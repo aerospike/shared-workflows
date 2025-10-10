@@ -247,10 +247,10 @@ jobs:
           CODENAME=$(lsb_release -sc)             # e.g. bookworm, jammy, noble
           ARCH=$(dpkg --print-architecture)       # e.g. amd64, arm64
           KEYRING=/usr/share/keyrings/aerospike.gpg
-          REPO_URL="https://artifact.aerospike.io/artifactory/test-deb-dev-local"
+          REPO="artifact.aerospike.io/artifactory/test-deb-dev-local"
 
           cat <<EOF | sudo tee /etc/apt/sources.list.d/aerospike.list
-          deb [arch=$ARCH signed-by=$KEYRING] https://${{ steps.jf.outputs.oidc-user }}:${{ steps.jf.outputs.oidc-token }}@$REPO_URL $CODENAME main
+          deb [arch=$ARCH signed-by=$KEYRING] https://${{ steps.jf.outputs.oidc-user }}:${{ steps.jf.outputs.oidc-token }}@$REPO $CODENAME main
           EOF
 
           sudo apt-get update && sudo apt-get install hi -y
