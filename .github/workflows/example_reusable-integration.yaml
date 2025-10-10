@@ -231,9 +231,15 @@ jobs:
         with:
           oidc-provider-name: gh-dev-test
           oidc-audience: aerospike/testing
+      - name: Docker login to Artifactory
+        uses: docker/login-action@v3
+        with:
+          registry: artifact.aerospike.io/test-container-dev-local
+          username: ${{ steps.jf.outputs.oidc-user }}
+          password: ${{ steps.jf.outputs.oidc-token }}
       - name: execute-docker-build
         run: |
-          jf docker run --rm --platform linux/amd64 artifact.aerospike.io/test-container-dev-local/test-image:${{ needs.extract-version.outputs.version }}
+          docker run --rm --platform linux/amd64 artifact.aerospike.io/test-container-dev-local/test-image:${{ needs.extract-version.outputs.version }}
       - name: Install packages
         run: |
           wget -qO - https://artifact.aerospike.io/artifactory/api/security/keypair/aerospike/public \
