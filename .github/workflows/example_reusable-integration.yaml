@@ -242,15 +242,25 @@ jobs:
           docker run --rm --platform linux/amd64 artifact.aerospike.io/test-container-dev-local/test-image:${{ needs.extract-version.outputs.version }}
       - name: Install packages
         run: |
+          set -euo pipefail
           wget -qO - https://artifact.aerospike.io/artifactory/api/security/keypair/aerospike/public \
           | sudo gpg --dearmor -o /usr/share/keyrings/aerospike.gpg
+
+          export DEBIAN_FRONTEND=noninteractive
           CODENAME=$(lsb_release -sc)             # e.g. bookworm, jammy, noble
           ARCH=$(dpkg --print-architecture)       # e.g. amd64, arm64
           KEYRING=/usr/share/keyrings/aerospike.gpg
           REPO="artifact.aerospike.io/artifactory/test-deb-dev-local"
 
+          sudo install -m 600 /dev/null /etc/apt/auth.conf.d/aerospike.conf
+          {
+            echo "machine artifact.aerospike.io"
+            echo "login ${{ steps.jf.outputs.oidc-user }}"
+            echo "password ${{ steps.jf.outputs.oidc-token }}"
+          } | sudo tee /etc/apt/auth.conf.d/aerospike.conf >/dev/null
+
           cat <<EOF | sudo tee /etc/apt/sources.list.d/aerospike.list
-          deb [arch=$ARCH signed-by=$KEYRING] https://${{ steps.jf.outputs.oidc-user }}:${{ steps.jf.outputs.oidc-token }}@$REPO $CODENAME main
+          deb [arch=$ARCH signed-by=$KEYRING] https://$REPO $CODENAME main
           EOF
 
           sudo apt-get update && sudo apt-get install hi -y
