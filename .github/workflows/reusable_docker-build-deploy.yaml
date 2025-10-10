@@ -96,6 +96,9 @@ on:
 
 jobs:
   build:
+    env:
+      JFROG_CLI_BUILD_NAME: ${{ inputs.jf_build_name || github.workflow }}
+      JFROG_CLI_LOG_LEVEL: INFO
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -118,7 +121,6 @@ jobs:
           JF_URL: ${{ inputs.jf_url }}
           JF_PROJECT: ${{ inputs.jf_project }}
           JFROG_CLI_BUILD_NAME: ${{ inputs.jf_build_name || github.workflow }}
-          JFROG_CLI_LOG_LEVEL: DEBUG
         with:
           version: 2.78.8
           oidc-provider-name: ${{ inputs.oidc_provider_name }}
@@ -169,12 +171,13 @@ jobs:
           sbom: ${{ inputs.sbom }}
           build-args: ${{ env.BUILD_ARGS }}
           labels: ${{ env.LABELS }}
-      - name: xray scan
-        shell: bash
-        run: |
-          export JFROG_CLI_LOG_LEVEL=DEBUG
-          jf docker pull ${{ inputs.tag }}
-          jf docker scan ${{ inputs.tag }}
+      # TODO: Uncomment this when xray scan is ready
+      #   - name: xray scan
+      #     shell: bash
+      #     run: |
+      #       echo "JFROG_CLI_BUILD_NAME=${{ env.JFROG_CLI_BUILD_NAME }}"
+      #       jf docker pull ${{ inputs.tag }} --build-name="${{ env.JFROG_CLI_BUILD_NAME }}" --build-number="$JFROG_CLI_BUILD_NUMBER"
+      #       jf docker scan ${{ inputs.tag }} --build-name="${{ env.JFROG_CLI_BUILD_NAME }}" --build-number="$JFROG_CLI_BUILD_NUMBER"
       - name: Create build info for docker image
         id: meta
         shell: bash
@@ -186,7 +189,6 @@ jobs:
       - name: Publish Build Info
         shell: bash
         run: |
-          export JFROG_CLI_LOG_LEVEL=DEBUG
           jf rt build-collect-env  "$JFROG_CLI_BUILD_NAME" "$JFROG_CLI_BUILD_NUMBER"
           jf rt build-add-git      "$JFROG_CLI_BUILD_NAME" "$JFROG_CLI_BUILD_NUMBER"
           jf rt build-publish --detailed-summary "$JFROG_CLI_BUILD_NAME" "$JFROG_CLI_BUILD_NUMBER"
