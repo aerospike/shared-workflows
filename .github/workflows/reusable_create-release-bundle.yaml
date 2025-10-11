@@ -61,7 +61,7 @@ jobs:
   create-release-bundle:
     runs-on: ${{ inputs.runs-on }}
     env:
-      CHECKOUT_REF: feature/INFRA-206-docker-builds-merged # Latest commit hash for latest release
+      CHECKOUT_REF: a57e0150b910f5f77c74095cfb019b19cb639502 # Latest commit hash for latest release
     steps:
       - name: Checkout shared-workflows repository
         uses: actions/checkout@v5
