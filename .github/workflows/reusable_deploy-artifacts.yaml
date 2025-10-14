@@ -3,68 +3,71 @@ name: Deploy to Artifactory
 on:
   workflow_call:
     inputs:
-      project:
-        description: JFrog Artifactory project name
-        required: true
-        type: string
-      build-name:
-        description: JFrog build name
-        required: true
-        type: string
-      build-id:
+      # Required inputs
+      jf-build-id:
         description: |
           JFrog build ID for the overall build info. This will be the parent build info with sub build infos for build metadata and artifacts.
           This should be a unique build ID for the overall build info and will be uploaded to JFrog as the parent build info.
         required: true
         type: string
-      metadata-build-id:
+      jf-build-name:
+        description: JFrog build name
+        required: true
+        type: string
+      jf-metadata-build-id:
         description: JFrog build ID for the build metadata
+        required: true
+        type: string
+      jf-project:
+        description: JFrog Artifactory project name
         required: true
         type: string
       version:
         description: Version of the artifact to upload
         required: true
         type: string
-      artifactory-url:
-        required: false
-        description: JFrog Artifactory URL
-        type: string
-        default: https://artifact.aerospike.io
-      artifactory-oidc-provider-name:
-        required: false
-        description: OIDC provider name
-        type: string
-        default: gh-citrusleaf
-      artifactory-oidc-audience:
-        required: false
-        description: OIDC audience
-        type: string
-        default: citrusleaf
-      artifact-name:
-        description: Name of signed artifacts on github
-        required: false
-        type: string
-        default: signed-artifacts
-      retention-days:
-        description: Retention days for the artifacts
-        required: false
-        type: number
-        default: 1
-      runs-on:
-        description: The runner to use for the build
-        required: false
-        type: string
-        default: ubuntu-22.04
-      checkout-path:
-        description: Directory to checkout the shared-workflows repository into
-        required: false
-        type: string
-        default: shared-workflows
+
+      # Optional inputs
       dry-run:
         description: Whether to run in dry-run mode. Dry-run mode will not upload any artifacts.
         required: false
         type: boolean
         default: false
+      gh-artifact-name:
+        description: Name of signed artifacts on github
+        required: false
+        type: string
+        default: signed-artifacts
+      gh-checkout-path:
+        description: Directory to checkout the shared-workflows repository into
+        required: false
+        type: string
+        default: shared-workflows
+      gh-retention-days:
+        description: Retention days for the artifacts
+        required: false
+        type: number
+        default: 1
+      jf-url:
+        required: false
+        description: JFrog Artifactory URL
+        type: string
+        default: https://artifact.aerospike.io
+      oidc-audience:
+        required: false
+        description: OIDC audience
+        type: string
+        default: citrusleaf
+      oidc-provider-name:
+        required: false
+        description: OIDC provider name
+        type: string
+        default: gh-citrusleaf
+      runs-on:
+        description: The runner to use for the build
+        required: false
+        type: string
+        default: ubuntu-22.04
 permissions:
   contents: read
   id-token: write
@@ -73,26 +76,26 @@ jobs:
   deploy:
     runs-on: ${{ inputs.runs-on }}
     outputs:
-      build-id: ${{ steps.deploy.outputs.build-id }}
+      jf-build-id: ${{ steps.deploy.outputs.jf-build-id }}
     env:
-      CHECKOUT_REF: a57e0150b910f5f77c74095cfb019b19cb639502 # Latest commit hash for latest release
+      CHECKOUT_REF: refactor/INFRA-213-prepare-breaking-change # Latest commit hash for latest release
     steps:
       - name: Checkout shared-workflows repository
         uses: actions/checkout@v5
         with:
           repository: aerospike/shared-workflows
           ref: ${{ env.CHECKOUT_REF }}
-          path: ${{ inputs.checkout-path }}
+          path: ${{ inputs.gh-checkout-path }}
           fetch-depth: 1
 
       - name: Setup JFrog CLI
         uses: jfrog/setup-jfrog-cli@751c204e8e1d3fe053e30218a2143ab4fe100d95 # v4.6.0
         env:
-          JF_URL: ${{ inputs.artifactory-url }}
-          JF_PROJECT: ${{ inputs.project }}
+          JF_URL: ${{ inputs.jf-url }}
+          JF_PROJECT: ${{ inputs.jf-project }}
         with:
-          oidc-provider-name: ${{ inputs.artifactory-oidc-provider-name }}
-          oidc-audience: ${{ inputs.artifactory-oidc-audience }}
+          oidc-provider-name: ${{ inputs.oidc-provider-name }}
+          oidc-audience: ${{ inputs.oidc-audience }}
 
       - name: Check JFrog Configuration
         run: |
@@ -101,24 +104,24 @@ jobs:
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
-          name: ${{ inputs.artifact-name }}
+          name: ${{ inputs.gh-artifact-name }}
           path: ./build-artifacts
 
       - name: Deploy Artifacts
         id: deploy
         shell: bash
         run: |
-          chmod +x ${{ inputs.checkout-path }}/.github/workflows/deploy-artifacts/entrypoint.sh
+          chmod +x ${{ inputs.gh-checkout-path }}/.github/workflows/deploy-artifacts/entrypoint.sh
           dry_run_arg=""
           if [ "${{ inputs.dry-run }}" = "true" ]; then
             dry_run_arg="--dry-run"
           fi
 
-          ${{ inputs.checkout-path }}/.github/workflows/deploy-artifacts/entrypoint.sh \
-            "${{ inputs.project }}" \
-            "${{ inputs.build-name }}" \
+          ${{ inputs.gh-checkout-path }}/.github/workflows/deploy-artifacts/entrypoint.sh \
+            "${{ inputs.jf-project }}" \
+            "${{ inputs.jf-build-name }}" \
             "${{ inputs.version }}" \
-            "${{ inputs.build-id }}" \
-            "${{ inputs.metadata-build-id }}" \
+            "${{ inputs.jf-build-id }}" \
+            "${{ inputs.jf-metadata-build-id }}" \
             $dry_run_arg
-          echo "build-id=${{ inputs.build-id }}" >> $GITHUB_OUTPUT
+          echo "jf-build-id=${{ inputs.jf-build-id }}" >> $GITHUB_OUTPUT

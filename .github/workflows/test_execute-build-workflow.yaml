@@ -12,21 +12,21 @@ jobs:
   test-execute-build-workflow:
     uses: ./.github/workflows/reusable_execute-build.yaml
     with:
-      project: test
-      build-name: test-build
-      build-id: v1.0.0
+      jf-project: test
+      jf-build-name: test-build
+      jf-build-id: v1.0.0
       build-script: |
         echo "Need to ensure current-source is correctly present and building"
         cat current-source/README.md &&\
         cd project-location/.github/workflows/execute-build/test_apps/hi && make
-      checkout-path: project-location
-      source-path: current-source
-      artifact-directory: project-location/.github/workflows/execute-build/test_apps/hi/build
-      artifact-name: test-execute-build
-      retention-days: 1 # default
-      artifactory-url: https://artifact.aerospike.io # default
-      artifactory-oidc-provider-name: gh-aerospike # default
-      artifactory-oidc-audience: aerospike # default
+      gh-checkout-path: project-location
+      gh-source-path: current-source
+      gh-artifact-directory: project-location/.github/workflows/execute-build/test_apps/hi/build
+      gh-artifact-name: test-execute-build
+      gh-retention-days: 1 # default
+      jf-url: https://artifact.aerospike.io # default
+      oidc-provider-name: gh-aerospike # default
+      oidc-audience: aerospike # default
       dry-run: false # default
 
   # Test the entrypoint script directly

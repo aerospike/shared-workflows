@@ -8,18 +8,18 @@ This workflow creates JFrog release bundles by bundling one or more builds into 
 
 ## Inputs
 
-| Input                            | Description                                                | Required | Default                         |
-| -------------------------------- | ---------------------------------------------------------- | -------- | ------------------------------- |
-| `project`                        | JFrog Artifactory project name                             | Yes      | -                               |
-| `build-names`                    | Comma-separated list of build names to include             | Yes      | -                               |
-| `bundle-name`                    | Name for the release bundle                                | Yes      | -                               |
-| `version`                        | Version of the release bundle                              | Yes      | -                               |
-| `artifactory-url`                | JFrog Artifactory URL                                      | No       | `https://artifact.aerospike.io` |
-| `artifactory-oidc-provider-name` | OIDC provider name for authentication                      | No       | `gh-aerospike`                  |
-| `artifactory-oidc-audience`      | OIDC audience for authentication                           | No       | `aerospike`                     |
-| `runs-on`                        | The runner to use for the build                            | No       | `ubuntu-22.04`                  |
-| `checkout-path`                  | Directory to checkout the shared-workflows repository into | No       | `shared-workflows`              |
-| `dry-run`                        | Whether to run in dry-run mode                             | No       | `false`                         |
+| Input                | Description                                                | Required | Default                         |
+| -------------------- | ---------------------------------------------------------- | -------- | ------------------------------- |
+| `jf-project`         | JFrog Artifactory project name                             | Yes      | -                               |
+| `jf-build-names`     | Comma-separated list of build names to include             | Yes      | -                               |
+| `jf-bundle-name`     | Name for the release bundle                                | Yes      | -                               |
+| `version`            | Version of the release bundle                              | Yes      | -                               |
+| `jf-url`             | JFrog Artifactory URL                                      | No       | `https://artifact.aerospike.io` |
+| `oidc-provider-name` | OIDC provider name for authentication                      | No       | `gh-aerospike`                  |
+| `oidc-audience`      | OIDC audience for authentication                           | No       | `aerospike`                     |
+| `runs-on`            | The runner to use for the build                            | No       | `ubuntu-22.04`                  |
+| `gh-checkout-path`   | Directory to checkout the shared-workflows repository into | No       | `shared-workflows`              |
+| `dry-run`            | Whether to run in dry-run mode                             | No       | `false`                         |
 
 ## Example Usage
 
@@ -36,9 +36,9 @@ jobs:
   create-release-bundle:
     uses: ./.github/workflows/reusable_create-release-bundle.yaml
     with:
-      project: database
-      build-names: "database-build,client-build"
-      bundle-name: database-release
+      jf-project: database
+      jf-build-names: "database-build,client-build"
+      jf-bundle-name: database-release
       version: ${{ github.ref_name }}
       dry-run: false
 ```

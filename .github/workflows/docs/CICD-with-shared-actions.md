@@ -25,15 +25,15 @@ sequenceDiagram
   participant JF as JFrog
   participant SW4 as Create Release Bundle (reusable)
 
-  WF->>SW1: uses reusable_execute-build (artifact-name=build-artifacts)
+  WF->>SW1: uses reusable_execute-build (gh_artifact_name=build-artifacts)
   SW1-->>GA: upload "build-artifacts"
-  WF->>SW2: uses reusable_sign-artifacts (unsigned-artifacts=build-artifacts, artifact-name=signed-artifacts)
+  WF->>SW2: uses reusable_sign-artifacts (gh_unsigned_artifacts=build-artifacts, gh_artifact_name=signed-artifacts)
   SW2-->>GA: download "build-artifacts"
   SW2-->>GA: upload "signed-artifacts"
-  WF->>SW3: uses reusable_deploy-artifacts (artifact-name=signed-artifacts, project/build-name/version)
+  WF->>SW3: uses reusable_deploy-artifacts (gh_artifact_name=signed-artifacts, jf_project/jf_build_name/version)
   SW3-->>GA: download "signed-artifacts"
   SW3-->>JF: deploy via OIDC
-  WF->>SW4: uses reusable_create-release-bundle (bundle-name, version, artifacts="name:version,...")
+  WF->>SW4: uses reusable_create-release-bundle (jf_bundle_name, version, jf_build_names="name:version,...")
   SW4-->>JF: create bundle from published artifacts
 ```
 
@@ -58,11 +58,11 @@ jobs:
       build-script: |
         make clean && make all
       # build-script-path: ci/build.sh
-      artifact-directory: dist/
-      artifact-name: build-artifacts
-      project: aerospike
-      build-name: myapp
-      build-version: ${{ github.ref_name }}
+      gh-artifact-directory: dist/
+      gh-artifact-name: build-artifacts
+      jf-project: aerospike
+      jf-build-name: myapp
+      jf-build-id: ${{ github.run_number }}
       dry-run: false
     secrets: inherit
 
@@ -71,8 +71,8 @@ jobs:
     needs: build
     uses: aerospike/shared-workflows/.github/workflows/reusable_sign-artifacts.yaml@<sha> # vX.Y.Z
     with:
-      unsigned-artifacts: build-artifacts
-      artifact-name: signed-artifacts
+      gh-unsigned-artifacts: build-artifacts
+      gh-artifact-name: signed-artifacts
     secrets: inherit
 
   deploy:
@@ -80,9 +80,11 @@ jobs:
     needs: sign
     uses: aerospike/shared-workflows/.github/workflows/reusable_deploy-artifacts.yaml@<sha> # vX.Y.Z
     with:
-      artifact-name: signed-artifacts
-      project: aerospike
-      build-name: myapp
+      gh-artifact-name: signed-artifacts
+      jf-project: aerospike
+      jf-build-name: myapp
+      jf-build-id: ${{ github.run_number }}
+      jf-metadata-build-id: ${{ github.run_number }}-metadata
       version: ${{ github.ref_name }}
       dry-run: false
     secrets: inherit
@@ -93,10 +95,10 @@ jobs:
     needs: deploy
     uses: aerospike/shared-workflows/.github/workflows/reusable_create-release-bundle.yaml@<sha> # vX.Y.Z
     with:
-      bundle-name: myapp-${{ github.ref_name }}
+      jf-project: aerospike
+      jf-bundle-name: myapp-${{ github.ref_name }}
+      jf-build-names: "myapp:${{ github.run_number }}"
       version: ${{ github.ref_name }}
-      # Comma-separated name:version pairs
-      artifacts: "myapp:${{ github.ref_name }}"
       dry-run: false
     secrets: inherit
 ```
@@ -113,17 +115,17 @@ There are two complementary ways we move files through the pipeline:
 1. **GitHub Actions artifacts — in‑runner handoff**
 
    - **Use for:** Passing build outputs between jobs in the _same run_ (Build → Sign → Deploy).
-   - **How:** `actions/upload-artifact` → `actions/download-artifact` using consistent `artifact-name`s (e.g., `build-artifacts` upload → GHA artifacts → download `signed-artifacts`).
+   - **How:** `actions/upload-artifact` → `actions/download-artifact` using consistent `gh-artifact-name`s (e.g., `build-artifacts` upload → GHA artifacts → download `signed-artifacts`).
    - **Scope/Lifetime:** Tied to a run; retention is configurable but not a long‑term store.
 
 2. **Artifactory coordinates — external, durable store**
 
-   - **What "coordinates" means:** The address that uniquely identifies items in JFrog, e.g. `{project}/{repo}/{path}/{filename}` (and often `{build-name}:{version}` via Build Info). Java calls this sort of thing 'coordinates'
+   - **What "coordinates" means:** The address that uniquely identifies items in JFrog, e.g. `{jf_project}/{repo}/{path}/{filename}` (and often `{jf_build_name}:{jf_build_id}` via Build Info). Java calls this sort of thing 'coordinates'
    - **Use for:** Anything other systems/users should consume (CD, other repos, release bundles).
-   - **How:** Deploy from the pipeline (OIDC auth) with `project`, `build-name`, `version`; downstream steps and tools resolve items by those coordinates.
+   - **How:** Deploy from the pipeline (OIDC auth) with `jf-project`, `jf-build-name`, `jf-build-id`; downstream steps and tools resolve items by those coordinates.
    - **Examples:**
-     • Generic file: `project=aerospike`, `repo=myapp-release-local`, `path=myapp/1.2.3/linux/x86_64/myapp-1.2.3-linux-x86_64.tar.gz`
-     • Build Info: `build-name=myapp`, `version=1.2.3` → “all artifacts produced by that build”.
+     • Generic file: `jf_project=aerospike`, `repo=myapp-release-local`, `path=myapp/1.2.3/linux/x86_64/myapp-1.2.3-linux-x86_64.tar.gz`
+     • Build Info: `jf_build_name=myapp`, `jf_build_id=123` → "all artifacts produced by that build".
 
 **Rule of thumb:** Use Actions artifacts for _in‑runner handoff_; use Artifactory coordinates for _durable discovery and consumption_ beyond the workflow.
 
@@ -133,6 +135,6 @@ There are two complementary ways we move files through the pipeline:
 
 - **Signing fails** → verify `gpg-private-key`, `gpg-public-key`, `gpg-key-pass` are set and valid. Ensure the workflow correctly imports ASCII‑armored keys and that the passphrase matches.&#x20;
 - **Deploy fails (auth)** → confirm GitHub→JFrog **OIDC** trust/policy is configured and that the workflow’s identity has deploy permission to the target project/repo. (example mistakes often around wrong audience or incorrect token permissions)
-- **Bundle creation issues** → confirm the `artifacts` input is a comma‑separated list of `name:version` pairs that exist for the specified `version`, and that your JFrog project/repo permissions allow bundle creation. This permission is higher than upload/download so often a source of error.
+- **Bundle creation issues** → confirm the `jf-build-names` input is a comma‑separated list of `name:build_id` pairs that exist for the specified `version`, and that your JFrog project/repo permissions allow bundle creation. This permission is higher than upload/download so often a source of error.
 
 ---

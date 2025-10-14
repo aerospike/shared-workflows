@@ -27,9 +27,9 @@ jobs:
     uses: ./.github/workflows/reusable_docker-build-deploy.yaml
     needs: extract-version
     with:
-      jf_project: test
-      image_name: test-image
+      jf-project: test
+      image-name: test-image
       tag: artifact.aerospike.io/test-container-dev-local/test-image:${{ needs.extract-version.outputs.version }}
       context: ./.github/workflows/execute-build/test_apps/hi
       file: ./.github/workflows/execute-build/test_apps/hi/Dockerfile
-      jf_build_name: test-container
+      jf-build-name: test-container
