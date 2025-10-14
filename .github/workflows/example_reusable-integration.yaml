@@ -51,7 +51,7 @@ jobs:
   # a single workflow that can be instrumented in the future.
   # This is also an example of using a matrix strategy to build in GHA
   build-packages:
-    uses: aerospike/shared-workflows/.github/workflows/reusable_execute-build.yaml@5d94b57c8eb7ff8cd77c28767d96c77bd7c89681
+    uses: aerospike/shared-workflows/.github/workflows/reusable_execute-build.yaml@6bd7904473640ef7efe9593c53bd748a905e9c1f
     needs: extract-version
     # Matrix strategy: Multi-platform builds across Ubuntu/Debian/RPM families (x86_64 native, ARM64 emulated)
     strategy:
@@ -183,11 +183,9 @@ jobs:
           retention-days: 1
   sign-artifacts:
     needs: package-built-artifacts
-    uses: aerospike/shared-workflows/.github/workflows/reusable_sign-artifacts.yaml@5d94b57c8eb7ff8cd77c28767d96c77bd7c89681
+    uses: aerospike/shared-workflows/.github/workflows/reusable_sign-artifacts.yaml@6bd7904473640ef7efe9593c53bd748a905e9c1f
     with:
       gh-retention-days: 1
-      oidc-provider-name: gh-dev-test
-      oidc-audience: aerospike/testing
       gh-artifact-name: packaged-artifacts
     secrets:
       gpg-private-key: ${{ secrets.GPG_SECRET_KEY }}
@@ -196,7 +194,7 @@ jobs:
 
   deploy-artifacts:
     needs: [sign-artifacts, extract-version]
-    uses: aerospike/shared-workflows/.github/workflows/reusable_deploy-artifacts.yaml@5d94b57c8eb7ff8cd77c28767d96c77bd7c89681
+    uses: aerospike/shared-workflows/.github/workflows/reusable_deploy-artifacts.yaml@6bd7904473640ef7efe9593c53bd748a905e9c1f
     with:
       jf-project: test
       jf-build-name: test-build
@@ -209,7 +207,7 @@ jobs:
       oidc-audience: aerospike/testing
       dry-run: false
   build-docker-deploy:
-    uses: aerospike/shared-workflows/.github/workflows/reusable_docker-build-deploy.yaml@5d94b57c8eb7ff8cd77c28767d96c77bd7c89681
+    uses: aerospike/shared-workflows/.github/workflows/reusable_docker-build-deploy.yaml@6bd7904473640ef7efe9593c53bd748a905e9c1f
     needs: extract-version
     with:
       jf-project: test
@@ -269,7 +267,8 @@ jobs:
 
   create-release-bundle:
     needs: [use-artifacts, extract-version, deploy-artifacts]
-    uses: aerospike/shared-workflows/.github/workflows/reusable_create-release-bundle.yaml@5d94b57c8eb7ff8cd77c28767d96c77bd7c89681
+    uses: aerospike/shared-workflows/.github/workflows/reusable_create-release-bundle.yaml@6bd7904473640ef7efe9593c53bd748a905e9c1f
+    if: github.event_name == 'workflow_dispatch'
     with:
       jf-project: test
       jf-build-names: test-build:${{ github.run_number }},test-build-container:${{ github.run_number }}
