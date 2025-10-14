@@ -24,21 +24,6 @@ on:
         required: false
         type: string
         default: build-artifacts
-      jf-url:
-        required: false
-        description: JFrog Artifactory URL
-        type: string
-        default: https://artifact.aerospike.io
-      oidc-audience:
-        required: false
-        description: OIDC audience
-        type: string
-        default: aerospike
-      oidc-provider-name:
-        required: false
-        description: OIDC provider name
-        type: string
-        default: gh-aerospike
       runs-on:
         description: The runner to use for the build
         required: false
