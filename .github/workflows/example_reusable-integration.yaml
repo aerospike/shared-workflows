@@ -79,7 +79,7 @@ jobs:
         #     runs-on: ubuntu-22.04
         #     emulated: false
         #   # Ubuntu/Debian family (arm64) - emulated by default
-        #   # set emulated to false to run on real arm64 runners but as of 8/14/2025, the queue times are too long
+        #   # set emulated to false to run on real arm64 runners but as of 8/14/2025, the queue times are very long
         #   - distro: jammy
         #     arch: arm64
         #     runs-on: ubuntu-22.04
