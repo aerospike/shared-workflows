@@ -1,4 +1,4 @@
-# Reusable Docker Build, Publish & Attest (minimal)
+# Reusable Docker Build, Publish & Attest
 
 This workflow builds, optionally attests, and publishes an OCI image to JFrog Artifactory
 
