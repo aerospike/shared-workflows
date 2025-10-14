@@ -75,7 +75,7 @@ jobs:
     outputs:
       build-id: ${{ steps.deploy.outputs.build-id }}
     env:
-      CHECKOUT_REF: a57e0150b910f5f77c74095cfb019b19cb639502 # Latest commit hash for latest release
+      CHECKOUT_REF: 5d94b57c8eb7ff8cd77c28767d96c77bd7c89681 # Latest commit hash for latest release
     steps:
       - name: Checkout shared-workflows repository
         uses: actions/checkout@v5
