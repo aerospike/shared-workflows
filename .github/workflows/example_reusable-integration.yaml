@@ -268,6 +268,7 @@ jobs:
           hi
 
   create-release-bundle:
+    if: github.event_name == 'workflow_dispatch'
     needs: [use-artifacts, extract-version, deploy-artifacts]
     uses: aerospike/shared-workflows/.github/workflows/reusable_create-release-bundle.yaml@5d94b57c8eb7ff8cd77c28767d96c77bd7c89681
     with:
