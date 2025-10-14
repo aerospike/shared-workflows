@@ -51,7 +51,7 @@ jobs:
   # a single workflow that can be instrumented in the future.
   # This is also an example of using a matrix strategy to build in GHA
   build-packages:
-    uses: aerospike/shared-workflows/.github/workflows/reusable_execute-build.yaml@refactor/INFRA-213-prepare-breaking-change
+    uses: aerospike/shared-workflows/.github/workflows/reusable_execute-build.yaml@5d94b57c8eb7ff8cd77c28767d96c77bd7c89681
     needs: extract-version
     # Matrix strategy: Multi-platform builds across Ubuntu/Debian/RPM families (x86_64 native, ARM64 emulated)
     strategy:
@@ -79,7 +79,7 @@ jobs:
         #     runs-on: ubuntu-22.04
         #     emulated: false
         #   # Ubuntu/Debian family (arm64) - emulated by default
-        #   # set emulated to false to run on real arm64 runners but as of 8/14/2025, the queue times are very long
+        #   # set emulated to false to run on real arm64 runners but as of 8/14/2025, the queue times are too long
         #   - distro: jammy
         #     arch: arm64
         #     runs-on: ubuntu-22.04
@@ -183,7 +183,7 @@ jobs:
           retention-days: 1
   sign-artifacts:
     needs: package-built-artifacts
-    uses: aerospike/shared-workflows/.github/workflows/reusable_sign-artifacts.yaml@refactor/INFRA-213-prepare-breaking-change
+    uses: aerospike/shared-workflows/.github/workflows/reusable_sign-artifacts.yaml@5d94b57c8eb7ff8cd77c28767d96c77bd7c89681
     with:
       gh-retention-days: 1
       oidc-provider-name: gh-dev-test
@@ -196,7 +196,7 @@ jobs:
 
   deploy-artifacts:
     needs: [sign-artifacts, extract-version]
-    uses: aerospike/shared-workflows/.github/workflows/reusable_deploy-artifacts.yaml@refactor/INFRA-213-prepare-breaking-change
+    uses: aerospike/shared-workflows/.github/workflows/reusable_deploy-artifacts.yaml@5d94b57c8eb7ff8cd77c28767d96c77bd7c89681
     with:
       jf-project: test
       jf-build-name: test-build
@@ -209,7 +209,7 @@ jobs:
       oidc-audience: aerospike/testing
       dry-run: false
   build-docker-deploy:
-    uses: aerospike/shared-workflows/.github/workflows/reusable_docker-build-deploy.yaml@refactor/INFRA-213-prepare-breaking-change
+    uses: aerospike/shared-workflows/.github/workflows/reusable_docker-build-deploy.yaml@5d94b57c8eb7ff8cd77c28767d96c77bd7c89681
     needs: extract-version
     with:
       jf-project: test
@@ -269,7 +269,7 @@ jobs:
 
   create-release-bundle:
     needs: [use-artifacts, extract-version, deploy-artifacts]
-    uses: aerospike/shared-workflows/.github/workflows/reusable_create-release-bundle.yaml@refactor/INFRA-213-prepare-breaking-change
+    uses: aerospike/shared-workflows/.github/workflows/reusable_create-release-bundle.yaml@5d94b57c8eb7ff8cd77c28767d96c77bd7c89681
     with:
       jf-project: test
       jf-build-names: test-build:${{ github.run_number }},test-build-container:${{ github.run_number }}

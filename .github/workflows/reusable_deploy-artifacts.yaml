@@ -78,7 +78,7 @@ jobs:
     outputs:
       jf-build-id: ${{ steps.deploy.outputs.jf-build-id }}
     env:
-      CHECKOUT_REF: refactor/INFRA-213-prepare-breaking-change # Latest commit hash for latest release
+      CHECKOUT_REF: ${{ github.workflow_sha }} # Latest commit hash for latest release
     steps:
       - name: Checkout shared-workflows repository
         uses: actions/checkout@v5

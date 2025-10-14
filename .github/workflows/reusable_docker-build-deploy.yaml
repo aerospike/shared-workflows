@@ -1,4 +1,4 @@
-name: Reusable Docker Build, Publish & Attest (minimal)
+name: Reusable Docker Build, Publish & Attest
 
 on:
   workflow_call:
