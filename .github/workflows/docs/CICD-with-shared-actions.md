@@ -22,7 +22,7 @@ The architecture follows an ecosystem-specific build & sign pattern, where artif
 
 **Create Release Bundle** → combine artifacts and/or docker builds into a single distributable release bundle
 
-Each workflow is independent and composable. Internally actions artifacts are used for _in‑runner handoff_; use Artifactory coordinates are used for _durable discovery and consumption_ beyond the workflow. Build and sign according to ecosystem requirements, then bundle everything together for release.
+Each workflow is independent and composable. Internally actions artifacts are used for _in‑runner handoff_; deployments are used for _durable discovery and consumption_ beyond the workflow. Build and sign according to ecosystem requirements, then bundle everything together for release.
 
 ```mermaid
 sequenceDiagram
