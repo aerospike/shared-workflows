@@ -51,7 +51,7 @@ jobs:
   # a single workflow that can be instrumented in the future.
   # This is also an example of using a matrix strategy to build in GHA
   build-packages:
-    uses: aerospike/shared-workflows/.github/workflows/reusable_execute-build.yaml@5d94b57c8eb7ff8cd77c28767d96c77bd7c89681
+    uses: aerospike/shared-workflows/.github/workflows/reusable_execute-build.yaml@6bd7904473640ef7efe9593c53bd748a905e9c1f
     needs: extract-version
     # Matrix strategy: Multi-platform builds across Ubuntu/Debian/RPM families (x86_64 native, ARM64 emulated)
     strategy:
@@ -128,11 +128,11 @@ jobs:
         #   emulated: false
     with:
       runs-on: ${{ matrix.runs-on }}
-      project: test
-      build-name: test-build
-      build-id: ${{ github.run_number }}-buildinfo-${{ matrix.distro }}-${{ matrix.arch }}
-      checkout-path: project-location # In the case of running in shared_workflows checkout-path and source-path will have the same content but we put them here by way of example.
-      source-path: repo-source
+      jf-project: test
+      jf-build-name: test-build
+      jf-build-id: ${{ github.run_number }}-buildinfo-${{ matrix.distro }}-${{ matrix.arch }}
+      gh-checkout-path: project-location # In the case of running in shared_workflows gh_checkout_path and gh_source_path will have the same content but we put them here by way of example.
+      gh-source-path: repo-source
       working-directory: repo-source/.github/workflows/execute-build/test_apps/hi
       build-script: |
         uname -m
@@ -144,12 +144,12 @@ jobs:
         ARCH=${{ matrix.arch }} \
         EMULATED=${{ matrix.emulated }} \
         make docker-build
-      artifact-directory: build
-      artifact-name: build-artifacts-${{ matrix.distro }}-${{ matrix.arch }}
-      retention-days: 1 # default
-      artifactory-url: https://artifact.aerospike.io # default
-      artifactory-oidc-provider-name: gh-dev-test
-      artifactory-oidc-audience: aerospike/testing
+      gh-artifact-directory: build
+      gh-artifact-name: build-artifacts-${{ matrix.distro }}-${{ matrix.arch }}
+      gh-retention-days: 1 # default
+      jf-url: https://artifact.aerospike.io # default
+      oidc-provider-name: gh-dev-test
+      oidc-audience: aerospike/testing
       publish-build-info: true
       dry-run: false # default
   # This job demonstrates custom packaging logic using standard GitHub Actions (actions/checkout, actions/download-artifact, actions/upload-artifact)
@@ -183,12 +183,10 @@ jobs:
           retention-days: 1
   sign-artifacts:
     needs: package-built-artifacts
-    uses: aerospike/shared-workflows/.github/workflows/reusable_sign-artifacts.yaml@5d94b57c8eb7ff8cd77c28767d96c77bd7c89681
+    uses: aerospike/shared-workflows/.github/workflows/reusable_sign-artifacts.yaml@6bd7904473640ef7efe9593c53bd748a905e9c1f
     with:
-      retention-days: 1
-      artifactory-oidc-provider-name: gh-dev-test
-      artifactory-oidc-audience: aerospike/testing
-      artifact-name: packaged-artifacts
+      gh-retention-days: 1
+      gh-artifact-name: packaged-artifacts
     secrets:
       gpg-private-key: ${{ secrets.GPG_SECRET_KEY }}
       gpg-public-key: ${{ secrets.GPG_PUBLIC_KEY }}
@@ -196,28 +194,28 @@ jobs:
 
   deploy-artifacts:
     needs: [sign-artifacts, extract-version]
-    uses: aerospike/shared-workflows/.github/workflows/reusable_deploy-artifacts.yaml@5d94b57c8eb7ff8cd77c28767d96c77bd7c89681
+    uses: aerospike/shared-workflows/.github/workflows/reusable_deploy-artifacts.yaml@6bd7904473640ef7efe9593c53bd748a905e9c1f
     with:
-      project: test
-      build-name: test-build
-      metadata-build-id: ${{ github.run_number }}-buildinfo
-      build-id: ${{ github.run_number }}
-      artifact-name: ${{ needs.sign-artifacts.outputs.artifact-name }}
+      jf-project: test
+      jf-build-name: test-build
+      jf-metadata-build-id: ${{ github.run_number }}-buildinfo
+      jf-build-id: ${{ github.run_number }}
+      gh-artifact-name: ${{ needs.sign-artifacts.outputs.gh-artifact-name }}
       version: ${{ needs.extract-version.outputs.version }}
-      retention-days: 1
-      artifactory-oidc-provider-name: gh-dev-test
-      artifactory-oidc-audience: aerospike/testing
+      gh-retention-days: 1
+      oidc-provider-name: gh-dev-test
+      oidc-audience: aerospike/testing
       dry-run: false
   build-docker-deploy:
-    uses: aerospike/shared-workflows/.github/workflows/reusable_docker-build-deploy.yaml@5d94b57c8eb7ff8cd77c28767d96c77bd7c89681
+    uses: aerospike/shared-workflows/.github/workflows/reusable_docker-build-deploy.yaml@6bd7904473640ef7efe9593c53bd748a905e9c1f
     needs: extract-version
     with:
-      jf_project: test
-      image_name: test-image
+      jf-project: test
+      image-name: test-image
       tag: artifact.aerospike.io/test-container-dev-local/test-image:${{ needs.extract-version.outputs.version }}
       context: ./.github/workflows/execute-build/test_apps/hi
       file: ./.github/workflows/execute-build/test_apps/hi/Dockerfile
-      jf_build_name: test-build-container
+      jf-build-name: test-build-container
   use-artifacts:
     needs: [build-docker-deploy, extract-version, deploy-artifacts]
     runs-on: ubuntu-22.04
@@ -232,7 +230,7 @@ jobs:
           oidc-provider-name: gh-dev-test
           oidc-audience: aerospike/testing
       - name: Docker login to Artifactory
-        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+        uses: docker/login-action@v3
         with:
           registry: artifact.aerospike.io/test-container-dev-local
           username: ${{ steps.jf.outputs.oidc-user }}
@@ -268,14 +266,14 @@ jobs:
           hi
 
   create-release-bundle:
-    if: github.event_name == 'workflow_dispatch'
     needs: [use-artifacts, extract-version, deploy-artifacts]
-    uses: aerospike/shared-workflows/.github/workflows/reusable_create-release-bundle.yaml@5d94b57c8eb7ff8cd77c28767d96c77bd7c89681
+    uses: aerospike/shared-workflows/.github/workflows/reusable_create-release-bundle.yaml@6bd7904473640ef7efe9593c53bd748a905e9c1f
+    if: github.event_name == 'workflow_dispatch'
     with:
-      project: test
-      build-names: test-build:${{ github.run_number }},test-build-container:${{ github.run_number }}
-      bundle-name: test-release
+      jf-project: test
+      jf-build-names: test-build:${{ github.run_number }},test-build-container:${{ github.run_number }}
+      jf-bundle-name: test-release
       version: ${{ needs.extract-version.outputs.version }}
-      artifactory-oidc-provider-name: gh-dev-test
-      artifactory-oidc-audience: aerospike/testing
+      oidc-provider-name: gh-dev-test
+      oidc-audience: aerospike/testing
       dry-run: false

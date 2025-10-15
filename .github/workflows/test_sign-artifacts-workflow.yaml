@@ -30,7 +30,7 @@ jobs:
       gpg-public-key: ${{ secrets.GPG_PUBLIC_KEY }}
       gpg-key-pass: ${{ secrets.GPG_PASS }}
     with:
-      unsigned-artifacts: test-fixtures
+      gh-unsigned-artifacts: test-fixtures
 
   run-tests:
     needs: test-sign-workflow

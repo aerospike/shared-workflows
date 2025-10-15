@@ -3,42 +3,27 @@ name: Sign Artifacts
 on:
   workflow_call:
     inputs:
-      unsigned-artifacts:
-        description: uploaded artifacts to sign
-        required: false
-        type: string
-        default: build-artifacts
-      artifact-name:
+      # Optional inputs
+      gh-artifact-name:
         description: Name to upload signed artifacts as
         required: false
         type: string
         default: signed-artifacts
-      retention-days:
-        description: Retention days for the artifacts
-        required: false
-        type: number
-        default: 1
-      artifactory-url:
-        required: false
-        description: JFrog Artifactory URL
-        type: string
-        default: https://artifact.aerospike.io
-      artifactory-oidc-provider-name:
-        required: false
-        description: OIDC provider name
-        type: string
-        default: gh-aerospike
-      artifactory-oidc-audience:
-        required: false
-        description: OIDC audience
-        type: string
-        default: aerospike
-      checkout-path:
+      gh-checkout-path:
         description: Directory to checkout the shared-workflows repository into
         required: false
         type: string
         default: shared-workflows
-
+      gh-retention-days:
+        description: Retention days for the artifacts
+        required: false
+        type: number
+        default: 1
+      gh-unsigned-artifacts:
+        description: uploaded artifacts to sign
+        required: false
+        type: string
+        default: build-artifacts
       runs-on:
         description: The runner to use for the build
         required: false
@@ -53,9 +38,9 @@ on:
       gpg-key-pass:
         required: true
     outputs:
-      artifact-name:
+      gh-artifact-name:
         description: The name of the uploaded signed artifacts on github
-        value: ${{ jobs.sign.outputs.artifact-name }}
+        value: ${{ jobs.sign.outputs.gh-artifact-name }}
 permissions:
   contents: read
   id-token: write
@@ -63,14 +48,14 @@ jobs:
   sign:
     runs-on: ${{ inputs.runs-on }}
     outputs:
-      artifact-name: ${{ steps.sign-outputs.outputs.artifact-name }}
+      gh-artifact-name: ${{ steps.sign-outputs.outputs.gh-artifact-name }}
     env:
       CHECKOUT_REF: ${{ github.workflow_sha }} # Latest commit hash for latest release
     steps:
       - name: Download Unsigned Artifacts
         uses: actions/download-artifact@v4
         with:
-          name: ${{ inputs.unsigned-artifacts }}
+          name: ${{ inputs.gh-unsigned-artifacts }}
           path: unsigned-artifacts
           merge-multiple: true
 
@@ -79,7 +64,7 @@ jobs:
         with:
           repository: aerospike/shared-workflows
           ref: ${{ env.CHECKOUT_REF }}
-          path: ${{ inputs.checkout-path }}
+          path: ${{ inputs.gh-checkout-path }}
           fetch-depth: 1
 
       - name: Set up GPG
@@ -93,16 +78,16 @@ jobs:
           sudo apt-get update && sudo apt-get install dpkg-sig dpkg-dev -y
       - name: Sign Artifacts
         run: |
-          chmod +x ${{ inputs.checkout-path }}/.github/workflows/sign-artifacts/entrypoint.sh
-          ${{ inputs.checkout-path }}/.github/workflows/sign-artifacts/entrypoint.sh 'unsigned-artifacts/**/*' '${{ inputs.artifact-name }}'
+          chmod +x ${{ inputs.gh-checkout-path }}/.github/workflows/sign-artifacts/entrypoint.sh
+          ${{ inputs.gh-checkout-path }}/.github/workflows/sign-artifacts/entrypoint.sh 'unsigned-artifacts/**/*' '${{ inputs.gh-artifact-name }}'
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ inputs.artifact-name }}
-          path: ${{ inputs.artifact-name }}
+          name: ${{ inputs.gh-artifact-name }}
+          path: ${{ inputs.gh-artifact-name }}
           overwrite: true
-          retention-days: ${{ inputs.retention-days }}
+          retention-days: ${{ inputs.gh-retention-days }}
       - name: Set Outputs
         id: sign-outputs
         run: |
-          echo "artifact-name=${{ inputs.artifact-name }}" >> $GITHUB_OUTPUT
+          echo "gh-artifact-name=${{ inputs.gh-artifact-name }}" >> $GITHUB_OUTPUT

@@ -12,13 +12,13 @@ jobs:
   test-create-release-bundle-workflow:
     uses: ./.github/workflows/reusable_create-release-bundle.yaml
     with:
-      project: test
-      build-names: test-build-1:1728052628123,test-build-2:1728052628123
-      bundle-name: test-release-bundle
+      jf-project: test
+      jf-build-names: test-build-1:1728052628123,test-build-2:1728052628123
+      jf-bundle-name: test-release-bundle
       version: v1.0.0
-      artifactory-url: https://artifact.aerospike.io
-      artifactory-oidc-provider-name: gh-aerospike
-      artifactory-oidc-audience: aerospike
+      jf-url: https://artifact.aerospike.io
+      oidc-provider-name: gh-aerospike
+      oidc-audience: aerospike
       dry-run: true
 
   run-tests:

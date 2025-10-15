@@ -1,14 +1,14 @@
-name: Reusable Docker Build, Publish & Attest (minimal)
+name: Reusable Docker Build, Publish & Attest
 
 on:
   workflow_call:
     inputs:
       # Required inputs (alphabetical)
-      image_name:
+      image-name:
         type: string
         required: true
         description: Image repository/name (without registry)
-      jf_project:
+      jf-project:
         type: string
         required: true
         description: JFrog project key
@@ -22,7 +22,7 @@ on:
         type: boolean
         default: true
         description: Generate SLSA build-provenance attestation
-      build_args_json:
+      build-args-json:
         type: string
         default: "{}"
         description: JSON object of build-args passed to docker build # {"KEY":"VALUE",...}
@@ -34,31 +34,31 @@ on:
         type: string
         default: Dockerfile
         description: Path to Dockerfile (relative to context)
-      jf_build_name:
+      jf-build-name:
         type: string
         required: false
         description: Build name for JFrog build-info (defaults to workflow name)
-      jf_registry:
+      jf-registry:
         type: string
         required: false
         description: Full Docker registry URL including repository path (e.g., artifact.aerospike.io/test-container-dev-local) # should be full uri for Artifactory registry eg artifact.aerospike.io/test-container-dev-local
-      jf_registry_base:
+      jf-registry-base:
         type: string
         default: artifact.aerospike.io
         description: Registry hostname (no repo path)
-      jf_url:
+      jf-url:
         type: string
         default: https://artifact.aerospike.io
         description: Base JFrog Artifactory URL
-      labels_json:
+      labels-json:
         type: string
         default: "{}"
         description: JSON object of image labels # {"key":"value",...}
-      oidc_audience:
+      oidc-audience:
         type: string
         default: aerospike/testing
         description: OIDC audience value for token
-      oidc_provider_name:
+      oidc-provider-name:
         type: string
         default: gh-dev-test
         description: JFrog OIDC provider name
@@ -74,10 +74,10 @@ on:
         type: boolean
         default: true
         description: Whether to push the image
-      repo_scope:
+      repo-scope:
         type: string
         default: -container-dev-local
-        description: Repository suffix appended to jf_project (e.g., -container-preview-public-local) # e.g. "-container-preview-public-local"
+        description: Repository suffix appended to jf-project (e.g., -container-preview-public-local) # e.g. "-container-preview-public-local"
       sbom:
         type: boolean
         default: true
@@ -87,9 +87,9 @@ on:
       digest:
         description: Image manifest digest
         value: ${{ jobs.build.outputs.digest }}
-      image_ref:
+      image-ref:
         description: Primary tag with @digest
-        value: ${{ jobs.build.outputs.image_ref }}
+        value: ${{ jobs.build.outputs.image-ref }}
       tag:
         description: Primary tag used
         value: ${{ jobs.build.outputs.tag }}
@@ -97,7 +97,7 @@ on:
 jobs:
   build:
     env:
-      JFROG_CLI_BUILD_NAME: ${{ inputs.jf_build_name || github.workflow }}
+      JFROG_CLI_BUILD_NAME: ${{ inputs.jf-build-name || github.workflow }}
       JFROG_CLI_LOG_LEVEL: INFO
     runs-on: ubuntu-22.04
     permissions:
@@ -108,7 +108,7 @@ jobs:
 
     outputs:
       digest: ${{ steps.build.outputs.digest }}
-      image_ref: ${{ steps.meta.outputs.image_ref }}
+      image-ref: ${{ steps.meta.outputs.image-ref }}
       tag: ${{ inputs.tag }}
 
     steps:
@@ -118,22 +118,22 @@ jobs:
         id: jf
         uses: jfrog/setup-jfrog-cli@c32bf10843e4071112c4ea3abf622d3b27cd8c17 # v4.7.0
         env:
-          JF_URL: ${{ inputs.jf_url }}
-          JF_PROJECT: ${{ inputs.jf_project }}
-          JFROG_CLI_BUILD_NAME: ${{ inputs.jf_build_name || github.workflow }}
+          JF_URL: ${{ inputs.jf-url }}
+          JF_PROJECT: ${{ inputs.jf-project }}
+          JFROG_CLI_BUILD_NAME: ${{ inputs.jf-build-name || github.workflow }}
         with:
           version: 2.78.8
-          oidc-provider-name: ${{ inputs.oidc_provider_name }}
-          oidc-audience: ${{ inputs.oidc_audience }}
+          oidc-provider-name: ${{ inputs.oidc-provider-name }}
+          oidc-audience: ${{ inputs.oidc-audience }}
 
       - name: Compute registry
         id: registry
         shell: bash
         run: |
           set -euo pipefail
-          reg='${{ inputs.jf_registry }}'
+          reg='${{ inputs.jf-registry }}'
           if [ -z "$reg" ]; then
-            reg='${{ inputs.jf_registry_base }}/${{ inputs.jf_project }}${{ inputs.repo_scope }}'
+            reg='${{ inputs.jf-registry-base }}/${{ inputs.jf-project }}${{ inputs.repo-scope }}'
           fi
           echo "registry=$reg" >> "$GITHUB_OUTPUT"
 
@@ -152,8 +152,8 @@ jobs:
         run: |
           set -euo pipefail
           to_kv() { jq -r 'to_entries|map("\(.key)=\(.value)")|.[]'; }
-          echo '${{ inputs.build_args_json }}' | to_kv > /tmp/build_args
-          echo '${{ inputs.labels_json }}' | to_kv > /tmp/labels
+          echo '${{ inputs.build-args-json }}' | to_kv > /tmp/build_args
+          echo '${{ inputs.labels-json }}' | to_kv > /tmp/labels
           echo "BUILD_ARGS=$(cat /tmp/build_args)" >> "$GITHUB_ENV"
           echo "LABELS=$(cat /tmp/labels)" >> "$GITHUB_ENV"
 
@@ -182,8 +182,8 @@ jobs:
         shell: bash
         run: |
           image_ref="${{ inputs.tag }}@${{ steps.build.outputs.digest }}"
-          echo "image_ref=${image_ref}" >> "$GITHUB_OUTPUT"
-          jf rt build-docker-create --image-file <(echo "$image_ref") "${{ inputs.jf_project }}${{ inputs.repo_scope }}"
+          echo "image-ref=${image_ref}" >> "$GITHUB_OUTPUT"
+          jf rt build-docker-create --image-file <(echo "$image_ref") "${{ inputs.jf-project }}${{ inputs.repo-scope }}"
 
       - name: Publish Build Info
         shell: bash

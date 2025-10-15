@@ -26,15 +26,15 @@ jobs:
     needs: upload-test-gh-artifacts
     uses: ./.github/workflows/reusable_deploy-artifacts.yaml
     with:
-      project: test
-      build-name: test-upload-workflow
+      jf-project: test
+      jf-build-name: test-upload-workflow
       version: v1.0.0
-      build-id: ${{ github.run_number }}
-      metadata-build-id: ${{ github.run_number }}-metadata
-      artifactory-url: https://artifact.aerospike.io
-      artifactory-oidc-provider-name: gh-aerospike
-      artifactory-oidc-audience: aerospike
-      artifact-name: test-fixtures
+      jf-build-id: ${{ github.run_number }}
+      jf-metadata-build-id: ${{ github.run_number }}-metadata
+      jf-url: https://artifact.aerospike.io
+      oidc-provider-name: gh-aerospike
+      oidc-audience: aerospike
+      gh-artifact-name: test-fixtures
       dry-run: true
 
   run-tests:

@@ -3,18 +3,25 @@ name: Execute Build
 on:
   workflow_call:
     inputs:
-      project:
-        description: JFrog Artifactory project name
+      # Required inputs
+      gh-artifact-directory:
+        description: Build script will place artifacts in this directory and it will be uploaded to github artifacts
         required: true
         type: string
-      build-name:
-        description: Name for this build in artifactory
-        required: true
-        type: string
-      build-id:
+      jf-build-id:
         description: Build ID for this build in artifactory
         required: true
         type: string
+      jf-build-name:
+        description: Name for this build in artifactory
+        required: true
+        type: string
+      jf-project:
+        description: JFrog Artifactory project name
+        required: true
+        type: string
+
+      # Optional inputs
       build-script:
         description: Inline build script to execute
         required: false
@@ -25,71 +32,67 @@ on:
         required: false
         type: string
         default: ""
-      artifact-directory:
-        description: Build script will place artifacts in this directory and it will be uploaded to github artifacts
-        required: true
-        type: string
-      artifact-name:
-        description: Name for artifacts from this build. Will be used for name of uploaded github artifacts
-        required: false
-        type: string
-        default: build-artifacts
-      retention-days:
-        description: Retention days for the github artifacts
-        required: false
-        type: number
-        default: 1
-      artifactory-url:
-        required: false
-        description: JFrog Artifactory URL
-        type: string
-        default: https://artifact.aerospike.io
-      artifactory-oidc-provider-name:
-        required: false
-        description: OIDC provider name
-        type: string
-        default: gh-aerospike
-      artifactory-oidc-audience:
-        required: false
-        description: OIDC audience
-        type: string
-        default: aerospike
-      runs-on:
-        description: The runner to use for the build
-        required: false
-        type: string
-        default: ubuntu-22.04
-      checkout-path:
-        description: Directory to checkout the shared-workflows repository into
-        required: false
-        type: string
-        default: shared-workflows
-      source-repository:
-        description: Repository to checkout for source code (format owner/repo)
-        required: false
-        type: string
-        default: ${{ github.repository }}
-      source-ref:
-        description: Reference to checkout for source repository (branch, tag, or commit)
-        required: false
-        type: string
-        default: ""
-      source-path:
-        description: Directory to checkout the source repository into. If set to empty string it will not checkout the current repository.
-        required: false
-        type: string
-        default: local
       dry-run:
         description: Whether to run in dry-run mode
         required: false
         type: boolean
         default: false
+      gh-artifact-name:
+        description: Name for artifacts from this build. Will be used for name of uploaded github artifacts
+        required: false
+        type: string
+        default: build-artifacts
+      gh-checkout-path:
+        description: Directory to checkout the shared-workflows repository into
+        required: false
+        type: string
+        default: shared-workflows
+      gh-retention-days:
+        description: Retention days for the github artifacts
+        required: false
+        type: number
+        default: 1
+      gh-source-path:
+        description: Directory to checkout the source repository into. If set to empty string it will not checkout the current repository.
+        required: false
+        type: string
+        default: local
+      gh-source-ref:
+        description: Reference to checkout for source repository (branch, tag, or commit)
+        required: false
+        type: string
+        default: ""
+      gh-source-repository:
+        description: Repository to checkout for source code (format owner/repo)
+        required: false
+        type: string
+        default: ${{ github.repository }}
+      jf-url:
+        required: false
+        description: JFrog Artifactory URL
+        type: string
+        default: https://artifact.aerospike.io
+      oidc-audience:
+        required: false
+        description: OIDC audience
+        type: string
+        default: aerospike
+      oidc-provider-name:
+        required: false
+        description: OIDC provider name
+        type: string
+        default: gh-aerospike
       publish-build-info:
         description: |
           Whether to publish build-info to JFrog. If true will publish build-info to JFrog without uploading artifacts.
         required: false
         type: boolean
         default: false
+      runs-on:
+        description: The runner to use for the build
+        required: false
+        type: string
+        default: ubuntu-22.04
       working-directory:
         description: Working directory for build script execution
         required: false
@@ -97,15 +100,15 @@ on:
         default: .
 
     outputs:
-      build-name:
-        description: The build name used for JFrog build-info
-        value: ${{ jobs.execute-build.outputs.build-name }}
-      build-id:
-        description: The build ID used for JFrog build-info
-        value: ${{ jobs.execute-build.outputs.build-id }}
-      artifact-name:
+      gh-artifact-name:
         description: The name of the uploaded artifacts on github
-        value: ${{ jobs.execute-build.outputs.artifact-name }}
+        value: ${{ jobs.execute-build.outputs.gh-artifact-name }}
+      jf-build-id:
+        description: The build ID used for JFrog build-info
+        value: ${{ jobs.execute-build.outputs.jf-build-id }}
+      jf-build-name:
+        description: The build name used for JFrog build-info
+        value: ${{ jobs.execute-build.outputs.jf-build-name }}
 
 permissions:
   contents: read
@@ -115,9 +118,9 @@ jobs:
   execute-build:
     runs-on: ${{ inputs.runs-on }}
     outputs:
-      build-name: ${{ steps.build-info.outputs.build-name }}
-      build-id: ${{ steps.build-info.outputs.build-id }}
-      artifact-name: ${{ steps.build-info.outputs.artifact-name }}
+      gh-artifact-name: ${{ steps.build-info.outputs.gh-artifact-name }}
+      jf-build-id: ${{ steps.build-info.outputs.jf-build-id }}
+      jf-build-name: ${{ steps.build-info.outputs.jf-build-name }}
     env:
       CHECKOUT_REF: ${{ github.workflow_sha }} # Latest commit hash for latest release
     steps:
@@ -126,16 +129,16 @@ jobs:
         with:
           repository: aerospike/shared-workflows
           ref: ${{ env.CHECKOUT_REF }}
-          path: ${{ inputs.checkout-path }}
+          path: ${{ inputs.gh-checkout-path }}
           fetch-depth: 1
 
       - name: Checkout source repository
-        if: inputs.source-path != ''
+        if: inputs.gh-source-path != ''
         uses: actions/checkout@v5
         with:
-          repository: ${{ inputs.source-repository }}
-          ref: ${{ inputs.source-ref }}
-          path: ${{ inputs.source-path }}
+          repository: ${{ inputs.gh-source-repository }}
+          ref: ${{ inputs.gh-source-ref }}
+          path: ${{ inputs.gh-source-path }}
           fetch-tags: true
           submodules: recursive
           fetch-depth: 1
@@ -143,16 +146,16 @@ jobs:
       - name: Set up JFrog CLI
         uses: jfrog/setup-jfrog-cli@c32bf10843e4071112c4ea3abf622d3b27cd8c17 # v4.7.0
         env:
-          JF_URL: ${{ inputs.artifactory-url }}
-          JF_PROJECT: ${{ inputs.project }}
+          JF_URL: ${{ inputs.jf-url }}
+          JF_PROJECT: ${{ inputs.jf-project }}
         with:
-          oidc-provider-name: ${{ inputs.artifactory-oidc-provider-name }}
-          oidc-audience: ${{ inputs.artifactory-oidc-audience }}
+          oidc-provider-name: ${{ inputs.oidc-provider-name }}
+          oidc-audience: ${{ inputs.oidc-audience }}
 
       - name: Execute Build Script
         shell: bash
         run: |
-          entrypoint=$(realpath ${{ inputs.checkout-path }}/.github/workflows/execute-build/entrypoint.sh)
+          entrypoint=$(realpath ${{ inputs.gh-checkout-path }}/.github/workflows/execute-build/entrypoint.sh)
           chmod +x "$entrypoint"
           if [[ -n "${{ inputs.working-directory }}" ]]; then
             cd "${{ inputs.working-directory }}"
@@ -173,24 +176,24 @@ jobs:
 
           "$entrypoint" \
             "$script_arg" "$script_value" \
-            --artifact-directory "${{ inputs.artifact-directory }}" \
-            --build-name "${{ inputs.build-name }}" \
-            --build-id "${{ inputs.build-id }}" \
-            --project "${{ inputs.project }}" \
+            --artifact-directory "${{ inputs.gh-artifact-directory }}" \
+            --build-name "${{ inputs.jf-build-name }}" \
+            --build-id "${{ inputs.jf-build-id }}" \
+            --project "${{ inputs.jf-project }}" \
             ${{ inputs.publish-build-info && '--publish-build-info' || '' }} \
             ${{ inputs.dry-run && '--dry-run' || '' }}
       - name: Upload Artifacts
         if: inputs.dry-run != true
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ inputs.artifact-name }}
-          path: ${{ inputs.working-directory != '' && format('{0}/{1}', inputs.working-directory, inputs.artifact-directory) || inputs.artifact-directory }}
-          retention-days: ${{ inputs.retention-days }}
+          name: ${{ inputs.gh-artifact-name }}
+          path: ${{ inputs.working-directory != '' && format('{0}/{1}', inputs.working-directory, inputs.gh-artifact-directory) || inputs.gh-artifact-directory }}
+          retention-days: ${{ inputs.gh-retention-days }}
 
       - name: Set Build Info Outputs
         if: inputs.publish-build-info == true
         id: build-info
         run: |
-          echo "build-name=${{ inputs.build-name }}" >> $GITHUB_OUTPUT
-          echo "build-id=${{ inputs.build-id }}" >> $GITHUB_OUTPUT
-          echo "artifact-name=${{ inputs.artifact-name }}" >> $GITHUB_OUTPUT
+          echo "jf-build-name=${{ inputs.jf-build-name }}" >> $GITHUB_OUTPUT
+          echo "jf-build-id=${{ inputs.jf-build-id }}" >> $GITHUB_OUTPUT
+          echo "gh-artifact-name=${{ inputs.gh-artifact-name }}" >> $GITHUB_OUTPUT

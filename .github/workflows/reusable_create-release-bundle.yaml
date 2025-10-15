@@ -3,55 +3,58 @@ name: Create Release Bundle
 on:
   workflow_call:
     inputs:
-      project:
-        description: JFrog Artifactory project name
-        required: true
-        type: string
-      build-names:
+      # Required inputs
+      jf-build-names:
         description: |
           Comma-separated list of build name:version pairs to include in the release bundle.
           Format: "build-name1:version1,build-name2:version2"
           Example: "database-build:v1.2.3,app-build:v2.1.0"
         required: true
         type: string
-      bundle-name:
+      jf-bundle-name:
         description: Name for the release bundle
+        required: true
+        type: string
+      jf-project:
+        description: JFrog Artifactory project name
         required: true
         type: string
       version:
         description: Version of the release bundle
         required: true
         type: string
-      artifactory-url:
-        required: false
-        description: JFrog Artifactory URL
-        type: string
-        default: https://artifact.aerospike.io
-      artifactory-oidc-provider-name:
-        required: false
-        description: OIDC provider name
-        type: string
-        default: gh-aerospike
-      artifactory-oidc-audience:
-        required: false
-        description: OIDC audience
-        type: string
-        default: aerospike
-      runs-on:
-        description: The runner to use for the build
-        required: false
-        type: string
-        default: ubuntu-22.04
-      checkout-path:
-        description: Directory to checkout the shared-workflows repository into
-        required: false
-        type: string
-        default: shared-workflows
+
+      # Optional inputs
       dry-run:
         description: Whether to run in dry-run mode
         required: false
         type: boolean
         default: false
+      gh-checkout-path:
+        description: Directory to checkout the shared-workflows repository into
+        required: false
+        type: string
+        default: shared-workflows
+      jf-url:
+        required: false
+        description: JFrog Artifactory URL
+        type: string
+        default: https://artifact.aerospike.io
+      oidc-audience:
+        required: false
+        description: OIDC audience
+        type: string
+        default: aerospike
+      oidc-provider-name:
+        required: false
+        description: OIDC provider name
+        type: string
+        default: gh-aerospike
+      runs-on:
+        description: The runner to use for the build
+        required: false
+        type: string
+        default: ubuntu-22.04
 
 permissions:
   contents: read
@@ -68,17 +71,17 @@ jobs:
         with:
           repository: aerospike/shared-workflows
           ref: ${{ env.CHECKOUT_REF }}
-          path: ${{ inputs.checkout-path }}
+          path: ${{ inputs.gh-checkout-path }}
           fetch-depth: 1
 
       - name: Setup JFrog CLI
         uses: jfrog/setup-jfrog-cli@c32bf10843e4071112c4ea3abf622d3b27cd8c17 # v4.7.0
         env:
-          JF_URL: ${{ inputs.artifactory-url }}
-          JF_PROJECT: ${{ inputs.project }}
+          JF_URL: ${{ inputs.jf-url }}
+          JF_PROJECT: ${{ inputs.jf-project }}
         with:
-          oidc-provider-name: ${{ inputs.artifactory-oidc-provider-name }}
-          oidc-audience: ${{ inputs.artifactory-oidc-audience }}
+          oidc-provider-name: ${{ inputs.oidc-provider-name }}
+          oidc-audience: ${{ inputs.oidc-audience }}
 
       - name: Check JFrog Configuration
         run: |
@@ -88,14 +91,14 @@ jobs:
       - name: Create Release Bundle
         shell: bash
         run: |
-          chmod +x ${{ inputs.checkout-path }}/.github/workflows/create-release-bundle/entrypoint.sh
+          chmod +x ${{ inputs.gh-checkout-path }}/.github/workflows/create-release-bundle/entrypoint.sh
           dry_run_arg=""
           if [ "${{ inputs.dry-run }}" = "true" ]; then
             dry_run_arg="--dry-run"
           fi
-          "${{ inputs.checkout-path }}/.github/workflows/create-release-bundle/entrypoint.sh" \
-            --project "${{ inputs.project }}" \
-            --build-names "${{ inputs.build-names }}" \
-            --bundle-name "${{ inputs.bundle-name }}" \
+          "${{ inputs.gh-checkout-path }}/.github/workflows/create-release-bundle/entrypoint.sh" \
+            --project "${{ inputs.jf-project }}" \
+            --build-names "${{ inputs.jf-build-names }}" \
+            --bundle-name "${{ inputs.jf-bundle-name }}" \
             --version "${{ inputs.version }}" \
             $dry_run_arg
