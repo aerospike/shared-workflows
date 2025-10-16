@@ -1,0 +1,17 @@
+name: Release
+permissions:
+  contents: write
+  packages: write
+  attestations: write
+  id-token: write
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: NoOp
+        run: |
+          echo "not an op"
