@@ -34,4 +34,4 @@ jobs:
             -p @semantic-release/github@11 \
             -p conventional-changelog@7 \
             -p conventional-changelog-conventionalcommits@8 \
-            semantic-release --dry-run
+            semantic-release --dry-run --ci=false
