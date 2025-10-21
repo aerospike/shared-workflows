@@ -35,6 +35,11 @@ on:
         required: false
         type: string
         default: shared-workflows
+      gh-workflows-ref:
+        description: Git reference to checkout shared-workflows repository (tag, branch, or SHA)
+        required: false
+        type: string
+        default: v2.0.1
       jf-url:
         required: false
         description: JFrog Artifactory URL
@@ -64,7 +69,7 @@ jobs:
   create-release-bundle:
     runs-on: ${{ inputs.runs-on }}
     env:
-      CHECKOUT_REF: ${{ github.workflow_sha }} # Latest commit hash for latest release
+      CHECKOUT_REF: ${{ inputs.gh-workflows-ref }}
     steps:
       - name: Checkout shared-workflows repository
         uses: actions/checkout@v5

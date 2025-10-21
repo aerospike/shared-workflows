@@ -36,7 +36,7 @@ while [[ $# -gt 0 ]]; do
       echo "Uploads artifacts to JFrog Artifactory" >&2
       echo "" >&2
       echo "Options:" >&2
-      echo "  --metadata-build-number <number> JFrog build ID for the build metadata" >&2
+      echo "  --metadata-build-number <prefix> Build ID prefix used to discover related metadata builds (searches for <prefix>*.json)" >&2
       echo "  --dry-run        Show what would be uploaded without actually uploading" >&2
       echo "  --help, -h       Show this help message" >&2
       echo "" >&2

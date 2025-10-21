@@ -1,0 +1,60 @@
+---
+config:
+  layout: dagre
+---
+flowchart TD
+ subgraph s1["Gates"]
+        n4["Basic Integration Test"]
+        n5["Deep Integration Testing<br>(QE System)"]
+        n7["Full cloud and performance testing"]
+        n6["Product Owner<br>Approves"]
+  end
+    A(["Build and Smoketest"]) -- Smoke tests pass --> B["DEV"]
+    B -- Basic integration tests pass --> C["TEST"]
+    C -- "Deep integration tests pass<br>and QE sign-off" --> D["STAGE"]
+    D -- "Full Cloud and Performance Testing Complete. Publicically Available" --> E["PREVIEW"]
+    E -- Product Readiness Checklist Satisfied --> F["PUBLIC"]
+    n4 <--> B
+    n5 <--> C
+    n7 <--> D
+    n6 --> E & F
+    n4@{ shape: rect}
+    n5@{ shape: rect}
+    n7@{ shape: rect}
+    n6@{ shape: rect}
+     n4:::test
+     n4:::start
+     n5:::test
+     n5:::start
+     n7:::test
+     n7:::start
+     n6:::test
+     n6:::start
+     A:::start
+     A:::start
+     B:::dev
+     C:::test
+     D:::stage
+     E:::preview
+     F:::stable
+    classDef dev fill:#223344,stroke:#5AA9E6,stroke-width:1px,color:#eee
+    classDef test fill:#1F3322,stroke:#5AE67D,stroke-width:1px,color:#eee
+    classDef stage fill:#443322,stroke:#E6B85A,stroke-width:1px,color:#eee
+    classDef preview fill:#372355,stroke:#C77DFF,stroke-width:2px,color:#fff
+    classDef stable fill:#003C38,stroke:#00E6C0,stroke-width:2px,color:#fff
+    classDef internal fill:#552222,stroke:#E67A7A,stroke-width:1px,color:#eee
+    classDef start fill:#333, stroke:#888, stroke-width:1px, color:#eee
+    classDef Aqua stroke-width:1px, stroke-dasharray:none, stroke:#46EDC8, fill:#DEFFF8, color:#378E7A
+    classDef Class_01 stroke-width:4px, stroke-dasharray: 0, stroke:#00C853, fill:#00C853, color:#000000
+    classDef FAIL stroke:#D50000, fill:#D50000, color:#FFFFFF
+    style s1 fill:#00C853
+    linkStyle 0 stroke:#FFFFFF,fill:none
+    linkStyle 1 stroke:#FFFFFF,fill:none
+    linkStyle 2 stroke:#FFFFFF,fill:none
+    linkStyle 3 stroke:#FFFFFF,fill:none
+    linkStyle 4 stroke:#FFFFFF
+    linkStyle 5 stroke:#FFFFFF,fill:none
+    linkStyle 6 stroke:#FFFFFF,fill:none
+    linkStyle 7 stroke:#FFFFFF,fill:none
+    linkStyle 8 stroke:none,fill:none
+    linkStyle 9 stroke:#FFFFFF,fill:none
