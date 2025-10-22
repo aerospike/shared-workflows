@@ -47,6 +47,11 @@ on:
         required: false
         type: string
         default: shared-workflows
+      gh-workflows-ref:
+        description: Git reference to checkout shared-workflows repository (tag, branch, or SHA)
+        required: false
+        type: string
+        default: v2.0.1
       gh-retention-days:
         description: Retention days for the github artifacts
         required: false
@@ -122,7 +127,7 @@ jobs:
       jf-build-id: ${{ steps.build-info.outputs.jf-build-id }}
       jf-build-name: ${{ steps.build-info.outputs.jf-build-name }}
     env:
-      CHECKOUT_REF: ${{ github.workflow_sha }} # Latest commit hash for latest release
+      CHECKOUT_REF: ${{ inputs.gh-workflows-ref }}
     steps:
       - name: Checkout shared-workflows repository
         uses: actions/checkout@v5

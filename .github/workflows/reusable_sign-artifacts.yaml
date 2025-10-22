@@ -14,6 +14,11 @@ on:
         required: false
         type: string
         default: shared-workflows
+      gh-workflows-ref:
+        description: Git reference to checkout shared-workflows repository (tag, branch, or SHA)
+        required: false
+        type: string
+        default: v2.0.1
       gh-retention-days:
         description: Retention days for the artifacts
         required: false
@@ -50,7 +55,7 @@ jobs:
     outputs:
       gh-artifact-name: ${{ steps.sign-outputs.outputs.gh-artifact-name }}
     env:
-      CHECKOUT_REF: ${{ github.workflow_sha }} # Latest commit hash for latest release
+      CHECKOUT_REF: ${{ inputs.gh-workflows-ref }}
     steps:
       - name: Download Unsigned Artifacts
         uses: actions/download-artifact@v4

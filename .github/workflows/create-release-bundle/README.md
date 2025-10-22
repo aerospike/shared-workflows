@@ -19,6 +19,7 @@ This workflow creates JFrog release bundles by bundling one or more builds into 
 | `oidc-audience`      | OIDC audience for authentication                           | No       | `aerospike`                     |
 | `runs-on`            | The runner to use for the build                            | No       | `ubuntu-22.04`                  |
 | `gh-checkout-path`   | Directory to checkout the shared-workflows repository into | No       | `shared-workflows`              |
+| `gh-workflows-ref`   | Git reference to checkout shared-workflows repository      | No       | `v2.0.1`                        |
 | `dry-run`            | Whether to run in dry-run mode                             | No       | `false`                         |
 
 ## Example Usage
@@ -40,6 +41,7 @@ jobs:
       jf-build-names: "database-build,client-build"
       jf-bundle-name: database-release
       version: ${{ github.ref_name }}
+      gh-workflows-ref: v2.0.1 # Use specific shared-workflows version
       dry-run: false
 ```
 

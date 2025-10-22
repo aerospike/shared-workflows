@@ -28,6 +28,7 @@ jobs:
       oidc-provider-name: gh-aerospike # default
       oidc-audience: aerospike # default
       dry-run: false # default
+      gh-workflows-ref: v2.0.0 # use v2.0.1 once it is released
 
   # Test the entrypoint script directly
   run-tests:
