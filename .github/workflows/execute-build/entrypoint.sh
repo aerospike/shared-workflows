@@ -171,7 +171,7 @@ main() {
   if [[ "$BUILD_SCRIPT_TYPE" == "inline" ]]; then
     local temp_script="/tmp/build-script-$$.sh"
     echo "#!/bin/bash" > "$temp_script"
-    echo "set -euo pipefail" >> "$temp_script"
+    echo "set -e" >> "$temp_script"
     echo "$BUILD_SCRIPT" >> "$temp_script"
     chmod +x "$temp_script"
     echo "temp_script: $temp_script"

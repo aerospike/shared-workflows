@@ -229,7 +229,10 @@ upload_generic_files() {
   else
     echo "Uploading generic files..." >&2
   fi
-
+  echo "Finding files..." >&2
+  find . >&2
+  echo "Finding non-package files..." >&2
+  find . \( -not -name "*.deb" -not -name "*.rpm" -not -name "*.asc" \) -print0 >&2
   while IFS= read -r -d '' file; do
     echo "Processing generic file: $file" >&2
     if [[ -f "$file" ]]; then
