@@ -122,7 +122,9 @@ run_optional() {
 
 structure_build_artifacts() {
   echo "Structuring build artifacts..." >&2
-  mkdir -p structured_build_artifacts
+  mkdir -p structured_build_artifacts/deb
+  mkdir -p structured_build_artifacts/rpm
+  mkdir -p structured_build_artifacts/generic
   while IFS= read -r -d '' deb; do
     if [[ ! -f "$deb" ]]; then
       continue

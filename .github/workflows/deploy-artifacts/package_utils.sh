@@ -47,8 +47,7 @@ process_rpm() {
     mkdir -p "$target"
     echo "Copying RPM to: $target" >&2
     rpm_name=$(basename "$rpm")
-    cp "$rpm" "$target/$rpm_name"
-    echo "$target/$rpm_name"
+    mv -v "$rpm" "$target/$rpm_name"
 }
 
 get_codename_for_deb() {
@@ -77,6 +76,14 @@ process_deb() {
     mkdir -p "$target"
     echo "Copying DEB to: $target" >&2
     deb_name=$(basename "$deb")
-    cp "$deb" "$target/$deb_name"
-    echo "$target/$deb_name"
+    mv -v "$deb" "$target/$deb_name"
+}
+
+process_generic() {
+    local file="$1"
+    local dest_dir="$2"
+    local file_name
+    file_name=$(basename "$file")
+    mkdir -p "$dest_dir/$file_name"
+    mv -v "$file" "$dest_dir/$file_name"
 }
