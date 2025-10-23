@@ -1,6 +1,15 @@
 #!/usr/bin/env bash
-set -eo pipefail
-if [ -n "${DEBUG:-}" ]; then set -x; fi
+set -euo pipefail
+export PS4='+($LINENO): ${FUNCNAME[0]:+${FUNCNAME[0]}(): }'
+trap 'handle_error ${LINENO}' ERR
+
+handle_error() {
+    local exit_code=$?
+    local line_number=$1
+    echo "Error: Command failed with exit code $exit_code at line $line_number" >&2
+    exit 1
+}
+
 # Function to extract RPM metadata and distribution
 # Unlike for debs this requires parsing the name (because the distro name is not standard)
 get_rpm_metadata() {
@@ -84,6 +93,6 @@ process_generic() {
     local dest_dir="$2"
     local file_name
     file_name=$(basename "$file")
-    mkdir -p "$dest_dir/$file_name"
+    mkdir -p "$dest_dir"
     mv -v "$file" "$dest_dir/$file_name"
 }
