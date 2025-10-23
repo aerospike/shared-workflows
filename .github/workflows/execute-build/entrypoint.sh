@@ -217,6 +217,8 @@ main() {
     run jf rt build-publish "$BUILD_NAME" "$BUILD_ID" --project="$PROJECT"
     
     echo "Published build-info: $BUILD_NAME/$BUILD_ID" >&2
+  else
+    echo "Skipping build-info collection and publication" >&2
   fi
   
   echo "Build-artifacts workflow completed successfully!" >&2
