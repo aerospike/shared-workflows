@@ -24,9 +24,9 @@ jobs:
       gh-artifact-directory: project-location/.github/workflows/execute-build/test_apps/hi/build
       gh-artifact-name: test-execute-build
       gh-retention-days: 1 # default
-      jf-url: https://artifact.aerospike.io # default
-      oidc-provider-name: gh-aerospike # default
-      oidc-audience: aerospike # default
+      jf-url: https://artifact.aerospike.io
+      oidc-provider-name: gh-dev-test
+      oidc-audience: aerospike/testing
       dry-run: false # default
       gh-workflows-ref: v2.0.0 # use v2.0.1 once it is released
 

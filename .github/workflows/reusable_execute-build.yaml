@@ -78,15 +78,13 @@ on:
         type: string
         default: https://artifact.aerospike.io
       oidc-audience:
-        required: false
-        description: OIDC audience
         type: string
-        default: aerospike
+        default: aerospike/testing
+        description: OIDC audience value for token
       oidc-provider-name:
-        required: false
-        description: OIDC provider name
         type: string
-        default: gh-aerospike
+        default: gh-dev-test
+        description: JFrog OIDC provider name
       publish-build-info:
         description: |
           Whether to publish build-info to JFrog. If true will publish build-info to JFrog without uploading artifacts.
