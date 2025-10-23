@@ -85,7 +85,8 @@ process_deb() {
     mkdir -p "$target"
     echo "Copying DEB to: $target" >&2
     deb_name=$(basename "$deb")
-    cp -v "$deb" "$target/$deb_name"
+    cp -v "$deb" "$target/$deb_name" >&2
+    echo "$target/$deb_name"
 }
 
 process_generic() {
