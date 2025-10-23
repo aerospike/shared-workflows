@@ -142,6 +142,13 @@ structure_build_artifacts() {
     echo "Processing RPM: $rpm" >&2
     process_rpm "$rpm" "./structured_build_artifacts"
   done < <(find build-artifacts -name "*.rpm" -print0)
+  while IFS= read -r -d '' generic; do
+    if [[ ! -f "$generic" ]]; then
+      continue
+    fi
+    echo "Processing generic file: $generic" >&2
+    process_generic "$generic" "./structured_build_artifacts"
+  done < <(find build-artifacts -type f -print0)
 }
 
 upload_deb_packages() {
