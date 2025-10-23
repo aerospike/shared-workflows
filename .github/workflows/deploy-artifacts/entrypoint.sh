@@ -347,7 +347,7 @@ main() {
   # Upload all packages
   upload_rpm_packages
   upload_deb_packages
-  echo "now uploading any generic files..."
+  echo "Now uploading any generic files..." >&2
   upload_generic_files
   # Publish build info once for the unified build
   publish_build_info
