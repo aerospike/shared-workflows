@@ -266,7 +266,7 @@ echo ""
 echo " Test 4: Error handling"
 test4_success=true
 
-echo "  Testing missing project argument..."# shellcheck disable=SC2015
+echo "  Testing missing project argument..."
 # trunk-ignore(shellcheck/SC2015)
 missing_project_output=$(cd "$TEST_DIR" && "$SCRIPT_DIR/entrypoint.sh" 2>&1 || true)
 if echo "$missing_project_output" | grep -q "Error: project is required"; then
