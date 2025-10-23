@@ -91,8 +91,6 @@ process_deb() {
 process_generic() {
     local file="$1"
     local dest_dir="$2"
-    local file_name
-    file_name=$(basename "$file")
-    mkdir -p "$dest_dir"
-    mv -v "$file" "$dest_dir/$file_name"
+    mkdir -p "$dest_dir/$file"
+    mv -v "$file" "$dest_dir/$file"
 }
