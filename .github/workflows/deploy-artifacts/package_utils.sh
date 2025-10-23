@@ -56,7 +56,7 @@ process_rpm() {
     mkdir -p "$target"
     echo "Copying RPM to: $target" >&2
     rpm_name=$(basename "$rpm")
-    mv -v "$rpm" "$target/$rpm_name"
+    cp -v "$rpm" "$target/$rpm_name"
 }
 
 get_codename_for_deb() {
@@ -85,12 +85,20 @@ process_deb() {
     mkdir -p "$target"
     echo "Copying DEB to: $target" >&2
     deb_name=$(basename "$deb")
-    mv -v "$deb" "$target/$deb_name"
+    cp -v "$deb" "$target/$deb_name"
 }
 
 process_generic() {
     local file="$1"
     local dest_dir="$2"
-    mkdir -p "$dest_dir/$file"
-    mv -v "$file" "$dest_dir/$file"
+
+    local dir
+    dir=$(dirname "$file")
+    mkdir -p "$dest_dir/$dir"
+    echo "JOE: copying $file to $dest_dir/$dir" >&2
+    echo "JOE: dest_dir: $dest_dir" >&2 
+    echo "JOE: dir: $dir" >&2
+    echo "JOE: file: $file" >&2
+    echo "JOE: cp -v \"$file\" \"$dest_dir/$dir\"" >&2
+    cp -v "$file" "$dest_dir/$dir" >&2
 }

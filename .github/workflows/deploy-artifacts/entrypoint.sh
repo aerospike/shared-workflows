@@ -132,7 +132,7 @@ structure_build_artifacts() {
     fi
 
     echo "Processing DEB: $deb" >&2
-    process_deb "$deb" "./structured_build_artifacts"
+    process_deb "$deb" "./structured_build_artifacts/deb"
   done < <(find build-artifacts -name "*.deb" -print0)
 
   while IFS= read -r -d '' rpm; do
@@ -141,17 +141,18 @@ structure_build_artifacts() {
     fi
 
     echo "Processing RPM: $rpm" >&2
-    process_rpm "$rpm" "./structured_build_artifacts"
+    process_rpm "$rpm" "./structured_build_artifacts/rpm"
   done < <(find build-artifacts -name "*.rpm" -print0)
   echo "current files: $(ls -la build-artifacts)" >&2
+
   while IFS= read -r -d '' generic; do
     if [[ ! -f "$generic" ]]; then
       echo "Skipping non-file: $generic" >&2
       continue
     fi
     echo "Processing generic file: $generic" >&2
-    process_generic "$generic" "./structured_build_artifacts"
-  done < <(find build-artifacts -type f -print0)
+    process_generic "$generic" "./structured_build_artifacts/generic"
+  done < <(find build-artifacts \( -not -name "*.deb" -not -name "*.rpm" -not -name "*.asc" \) -print0)
 }
 
 upload_deb_packages() {
@@ -248,7 +249,7 @@ upload_generic_files() {
         --build-number="$ARTIFACT_BUILD_NUMBER" \
         --project="$PROJECT"
     fi
-  done < <(find . -type f -print0)
+  done < <(find . \( -not -name "*.deb" -not -name "*.rpm" -not -name "*.asc" \) -print0)
 }
 
 
@@ -347,7 +348,6 @@ main() {
   upload_rpm_packages
   upload_deb_packages
   echo "now uploading any generic files..."
-  set -x
   upload_generic_files
   # Publish build info once for the unified build
   publish_build_info
