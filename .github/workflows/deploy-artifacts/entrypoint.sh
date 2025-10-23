@@ -160,7 +160,6 @@ upload_deb_packages() {
   else
     echo "Uploading DEB packages to JFrog..." >&2
   fi
-  local count=0
   while IFS= read -r -d '' deb; do
     if [[ ! -f "$deb" ]]; then
       continue
@@ -190,9 +189,7 @@ upload_deb_packages() {
         --build-number="$ARTIFACT_BUILD_NUMBER" \
         --project="$PROJECT"
     fi
-    ((count++))
   done < <(find . -name "*.deb" -print0)
-  echo "Uploaded $count DEB packages" >&2
 }
 
 upload_rpm_packages() {
@@ -202,7 +199,6 @@ upload_rpm_packages() {
   else
     echo "Uploading RPM packages to JFrog..." >&2
   fi
-  local count=0
   while IFS= read -r -d '' rpm; do
     if [[ ! -f "$rpm" ]]; then
       continue
@@ -232,9 +228,7 @@ upload_rpm_packages() {
         --build-number="$ARTIFACT_BUILD_NUMBER" \
         --project="$PROJECT"
     fi
-    ((count++))
   done < <(find . -name "*.rpm" -print0)
-  echo "Uploaded $count RPM packages" >&2
 }
 
 upload_generic_files() {
@@ -243,7 +237,6 @@ upload_generic_files() {
   else
     echo "Uploading generic files..." >&2
   fi
-  local count=0
   echo "Finding files..." >&2
   find . >&2
   while IFS= read -r -d '' file; do
@@ -254,10 +247,8 @@ upload_generic_files() {
         --build-name="$BUILD_NAME" \
         --build-number="$ARTIFACT_BUILD_NUMBER" \
         --project="$PROJECT"
-    ((count++))
     fi
   done < <(find . -type f -print0)
-  echo "Uploaded $count generic files" >&2
 }
 
 
