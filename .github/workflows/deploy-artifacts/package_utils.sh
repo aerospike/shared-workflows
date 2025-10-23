@@ -95,10 +95,5 @@ process_generic() {
     local dir
     dir=$(dirname "$file")
     mkdir -p "$dest_dir/$dir"
-    echo "JOE: copying $file to $dest_dir/$dir" >&2
-    echo "JOE: dest_dir: $dest_dir" >&2 
-    echo "JOE: dir: $dir" >&2
-    echo "JOE: file: $file" >&2
-    echo "JOE: cp -v \"$file\" \"$dest_dir/$dir\"" >&2
     cp -v "$file" "$dest_dir/$dir" >&2
 }
