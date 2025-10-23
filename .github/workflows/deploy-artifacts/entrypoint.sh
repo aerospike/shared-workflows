@@ -327,9 +327,9 @@ publish_build_info() {
 
 main() {
   if [[ "$DRY_RUN" == "true" ]]; then
-    echo "Would upload artifacts to JFrog Artifactory" >&2
+    echo "Would deploy artifacts to JFrog Artifactory" >&2
   else
-    echo "Uploading artifacts to JFrog Artifactory" >&2
+    echo "Deploying artifacts to JFrog Artifactory" >&2
   fi
   echo "Project: $PROJECT" >&2
   echo "Build name: $BUILD_NAME" >&2
@@ -339,11 +339,11 @@ main() {
   echo "Metadata build number: $METADATA_BUILD_NUMBER" >&2
   mkdir -p structured_build_artifacts
   shopt -s globstar nullglob
+  find . >&2
 
   structure_build_artifacts
   cd structured_build_artifacts
   echo "Structured build artifacts:" >&2
-  find . >&2
   # Upload all packages
   upload_rpm_packages
   upload_deb_packages
@@ -352,7 +352,7 @@ main() {
   # Publish build info once for the unified build
   publish_build_info
 
-  echo "Upload complete!" >&2
+  echo "Deploy complete!" >&2
   echo "Build name: $BUILD_NAME" >&2
   echo "Build number: $BUILD_NUMBER" >&2
 }
