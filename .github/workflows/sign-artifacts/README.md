@@ -3,7 +3,6 @@
 This is a reusable GitHub Actions workflow that signs binary artifacts using GPG. It supports `.deb`, `.rpm`, and any other file type passed via a glob pattern. It produces:
 
 - GPG detached signature (`.asc`) for any file
-- SHA256 checksums for both the file and signature (`.sha256`, `.asc.sha256`)
 - Native signing for `.deb` and `.rpm` using `dpkg-sig` and `rpm --addsign`
 
 ---
@@ -24,11 +23,11 @@ This is a reusable GitHub Actions workflow that signs binary artifacts using GPG
 
 ## Secrets
 
-| Name              | Required | Description                     |
-| ----------------- | -------- | ------------------------------- |
-| `gpg-private-key` | ✅       | GPG private key for signing     |
-| `gpg-public-key`  | ✅       | GPG public key for verification |
-| `gpg-key-pass`    | ✅       | Passphrase for the GPG key      |
+| Name              | Description                     |
+| ----------------- | ------------------------------- |
+| `gpg-private-key` | GPG private key for signing     |
+| `gpg-public-key`  | GPG public key for verification |
+| `gpg-key-pass`    | Passphrase for the GPG key      |
 
 ---
 

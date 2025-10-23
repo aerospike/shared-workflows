@@ -77,19 +77,11 @@ find "$TARGET_DIR" -type f | while read -r file; do
     fi
   fi
 
-  # Always create detached GPG signature and SHA256 checksum for all files
+  # Always create detached GPG signature for all files
   gpg --detach-sign --no-tty --batch --yes --quiet \
     --passphrase-file "$GNUPGHOME/passphrase" \
     --output "$file.asc" "$file"
 
-  # SHA256 checksum for original file
-  shasum -a 256 "$file" > "$file.sha256"
-
-  # SHA256 checksum for signature file
-  shasum -a 256 "$file.asc" > "$file.asc.sha256"
-
   echo "Signed: $file"
   echo "  Signature: $file.asc"
-  echo "  Checksum:  $file.sha256"
-  echo "  Sig Checksum: $file.asc.sha256"
 done
