@@ -1,6 +1,15 @@
 #!/usr/bin/env bash
-set -eo pipefail
-if [ -n "${DEBUG:-}" ]; then set -x; fi
+set -euo pipefail
+export PS4='+($LINENO): ${FUNCNAME[0]:+${FUNCNAME[0]}(): }'
+trap 'handle_error ${LINENO}' ERR
+
+handle_error() {
+    local exit_code=$?
+    local line_number=$1
+    echo "Error: Command failed with exit code $exit_code at line $line_number" >&2
+    exit 1
+}
+
 # Function to extract RPM metadata and distribution
 # Unlike for debs this requires parsing the name (because the distro name is not standard)
 get_rpm_metadata() {
@@ -47,8 +56,7 @@ process_rpm() {
     mkdir -p "$target"
     echo "Copying RPM to: $target" >&2
     rpm_name=$(basename "$rpm")
-    cp "$rpm" "$target/$rpm_name"
-    echo "$target/$rpm_name"
+    cp -v "$rpm" "$target/$rpm_name" >&2
 }
 
 get_codename_for_deb() {
@@ -77,6 +85,16 @@ process_deb() {
     mkdir -p "$target"
     echo "Copying DEB to: $target" >&2
     deb_name=$(basename "$deb")
-    cp "$deb" "$target/$deb_name"
+    cp -v "$deb" "$target/$deb_name" >&2
     echo "$target/$deb_name"
+}
+
+process_generic() {
+    local file="$1"
+    local dest_dir="$2"
+
+    local dir
+    dir=$(dirname "$file")
+    mkdir -p "$dest_dir/$dir"
+    cp -v "$file" "$dest_dir/$dir" >&2
 }

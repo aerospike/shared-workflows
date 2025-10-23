@@ -171,7 +171,7 @@ main() {
   if [[ "$BUILD_SCRIPT_TYPE" == "inline" ]]; then
     local temp_script="/tmp/build-script-$$.sh"
     echo "#!/bin/bash" > "$temp_script"
-    echo "set -euo pipefail" >> "$temp_script"
+    echo "set -e" >> "$temp_script"
     echo "$BUILD_SCRIPT" >> "$temp_script"
     chmod +x "$temp_script"
     echo "temp_script: $temp_script"
@@ -217,6 +217,8 @@ main() {
     run jf rt build-publish "$BUILD_NAME" "$BUILD_ID" --project="$PROJECT"
     
     echo "Published build-info: $BUILD_NAME/$BUILD_ID" >&2
+  else
+    echo "Skipping build-info collection and publication" >&2
   fi
   
   echo "Build-artifacts workflow completed successfully!" >&2

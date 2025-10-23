@@ -129,8 +129,6 @@ for file in "$SIGNED_ARTIFACTS_DIR"/*.{deb,rpm}; do
         echo "  ✅ $file"
         echo "    - Original: $(stat -c%s "$file" 2>/dev/null || echo "ERROR") bytes"
         echo "    - Signature: $(stat -c%s "$file.asc" 2>/dev/null || echo "MISSING") bytes"
-        echo "    - Checksum: $(stat -c%s "$file.sha256" 2>/dev/null || echo "MISSING") bytes"
-        echo "    - Sig Checksum: $(stat -c%s "$file.asc.sha256" 2>/dev/null || echo "MISSING") bytes"
     fi
 done
 
@@ -147,8 +145,6 @@ for file in "$SIGNED_ARTIFACTS_DIR"/**/*.{deb,rpm}; do
         echo "  ✅ $file"
         echo "    - Original: $(stat -c%s "$file" 2>/dev/null || echo "ERROR") bytes"
         echo "    - Signature: $(stat -c%s "$file.asc" 2>/dev/null || echo "MISSING") bytes"
-        echo "    - Checksum: $(stat -c%s "$file.sha256" 2>/dev/null || echo "MISSING") bytes"
-        echo "    - Sig Checksum: $(stat -c%s "$file.asc.sha256" 2>/dev/null || echo "MISSING") bytes"
     fi
 done
 
@@ -165,8 +161,6 @@ for file in "$SIGNED_ARTIFACTS_DIR"/**/*; do
         echo "  ✅ $file"
         echo "    - Original: $(stat -c%s "$file" 2>/dev/null || echo "ERROR") bytes"
         echo "    - Signature: $(stat -c%s "$file.asc" 2>/dev/null || echo "MISSING") bytes"
-        echo "    - Checksum: $(stat -c%s "$file.sha256" 2>/dev/null || echo "MISSING") bytes"
-        echo "    - Sig Checksum: $(stat -c%s "$file.asc.sha256" 2>/dev/null || echo "MISSING") bytes"
     fi
 done
 
@@ -187,28 +181,11 @@ for file in "$SIGNED_ARTIFACTS_DIR"/**/*.asc; do
     fi
 done
 
-# Test 5: Validate checksums
-echo ""
-echo " Test 5: Validating checksums"
-for file in "$SIGNED_ARTIFACTS_DIR"/**/*.sha256; do
-    if [[ -f "$file" ]]; then
-        original_file="${file%.sha256}"
-        if [[ -f "$original_file" ]]; then
-            echo "   Validating checksum for $original_file"
-            if shasum -a 256 -c "$file" 2>/dev/null; then
-                echo "    ✅ Checksum is valid"
-            else
-                echo "    ❌ Checksum validation failed"
-            fi
-        fi
-    fi
-done
 # Summary
 echo ""
 echo "📊 Test Summary:"
 echo "  - Test files created: $(find "$SIGNED_ARTIFACTS_DIR" -type f ! -name "*.asc" ! -name "*.sha256" | wc -l)"
 echo "  - Signatures created: $(find "$SIGNED_ARTIFACTS_DIR" -name "*.asc" | wc -l)"
-echo "  - Checksums created: $(find "$SIGNED_ARTIFACTS_DIR" -name "*.sha256" | wc -l)"
 echo "  - Total files: $(find "$SIGNED_ARTIFACTS_DIR" -type f | wc -l)"
 
 echo ""

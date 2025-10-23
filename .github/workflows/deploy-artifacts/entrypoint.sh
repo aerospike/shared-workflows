@@ -122,14 +122,17 @@ run_optional() {
 
 structure_build_artifacts() {
   echo "Structuring build artifacts..." >&2
-  mkdir -p structured_build_artifacts
+  echo "current files: $(ls -la build-artifacts)" >&2
+  mkdir -p structured_build_artifacts/deb
+  mkdir -p structured_build_artifacts/rpm
+  mkdir -p structured_build_artifacts/generic
   while IFS= read -r -d '' deb; do
     if [[ ! -f "$deb" ]]; then
       continue
     fi
 
     echo "Processing DEB: $deb" >&2
-    process_deb "$deb" "./structured_build_artifacts"
+    process_deb "$deb" "./structured_build_artifacts/deb"
   done < <(find build-artifacts -name "*.deb" -print0)
 
   while IFS= read -r -d '' rpm; do
@@ -138,8 +141,18 @@ structure_build_artifacts() {
     fi
 
     echo "Processing RPM: $rpm" >&2
-    process_rpm "$rpm" "./structured_build_artifacts"
+    process_rpm "$rpm" "./structured_build_artifacts/rpm"
   done < <(find build-artifacts -name "*.rpm" -print0)
+  echo "current files: $(ls -la build-artifacts)" >&2
+
+  while IFS= read -r -d '' generic; do
+    if [[ ! -f "$generic" ]]; then
+      echo "Skipping non-file: $generic" >&2
+      continue
+    fi
+    echo "Processing generic file: $generic" >&2
+    process_generic "$generic" "./structured_build_artifacts/generic"
+  done < <(find build-artifacts \( -not -name "*.deb" -not -name "*.rpm" -not -name "*.asc" \) -type f -print0)
 }
 
 upload_deb_packages() {
@@ -148,7 +161,6 @@ upload_deb_packages() {
   else
     echo "Uploading DEB packages to JFrog..." >&2
   fi
-
   while IFS= read -r -d '' deb; do
     if [[ ! -f "$deb" ]]; then
       continue
@@ -178,7 +190,6 @@ upload_deb_packages() {
         --build-number="$ARTIFACT_BUILD_NUMBER" \
         --project="$PROJECT"
     fi
-
   done < <(find . -name "*.deb" -print0)
 }
 
@@ -189,7 +200,6 @@ upload_rpm_packages() {
   else
     echo "Uploading RPM packages to JFrog..." >&2
   fi
-
   while IFS= read -r -d '' rpm; do
     if [[ ! -f "$rpm" ]]; then
       continue
@@ -219,7 +229,6 @@ upload_rpm_packages() {
         --build-number="$ARTIFACT_BUILD_NUMBER" \
         --project="$PROJECT"
     fi
-
   done < <(find . -name "*.rpm" -print0)
 }
 
@@ -229,7 +238,8 @@ upload_generic_files() {
   else
     echo "Uploading generic files..." >&2
   fi
-
+  echo "Finding files..." >&2
+  find . >&2
   while IFS= read -r -d '' file; do
     echo "Processing generic file: $file" >&2
     if [[ -f "$file" ]]; then
@@ -318,9 +328,9 @@ publish_build_info() {
 
 main() {
   if [[ "$DRY_RUN" == "true" ]]; then
-    echo "Would upload artifacts to JFrog Artifactory" >&2
+    echo "Would deploy artifacts to JFrog Artifactory" >&2
   else
-    echo "Uploading artifacts to JFrog Artifactory" >&2
+    echo "Deploying artifacts to JFrog Artifactory" >&2
   fi
   echo "Project: $PROJECT" >&2
   echo "Build name: $BUILD_NAME" >&2
@@ -328,21 +338,21 @@ main() {
   echo "Dry run: $DRY_RUN" >&2
   echo "Build number: $BUILD_NUMBER" >&2
   echo "Metadata build number: $METADATA_BUILD_NUMBER" >&2
+  echo "current files: $(ls -la build-artifacts)" >&2
   mkdir -p structured_build_artifacts
   shopt -s globstar nullglob
 
   structure_build_artifacts
   cd structured_build_artifacts
-  echo "Structured build artifacts:" >&2
-  find . >&2
   # Upload all packages
   upload_rpm_packages
   upload_deb_packages
+  echo "Now uploading any generic files..." >&2
   upload_generic_files
   # Publish build info once for the unified build
   publish_build_info
 
-  echo "Upload complete!" >&2
+  echo "Deploy complete!" >&2
   echo "Build name: $BUILD_NAME" >&2
   echo "Build number: $BUILD_NUMBER" >&2
 }

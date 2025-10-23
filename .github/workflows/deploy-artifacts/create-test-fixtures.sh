@@ -34,6 +34,8 @@ fi
 echo "test jar content" > "$BUILD_ARTIFACTS_DIR/test.jar"
 echo "test zip content" > "$BUILD_ARTIFACTS_DIR/test.zip"
 echo "test tar content" > "$BUILD_ARTIFACTS_DIR/test.tar.gz"
+mkdir -p "$BUILD_ARTIFACTS_DIR/nested/dir"
+echo "test-nested-dir-content" > "$BUILD_ARTIFACTS_DIR/nested/dir/test-nested-dir.txt"
 
 # Create nested directory structure
 mkdir -p "$BUILD_ARTIFACTS_DIR/nested/dir"
