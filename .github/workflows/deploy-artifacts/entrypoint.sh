@@ -122,6 +122,7 @@ run_optional() {
 
 structure_build_artifacts() {
   echo "Structuring build artifacts..." >&2
+  echo "current files: $(ls -la build-artifacts)" >&2
   mkdir -p structured_build_artifacts/deb
   mkdir -p structured_build_artifacts/rpm
   mkdir -p structured_build_artifacts/generic
@@ -142,8 +143,10 @@ structure_build_artifacts() {
     echo "Processing RPM: $rpm" >&2
     process_rpm "$rpm" "./structured_build_artifacts"
   done < <(find build-artifacts -name "*.rpm" -print0)
+  echo "current files: $(ls -la build-artifacts)" >&2
   while IFS= read -r -d '' generic; do
     if [[ ! -f "$generic" ]]; then
+      echo "Skipping non-file: $generic" >&2
       continue
     fi
     echo "Processing generic file: $generic" >&2
@@ -243,7 +246,6 @@ upload_generic_files() {
   local count=0
   echo "Finding files..." >&2
   find . >&2
-  find . \( -not -name "*.deb" -not -name "*.rpm" -not -name "*.asc" \) >&2
   while IFS= read -r -d '' file; do
     echo "Processing generic file: $file" >&2
     if [[ -f "$file" ]]; then
@@ -344,13 +346,12 @@ main() {
   echo "Dry run: $DRY_RUN" >&2
   echo "Build number: $BUILD_NUMBER" >&2
   echo "Metadata build number: $METADATA_BUILD_NUMBER" >&2
+  echo "current files: $(ls -la build-artifacts)" >&2
   mkdir -p structured_build_artifacts
   shopt -s globstar nullglob
-  find . >&2
 
   structure_build_artifacts
   cd structured_build_artifacts
-  echo "Structured build artifacts:" >&2
   # Upload all packages
   upload_rpm_packages
   upload_deb_packages
