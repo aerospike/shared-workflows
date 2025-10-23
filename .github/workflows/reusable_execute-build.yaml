@@ -92,7 +92,7 @@ on:
           Whether to publish build-info to JFrog. If true will publish build-info to JFrog without uploading artifacts.
         required: false
         type: boolean
-        default: false
+        default: true
       runs-on:
         description: The runner to use for the build
         required: false
