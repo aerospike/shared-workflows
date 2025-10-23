@@ -56,7 +56,7 @@ process_rpm() {
     mkdir -p "$target"
     echo "Copying RPM to: $target" >&2
     rpm_name=$(basename "$rpm")
-    cp -v "$rpm" "$target/$rpm_name"
+    cp -v "$rpm" "$target/$rpm_name" >&2
 }
 
 get_codename_for_deb() {
