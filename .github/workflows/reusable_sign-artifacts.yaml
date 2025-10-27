@@ -86,7 +86,7 @@ jobs:
           chmod +x ${{ inputs.gh-checkout-path }}/.github/workflows/sign-artifacts/entrypoint.sh
           ${{ inputs.gh-checkout-path }}/.github/workflows/sign-artifacts/entrypoint.sh 'unsigned-artifacts/**/*' '${{ inputs.gh-artifact-name }}'
       - name: Upload Artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ${{ inputs.gh-artifact-name }}
           path: ${{ inputs.gh-artifact-name }}
