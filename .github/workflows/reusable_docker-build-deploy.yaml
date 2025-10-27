@@ -194,7 +194,7 @@ jobs:
 
       - name: Attest OCI Image
         if: ${{ inputs.attest }}
-        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v2
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3.0.0
         with:
           subject-name: oci://${{ inputs.tag }}
           subject-digest: ${{ steps.build.outputs.digest }}
