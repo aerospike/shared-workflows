@@ -176,7 +176,7 @@ jobs:
           .github/workflows/execute-build/test_apps/hi/package.sh --target hi --version ${{ needs.extract-version.outputs.version }} \
             --packages-dir build-artifacts --output-dir packaged-artifacts
       - name: Upload packaged Artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: build-artifacts
           path: packaged-artifacts

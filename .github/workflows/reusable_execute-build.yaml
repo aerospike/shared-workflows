@@ -187,7 +187,7 @@ jobs:
             ${{ inputs.dry-run && '--dry-run' || '' }}
       - name: Upload Artifacts
         if: inputs.dry-run != true
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ${{ inputs.gh-artifact-name }}
           path: ${{ inputs.working-directory != '' && format('{0}/{1}', inputs.working-directory, inputs.gh-artifact-directory) || inputs.gh-artifact-directory }}
