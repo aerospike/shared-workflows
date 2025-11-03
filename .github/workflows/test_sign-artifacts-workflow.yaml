@@ -31,7 +31,7 @@ jobs:
       gpg-key-pass: ${{ secrets.GPG_PASS }}
     with:
       gh-unsigned-artifacts: test-fixtures
-      gh-workflows-ref: v2.0.1 # replace with v2.0.2 when it is released # use v2.0.1 # replace with v2.0.2 when it is released once it is released
+      gh-workflows-ref: v2.0.1 # replace with v2.0.2 when it is released
 
   run-tests:
     needs: test-sign-workflow
