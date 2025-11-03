@@ -51,7 +51,7 @@ jobs:
   # a single workflow that can be instrumented in the future.
   # This is also an example of using a matrix strategy to build in GHA
   build-packages:
-    uses: aerospike/shared-workflows/.github/workflows/reusable_execute-build.yaml@bugfix/rpm-builds
+    uses: aerospike/shared-workflows/.github/workflows/reusable_execute-build.yaml@v2.0.2
     needs: extract-version
     # Matrix strategy: Multi-platform builds across Ubuntu/Debian/RPM families (x86_64 native, ARM64 emulated)
     strategy:
@@ -132,7 +132,7 @@ jobs:
       jf-build-name: test-build
       jf-build-id: ${{ github.run_number }}-buildinfo-${{ matrix.distro }}-${{ matrix.arch }}
       gh-checkout-path: project-location # In the case of running in shared_workflows gh_checkout_path and gh_source_path will have the same content but we put them here by way of example.
-      # gh-workflows-ref: bugfix/rpm-builds  # Use specific shared-workflows version
+      # gh-workflows-ref: v2.0.2  # Use specific shared-workflows version
       gh-source-path: repo-source
       working-directory: repo-source/.github/workflows/execute-build/test_apps/hi
       build-script: |
@@ -184,11 +184,11 @@ jobs:
           retention-days: 1
   sign-artifacts:
     needs: package-built-artifacts
-    uses: aerospike/shared-workflows/.github/workflows/reusable_sign-artifacts.yaml@bugfix/rpm-builds
+    uses: aerospike/shared-workflows/.github/workflows/reusable_sign-artifacts.yaml@v2.0.2
     with:
       gh-retention-days: 1
       gh-artifact-name: packaged-artifacts
-      # gh-workflows-ref: bugfix/rpm-builds  # Use specific shared-workflows version
+      # gh-workflows-ref: v2.0.2  # Use specific shared-workflows version
     secrets:
       gpg-private-key: ${{ secrets.GPG_SECRET_KEY }}
       gpg-public-key: ${{ secrets.GPG_PUBLIC_KEY }}
@@ -196,7 +196,7 @@ jobs:
 
   deploy-artifacts:
     needs: [sign-artifacts, extract-version]
-    uses: aerospike/shared-workflows/.github/workflows/reusable_deploy-artifacts.yaml@bugfix/rpm-builds
+    uses: aerospike/shared-workflows/.github/workflows/reusable_deploy-artifacts.yaml@v2.0.2
     with:
       jf-project: test
       jf-build-name: test-build
@@ -205,12 +205,12 @@ jobs:
       gh-artifact-name: ${{ needs.sign-artifacts.outputs.gh-artifact-name }}
       version: ${{ needs.extract-version.outputs.version }}
       gh-retention-days: 1
-      # gh-workflows-ref: bugfix/rpm-builds  # Use specific shared-workflows version
+      # gh-workflows-ref: v2.0.2  # Use specific shared-workflows version
       oidc-provider-name: gh-dev-test
       oidc-audience: aerospike/testing
       dry-run: false
   build-docker-deploy:
-    uses: aerospike/shared-workflows/.github/workflows/reusable_docker-build-deploy.yaml@bugfix/rpm-builds
+    uses: aerospike/shared-workflows/.github/workflows/reusable_docker-build-deploy.yaml@v2.0.2
     needs: extract-version
     with:
       jf-project: test
@@ -336,14 +336,14 @@ jobs:
           hi
   create-release-bundle:
     needs: [use-artifacts, extract-version, deploy-artifacts]
-    uses: aerospike/shared-workflows/.github/workflows/reusable_create-release-bundle.yaml@bugfix/rpm-builds
+    uses: aerospike/shared-workflows/.github/workflows/reusable_create-release-bundle.yaml@v2.0.2
     if: github.event_name == 'workflow_dispatch'
     with:
       jf-project: test
       jf-build-names: test-build:${{ github.run_number }},test-build-container:${{ github.run_number }}
       jf-bundle-name: test-release
       version: ${{ needs.extract-version.outputs.version }}
-      # gh-workflows-ref: bugfix/rpm-builds  # Use specific shared-workflows version
+      # gh-workflows-ref: v2.0.2  # Use specific shared-workflows version
       oidc-provider-name: gh-dev-test
       oidc-audience: aerospike/testing
       dry-run: false

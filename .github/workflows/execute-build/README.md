@@ -24,7 +24,7 @@ This workflow executes a custom build script and uploads the resulting artifacts
 | `oidc-audience`         | OIDC audience                                                               | No       | `aerospike`                     |
 | `runs-on`               | The runner to use for the build                                             | No       | `ubuntu-22.04`                  |
 | `gh-checkout-path`      | Directory to checkout the shared-workflows repository into                  | No       | `shared-workflows`              |
-| `gh-workflows-ref`      | Git reference to checkout shared-workflows repository (tag, branch, or SHA) | No       | `bugfix/rpm-builds`             |
+| `gh-workflows-ref`      | Git reference to checkout shared-workflows repository (tag, branch, or SHA) | No       | `v2.0.2`                        |
 | `gh-source-repository`  | Repository to checkout for source code (format owner/repo)                  | No       | `${{ github.repository }}`      |
 | `gh-workflows-ref`      | Reference to checkout for source repository (branch, tag, or commit)        | No       | -                               |
 | `gh-source-path`        | Directory to checkout the source repository into                            | No       | `local`                         |
@@ -45,7 +45,7 @@ on:
 
 jobs:
   build:
-    uses: aerospike/shared-workflows/.github/workflows/reusable_execute-build.yaml@bugfix/rpm-builds
+    uses: aerospike/shared-workflows/.github/workflows/reusable_execute-build.yaml@v2.0.2
     with:
       jf-project: my-project
       jf-build-name: my-app
@@ -54,7 +54,7 @@ jobs:
       gh-artifact-directory: dist
       gh-artifact-name: my-build-artifacts
       gh-retention-days: 7
-      gh-workflows-ref: bugfix/rpm-builds # Use specific shared-workflows version
+      gh-workflows-ref: v2.0.2 # Use specific shared-workflows version
       dry-run: false
 ```
 
@@ -63,7 +63,7 @@ jobs:
 ```yaml
 jobs:
   build:
-    uses: aerospike/shared-workflows/.github/workflows/reusable_execute-build.yaml@bugfix/rpm-builds
+    uses: aerospike/shared-workflows/.github/workflows/reusable_execute-build.yaml@v2.0.2
     with:
       jf-project: my-project
       jf-build-name: my-app
@@ -72,7 +72,7 @@ jobs:
       gh-artifact-directory: dist
       gh-artifact-name: my-build-artifacts
       gh-retention-days: 7
-      gh-workflows-ref: bugfix/rpm-builds # Use specific shared-workflows version
+      gh-workflows-ref: v2.0.2 # Use specific shared-workflows version
       dry-run: false
 ```
 

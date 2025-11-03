@@ -86,7 +86,7 @@ echo "Test 2: Dry-run mode with single build"
 test2_success=true
 
 cd "$TEST_DIR"
-output=$("$SCRIPT_DIR/entrypoint.sh" --project single-project --build-names "single-build:1728052628123" --bundle-name single-bundle --version bugfix/rpm-builds --dry-run 2>&1)
+output=$("$SCRIPT_DIR/entrypoint.sh" --project single-project --build-names "single-build:1728052628123" --bundle-name single-bundle --version v2.0.1 --dry-run 2>&1)
 
 if ! echo "$output" | grep -q "Would execute create-release-bundle workflow"; then
     test2_success=false

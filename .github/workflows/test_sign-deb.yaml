@@ -27,7 +27,7 @@ jobs:
         run: |
           sudo apt-get update && sudo apt-get install dpkg-sig dpkg-dev -y
       - name: setup GPG
-        uses: aerospike/shared-workflows/.github/actions/setup-gpg@a3356acbde7fcda4b9e632b9b4f6ed83ce48b87d # bugfix/rpm-builds
+        uses: aerospike/shared-workflows/.github/actions/setup-gpg@a3356acbde7fcda4b9e632b9b4f6ed83ce48b87d # v2.0.1 # replace with v2.0.2 when it is released
         with:
           gpg-private-key: ${{ secrets.GPG_SECRET_KEY }}
           gpg-public-key: ${{ secrets.GPG_PUBLIC_KEY }}
