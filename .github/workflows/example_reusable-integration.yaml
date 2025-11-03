@@ -318,8 +318,10 @@ jobs:
           tee "$REPO_FILE" > /dev/null <<EOF
           [aerospike-${DIST,,}-test]
           name=Aerospike RPM Repo DEV for ${DIST^^} (\$basearch)
-          baseurl=https://${JF_USERNAME}:${JF_TOKEN}@artifact.aerospike.io/artifactory/database-rpm-dev-local/${DIST,,}/$ARCH/
-          enabled=0
+          baseurl=https://artifact.aerospike.io/artifactory/database-rpm-dev-local/${DIST,,}/$ARCH/
+          username=${JF_USERNAME}
+          password=${JF_TOKEN}
+          enabled=1
           gpgcheck=1
           gpgkey=https://artifact.aerospike.io/artifactory/api/security/keypair/aerospike/public
           EOF
