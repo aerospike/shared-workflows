@@ -267,7 +267,66 @@ jobs:
           sudo apt-get update && sudo apt-get install hi -y
           echo "the test binary says:"
           hi
+  use-rpm-artifacts:
+    runs-on: ubuntu-22.04
+    needs: [extract-version, deploy-artifacts]
+    steps:
+      - name: Install JFrog CLI
+        id: jf
+        uses: jfrog/setup-jfrog-cli@e5d3afdd1d75e4aa14a4f217cca93a2a9b5b846d # v4.8.0
+        env:
+          JF_URL: https://artifact.aerospike.io
+          JF_PROJECT: test
+        with:
+          oidc-provider-name: gh-dev-test
+          oidc-audience: aerospike/testing
+      - name: Set up RPM repository
+        run: | # Detect OS distro and version
+          JF_USERNAME=${{ steps.jf.outputs.oidc-user }}
+          JF_TOKEN=${{ steps.jf.outputs.oidc-token }}
+          if [ -f /etc/os-release ]; then
+              . /etc/os-release
+              case "$ID" in
+                  rhel|centos|almalinux|rocky)
+                      DIST="el${VERSION_ID%%.*}"
+                      ;;
+                  amzn)
+                      if [[ "$VERSION_ID" == "2023" ]]; then
+                          DIST="amzn2023"
+                      else
+                          echo "Unsupported Amazon Linux version: $VERSION_ID"
+                          exit 1
+                      fi
+                      ;;
+                  *)
+                      echo "Unsupported distro: $ID"
+                      exit 1
+                      ;;
+              esac
+          else
+              echo "Cannot determine OS version"
+              exit 1
+          fi
 
+          ARCH=$(uname -m)   # e.g., x86_64, aarch64
+
+          REPO_FILE="/etc/yum.repos.d/aerospike-${DIST,,}-all.repo"
+
+          # Write .repo content
+          sudo tee "$REPO_FILE" > /dev/null <<EOF
+          [aerospike-${DIST,,}-test]
+          name=Aerospike RPM Repo DEV for ${DIST^^} (\$basearch)
+          baseurl=https://${JF_USERNAME}:${JF_TOKEN}@artifact.aerospike.io/artifactory/database-rpm-dev-local/${DIST,,}/$ARCH/
+          enabled=0
+          gpgcheck=1
+          gpgkey=https://artifact.aerospike.io/artifactory/api/security/keypair/aerospike/public
+
+          echo "Aerospike .repo file written to $REPO_FILE"
+      - name: Install RPMs
+        run: |
+          sudo yum install hi -y
+          echo "the test binary says:"
+          hi
   create-release-bundle:
     needs: [use-artifacts, extract-version, deploy-artifacts]
     uses: aerospike/shared-workflows/.github/workflows/reusable_create-release-bundle.yaml@v2.0.1
