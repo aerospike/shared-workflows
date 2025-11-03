@@ -322,6 +322,7 @@ jobs:
           enabled=0
           gpgcheck=1
           gpgkey=https://artifact.aerospike.io/artifactory/api/security/keypair/aerospike/public
+          EOF
 
           echo "Aerospike .repo file written to $REPO_FILE"
       - name: Install RPMs
