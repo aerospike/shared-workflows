@@ -269,6 +269,8 @@ jobs:
           hi
   use-rpm-artifacts:
     runs-on: ubuntu-22.04
+    container:
+      image: rockylinux:9
     needs: [extract-version, deploy-artifacts]
     steps:
       - name: Install JFrog CLI
