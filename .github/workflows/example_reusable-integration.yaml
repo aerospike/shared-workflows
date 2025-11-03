@@ -315,7 +315,7 @@ jobs:
           REPO_FILE="/etc/yum.repos.d/aerospike-${DIST,,}-all.repo"
 
           # Write .repo content
-          sudo tee "$REPO_FILE" > /dev/null <<EOF
+          tee "$REPO_FILE" > /dev/null <<EOF
           [aerospike-${DIST,,}-test]
           name=Aerospike RPM Repo DEV for ${DIST^^} (\$basearch)
           baseurl=https://${JF_USERNAME}:${JF_TOKEN}@artifact.aerospike.io/artifactory/database-rpm-dev-local/${DIST,,}/$ARCH/
@@ -327,7 +327,7 @@ jobs:
           echo "Aerospike .repo file written to $REPO_FILE"
       - name: Install RPMs
         run: |
-          sudo yum install hi -y
+          yum install hi -y
           echo "the test binary says:"
           hi
   create-release-bundle:
