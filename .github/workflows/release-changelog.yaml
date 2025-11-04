@@ -1,26 +1,39 @@
 name: Release Changelog PR
+
 on:
-  release:
-    types: [published]
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
   workflow_dispatch:
 
 permissions:
   contents: write
   pull-requests: write
 
+env:
+  BASE_BRANCH: main
+
 jobs:
   create-changelog-pr:
+    # Run if manual OR if Release workflow finished successfully
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
           fetch-tags: true
-          ref: main
+          ref: ${{ env.BASE_BRANCH }}
 
       - uses: actions/setup-node@v6
         with:
           node-version: 22
+
+      - name: Extract Version
+        id: extract-version
+        uses: ./.github/actions/extract-version-from-tag
 
       - name: Update CHANGELOG.md
         run: |
@@ -29,13 +42,15 @@ jobs:
             -i CHANGELOG.md -s
 
       - name: Open PR with changelog
-        uses: peter-evans/create-pull-request@271a8d0340265f705b14b6d32b9829c1cb33d45e # v7.0.8
+        uses: peter-evans/create-pull-request@v7
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          base: main
-          branch: chore/changelog-${{ github.event.release.tag_name }} # created if missing
-          commit-message: "docs(changelog): release notes for ${{ github.event.release.tag_name }}"
-          title: "docs(changelog): release notes for ${{ github.event.release.tag_name }}"
-          body: "Automated changelog update for ${{ github.event.release.tag_name }}."
+          base: ${{ env.BASE_BRANCH }}
+          branch: chore/changelog-${{ steps.extract-version.outputs.git_tag }}-${{ github.run_id }}
+          commit-message: "docs(changelog): update after ${{ steps.extract-version.outputs.git_tag}}"
+          title: "docs(changelog): update after ${{steps.extract-version.outputs.git_tag}}"
+          body: Automated changelog update.
           add-paths: |
             CHANGELOG.md
+          labels: documentation
+          # If no changes to CHANGELOG.md, the action will no-op when add-paths is set
