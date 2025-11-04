@@ -28,7 +28,7 @@ The workflow processes artifacts from a `build-artifacts` directory and creates 
 | `gh-retention-days`    | Retention days for the artifacts                           | No       | `1`                             |
 | `runs-on`              | The runner to use for the build                            | No       | `ubuntu-22.04`                  |
 | `gh-checkout-path`     | Directory to checkout the shared-workflows repository into | No       | `shared-workflows`              |
-| `gh-workflows-ref`     | Git reference to checkout shared-workflows repository      | No       | `v2.0.1`                        |
+| `gh-workflows-ref`     | Git reference to checkout shared-workflows repository      | No       | `v2.0.2`                        |
 | `dry-run`              | Whether to run in dry-run mode                             | No       | `false`                         |
 
 ## Outputs
@@ -86,7 +86,7 @@ on:
 
 jobs:
   upload:
-    uses: aerospike/shared-workflows/.github/workflows/reusable_deploy-artifacts.yaml@v2.0.1
+    uses: aerospike/shared-workflows/.github/workflows/reusable_deploy-artifacts.yaml@v2.0.2
     with:
       jf-project: database
       jf-build-name: database
@@ -98,7 +98,7 @@ jobs:
       oidc-audience: citrusleaf
       gh-artifact-name: signed-artifacts
       gh-retention-days: 1
-      gh-workflows-ref: v2.0.1 # Use specific shared-workflows version
+      gh-workflows-ref: v2.0.2 # Use specific shared-workflows version
       dry-run: false
 ```
 

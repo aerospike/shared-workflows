@@ -18,7 +18,7 @@ This is a reusable GitHub Actions workflow that signs binary artifacts using GPG
 | `oidc-provider-name`    | `string` | No       | OIDC provider name. Default: `gh-aerospike`                                                    |
 | `oidc-audience`         | `string` | No       | OIDC audience. Default: `aerospike`                                                            |
 | `gh-checkout-path`      | `string` | No       | Directory to checkout the shared-workflows repository into. Default: `shared-workflows`        |
-| `gh-workflows-ref`      | `string` | No       | Git reference to checkout shared-workflows repository (tag, branch, or SHA). Default: `v2.0.1` |
+| `gh-workflows-ref`      | `string` | No       | Git reference to checkout shared-workflows repository (tag, branch, or SHA). Default: `v2.0.2` |
 | `runs-on`               | `string` | No       | The runner to use for the build. Default: `ubuntu-22.04`                                       |
 
 ## Secrets
@@ -38,12 +38,12 @@ From another workflow:
 ```yaml
 jobs:
   sign:
-    uses: aerospike/shared-workflows/.github/workflows/reusable_sign-artifacts.yaml@v2.0.1
+    uses: aerospike/shared-workflows/.github/workflows/reusable_sign-artifacts.yaml@v2.0.2
     with:
       gh-unsigned-artifacts: test-fixtures
       gh-artifact-name: signed-artifacts # optional, defaults to signed-artifacts
       gh-retention-days: 7 # optional, defaults to 1
-      gh-workflows-ref: v2.0.1 # Use specific shared-workflows version
+      gh-workflows-ref: v2.0.2 # Use specific shared-workflows version
     secrets:
       gpg-private-key: ${{ secrets.GPG_SECRET_KEY }}
       gpg-public-key: ${{ secrets.GPG_PUBLIC_KEY }}

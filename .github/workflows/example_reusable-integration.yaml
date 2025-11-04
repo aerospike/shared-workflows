@@ -51,7 +51,7 @@ jobs:
   # a single workflow that can be instrumented in the future.
   # This is also an example of using a matrix strategy to build in GHA
   build-packages:
-    uses: aerospike/shared-workflows/.github/workflows/reusable_execute-build.yaml@v2.0.1
+    uses: aerospike/shared-workflows/.github/workflows/reusable_execute-build.yaml@v2.0.1 #update to 2.0.2 once released
     needs: extract-version
     # Matrix strategy: Multi-platform builds across Ubuntu/Debian/RPM families (x86_64 native, ARM64 emulated)
     strategy:
@@ -66,49 +66,49 @@ jobs:
             arch: x86_64
             runs-on: ubuntu-22.04
             emulated: false
-        #   - distro: focal
-        #     arch: x86_64
-        #     runs-on: ubuntu-22.04
-        #     emulated: false
-        #   - distro: bullseye
-        #     arch: x86_64
-        #     runs-on: ubuntu-22.04
-        #     emulated: false
-        #   - distro: bookworm
-        #     arch: x86_64
-        #     runs-on: ubuntu-22.04
-        #     emulated: false
-        #   # Ubuntu/Debian family (arm64) - emulated by default
-        #   # set emulated to false to run on real arm64 runners but as of 8/14/2025, the queue times are too long
-        #   - distro: jammy
-        #     arch: arm64
-        #     runs-on: ubuntu-22.04
-        #     emulated: true
-        #   - distro: noble
-        #     arch: arm64
-        #     runs-on: ubuntu-22.04
-        #     emulated: true
-        #   - distro: focal
-        #     arch: arm64
-        #     runs-on: ubuntu-22.04
-        #     emulated: true
-        #   - distro: bullseye
-        #     arch: arm64
-        #     runs-on: ubuntu-22.04
-        #     emulated: true
-        #   - distro: bookworm
-        #     arch: arm64
-        #     runs-on: ubuntu-22.04
-        #     emulated: true
-        #   # RPM family (x86_64 only - no ARM support)
-        #   - distro: el8
-        #     arch: x86_64
-        #     runs-on: ubuntu-22.04
-        #     emulated: false
-        #   - distro: el9
-        #     arch: x86_64
-        #     runs-on: ubuntu-22.04
-        #     emulated: false
+          #   - distro: focal
+          #     arch: x86_64
+          #     runs-on: ubuntu-22.04
+          #     emulated: false
+          #   - distro: bullseye
+          #     arch: x86_64
+          #     runs-on: ubuntu-22.04
+          #     emulated: false
+          #   - distro: bookworm
+          #     arch: x86_64
+          #     runs-on: ubuntu-22.04
+          #     emulated: false
+          #   # Ubuntu/Debian family (arm64) - emulated by default
+          #   # set emulated to false to run on real arm64 runners but as of 8/14/2025, the queue times are too long
+          #   - distro: jammy
+          #     arch: arm64
+          #     runs-on: ubuntu-22.04
+          #     emulated: true
+          #   - distro: noble
+          #     arch: arm64
+          #     runs-on: ubuntu-22.04
+          #     emulated: true
+          #   - distro: focal
+          #     arch: arm64
+          #     runs-on: ubuntu-22.04
+          #     emulated: true
+          #   - distro: bullseye
+          #     arch: arm64
+          #     runs-on: ubuntu-22.04
+          #     emulated: true
+          #   - distro: bookworm
+          #     arch: arm64
+          #     runs-on: ubuntu-22.04
+          #     emulated: true
+          #   # RPM family (x86_64 only - no ARM support)
+          - distro: el8
+            arch: x86_64
+            runs-on: ubuntu-22.04
+            emulated: false
+          - distro: el9
+            arch: x86_64
+            runs-on: ubuntu-22.04
+            emulated: false
         #   - distro: amzn2023
         #     arch: x86_64
         #     runs-on: ubuntu-22.04
@@ -132,7 +132,7 @@ jobs:
       jf-build-name: test-build
       jf-build-id: ${{ github.run_number }}-buildinfo-${{ matrix.distro }}-${{ matrix.arch }}
       gh-checkout-path: project-location # In the case of running in shared_workflows gh_checkout_path and gh_source_path will have the same content but we put them here by way of example.
-      # gh-workflows-ref: v2.0.1  # Use specific shared-workflows version
+      # gh-workflows-ref: v2.0.1 #update to 2.0.2 once released  # Use specific shared-workflows version
       gh-source-path: repo-source
       working-directory: repo-source/.github/workflows/execute-build/test_apps/hi
       build-script: |
@@ -184,11 +184,11 @@ jobs:
           retention-days: 1
   sign-artifacts:
     needs: package-built-artifacts
-    uses: aerospike/shared-workflows/.github/workflows/reusable_sign-artifacts.yaml@v2.0.1
+    uses: aerospike/shared-workflows/.github/workflows/reusable_sign-artifacts.yaml@v2.0.1 #update to 2.0.2 once released
     with:
       gh-retention-days: 1
       gh-artifact-name: packaged-artifacts
-      # gh-workflows-ref: v2.0.1  # Use specific shared-workflows version
+      # gh-workflows-ref: v2.0.2 # Use specific shared-workflows version
     secrets:
       gpg-private-key: ${{ secrets.GPG_SECRET_KEY }}
       gpg-public-key: ${{ secrets.GPG_PUBLIC_KEY }}
@@ -196,7 +196,7 @@ jobs:
 
   deploy-artifacts:
     needs: [sign-artifacts, extract-version]
-    uses: aerospike/shared-workflows/.github/workflows/reusable_deploy-artifacts.yaml@v2.0.1
+    uses: aerospike/shared-workflows/.github/workflows/reusable_deploy-artifacts.yaml@v2.0.1 #update to 2.0.2 once released
     with:
       jf-project: test
       jf-build-name: test-build
@@ -205,12 +205,12 @@ jobs:
       gh-artifact-name: ${{ needs.sign-artifacts.outputs.gh-artifact-name }}
       version: ${{ needs.extract-version.outputs.version }}
       gh-retention-days: 1
-      # gh-workflows-ref: v2.0.1  # Use specific shared-workflows version
+      # gh-workflows-ref: v2.0.2  # Use specific shared-workflows version
       oidc-provider-name: gh-dev-test
       oidc-audience: aerospike/testing
       dry-run: false
   build-docker-deploy:
-    uses: aerospike/shared-workflows/.github/workflows/reusable_docker-build-deploy.yaml@v2.0.1
+    uses: aerospike/shared-workflows/.github/workflows/reusable_docker-build-deploy.yaml@v2.0.1 #update to 2.0.2 once released
     needs: extract-version
     with:
       jf-project: test
@@ -267,17 +267,83 @@ jobs:
           sudo apt-get update && sudo apt-get install hi -y
           echo "the test binary says:"
           hi
+  use-rpm-artifacts:
+    runs-on: ubuntu-22.04
+    container:
+      image: rockylinux:9
+    needs: [extract-version, deploy-artifacts]
+    steps:
+      - name: Install JFrog CLI
+        id: jf
+        uses: jfrog/setup-jfrog-cli@e5d3afdd1d75e4aa14a4f217cca93a2a9b5b846d # v4.8.0
+        env:
+          JF_URL: https://artifact.aerospike.io
+          JF_PROJECT: test
+        with:
+          oidc-provider-name: gh-dev-test
+          oidc-audience: aerospike/testing
+      - name: Set up RPM repository
+        run: | # Detect OS distro and version
+          JF_USERNAME=${{ steps.jf.outputs.oidc-user }}
+          JF_TOKEN=${{ steps.jf.outputs.oidc-token }}
+          if [ -f /etc/os-release ]; then
+              . /etc/os-release
+              case "$ID" in
+                  rhel|centos|almalinux|rocky)
+                      DIST="el${VERSION_ID%%.*}"
+                      ;;
+                  amzn)
+                      if [[ "$VERSION_ID" == "2023" ]]; then
+                          DIST="amzn2023"
+                      else
+                          echo "Unsupported Amazon Linux version: $VERSION_ID"
+                          exit 1
+                      fi
+                      ;;
+                  *)
+                      echo "Unsupported distro: $ID"
+                      exit 1
+                      ;;
+              esac
+          else
+              echo "Cannot determine OS version"
+              exit 1
+          fi
 
+          ARCH=$(uname -m)   # e.g., x86_64, aarch64
+
+          REPO_FILE="/etc/yum.repos.d/aerospike-${DIST,,}-all.repo"
+
+          # Write .repo content
+          tee "$REPO_FILE" > /dev/null <<EOF
+          [aerospike-${DIST,,}-test]
+          name=Aerospike RPM Repo DEV for ${DIST^^} (\$basearch)
+          baseurl=https://artifact.aerospike.io/artifactory/test-rpm-dev-local/${DIST,,}/$ARCH/
+          username=${JF_USERNAME}
+          password=${JF_TOKEN}
+          enabled=1
+          gpgcheck=1
+          gpgkey=https://artifact.aerospike.io/artifactory/api/security/keypair/aerospike/public
+          EOF
+          echo "--------------------------------"
+          cat "$REPO_FILE" | base64
+          echo "--------------------------------"
+          echo "Aerospike .repo file written to $REPO_FILE"
+      - name: Install RPMs
+        run: |
+          yum install hi -y
+          echo "the test binary says:"
+          hi
   create-release-bundle:
     needs: [use-artifacts, extract-version, deploy-artifacts]
-    uses: aerospike/shared-workflows/.github/workflows/reusable_create-release-bundle.yaml@v2.0.1
+    uses: aerospike/shared-workflows/.github/workflows/reusable_create-release-bundle.yaml@v2.0.1 #update to 2.0.2 once released
     if: github.event_name == 'workflow_dispatch'
     with:
       jf-project: test
       jf-build-names: test-build:${{ github.run_number }},test-build-container:${{ github.run_number }}
       jf-bundle-name: test-release
       version: ${{ needs.extract-version.outputs.version }}
-      # gh-workflows-ref: v2.0.1  # Use specific shared-workflows version
+      # gh-workflows-ref: v2.0.2  # Use specific shared-workflows version
       oidc-provider-name: gh-dev-test
       oidc-audience: aerospike/testing
       dry-run: false

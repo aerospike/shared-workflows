@@ -345,10 +345,15 @@ main() {
   structure_build_artifacts
   cd structured_build_artifacts
   # Upload all packages
+  cd rpm
   upload_rpm_packages
+  cd ..
+  cd deb
   upload_deb_packages
-  echo "Now uploading any generic files..." >&2
+  cd ..
+  cd generic
   upload_generic_files
+  cd ..
   # Publish build info once for the unified build
   publish_build_info
 

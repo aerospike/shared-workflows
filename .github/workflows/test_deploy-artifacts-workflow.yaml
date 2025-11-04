@@ -36,7 +36,7 @@ jobs:
       oidc-audience: aerospike
       gh-artifact-name: test-fixtures
       dry-run: true
-      gh-workflows-ref: v2.0.0 # use v2.0.1 once it is released
+      gh-workflows-ref: v2.0.1 # replace with v2.0.2 when it is released
 
   run-tests:
     runs-on: ubuntu-22.04
