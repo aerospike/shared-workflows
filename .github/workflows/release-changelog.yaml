@@ -34,8 +34,8 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           base: main
           branch: chore/changelog-${{ github.event.release.tag_name }} # created if missing
-          commit-message: "docs(changelog): release notes for ${{github.event.release.tag_name }}"
-          title: "docs(changelog): release notes for ${{github.event.release.tag_name }}"
-          body: "Automated changelog update for ${{github.event.release.tag_name }}."
+          commit-message: "docs(changelog): release notes for ${{ github.event.release.tag_name }}"
+          title: "docs(changelog): release notes for ${{ github.event.release.tag_name }}"
+          body: "Automated changelog update for ${{ github.event.release.tag_name }}."
           add-paths: |
             CHANGELOG.md
