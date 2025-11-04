@@ -1,3 +1,8 @@
+## [](https://github.com/aerospike/shared-workflows/compare/v2.0.1...v) (2025-11-04)
+
+### Bug Fixes
+
+* **workflows:** [INFRA-235] deploy for rpm and deb should not include prefix ([#73](https://github.com/aerospike/shared-workflows/issues/73)) ([f9da14b](https://github.com/aerospike/shared-workflows/commit/f9da14bdbd362d362675ff60de48e583b6d054eb))
 ## [2.0.0](https://github.com/aerospike/shared-workflows/compare/v1.2.0...v2.0.0) (2025-10-16)
 
 ### ⚠ BREAKING CHANGES
