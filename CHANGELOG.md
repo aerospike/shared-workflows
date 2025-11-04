@@ -1,3 +1,4 @@
+## [](https://github.com/aerospike/shared-workflows/compare/v2.0.2...v) (2025-11-04)
 ## [2.0.0](https://github.com/aerospike/shared-workflows/compare/v1.2.0...v2.0.0) (2025-10-16)
 
 ### ⚠ BREAKING CHANGES
