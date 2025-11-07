@@ -29,9 +29,8 @@ else
     echo "   test-1.0-2.noarch.rpm not found, creating mock"
     echo "test-rpm-content" > "$BUILD_ARTIFACTS_DIR/test-1.0-2.noarch.rpm"
 fi
+cp -v tests/some/structure/Aerospike.Client.8.0.2.nupkg  "$BUILD_ARTIFACTS_DIR/Aerospike.Client.8.0.2.nupkg"
 
-cp tests/some/structure/Aerospike.Core.4.11.0.nupkg "$BUILD_ARTIFACTS_DIR/Aerospike.Core.4.11.0.nupkg"
-echo "   Copied Aerospike.Core.4.11.0.nupkg"
 
 # Create some additional test files
 echo "test jar content" > "$BUILD_ARTIFACTS_DIR/test.jar"
