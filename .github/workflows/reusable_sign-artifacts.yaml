@@ -34,6 +34,11 @@ on:
         required: false
         type: string
         default: ubuntu-22.04
+      nuget-environment:
+        description: The environment to use for the NuGet packages
+        required: false
+        type: string
+        default: PROD
 
     secrets:
       gpg-private-key:
@@ -42,6 +47,15 @@ on:
         required: true
       gpg-key-pass:
         required: true
+      es-username:
+        required: false
+      es-password:
+        required: false
+      credential_id:
+        required: false
+      es-totp_secret:
+        required: false
+
     outputs:
       gh-artifact-name:
         description: The name of the uploaded signed artifacts on github
@@ -63,7 +77,13 @@ jobs:
           name: ${{ inputs.gh-unsigned-artifacts }}
           path: unsigned-artifacts
           merge-multiple: true
-
+      - name: Get nuget packages
+        id: nuget-packages
+        run: |
+          mkdir -p unsigned-nuget-packages
+          find unsigned-artifacts -name "*.nupkg" -exec mv {} unsigned-nuget-packages/ \;
+          echo "unsigned-nuget-packages=$(ls unsigned-nuget-packages/)" >> $GITHUB_OUTPUT
+          echo "count=$(ls unsigned-nuget-packages/ | wc -l)" >> $GITHUB_OUTPUT
       - name: Checkout shared-workflows repository
         uses: actions/checkout@v5
         with:
@@ -78,6 +98,29 @@ jobs:
           gpg-private-key: ${{ secrets.gpg-private-key }}
           gpg-public-key: ${{ secrets.gpg-public-key }}
           gpg-key-pass: ${{ secrets.gpg-key-pass }}
+      - name: Validate nuget secrets present
+        if: steps.nuget-packages.outputs.count > 0
+        run: |
+          if [ -z "${{ secrets.es-username }}" ] || [ -z "${{ secrets.es-password }}" ] || [ -z "${{ secrets.credential_id }}" ] || [ -z "${{ secrets.es-totp_secret }}" ]; then
+            echo "missing required secrets for NuGet signing"
+            exit 1
+          fi
+      - name: Sign NuGet Packages with SSL.com
+        uses: sslcom/esigner-codesign@a272724cb13abe0abc579c6c40f7899969b6942b # v1.3.1
+        if: steps.nuget-packages.outputs.count > 0
+        with:
+          command: batch_sign
+          username: ${{ secrets.es-username }}
+          password: ${{ secrets.es-password }}
+          credential_id: ${{ secrets.credential_id }}
+          totp_secret: ${{ secrets.es-totp_secret }}
+          dir_path: unsigned-nuget-packages
+          output_path: ${{ inputs.gh-artifact-name }}/nuget
+          # malware_block: true
+          environment_name: ${{ inputs.nuget-environment }}
+          clean_logs: true
+          signing_method: v1
+
       - name: Install dpkg-sig
         run: |
           sudo apt-get update && sudo apt-get install dpkg-sig dpkg-dev -y
