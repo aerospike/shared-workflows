@@ -93,7 +93,16 @@ else
 	docker run --rm -v $(PWD):/workspace -w /workspace \
 		-e ARCH=$(ARCH) -e EMULATED=$(EMULATED) \
 		$(DOCKER_IMAGE) \
-		bash -c 'yum install -y --allowerasing gcc make && \
+		bash -c 'set -e; \
+		if command -v dnf >/dev/null 2>&1; then \
+		  dnf -y clean all && dnf -y distro-sync --refresh || dnf -y upgrade --refresh; \
+		  dnf -y makecache; \
+		  dnf -y install --allowerasing --setopt=install_weak_deps=False gcc glibc-devel make; \
+		else \
+		  yum -y clean all && yum -y update; \
+		  yum -y makecache; \
+		  yum -y install --allowerasing gcc glibc-devel make; \
+		fi; \
 		CC=${CC} && \
 		echo "Using CC: $$CC" && \
 		echo "ARCH: $$ARCH, EMULATED: $$EMULATED" && \
