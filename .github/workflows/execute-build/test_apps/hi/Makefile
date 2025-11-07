@@ -93,7 +93,7 @@ else
 	docker run --rm -v $(PWD):/workspace -w /workspace \
 		-e ARCH=$(ARCH) -e EMULATED=$(EMULATED) \
 		$(DOCKER_IMAGE) \
-		bash -c 'yum install -y --allowerasing gcc make && \
+		bash -c 'yum install -y --allowerasing make && \
 		CC=${CC} && \
 		echo "Using CC: $$CC" && \
 		echo "ARCH: $$ARCH, EMULATED: $$EMULATED" && \
