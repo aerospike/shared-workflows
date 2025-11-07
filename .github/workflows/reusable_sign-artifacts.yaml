@@ -102,7 +102,7 @@ jobs:
         if: steps.nuget-packages.outputs.count > 0
         run: |
           if [ -z "${{ secrets.es-username }}" ] || [ -z "${{ secrets.es-password }}" ] || [ -z "${{ secrets.credential_id }}" ] || [ -z "${{ secrets.es-totp_secret }}" ]; then
-            echo "missing required secrets for NuGet signing"
+            echo 'Error: NuGet packages found but required SSL.com secrets are missing. Please provide: es-username, es-password, credential_id, es-totp_secret' >&2
             exit 1
           fi
           mkdir -p ${{ inputs.gh-artifact-name }}/nuget
