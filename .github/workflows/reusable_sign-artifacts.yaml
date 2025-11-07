@@ -99,13 +99,14 @@ jobs:
           gpg-private-key: ${{ secrets.gpg-private-key }}
           gpg-public-key: ${{ secrets.gpg-public-key }}
           gpg-key-pass: ${{ secrets.gpg-key-pass }}
-      - name: Validate nuget secrets present
+      - name: Prepare NuGet signing
         if: steps.nuget-packages.outputs.count > 0
         run: |
           if [ -z "${{ secrets.es-username }}" ] || [ -z "${{ secrets.es-password }}" ] || [ -z "${{ secrets.credential_id }}" ] || [ -z "${{ secrets.es-totp_secret }}" ]; then
             echo "missing required secrets for NuGet signing"
             exit 1
           fi
+          mkdir -p ${{ inputs.gh-artifact-name }}/nuget
       - name: Sign NuGet Packages with SSL.com
         uses: sslcom/esigner-codesign@a272724cb13abe0abc579c6c40f7899969b6942b # v1.3.1
         if: steps.nuget-packages.outputs.count > 0

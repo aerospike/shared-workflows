@@ -217,7 +217,7 @@ jf rt build-publish.*test-build.*12345
     cat "$TEST_DIR/test1_output.txt.build_commands"
 fi
 
-if ! verify_command_count "Upload commands" "$TEST_DIR/test1_output.txt.upload_commands" 8; then
+if ! verify_command_count "Upload commands" "$TEST_DIR/test1_output.txt.upload_commands" 9; then
     test1_success=false
     echo "Wrong number of commands"
     cat "$TEST_DIR/test1_output.txt.upload_commands"
@@ -251,7 +251,7 @@ jf rt build-publish.*test-build.*12345
     test3_success=false
 fi
 
-if ! verify_command_count "All upload commands" "$TEST_DIR/test3_output.txt.upload_commands" 8; then
+if ! verify_command_count "All upload commands" "$TEST_DIR/test3_output.txt.upload_commands" 9; then
     test3_success=false
 fi
 
