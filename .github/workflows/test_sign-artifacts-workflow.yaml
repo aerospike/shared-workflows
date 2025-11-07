@@ -52,7 +52,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          dotnet tool install --global NuGet.CommandLine > /dev/null
           export PATH="$HOME/.dotnet/tools:$PATH"
           shopt -s nullglob globstar
           mapfile -t pkgs < <(printf '%s\n' signed/**/*.nupkg)
@@ -63,7 +62,7 @@ jobs:
           fi
           for p in "${pkgs[@]}"; do
             echo "Verifying $p"
-            nuget verify -Signatures "$p"
+            dotnet nuget verify "$p" --all
           done
 
   run-tests:
