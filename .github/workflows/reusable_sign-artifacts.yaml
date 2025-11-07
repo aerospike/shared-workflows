@@ -82,6 +82,7 @@ jobs:
         run: |
           mkdir -p unsigned-nuget-packages
           find unsigned-artifacts -name "*.nupkg" -exec mv {} unsigned-nuget-packages/ \;
+          echo "Found nuget packages: $(ls unsigned-nuget-packages/)"
           echo "unsigned-nuget-packages=$(ls unsigned-nuget-packages/)" >> $GITHUB_OUTPUT
           echo "count=$(ls unsigned-nuget-packages/ | wc -l)" >> $GITHUB_OUTPUT
       - name: Checkout shared-workflows repository

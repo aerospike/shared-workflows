@@ -28,7 +28,7 @@ jobs:
       oidc-provider-name: gh-dev-test
       oidc-audience: aerospike/testing
       dry-run: false # default
-      gh-workflows-ref: v2.0.1 # replace with v2.0.2 when it is released
+      gh-workflows-ref: v2.0.2
 
   # Test the entrypoint script directly
   run-tests:

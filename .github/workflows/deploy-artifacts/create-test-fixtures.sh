@@ -26,9 +26,12 @@ if [[ -f "tests/test-1.0-2.noarch.rpm" ]]; then
     cp "tests/test-1.0-2.noarch.rpm" "$BUILD_ARTIFACTS_DIR/"
     echo "   Copied test-1.0-2.noarch.rpm"
 else
-    echo "  ❌ test-1.0-2.noarch.rpm not found, creating mock"
+    echo "   test-1.0-2.noarch.rpm not found, creating mock"
     echo "test-rpm-content" > "$BUILD_ARTIFACTS_DIR/test-1.0-2.noarch.rpm"
 fi
+
+cp tests/some/structure/Aerospike.Core.4.11.0.nupkg "$BUILD_ARTIFACTS_DIR/Aerospike.Core.4.11.0.nupkg"
+echo "   Copied Aerospike.Core.4.11.0.nupkg"
 
 # Create some additional test files
 echo "test jar content" > "$BUILD_ARTIFACTS_DIR/test.jar"
