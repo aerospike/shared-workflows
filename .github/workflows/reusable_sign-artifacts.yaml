@@ -118,7 +118,7 @@ jobs:
           totp_secret: ${{ secrets.es-totp_secret }}
           dir_path: unsigned-nuget-packages
           output_path: ${{ inputs.gh-artifact-name }}/nuget
-          # malware_block: true
+          malware_block: true
           environment_name: ${{ inputs.nuget-environment }}
           clean_logs: true
           signing_method: v1
