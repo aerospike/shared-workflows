@@ -38,9 +38,12 @@ ifeq ($(ARCH),arm64)
         else ifeq ($(filter bullseye bookworm trixie,$(DISTRO)),$(DISTRO))
             # Debian family
             CROSS_COMPILE_CMD = apt-get update && apt-get install -y gcc-aarch64-linux-gnu
-        else
+        else ifeq ($(filter el8 el9 amzn2023,$(DISTRO)),$(DISTRO))
             # RPM family (el8, el9, amzn2023)
             CROSS_COMPILE_CMD = echo "Cross-compilation is not supported for RPM family distributions (el8, el9, amzn2023)"
+        else
+            echo "ERROR: Unsupported distribution: $(DISTRO)"
+            exit 1
         endif
     else
         # Real ARM runner - use native compiler
