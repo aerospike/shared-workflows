@@ -35,7 +35,7 @@ ifeq ($(ARCH),arm64)
         ifeq ($(filter jammy noble focal,$(DISTRO)),$(DISTRO))
             # Ubuntu family
             CROSS_COMPILE_CMD = apt-get update && apt-get install -y gcc-aarch64-linux-gnu
-        else ifeq ($(filter bullseye bookworm,$(DISTRO)),$(DISTRO))
+        else ifeq ($(filter bullseye bookworm trixie,$(DISTRO)),$(DISTRO))
             # Debian family
             CROSS_COMPILE_CMD = apt-get update && apt-get install -y gcc-aarch64-linux-gnu
         else
