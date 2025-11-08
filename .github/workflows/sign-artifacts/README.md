@@ -71,4 +71,3 @@ jobs:
 Artifacts layout:
 
 - Signed outputs are uploaded under the artifact name provided by `gh-artifact-name`.
-- NuGet-signed packages are placed under a subdirectory `nuget/` within that artifact.
