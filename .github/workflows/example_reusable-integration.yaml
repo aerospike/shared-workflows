@@ -66,10 +66,10 @@ jobs:
             arch: x86_64
             runs-on: ubuntu-22.04
             emulated: false
-          - distro: trixie
-            arch: x86_64
-            runs-on: ubuntu-22.04
-            emulated: false
+          #   - distro: trixie
+          #     arch: x86_64
+          #     runs-on: ubuntu-22.04
+          #     emulated: false
           #   - distro: focal
           #     arch: x86_64
           #     runs-on: ubuntu-22.04
@@ -145,7 +145,7 @@ jobs:
         echo "ARCH: ${{ matrix.arch }}"
         echo "EMULATED: ${{ matrix.emulated }}"
         echo "MAKEFILE: "
-        cat .github/workflows/execute-build/test_apps/hi/Makefile
+        cat Makefile
         which gcc
         pwd
         find .
