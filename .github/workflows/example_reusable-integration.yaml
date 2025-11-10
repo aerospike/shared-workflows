@@ -138,6 +138,7 @@ jobs:
       gh-checkout-path: project-location # In the case of running in shared_workflows gh_checkout_path and gh_source_path will have the same content but we put them here by way of example.
       # gh-workflows-ref: v2.0.2
       gh-source-path: repo-source
+      gh-source-ref: feature/INFRA-240-add-nuget-signing-to-sign-artifacts-workflow-2
       working-directory: repo-source/.github/workflows/execute-build/test_apps/hi
       build-script: |
         uname -m
