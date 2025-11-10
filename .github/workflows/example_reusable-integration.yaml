@@ -141,8 +141,11 @@ jobs:
       gh-source-ref: feature/INFRA-240-add-nuget-signing-to-sign-artifacts-workflow-2
       working-directory: repo-source/.github/workflows/execute-build/test_apps/hi
       build-script: |
-        uname -m
-        uname -a
+        echo "DISTRO: ${{ matrix.distro }}"
+        echo "ARCH: ${{ matrix.arch }}"
+        echo "EMULATED: ${{ matrix.emulated }}"
+        echo "MAKEFILE: "
+        cat .github/workflows/execute-build/test_apps/hi/Makefile
         which gcc
         pwd
         find .
