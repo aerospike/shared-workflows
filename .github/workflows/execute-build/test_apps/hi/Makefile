@@ -69,7 +69,7 @@ docker-build:
 	@echo "Using Docker image: $(DOCKER_IMAGE)"
 	@echo "Emulated: $(EMULATED)"
 	@mkdir -p $(BUILD_DIR)/$(DISTRO)/$(ARCH)
-ifeq ($(filter jammy noble focal bullseye bookworm,$(DISTRO)),$(DISTRO))
+ifeq ($(filter jammy noble focal bullseye bookworm trixie,$(DISTRO)),$(DISTRO))
 	docker run --rm -v $(PWD):/workspace -w /workspace \
 		-e ARCH=$(ARCH) -e EMULATED=$(EMULATED) \
 		$(DOCKER_IMAGE) \
