@@ -29,9 +29,45 @@ jobs:
       gpg-private-key: ${{ secrets.GPG_SECRET_KEY }}
       gpg-public-key: ${{ secrets.GPG_PUBLIC_KEY }}
       gpg-key-pass: ${{ secrets.GPG_PASS }}
+      es-username: ${{ secrets.ES_USERNAME }}
+      es-password: ${{ secrets.ES_PASSWORD }}
+      credential_id: ${{ secrets.CREDENTIAL_ID }}
+      es-totp_secret: ${{ secrets.ES_TOTP_SECRET }}
     with:
       gh-unsigned-artifacts: test-fixtures
-      gh-workflows-ref: v2.0.1 # replace with v2.0.2 when it is released
+      gh-workflows-ref: v2.0.2
+
+  verify-nuget-signatures:
+    needs: test-sign-workflow
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.x
+      - name: Download Signed Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.test-sign-workflow.outputs.gh-artifact-name }}
+          path: signed
+      - name: Verify NuGet Signatures
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PATH="$HOME/.dotnet/tools:$PATH"
+          shopt -s nullglob globstar
+          mapfile -t pkgs < <(printf '%s\n' signed/**/*.nupkg)
+          echo "Found ${#pkgs[@]} .nupkg files"
+          if [ "${#pkgs[@]}" -lt 1 ]; then
+            echo "No .nupkg files found under signed/" >&2
+            exit 1
+          fi
+          for p in "${pkgs[@]}"; do
+            echo "Verifying $p"
+            dotnet nuget verify "$p" --all
+          done
 
   run-tests:
     needs: test-sign-workflow

@@ -20,7 +20,7 @@ jobs:
       oidc-provider-name: gh-aerospike
       oidc-audience: aerospike
       dry-run: true
-      gh-workflows-ref: v2.0.1 # replace with v2.0.2 when it is released
+      gh-workflows-ref: v2.0.2
 
   run-tests:
     runs-on: ubuntu-22.04
