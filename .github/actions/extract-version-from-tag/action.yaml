@@ -28,8 +28,15 @@ runs:
       run: |
         # Priority order: VERSION file -> Git tag
         if [[ -f "${{ inputs.version-file }}" ]]; then
-          # Use VERSION file
-          TAG=$(cat "${{ inputs.version-file }}" | tr -d '\n\r' | xargs)
+          # Check if it's a pom.xml file
+          if [[ "${{ inputs.version-file }}" == *"pom.xml" ]]; then
+            # Extract version from pom.xml (project version, not dependencies)
+            # Get the first <version> tag which is typically the project version
+            TAG=$(grep -m 1 "<version>" "${{ inputs.version-file }}" | sed 's/.*<version>\(.*\)<\/version>.*/\1/' | tr -d '\n\r' | xargs)
+          else
+            # Use VERSION file
+            TAG=$(cat "${{ inputs.version-file }}" | tr -d '\n\r' | xargs)
+          fi
           SOURCE="file"
         elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
           # Triggered by tag push
