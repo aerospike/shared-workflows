@@ -229,6 +229,7 @@ jobs:
   use-artifacts:
     needs: [build-docker-deploy, extract-version, deploy-artifacts]
     runs-on: ubuntu-22.04
+    if: github.actor != 'dependabot[bot]'
     steps:
       - name: Install JFrog CLI
         id: jf
@@ -276,6 +277,7 @@ jobs:
           hi
   use-rpm-artifacts:
     runs-on: ubuntu-22.04
+    if: github.actor != 'dependabot[bot]'
     container:
       image: rockylinux:9
     needs: [extract-version, deploy-artifacts]
