@@ -119,7 +119,7 @@ on:
         type: string
         default: temurin
       java-cache:
-        description: Package manager to cache (maven, gradle, sbt). Leave empty for no cache.
+        description: Package manager to cache (maven, gradle, sbt).
         required: false
         type: string
         default: maven
