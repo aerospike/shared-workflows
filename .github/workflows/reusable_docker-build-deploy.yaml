@@ -205,9 +205,11 @@ jobs:
             }')
 
           # Merge user labels with OCI labels (user labels override)
+          echo "oci_labels=$oci_labels"
+          echo "user_labels=${{ inputs.labels-json }}"
           user_labels='${{ inputs.labels-json }}'
           merged_labels=$(jq -n --argjson oci "$oci_labels" --argjson user "$user_labels" '$oci * $user')
-
+          echo "merged_labels=$merged_labels"
           echo '${{ inputs.build-args-json }}' | to_kv > /tmp/build_args
           echo "$merged_labels" | to_kv > /tmp/labels
 
