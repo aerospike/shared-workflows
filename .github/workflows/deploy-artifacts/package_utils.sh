@@ -10,6 +10,19 @@ handle_error() {
     exit 1
 }
 
+# Function to extract JAR metadata
+get_jar_metadata() {
+    local jar="$1"
+    local filename="${jar##*/}"  # Get just the filename without path
+    local pkgname version
+
+    pkgname=$(echo "$filename" | sed 's/-[0-9.]*\.jar$//')
+    version=$(echo "$filename" | sed 's/.*-//' | sed 's/\.jar$//')
+
+    # Return package name and version
+    echo "$pkgname $version"
+}
+
 # Function to extract RPM metadata and distribution
 # Unlike for debs this requires parsing the name (because the distro name is not standard)
 get_rpm_metadata() {
