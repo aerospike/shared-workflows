@@ -181,7 +181,6 @@ jobs:
           echo "immutable-tag=${immutable}" >> "$GITHUB_OUTPUT"
 
       - name: Prepare build args/labels
-        id: prepare
         shell: bash
         run: |
           set -euo pipefail
@@ -205,16 +204,22 @@ jobs:
             }')
 
           # Merge user labels with OCI labels (user labels override)
-          echo "oci_labels=$oci_labels"
-          echo "user_labels=${{ inputs.labels-json }}"
           user_labels='${{ inputs.labels-json }}'
           merged_labels=$(jq -n --argjson oci "$oci_labels" --argjson user "$user_labels" '$oci * $user')
-          echo "merged_labels=$merged_labels"
+
+          # Convert JSON to KEY=VALUE lines
           echo '${{ inputs.build-args-json }}' | to_kv > /tmp/build_args
           echo "$merged_labels" | to_kv > /tmp/labels
 
-          echo "build-args=$(cat /tmp/build_args)" >> "$GITHUB_ENV"
-          echo "labels=$(cat /tmp/labels)" >> "$GITHUB_ENV"
+          # Use heredoc syntax so multi-line values are preserved in GITHUB_ENV
+          {
+            echo "BUILD_ARGS<<EOF"
+            cat /tmp/build_args
+            echo "EOF"
+            echo "LABELS<<EOF"
+            cat /tmp/labels
+            echo "EOF"
+          } >> "$GITHUB_ENV"
 
       - name: Build and push
         id: build
@@ -227,8 +232,8 @@ jobs:
           tags: ${{ steps.tags.outputs.tags }}
           provenance: ${{ inputs.provenance }}
           sbom: ${{ inputs.sbom }}
-          build-args: "${{ env.build-args }}"
-          labels: "${{ env.labels }}"
+          build-args: ${{ env.BUILD_ARGS }}
+          labels: ${{ env.LABELS }}
       # TODO: Uncomment this when xray scan is ready
       #   - name: xray scan
       #     shell: bash
