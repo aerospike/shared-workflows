@@ -4,23 +4,23 @@ on:
   workflow_call:
     inputs:
       # Required inputs
-      image-name:
-        type: string
-        required: true
-        description: Image repository/name (without registry)
-      jf-project:
-        type: string
-        required: true
-        description: JFrog project key
-      app-name:
-        type: string
-        required: true
-        description: Name of the application
       app-version:
         type: string
         required: true
         description: Version of the application
+      image-name:
+        type: string
+        required: true
+        description: image name without registry
+      jf-project:
+        type: string
+        required: true
+        description: JFrog project key
 
+      app-name:
+        type: string
+        required: false
+        description: Name of the application
       attest:
         type: boolean
         default: true
@@ -189,7 +189,7 @@ jobs:
 
           # Generate OCI labels
           oci_labels=$(jq -n \
-            --arg title "${{ inputs.app-name }}" \
+            --arg title "${{ inputs.app-name || inputs.image-name }}" \
             --arg version "${{ inputs.app-version }}" \
             --arg created "$(date --utc -Iseconds)" \
             --arg revision "${{ github.sha }}" \
