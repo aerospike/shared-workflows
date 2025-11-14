@@ -172,7 +172,7 @@ jobs:
           base="${{ steps.registry.outputs.registry }}/${{ inputs.image-name }}"
           version="${base}:${{ inputs.app-version }}"
           latest="${base}:latest"
-          immutable="${base}:$(date --utc +%Y%m%dT%H%M%SZ)"
+          immutable="${base}:${{ inputs.app-version }}-$(date --utc +%Y%m%dT%H%M%SZ)"
           primary="${immutable}"
           echo "tags=${primary},${latest},${version}" >> "$GITHUB_OUTPUT"
           echo "primary-tag=${primary}" >> "$GITHUB_OUTPUT"
