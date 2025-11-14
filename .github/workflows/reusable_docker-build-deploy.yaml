@@ -213,8 +213,8 @@ jobs:
           echo '${{ inputs.build-args-json }}' | to_kv > /tmp/build_args
           echo "$merged_labels" | to_kv > /tmp/labels
 
-          echo "build-args=$(cat /tmp/build_args)" >> "$GITHUB_OUTPUT"
-          echo "labels=$(cat /tmp/labels)" >> "$GITHUB_OUTPUT"
+          echo "build-args=$(cat /tmp/build_args)" >> "$GITHUB_ENV"
+          echo "labels=$(cat /tmp/labels)" >> "$GITHUB_ENV"
 
       - name: Build and push
         id: build
@@ -227,8 +227,8 @@ jobs:
           tags: ${{ steps.tags.outputs.tags }}
           provenance: ${{ inputs.provenance }}
           sbom: ${{ inputs.sbom }}
-          build-args: ${{ steps.prepare.outputs.build-args }}
-          labels: ${{ steps.prepare.outputs.labels }}
+          build-args: ${{ env.build-args }}
+          labels: ${{ env.labels }}
       # TODO: Uncomment this when xray scan is ready
       #   - name: xray scan
       #     shell: bash
