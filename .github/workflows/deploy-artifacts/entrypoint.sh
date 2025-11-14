@@ -232,6 +232,42 @@ upload_rpm_packages() {
   done < <(find . -name "*.rpm" -print0)
 }
 
+upload_jar_packages() {
+  if [[ "$DRY_RUN" == "true" ]]; then
+    echo "Would upload JAR packages to JFrog..." >&2
+  else
+    echo "Uploading JAR packages to JFrog..." >&2
+  fi
+  while IFS= read -r -d '' jar; do
+    if [[ ! -f "$jar" ]]; then
+      continue
+    fi
+
+    # Get metadata using the shared function
+    read -r -a metadata < <(get_jar_metadata "$jar")
+    pkgname="${metadata[0]}"
+    version="${metadata[1]}"
+
+    echo "  Package: $pkgname, Version: $version" >&2
+
+    # Upload the RPM
+    run jf rt upload "$jar" "$PROJECT-maven-dev-local" --flat=false \
+      --build-name="$BUILD_NAME" \
+      --build-number="$ARTIFACT_BUILD_NUMBER" \
+      --project="$PROJECT" \
+      --target-props "version=$VERSION"
+
+    # Upload signature and checksums if they exist
+    if [[ -f "$jar.asc" ]]; then
+      echo "  Uploading signature: $jar.asc" >&2
+      run jf rt upload "$jar.asc" "$PROJECT-maven-dev-local" --flat=false \
+        --build-name="$BUILD_NAME" \
+        --build-number="$ARTIFACT_BUILD_NUMBER" \
+        --project="$PROJECT"
+    fi
+  done < <(find . -name "*.jar" -print0)
+}
+
 upload_generic_files() {
   if [[ "$DRY_RUN" == "true" ]]; then
     echo "Would upload generic files..." >&2
