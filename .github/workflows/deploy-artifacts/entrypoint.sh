@@ -387,6 +387,9 @@ main() {
   cd deb
   upload_deb_packages
   cd ..
+  cd jar
+  upload_jar_packages
+  cd ..
   cd generic
   upload_generic_files
   cd ..
