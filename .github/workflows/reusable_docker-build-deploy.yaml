@@ -3,7 +3,7 @@ name: Reusable Docker Build, Publish & Attest
 on:
   workflow_call:
     inputs:
-      # Required inputs (alphabetical)
+      # Required inputs
       image-name:
         type: string
         required: true
@@ -12,12 +12,15 @@ on:
         type: string
         required: true
         description: JFrog project key
-      tag:
+      app-name:
         type: string
         required: true
-        description: Full image tag to build/push (e.g., artifact.aerospike.io/repo/image:tag) # explicit tag required
+        description: Name of the application
+      app-version:
+        type: string
+        required: true
+        description: Version of the application
 
-      # Optional inputs
       attest:
         type: boolean
         default: true
@@ -82,6 +85,10 @@ on:
         type: boolean
         default: true
         description: Enable SBOM generation (pass-through to docker/build-push-action)
+      tag:
+        type: string
+        required: false
+        description: Full image tag to build/push (e.g., artifact.aerospike.io/repo/image:tag) # explicit tag required
 
     outputs:
       digest:
@@ -93,6 +100,15 @@ on:
       tag:
         description: Primary tag used
         value: ${{ jobs.build.outputs.tag }}
+      version-tag:
+        description: Version tag (registry/image:version)
+        value: ${{ jobs.build.outputs.version-tag }}
+      latest-tag:
+        description: Latest tag (registry/image:latest)
+        value: ${{ jobs.build.outputs.latest-tag }}
+      immutable-tag:
+        description: Immutable tag (registry/image:<timestamp>)
+        value: ${{ jobs.build.outputs.immutable-tag }}
 
 jobs:
   build:
@@ -109,7 +125,10 @@ jobs:
     outputs:
       digest: ${{ steps.build.outputs.digest }}
       image-ref: ${{ steps.meta.outputs.image-ref }}
-      tag: ${{ inputs.tag }}
+      tag: ${{ steps.tags.outputs.primary-tag }}
+      version-tag: ${{ steps.tags.outputs.version-tag }}
+      latest-tag: ${{ steps.tags.outputs.latest-tag }}
+      immutable-tag: ${{ steps.tags.outputs.immutable-tag }}
 
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
@@ -146,16 +165,54 @@ jobs:
 
       - uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 # v3
       - uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3
+      - name: Compute tags
+        id: tags
+        shell: bash
+        run: |
+          base="${{ steps.registry.outputs.registry }}/${{ inputs.image-name }}"
+          version="${base}:${{ inputs.app-version }}"
+          latest="${base}:latest"
+          immutable="${base}:$(date --utc +%Y%m%dT%H%M%SZ)"
+          primary="${immutable}"
+          echo "tags=${primary},${latest},${version}" >> "$GITHUB_OUTPUT"
+          echo "primary-tag=${primary}" >> "$GITHUB_OUTPUT"
+          echo "version-tag=${version}" >> "$GITHUB_OUTPUT"
+          echo "latest-tag=${latest}" >> "$GITHUB_OUTPUT"
+          echo "immutable-tag=${immutable}" >> "$GITHUB_OUTPUT"
 
       - name: Prepare build args/labels
+        id: prepare
         shell: bash
         run: |
           set -euo pipefail
           to_kv() { jq -r 'to_entries|map("\(.key)=\(.value)")|.[]'; }
+
+          # Generate OCI labels
+          oci_labels=$(jq -n \
+            --arg title "${{ inputs.app-name }}" \
+            --arg version "${{ inputs.app-version }}" \
+            --arg created "$(date --utc -Iseconds)" \
+            --arg revision "${{ github.sha }}" \
+            --arg source "${{ github.server_url }}/${{ github.repository }}" \
+            --arg url "${{ github.server_url }}/${{ github.repository }}" \
+            '{
+              "org.opencontainers.image.title": $title,
+              "org.opencontainers.image.version": $version,
+              "org.opencontainers.image.created": $created,
+              "org.opencontainers.image.revision": $revision,
+              "org.opencontainers.image.source": $source,
+              "org.opencontainers.image.url": $url
+            }')
+
+          # Merge user labels with OCI labels (user labels override)
+          user_labels='${{ inputs.labels-json }}'
+          merged_labels=$(jq -n --argjson oci "$oci_labels" --argjson user "$user_labels" '$oci * $user')
+
           echo '${{ inputs.build-args-json }}' | to_kv > /tmp/build_args
-          echo '${{ inputs.labels-json }}' | to_kv > /tmp/labels
-          echo "BUILD_ARGS=$(cat /tmp/build_args)" >> "$GITHUB_ENV"
-          echo "LABELS=$(cat /tmp/labels)" >> "$GITHUB_ENV"
+          echo "$merged_labels" | to_kv > /tmp/labels
+
+          echo "build-args=$(cat /tmp/build_args)" >> "$GITHUB_OUTPUT"
+          echo "labels=$(cat /tmp/labels)" >> "$GITHUB_OUTPUT"
 
       - name: Build and push
         id: build
@@ -165,11 +222,11 @@ jobs:
           file: ${{ inputs.file }}
           platforms: ${{ inputs.platforms }}
           push: ${{ inputs.push }}
-          tags: ${{ inputs.tag }}
+          tags: ${{ steps.tags.outputs.tags }}
           provenance: ${{ inputs.provenance }}
           sbom: ${{ inputs.sbom }}
-          build-args: ${{ env.BUILD_ARGS }}
-          labels: ${{ env.LABELS }}
+          build-args: ${{ steps.prepare.outputs.build-args }}
+          labels: ${{ steps.prepare.outputs.labels }}
       # TODO: Uncomment this when xray scan is ready
       #   - name: xray scan
       #     shell: bash
@@ -181,7 +238,8 @@ jobs:
         id: meta
         shell: bash
         run: |
-          image_ref="${{ inputs.tag }}@${{ steps.build.outputs.digest }}"
+          # Use primary tag with digest for build-info
+          image_ref="${{ steps.tags.outputs.primary-tag }}@${{ steps.build.outputs.digest }}"
           echo "image-ref=${image_ref}" >> "$GITHUB_OUTPUT"
           jf rt build-docker-create --image-file <(echo "$image_ref") "${{ inputs.jf-project }}${{ inputs.repo-scope }}"
 
@@ -196,5 +254,5 @@ jobs:
         if: ${{ inputs.attest }}
         uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3.0.0
         with:
-          subject-name: oci://${{ inputs.tag }}
+          subject-name: oci://${{ steps.tags.outputs.primary-tag }}
           subject-digest: ${{ steps.build.outputs.digest }}
