@@ -95,7 +95,7 @@ if [[ -z "${METADATA_BUILD_NUMBER:-}" ]]; then
   error "metadata-build-number is required
 Use --help for usage information"
 fi
-ARTIFACT_BUILD_NUMBER="$BUILD_NUMBER-artifacts"
+ARTIFACT_BUILD_NUMBER="$BUILD_NUMBER"
 
 # Source the package utilities
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
