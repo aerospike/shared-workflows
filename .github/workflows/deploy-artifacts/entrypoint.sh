@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -x 
 set -euo pipefail
 export PS4='+($LINENO): ${FUNCNAME[0]:+${FUNCNAME[0]}(): }'
 trap 'handle_error ${LINENO}' ERR
