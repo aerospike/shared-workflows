@@ -257,39 +257,63 @@ upload_rpm_packages() {
 upload_jar_packages() {
   
   if [[ "$DRY_RUN" == "true" ]]; then
-    echo "Would upload JAR packages to JFrog..." >&2
+    echo "Would upload JAR/POM packages to JFrog..." >&2
   else
-    echo "Uploading JAR packages to JFrog..." >&2
+    echo "Uploading JAR/POM packages to JFrog..." >&2
   fi
-  while IFS= read -r -d '' jar; do
-    if [[ ! -f "$jar" ]]; then
+  
+  # Find all JAR and POM files, then process unique base names
+  declare -A processed_artifacts
+  
+  while IFS= read -r -d '' artifact; do
+    if [[ ! -f "$artifact" ]]; then
+      continue
+    fi
+
+    # Get the directory and base name
+    local artifact_dir=$(dirname "$artifact")
+    local artifact_name=$(basename "$artifact")
+    local base_name="${artifact_name%.jar}"
+    base_name="${base_name%.pom}"  # Remove .pom if it's a standalone pom
+    
+    # Skip if we've already processed this base artifact
+    local artifact_key="$artifact_dir/$base_name"
+    if [[ -n "${processed_artifacts[$artifact_key]:-}" ]]; then
+      continue
+    fi
+    processed_artifacts[$artifact_key]=1
+
+    # Determine which file to use for metadata extraction (prefer jar, fallback to pom)
+    local metadata_file
+    if [[ -f "$artifact_dir/${base_name}.jar" ]]; then
+      metadata_file="$artifact_dir/${base_name}.jar"
+    elif [[ -f "$artifact_dir/${base_name}.pom" ]]; then
+      metadata_file="$artifact_dir/${base_name}.pom"
+    else
       continue
     fi
 
     # Get metadata using the shared function
-    read -r -a metadata < <(get_jar_metadata "$jar")
+    read -r -a metadata < <(get_jar_metadata "$metadata_file")
     pkgname="${metadata[0]}"
     version="${metadata[1]}"
     group_id="${metadata[2]}"
 
     echo "  Package: $pkgname, Version: $version, Group ID: $group_id" >&2
 
-    # Upload the JAR
-    run jf rt upload "$jar" "$PROJECT-maven-dev-local" --flat=false \
-      --build-name="$BUILD_NAME" \
-      --build-number="$ARTIFACT_BUILD_NUMBER" \
-      --project="$PROJECT" \
-      --target-props "group_id=$group_id;package_name=$pkgname;version=$version"
-
-    # Upload signature and checksums if they exist
-    if [[ -f "$jar.asc" ]]; then
-      echo "  Uploading signature: $jar.asc" >&2
-      run jf rt upload "$jar.asc" "$PROJECT-maven-dev-local" --flat=false \
-        --build-name="$BUILD_NAME" \
-        --build-number="$ARTIFACT_BUILD_NUMBER" \
-        --project="$PROJECT"
-    fi
-  done < <(find . -name "*.jar" -print0)
+    # Upload all related Maven artifact files (jar, pom, signatures)
+    for ext in jar pom jar.asc pom.asc; do
+      local artifact_file="$artifact_dir/${base_name}.${ext}"
+      if [[ -f "$artifact_file" ]]; then
+        echo "  Uploading $ext: $artifact_file" >&2
+        run jf rt upload "$artifact_file" "$PROJECT-maven-dev-local" --flat=false \
+          --build-name="$BUILD_NAME" \
+          --build-number="$ARTIFACT_BUILD_NUMBER" \
+          --project="$PROJECT" \
+          --target-props "group_id=$group_id;package_name=$pkgname;version=$version"
+      fi
+    done
+  done < <(find . \( -name "*.jar" -o -name "*.pom" \) -print0)
 }
 
 upload_generic_files() {
