@@ -125,6 +125,7 @@ structure_build_artifacts() {
   echo "current files: $(ls -la build-artifacts)" >&2
   mkdir -p structured_build_artifacts/deb
   mkdir -p structured_build_artifacts/rpm
+  mkdir -p structured_build_artifacts/jar
   mkdir -p structured_build_artifacts/nupkg
   mkdir -p structured_build_artifacts/generic
   while IFS= read -r -d '' deb; do
@@ -144,6 +145,16 @@ structure_build_artifacts() {
     echo "Processing RPM: $rpm" >&2
     process_rpm "$rpm" "./structured_build_artifacts/rpm"
   done < <(find build-artifacts -name "*.rpm" -print0)
+  echo "current files: $(ls -la build-artifacts)" >&2
+
+  while IFS= read -r -d '' jar; do
+    if [[ ! -f "$jar" ]]; then
+      continue
+    fi
+
+    echo "Processing JAR: $jar" >&2
+    process_rpm "$jar" "./structured_build_artifacts/jar"
+  done < <(find build-artifacts -name "*.jar" -print0)
   echo "current files: $(ls -la build-artifacts)" >&2
 
   while IFS= read -r -d '' nupkg; do
