@@ -96,9 +96,24 @@ process_jar() {
     echo "  Package name: $pkgname" >&2
     echo "  Version: $version" >&2
     mkdir -p "$target"
-    echo "Copying JAR to: $target" >&2
+    
+    # Get the directory and base name of the jar file
+    local jar_dir
+    local jar_name
+    local base_name
+    jar_dir=$(dirname "$jar")
     jar_name=$(basename "$jar")
-    cp -v "$jar" "$target/$jar_name" >&2
+    base_name="${jar_name%.jar}"  # Remove .jar extension
+    
+    echo "Copying Maven artifacts to: $target" >&2
+    
+    # Copy jar, pom, and asc files
+    for ext in jar pom jar.asc pom.asc; do
+        local file="$jar_dir/${base_name}.${ext}"
+        if [[ -f "$file" ]]; then
+            cp -v "$file" "$target/" >&2
+        fi
+    done
 }
 
 get_codename_for_deb() {
