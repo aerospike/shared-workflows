@@ -152,7 +152,7 @@ structure_build_artifacts() {
     fi
 
     echo "Processing JAR: $jar" >&2
-    process_rpm "$jar" "./structured_build_artifacts/jar"
+    process_jar "$jar" "./structured_build_artifacts/jar"
   done < <(find build-artifacts -name "*.jar" -print0)
   echo "current files: $(ls -la build-artifacts)" >&2
 
@@ -258,20 +258,22 @@ upload_jar_packages() {
     read -r -a metadata < <(get_jar_metadata "$jar")
     pkgname="${metadata[0]}"
     version="${metadata[1]}"
+    group_id="${metadata[2]}"
+    group_path="${group_id//./\/}"
 
-    echo "  Package: $pkgname, Version: $version" >&2
+    echo "  Package: $pkgname, Version: $version, Group ID: $group_id" >&2
 
     # Upload the RPM
-    run jf rt upload "$jar" "$PROJECT-maven-dev-local" --flat=false \
+    run jf rt upload "$jar" "$PROJECT-maven-dev-local/$group_path/$pkgname/$version" --flat=false \
       --build-name="$BUILD_NAME" \
       --build-number="$ARTIFACT_BUILD_NUMBER" \
       --project="$PROJECT" \
-      --target-props "version=$VERSION"
+      --target-props "group_id=$group_id;package_name=$pkgname;version=$version"
 
     # Upload signature and checksums if they exist
     if [[ -f "$jar.asc" ]]; then
       echo "  Uploading signature: $jar.asc" >&2
-      run jf rt upload "$jar.asc" "$PROJECT-maven-dev-local" --flat=false \
+      run jf rt upload "$jar.asc" "$PROJECT-maven-dev-local/$group_path/$pkgname/$version" --flat=false \
         --build-name="$BUILD_NAME" \
         --build-number="$ARTIFACT_BUILD_NUMBER" \
         --project="$PROJECT"

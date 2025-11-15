@@ -14,13 +14,18 @@ handle_error() {
 get_jar_metadata() {
     local jar="$1"
     local filename="${jar##*/}"  # Get just the filename without path
-    local pkgname version
+    local pkgname version group_id
 
     pkgname=$(echo "$filename" | sed 's/-[0-9.]*\.jar$//')
     version=$(echo "$filename" | sed 's/.*-//' | sed 's/\.jar$//')
+    group_id=$(unzip -Z1 "$jar" \
+      | awk '/pom\.properties$/ {print; exit}' \
+      | xargs -r -I{} unzip -p "$jar" "{}" \
+      | grep '^groupId=' \
+      | cut -d= -f2)
 
     # Return package name and version
-    echo "$pkgname $version"
+    echo "$pkgname $version $group_id"
 }
 
 # Function to extract RPM metadata and distribution
@@ -61,6 +66,28 @@ process_rpm() {
     
     # Create target directory: <dist>/<arch>/
     # Example: el8/x86_64/
+    local target="$dest_dir/$dist/$arch"
+    echo "DEBUG: Creating directory structure:" >&2
+    echo "  Distribution: $dist" >&2
+    echo "  Architecture: $arch" >&2
+    echo "  Target path: $target" >&2
+    mkdir -p "$target"
+    echo "Copying RPM to: $target" >&2
+    rpm_name=$(basename "$rpm")
+    cp -v "$rpm" "$target/$rpm_name" >&2
+}
+
+process_jar() {
+    local jar="$1"
+    local dest_dir="$2"
+    local -a metadata
+    local pkgname version arch dist
+    
+    # Get metadata using the new function
+    read -r -a metadata < <(get_jar_metadata "$jar")
+    pkgname="${metadata[0]}"
+    version="${metadata[1]}"
+    
     local target="$dest_dir/$dist/$arch"
     echo "DEBUG: Creating directory structure:" >&2
     echo "  Distribution: $dist" >&2
