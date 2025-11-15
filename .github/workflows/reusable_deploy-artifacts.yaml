@@ -121,7 +121,7 @@ jobs:
         id: deploy
         shell: bash
         run: |
-          chmod +x ${{ inputs.gh-checkout-path }}/.github/workflows/deploy-artifacts/entrypoint.sh@760ac27cd9426823b3297bfdf17cbbf8455c544b
+          chmod +x ${{ inputs.gh-checkout-path }}/.github/workflows/deploy-artifacts/entrypoint.sh
           dry_run_arg=""
           if [ "${{ inputs.dry-run }}" = "true" ]; then
             dry_run_arg="--dry-run"
