@@ -274,7 +274,7 @@ upload_jar_packages() {
     local artifact_dir=$(dirname "$artifact")
     local artifact_name=$(basename "$artifact")
     local base_name="${artifact_name%.jar}"
-    base_name="${base_name%.pom}"  # Remove .pom if it's a standalone pom
+    base_name="${base_name%.pom}"
     
     # Skip if we've already processed this base artifact
     local artifact_key="$artifact_dir/$base_name"
@@ -283,21 +283,25 @@ upload_jar_packages() {
     fi
     processed_artifacts[$artifact_key]=1
 
-    # Determine which file to use for metadata extraction (prefer jar, fallback to pom)
-    local metadata_file
-    if [[ -f "$artifact_dir/${base_name}.jar" ]]; then
-      metadata_file="$artifact_dir/${base_name}.jar"
-    elif [[ -f "$artifact_dir/${base_name}.pom" ]]; then
-      metadata_file="$artifact_dir/${base_name}.pom"
+    # Determine which file to use for metadata extraction (prefer POM as it's the source of truth)
+    local pkgname version group_id
+    
+    if [[ -f "$artifact_dir/${base_name}.pom" ]]; then
+      # Extract metadata from POM (canonical source for Maven metadata)
+      read -r -a metadata < <(get_pom_metadata "$artifact_dir/${base_name}.pom")
+      pkgname="${metadata[0]}"
+      version="${metadata[1]}"
+      group_id="${metadata[2]}"
+    elif [[ -f "$artifact_dir/${base_name}.jar" ]]; then
+      # Fallback: Extract metadata from JAR if no POM exists
+      read -r -a metadata < <(get_jar_metadata "$artifact_dir/${base_name}.jar")
+      pkgname="${metadata[0]}"
+      version="${metadata[1]}"
+      group_id="${metadata[2]}"
     else
+      # No jar or pom found, skip
       continue
     fi
-
-    # Get metadata using the shared function
-    read -r -a metadata < <(get_jar_metadata "$metadata_file")
-    pkgname="${metadata[0]}"
-    version="${metadata[1]}"
-    group_id="${metadata[2]}"
 
     echo "  Package: $pkgname, Version: $version, Group ID: $group_id" >&2
 
