@@ -98,7 +98,7 @@ process_jar() {
     mkdir -p "$target"
     echo "Copying JAR to: $target" >&2
     jar_name=$(basename "$jar")
-    cp -v "$rpm" "$target/$jar_name" >&2
+    cp -v "$jar" "$target/$jar_name" >&2
 }
 
 get_codename_for_deb() {
