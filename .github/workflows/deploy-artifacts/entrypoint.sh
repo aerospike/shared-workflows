@@ -244,7 +244,6 @@ upload_rpm_packages() {
 }
 
 upload_jar_packages() {
-  
   if [[ "$DRY_RUN" == "true" ]]; then
     echo "Would upload JAR/POM packages to JFrog..." >&2
   else
@@ -260,13 +259,13 @@ upload_jar_packages() {
     fi
 
     # Get the directory and base name
-    local artifact_dir=$(dirname "$artifact")
-    local artifact_name=$(basename "$artifact")
-    local base_name="${artifact_name%.jar}"
+    artifact_dir=$(dirname "$artifact")
+    artifact_name=$(basename "$artifact")
+    base_name="${artifact_name%.jar}"
     base_name="${base_name%.pom}"
     
     # Skip if we've already processed this base artifact
-    local artifact_key="$artifact_dir/$base_name"
+    artifact_key="$artifact_dir/$base_name"
     if [[ -n "${processed_artifacts[$artifact_key]:-}" ]]; then
       continue
     fi
@@ -275,22 +274,11 @@ upload_jar_packages() {
     # Determine which file to use for metadata extraction (prefer POM as it's the source of truth)
     local pkgname version group_id
     
-    if [[ -f "$artifact_dir/${base_name}.pom" ]]; then
-      # Extract metadata from POM (canonical source for Maven metadata)
-      read -r -a metadata < <(get_pom_metadata "$artifact_dir/${base_name}.pom")
-      pkgname="${metadata[0]}"
-      version="${metadata[1]}"
-      group_id="${metadata[2]}"
-    elif [[ -f "$artifact_dir/${base_name}.jar" ]]; then
-      # Fallback: Extract metadata from JAR if no POM exists
-      read -r -a metadata < <(get_jar_metadata "$artifact_dir/${base_name}.jar")
-      pkgname="${metadata[0]}"
-      version="${metadata[1]}"
-      group_id="${metadata[2]}"
-    else
-      # No jar or pom found, skip
-      continue
-    fi
+    # Fallback: Extract metadata from JAR if no POM exists
+    read -r -a metadata < <(get_jar_metadata "$artifact_dir/${base_name}.jar")
+    pkgname="${metadata[0]}"
+    version="${metadata[1]}"
+    group_id="${metadata[2]}"
 
     echo "  Package: $pkgname, Version: $version, Group ID: $group_id" >&2
 
