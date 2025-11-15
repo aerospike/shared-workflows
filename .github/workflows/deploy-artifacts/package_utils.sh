@@ -81,22 +81,24 @@ process_jar() {
     local jar="$1"
     local dest_dir="$2"
     local -a metadata
-    local pkgname version arch dist
+    local pkgname version group_id group_path
     
     # Get metadata using the new function
     read -r -a metadata < <(get_jar_metadata "$jar")
     pkgname="${metadata[0]}"
     version="${metadata[1]}"
-    
-    local target="$dest_dir/$dist/$arch"
+    group_id="${metadata[2]}"
+    group_path="${group_id//./\/}"
+
+    local target="$dest_dir/$group_path/$pkgname/$version"
     echo "DEBUG: Creating directory structure:" >&2
-    echo "  Distribution: $dist" >&2
-    echo "  Architecture: $arch" >&2
-    echo "  Target path: $target" >&2
+    echo "  Group id: $group_id" >&2
+    echo "  Package name: $pkgname" >&2
+    echo "  Version: $version" >&2
     mkdir -p "$target"
-    echo "Copying RPM to: $target" >&2
-    rpm_name=$(basename "$rpm")
-    cp -v "$rpm" "$target/$rpm_name" >&2
+    echo "Copying JAR to: $target" >&2
+    jar_name=$(basename "$jar")
+    cp -v "$rpm" "$target/$jar_name" >&2
 }
 
 get_codename_for_deb() {
