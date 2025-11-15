@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-set -x 
 set -euo pipefail
 export PS4='+($LINENO): ${FUNCNAME[0]:+${FUNCNAME[0]}(): }'
 trap 'handle_error ${LINENO}' ERR
@@ -164,7 +163,7 @@ structure_build_artifacts() {
     fi
     echo "Processing generic file: $generic" >&2
     process_generic "$generic" "./structured_build_artifacts/generic"
-  done < <(find build-artifacts \( -not -name "*.deb" -not -name "*.rpm" -not -name "*.asc" \) -type f -print0)
+  done < <(find build-artifacts \( -not -name "*.deb" -not -name "*.rpm" -not -name "*.asc" -not -name "*.jar" \) -type f -print0)
 }
 
 upload_deb_packages() {
@@ -245,6 +244,7 @@ upload_rpm_packages() {
 }
 
 upload_jar_packages() {
+  
   if [[ "$DRY_RUN" == "true" ]]; then
     echo "Would upload JAR packages to JFrog..." >&2
   else
@@ -263,7 +263,7 @@ upload_jar_packages() {
 
     echo "  Package: $pkgname, Version: $version, Group ID: $group_id" >&2
 
-    # Upload the RPM
+    # Upload the JAR
     run jf rt upload "$jar" "$PROJECT-maven-dev-local" --flat=false \
       --build-name="$BUILD_NAME" \
       --build-number="$ARTIFACT_BUILD_NUMBER" \
@@ -298,7 +298,7 @@ upload_generic_files() {
         --build-number="$ARTIFACT_BUILD_NUMBER" \
         --project="$PROJECT"
     fi
-  done < <(find . \( -not -name "*.deb" -not -name "*.rpm" -not -name "*.asc" \) -print0)
+  done < <(find . \( -not -name "*.deb" -not -name "*.rpm" -not -name "*.asc" -not -name "*.jar" \) -print0)
 }
 
 
