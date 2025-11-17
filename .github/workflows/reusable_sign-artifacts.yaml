@@ -81,7 +81,7 @@ jobs:
         shell: bash
         run: |
           PREFIX="${{ inputs.gh-unsigned-artifacts }}"
-          for f in unsigned-artifacts/*; do
+          for f in ./unsigned-artifacts/*; do
             [[ $(basename "$f") == "$PREFIX"* ]] || rm -rf "$f"
           done
           echo "Build artifacts: $(find ./unsigned-artifacts)"
