@@ -112,10 +112,13 @@ jobs:
         with:
           #name: ${{ inputs.gh-artifact-name }}
           path: ./build-artifacts
+          
       - name: Verify artifacts
         shell: bash
         run: |
-          rm -rf ./build-artifacts/unsigned-artifacts*
+          for f in ./build-artifacts; do
+            [[ $f == "${{ inputs.gh-artifact-name }}-*" ]] || rm -rf "$f"
+          done
           echo "Build artifacts: $(find ./build-artifacts)"
 
       - name: Deploy Artifacts
