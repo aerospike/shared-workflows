@@ -115,7 +115,7 @@ jobs:
       - name: Verify artifacts
         shell: bash
         run: |
-          rm -f ./build-artifacts/unsigned-artifacts*
+          rm -rf ./build-artifacts/unsigned-artifacts*
           echo "Build artifacts: $(find ./build-artifacts)"
 
       - name: Deploy Artifacts
