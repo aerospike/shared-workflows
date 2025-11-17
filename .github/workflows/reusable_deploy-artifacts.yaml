@@ -116,8 +116,9 @@ jobs:
       - name: Verify artifacts
         shell: bash
         run: |
-          for f in ./build-artifacts/*; do
-            [[ $f == "${{ inputs.gh-artifact-name }}-*" ]] || rm -rf "$f"
+          PREFIX="${{ inputs.gh-artifact-name }}"
+          for f in build-artifacts/*; do
+            [[ $(basename "$f") == "$PREFIX"* ]] || rm -rf "$f"
           done
           echo "Build artifacts: $(find ./build-artifacts)"
 
