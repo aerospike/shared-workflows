@@ -69,14 +69,14 @@ jobs:
     outputs:
       gh-artifact-name: ${{ steps.sign-outputs.outputs.gh-artifact-name }}
     env:
-      CHECKOUT_REF: 77e2f7f0b412413644cfe87367d6ea63ade0a307 # ${{ inputs.gh-workflows-ref }}
+      CHECKOUT_REF: ${{ inputs.gh-workflows-ref }}
     steps:
       - name: Download Unsigned Artifacts
         uses: actions/download-artifact@v4
         with:
-          #name: ${{ inputs.gh-unsigned-artifacts }}
+          name: ${{ inputs.gh-unsigned-artifacts }}
           path: unsigned-artifacts
-          #merge-multiple: true
+          merge-multiple: true
       - name: Verify artifacts
         shell: bash
         run: |
@@ -99,7 +99,6 @@ jobs:
           ref: ${{ env.CHECKOUT_REF }}
           path: ${{ inputs.gh-checkout-path }}
           fetch-depth: 1
-
       - name: Set up GPG
         uses: aerospike/shared-workflows/.github/actions/setup-gpg@a3356acbde7fcda4b9e632b9b4f6ed83ce48b87d # v2.0.2
         with:
@@ -129,7 +128,6 @@ jobs:
           environment_name: ${{ inputs.nuget-environment }}
           clean_logs: true
           signing_method: v1
-
       - name: Install dpkg-sig
         run: |
           sudo apt-get update && sudo apt-get install dpkg-sig dpkg-dev -y
