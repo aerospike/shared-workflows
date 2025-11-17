@@ -69,7 +69,7 @@ jobs:
     outputs:
       gh-artifact-name: ${{ steps.sign-outputs.outputs.gh-artifact-name }}
     env:
-      CHECKOUT_REF: ${{ inputs.gh-workflows-ref }}
+      CHECKOUT_REF: 77e2f7f0b412413644cfe87367d6ea63ade0a307 # ${{ inputs.gh-workflows-ref }}
     steps:
       - name: Download Unsigned Artifacts
         uses: actions/download-artifact@v4
