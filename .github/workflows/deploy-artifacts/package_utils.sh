@@ -24,7 +24,7 @@ get_jar_metadata() {
       | grep '^groupId=' \
       | cut -d= -f2)
 
-    # Return package name and version
+    # Return package name, version, and group_id
     echo "$pkgname $version $group_id"
 }
 
