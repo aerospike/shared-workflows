@@ -96,7 +96,7 @@ process_jar() {
     pkgname="${metadata[0]}"
     version="${metadata[1]}"
     group_id="${metadata[2]}"
-    group_path="${group_id//./\/}"
+    group_path="${group_id:+${group_id//./\/}}"
 
     local target="$dest_dir/$group_path/$pkgname/$version"
     echo "DEBUG: Creating directory structure:" >&2
