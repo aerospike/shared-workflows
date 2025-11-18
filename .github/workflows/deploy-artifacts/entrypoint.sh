@@ -174,7 +174,7 @@ structure_build_artifacts() {
     fi
     echo "Processing generic file: $generic" >&2
     process_generic "$generic" "./structured_build_artifacts/generic"
-  done < <(find build-artifacts \( -not -name "*.deb" -not -name "*.rpm" -not -name "*.asc" -not -name "*.jar" \) -type f -print0)
+  done < <(find build-artifacts \( -not -name "*.deb" -not -name "*.rpm" -not -name "*.asc" -not -name "*.jar" -not -name "*.pom" \) -type f -print0)
 }
 
 upload_deb_packages() {
