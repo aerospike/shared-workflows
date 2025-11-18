@@ -17,8 +17,9 @@ get_jar_metadata() {
     local pkgname version group_id
     local pom_props
 
-    pkgname=$(echo "$filename" | sed 's/-[0-9.]*\.jar$//')
-    version=$(echo "$filename" | sed 's/.*-//' | sed 's/\.jar$//')
+    # Initial parsing - handle versions with SNAPSHOT, SNAPSHOT_<hash>, etc.
+    pkgname=$(echo "$filename" | sed -E 's/-[0-9][0-9A-Za-z._\-]*\.jar$//')
+    version=$(echo "$filename" | sed -E 's/^[^-]+-([0-9][0-9A-Za-z._\-]*)\.jar$/\1/')
 
     pom_props=$(unzip -Z1 "$jar" | awk '/pom\.properties$/ {print; exit}')
     if [[ -n "$pom_props" ]]; then
@@ -27,8 +28,8 @@ get_jar_metadata() {
         group_id=$(unzip -p "$jar" "$pom_props" | grep '^groupId=' | cut -d= -f2)
     else
         # Fallback to filename parsing if pom.properties is not found
-        pkgname=$(echo "$filename" | sed -E 's/-[0-9][0-9A-Za-z\.\-]*\.jar$//')
-        version=$(echo "$filename" | sed -E 's/.*-([0-9][0-9A-Za-z\.\-]*)\.jar$/\1/')
+        pkgname=$(echo "$filename" | sed -E 's/-[0-9][0-9A-Za-z._\-]*\.jar$//')
+        version=$(echo "$filename" | sed -E 's/^[^-]+-([0-9][0-9A-Za-z._\-]*)\.jar$/\1/')
         group_id=""
     fi
 
