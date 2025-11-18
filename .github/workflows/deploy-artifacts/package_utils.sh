@@ -15,14 +15,22 @@ get_jar_metadata() {
     local jar="$1"
     local filename="${jar##*/}"  # Get just the filename without path
     local pkgname version group_id
+    local pom_props
 
     pkgname=$(echo "$filename" | sed 's/-[0-9.]*\.jar$//')
     version=$(echo "$filename" | sed 's/.*-//' | sed 's/\.jar$//')
-    group_id=$(unzip -Z1 "$jar" \
-      | awk '/pom\.properties$/ {print; exit}' \
-      | xargs -r -I{} unzip -p "$jar" "{}" \
-      | grep '^groupId=' \
-      | cut -d= -f2)
+
+    pom_props=$(unzip -Z1 "$jar" | awk '/pom\.properties$/ {print; exit}')
+    if [[ -n "$pom_props" ]]; then
+        pkgname=$(unzip -p "$jar" "$pom_props" | grep '^artifactId=' | cut -d= -f2)
+        version=$(unzip -p "$jar" "$pom_props" | grep '^version=' | cut -d= -f2)
+        group_id=$(unzip -p "$jar" "$pom_props" | grep '^groupId=' | cut -d= -f2)
+    else
+        # Fallback to filename parsing if pom.properties is not found
+        pkgname=$(echo "$filename" | sed -E 's/-[0-9][0-9A-Za-z\.\-]*\.jar$//')
+        version=$(echo "$filename" | sed -E 's/.*-([0-9][0-9A-Za-z\.\-]*)\.jar$/\1/')
+        group_id=""
+    fi
 
     # Return package name, version, and group_id
     echo "$pkgname $version $group_id"
