@@ -314,7 +314,7 @@ upload_generic_files() {
         --build-number="$ARTIFACT_BUILD_NUMBER" \
         --project="$PROJECT"
     fi
-  done < <(find . \( -not -name "*.deb" -not -name "*.rpm" -not -name "*.asc" -not -name "*.jar" \) -print0)
+  done < <(find . \( -not -name "*.deb" -not -name "*.rpm" -not -name "*.asc" -not -name "*.jar" -not -name "*.pom" \) -print0)
 }
 
 
