@@ -81,11 +81,6 @@ jobs:
         shell: bash
         run: |
           echo "Build artifacts: $(find ./unsigned-artifacts)"
-          PREFIX="unsigned-artifacts"
-          for f in unsigned-artifacts/*; do
-            [[ $(basename "$f") == "$PREFIX"* ]] || rm -rf "$f"
-          done
-          echo "Build artifacts: $(find ./unsigned-artifacts)"
       - name: Get nuget packages
         id: nuget-packages
         run: |
