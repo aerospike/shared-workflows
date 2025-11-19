@@ -48,8 +48,12 @@ jobs:
           sudo apt-get update && sudo apt-get install dpkg-dev rpm nodejs npm -y
       - name: Install bats
         run: |
-          # Install bats-core via npm (most reliable method)
-          sudo npm install -g bats
+          # Install bats-core from source (recommended method per official documentation)
+          git clone https://github.com/bats-core/bats-core.git
+          cd bats-core
+          sudo ./install.sh /usr/local
+          cd ..
+          rm -rf bats-core
       - name: Run bats tests
         run: |
           cd .github/workflows/deploy-artifacts
