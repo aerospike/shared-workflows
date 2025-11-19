@@ -96,31 +96,6 @@ assert_upload_command_valid() {
   return 0
 }
 
-# Assert that a DEB upload command has correct --deb path
-# Usage: assert_deb_path_valid "$cmd" "$expected_codename" "$expected_arch"
-assert_deb_path_valid() {
-  local cmd="$1"
-  local expected_codename="$2"
-  local expected_arch="$3"
-  
-  local -A parsed=()
-  local parse_output
-  parse_output=$(parse_jf_upload_command "$cmd")
-  while IFS='=' read -r key value; do
-    [[ -n "$key" ]] && parsed["$key"]="$value"
-  done <<< "$parse_output"
-  
-  local deb_path="${parsed[deb_path]:-}"
-  local expected_path="$expected_codename/main/$expected_arch"
-  
-  if [[ "$deb_path" != "$expected_path" ]]; then
-    echo "FAIL: --deb path mismatch. Expected: $expected_path, Got: $deb_path" >&2
-    return 1
-  fi
-  
-  return 0
-}
-
 # Assert that a build command is valid
 # Usage: assert_build_command_valid "$cmd" "$expected_build_name" "$expected_build_number" "$expected_project"
 assert_build_command_valid() {

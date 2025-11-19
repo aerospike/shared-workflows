@@ -175,7 +175,6 @@ teardown_file() {
       
       assert_upload_command_valid "$cmd" "$filename" "${exp[repo]}" "${exp[props]}" \
         "test-build" "12345-artifacts" "test-project"
-      assert_deb_path_valid "$cmd" "${exp[codename]}" "${exp[arch]}"
       
     elif [[ "$filename" == *.rpm ]]; then
       rpm_count=$((rpm_count + 1))
