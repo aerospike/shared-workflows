@@ -41,7 +41,7 @@ bats .github/workflows/deploy-artifacts/tests/bats/test_nupkg_upload.bats
 
 ## Test Files
 
-- `test_deb_rpm_upload.bats` - Validates DEB and RPM upload commands with validation
+- `test_deb_rpm_upload.bats` - Validates DEB and RPM upload commands
 - `test_all_files_upload.bats` - Validates generic file uploads (JAR, ZIP, TAR.GZ)
 - `test_error_handling.bats` - Tests error handling for missing arguments
 - `test_structured_artifacts.bats` - Tests processing messages and directory structure
