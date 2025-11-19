@@ -7,9 +7,12 @@ on:
 permissions:
   id-token: write
   contents: read
-
+# TODO: Dependabot is not allowed to run this workflow
+# nuget secrets are not valid for the dependabot test tokens
+# until we can have test tokens/pw to use will disable this.
 jobs:
   upload-test-gh-artifacts:
+    if: github.actor != 'dependabot[bot]'
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout
@@ -23,6 +26,7 @@ jobs:
           name: test-fixtures
           path: test-fixtures
   test-sign-workflow:
+    if: github.actor != 'dependabot[bot]'
     uses: ./.github/workflows/reusable_sign-artifacts.yaml
     needs: upload-test-gh-artifacts
     secrets:
@@ -38,6 +42,7 @@ jobs:
       gh-workflows-ref: v2.0.2
 
   verify-nuget-signatures:
+    if: github.actor != 'dependabot[bot]'
     needs: test-sign-workflow
     runs-on: ubuntu-22.04
     steps:
@@ -70,6 +75,7 @@ jobs:
           done
 
   run-tests:
+    if: github.actor != 'dependabot[bot]'
     needs: test-sign-workflow
     runs-on: ubuntu-22.04
     steps:
