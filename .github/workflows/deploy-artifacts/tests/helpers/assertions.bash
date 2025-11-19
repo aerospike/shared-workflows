@@ -169,13 +169,9 @@ assert_command_count() {
   local commands="$1"
   local expected_count="$2"
   
-  # Count non-empty lines
-  local actual_count=0
-  if [[ -n "$commands" ]]; then
-    actual_count=$(echo "$commands" | grep -c '^' || echo "0")
-    # Remove trailing newline count if present
-    actual_count=$(echo "$commands" | wc -l)
-  fi
+  # Count lines
+  local actual_count
+  actual_count=$(echo "$commands" | wc -l)
   
   if [[ "$actual_count" -ne "$expected_count" ]]; then
     echo "FAIL: Command count mismatch. Expected: $expected_count, Got: $actual_count" >&2
