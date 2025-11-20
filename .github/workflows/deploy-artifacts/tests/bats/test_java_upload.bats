@@ -64,8 +64,8 @@ teardown_file() {
     if [[ $cmd =~ \.jar ]]; then
       jar_found=true
       
-      # Java artifacts go to generic repo
-      local expected_repo="test-project-generic-dev-local"
+      # Java artifacts go to Maven repo
+      local expected_repo="test-project-maven-dev-local"
       
       # Extract filename from command
       local filename
@@ -73,8 +73,9 @@ teardown_file() {
         filename="${BASH_REMATCH[1]}"
       fi
       
-      # Validate command structure
-      assert_upload_command_valid "$cmd" "$filename" "$expected_repo" "" \
+      # Validate command structure with Maven target-props
+      assert_upload_command_valid "$cmd" "$filename" "$expected_repo" \
+        "group_id=;package_name=test.jar;version=test.jar" \
         "test-build" "12345-artifacts" "test-project"
     fi
   done
@@ -106,8 +107,8 @@ teardown_file() {
   local output
   output=$(run_entrypoint_dry_run "test-project" "test-build" "v1.0.0" "12345" "12345-metadata")
   
-  # Verify "Processing generic file:" messages appear for JAR files
-  [[ $output == *"Processing generic file:"* ]] || (echo "Generic file processing messages not found" >&2 && return 1)
+  # Verify "Processing JAR:" messages appear for JAR files
+  [[ $output == *"Processing JAR:"* ]] || (echo "JAR processing messages not found" >&2 && return 1)
   
   # Extract upload commands and verify JAR is present
   local upload_commands
