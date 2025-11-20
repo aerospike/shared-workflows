@@ -53,7 +53,7 @@ jobs:
         with:
           dotnet-version: 8.x
       - name: Download Signed Artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v6
         with:
           name: ${{ needs.test-sign-workflow.outputs.gh-artifact-name }}
           path: signed
@@ -82,7 +82,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
       - name: Download Test Fixtures
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v6
         with:
           name: test-fixtures
           path: test-fixtures
