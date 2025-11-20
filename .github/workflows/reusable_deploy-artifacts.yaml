@@ -108,7 +108,7 @@ jobs:
           jf rt ping
 
       - name: Download artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v6
         with:
           name: ${{ inputs.gh-artifact-name }}
           path: ./build-artifacts

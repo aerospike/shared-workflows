@@ -155,6 +155,10 @@ process_deb() {
     echo "$target/$deb_name"
 }
 
+process_nupkg() {
+    process_generic "$1" "$2"
+}
+
 process_generic() {
     local file="$1"
     local dest_dir="$2"

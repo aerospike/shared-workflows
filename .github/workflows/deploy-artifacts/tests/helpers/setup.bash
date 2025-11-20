@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+# Setup and teardown functions for bats tests
+
+# Find the git root directory
+GIT_ROOT="$(git rev-parse --show-toplevel)"
+DEPLOY_ARTIFACTS_DIR="$GIT_ROOT/.github/workflows/deploy-artifacts"
+
+# Define test directory
+TEST_DIR="$DEPLOY_ARTIFACTS_DIR/test-artifacts"
+BUILD_ARTIFACTS_DIR="$TEST_DIR/build-artifacts"
+
+# Setup function called before each test file
+setup_test_artifacts() {
+  # Create test directory and fixtures
+  rm -rf "$TEST_DIR"
+  mkdir -p "$BUILD_ARTIFACTS_DIR"
+  
+  # Run create-test-fixtures.sh to set up test artifacts
+  # Must run from git root so it can find tests/ directory
+  cd "$GIT_ROOT" || exit 1
+  "$DEPLOY_ARTIFACTS_DIR/create-test-fixtures.sh"
+  cd "$DEPLOY_ARTIFACTS_DIR/test-artifacts" || exit 1
+  
+  # Verify test files exist
+  declare -a TEST_FILES=(
+    "$BUILD_ARTIFACTS_DIR/test-ubuntu22.04.deb"
+    "$BUILD_ARTIFACTS_DIR/test-1.0-2.noarch.rpm"
+    "$BUILD_ARTIFACTS_DIR/test.jar"
+    "$BUILD_ARTIFACTS_DIR/test.zip"
+    "$BUILD_ARTIFACTS_DIR/test.tar.gz"
+    "$BUILD_ARTIFACTS_DIR/nested/dir/test-debian12.deb"
+    "$BUILD_ARTIFACTS_DIR/nested/dir/nested.rpm"
+  )
+  
+  for file in "${TEST_FILES[@]}"; do
+    if [[ ! -f "$file" ]]; then
+      echo "Error: Missing expected test file: $file" >&2
+      exit 1
+    fi
+  done
+  
+  # Change to test directory for consistent context
+  cd "$TEST_DIR" || exit 1
+}
+
+teardown_test_artifacts() {
+  # Cleanup test artifacts (optional - comment out for debugging)
+  # rm -rf "$TEST_DIR"
+  :
+}
+
+# Run entrypoint.sh with dry-run and capture output
+run_entrypoint_dry_run() {
+  local project="${1:-test-project}"
+  local build_name="${2:-test-build}"
+  local version="${3:-v1.0.0}"
+  local build_number="${4:-12345}"
+  local metadata_build_number="${5:-12345-metadata}"
+  
+  cd "$TEST_DIR" || exit 1
+  "$DEPLOY_ARTIFACTS_DIR/entrypoint.sh" \
+    "$project" \
+    "$build_name" \
+    "$version" \
+    "$build_number" \
+    "$metadata_build_number" \
+    --dry-run \
+    2>&1
+}
+

@@ -126,6 +126,7 @@ structure_build_artifacts() {
   mkdir -p structured_build_artifacts/deb
   mkdir -p structured_build_artifacts/rpm
   mkdir -p structured_build_artifacts/jar
+  mkdir -p structured_build_artifacts/nupkg
   mkdir -p structured_build_artifacts/generic
   while IFS= read -r -d '' deb; do
     if [[ ! -f "$deb" ]]; then
