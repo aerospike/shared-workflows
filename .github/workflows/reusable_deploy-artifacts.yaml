@@ -117,7 +117,7 @@ jobs:
         shell: bash
         run: |
           PREFIX="${{ inputs.gh-artifact-name }}"
-          # If PREFIX is empty → default to "signed-artifacts-"
+          # If PREFIX is empty → default to "signed-artifacts"
           if [[ -z "$PREFIX" ]]; then
             PREFIX="signed-artifacts-"
           fi
