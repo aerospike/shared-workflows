@@ -122,7 +122,7 @@ jobs:
             PREFIX="signed-artifacts-"
           fi
           for f in build-artifacts/*; do
-            [[ $(basename "$f") == "$PREFIX"* ]] || rm -rf "$f"
+            [[ "$f" == "$PREFIX"* ]] || rm -rf "$f"
           done
           echo "Build artifacts: $(find ./build-artifacts)"
 
