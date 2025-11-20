@@ -117,6 +117,10 @@ jobs:
         shell: bash
         run: |
           PREFIX="${{ inputs.gh-artifact-name }}"
+          # If PREFIX is empty → default to "signed-artifacts-"
+          if [[ -z "$PREFIX" ]]; then
+            PREFIX="signed-artifacts-"
+          fi
           for f in build-artifacts/*; do
             [[ $(basename "$f") == "$PREFIX"* ]] || rm -rf "$f"
           done
