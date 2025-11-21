@@ -64,7 +64,7 @@ if [[ -f "tests/test-1.0-2.noarch.rpm" ]]; then
     cp "tests/test-1.0-2.noarch.rpm" "$BUILD_ARTIFACTS_DIR/nested/dir/nested.rpm"
     echo "   Copied test-1.0-2.noarch.rpm as nested.rpm"
 else
-    echo "Error: tests/test-1.0-2.noarch.rpm not found. Cannot create nested mock RPM file." >&2
+    echo "Error: tests/test-1.0-2.noarch.rpm not found. This file is required for nested test fixtures." >&2
     exit 1
 fi
 
