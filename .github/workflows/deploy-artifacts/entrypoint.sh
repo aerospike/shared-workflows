@@ -157,6 +157,16 @@ structure_build_artifacts() {
   done < <(find build-artifacts -name "*.jar" -print0)
   echo "current files: $(ls -la build-artifacts)" >&2
 
+  while IFS= read -r -d '' nupkg; do
+    if [[ ! -f "$nupkg" ]]; then
+      continue
+    fi
+
+    echo "Processing JAR: $jar" >&2
+    process_jar "$jar" "./structured_build_artifacts/jar"
+  done < <(find build-artifacts -name "*.jar" -print0)
+  echo "current files: $(ls -la build-artifacts)" >&2
+
   while IFS= read -r -d '' generic; do
     if [[ ! -f "$generic" ]]; then
       echo "Skipping non-file: $generic" >&2
