@@ -285,7 +285,7 @@ upload_jar_packages() {
     read -r -a metadata < <(get_jar_metadata "$artifact_dir/${base_name}.jar")
     pkgname="${metadata[0]}"
     version="${metadata[1]}"
-    # group might be empty if this is a simple jar file Use :- to handle empty group_id
+    # Group might be empty if this is a simple jar file. Use :- to handle empty group_id.
     group_id="${metadata[2]:-}"
 
     echo "  Package: $pkgname, Version: $version, Group ID: $group_id" >&2
