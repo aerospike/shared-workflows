@@ -57,7 +57,7 @@ if [[ -f "tests/nano-tiny_8.4-1_arm64.deb" ]]; then
     cp "tests/nano-tiny_8.4-1_arm64.deb" "$BUILD_ARTIFACTS_DIR/nested/dir/test-debian12.deb"
     echo "   Copied nano-tiny_8.4-1_arm64.deb as nested test-debian12.deb"
 else
-    echo "Error: tests/nano-tiny_8.4-1_arm64.deb not found. Cannot create nested mock DEB file." >&2
+    echo "Error: tests/nano-tiny_8.4-1_arm64.deb not found. This file is required for nested test fixtures." >&2
     exit 1
 fi
 if [[ -f "tests/test-1.0-2.noarch.rpm" ]]; then
