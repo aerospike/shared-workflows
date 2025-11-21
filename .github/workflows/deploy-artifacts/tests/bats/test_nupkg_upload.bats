@@ -66,7 +66,7 @@ teardown_file() {
       nupkg_found=true
       
       # NuGet packages go to NuGet-specific repository
-      local expected_repo="test-project-nupkg-dev-local"
+      local expected_repo="test-project-nuget-dev-local"
       
       # Extract filename from command
       local filename

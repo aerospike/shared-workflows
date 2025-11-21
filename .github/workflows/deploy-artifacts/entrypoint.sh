@@ -317,7 +317,7 @@ upload_nupkg_packages() {
     fi
 
     echo "  Uploading NuGet package: $nupkg" >&2
-    run jf rt upload "$nupkg" "$PROJECT-nupkg-dev-local" --flat=false \
+    run jf rt upload "$nupkg" "$PROJECT-nuget-dev-local" --flat=false \
       --build-name="$BUILD_NAME" \
       --build-number="$ARTIFACT_BUILD_NUMBER" \
       --project="$PROJECT"
@@ -325,7 +325,7 @@ upload_nupkg_packages() {
     # Upload signature if it exists
     if [[ -f "$nupkg.asc" ]]; then
       echo "  Uploading signature: $nupkg.asc" >&2
-      run jf rt upload "$nupkg.asc" "$PROJECT-nupkg-dev-local" --flat=false \
+      run jf rt upload "$nupkg.asc" "$PROJECT-nuget-dev-local" --flat=false \
         --build-name="$BUILD_NAME" \
         --build-number="$ARTIFACT_BUILD_NUMBER" \
         --project="$PROJECT"
