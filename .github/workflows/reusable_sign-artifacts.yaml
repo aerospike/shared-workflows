@@ -85,7 +85,7 @@ jobs:
           echo "Found nuget packages: $(ls unsigned-nuget-packages/)"
           echo "count=$(ls unsigned-nuget-packages/ | wc -l)" >> $GITHUB_OUTPUT
       - name: Checkout shared-workflows repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           repository: aerospike/shared-workflows
           ref: ${{ env.CHECKOUT_REF }}

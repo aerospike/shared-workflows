@@ -128,7 +128,7 @@ jobs:
       CHECKOUT_REF: ${{ inputs.gh-workflows-ref }}
     steps:
       - name: Checkout shared-workflows repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           repository: aerospike/shared-workflows
           ref: ${{ env.CHECKOUT_REF }}
@@ -137,7 +137,7 @@ jobs:
 
       - name: Checkout source repository
         if: inputs.gh-source-path != ''
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           repository: ${{ inputs.gh-source-repository }}
           ref: ${{ inputs.gh-source-ref }}
