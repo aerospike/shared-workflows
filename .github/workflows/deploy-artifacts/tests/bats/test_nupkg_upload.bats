@@ -65,9 +65,8 @@ teardown_file() {
     if [[ $cmd =~ \.nupkg ]]; then
       nupkg_found=true
       
-      # Determine expected repository (check if nupkg has separate repo or uses generic)
-      # Based on entrypoint.sh, nupkg files go to generic repo
-      local expected_repo="test-project-generic-dev-local"
+      # NuGet packages go to NuGet-specific repository
+      local expected_repo="test-project-nuget-dev-local"
       
       # Extract filename from command
       local filename

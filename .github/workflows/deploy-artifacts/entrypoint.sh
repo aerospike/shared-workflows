@@ -122,7 +122,6 @@ run_optional() {
 
 structure_build_artifacts() {
   echo "Structuring build artifacts..." >&2
-  echo "current files: $(ls -la build-artifacts)" >&2
   mkdir -p structured_build_artifacts/deb
   mkdir -p structured_build_artifacts/rpm
   mkdir -p structured_build_artifacts/jar
@@ -145,7 +144,6 @@ structure_build_artifacts() {
     echo "Processing RPM: $rpm" >&2
     process_rpm "$rpm" "./structured_build_artifacts/rpm"
   done < <(find build-artifacts -name "*.rpm" -print0)
-  echo "current files: $(ls -la build-artifacts)" >&2
 
   while IFS= read -r -d '' jar; do
     if [[ ! -f "$jar" ]]; then
@@ -155,7 +153,6 @@ structure_build_artifacts() {
     echo "Processing JAR: $jar" >&2
     process_jar "$jar" "./structured_build_artifacts/jar"
   done < <(find build-artifacts -name "*.jar" -print0)
-  echo "current files: $(ls -la build-artifacts)" >&2
 
   while IFS= read -r -d '' nupkg; do
     if [[ ! -f "$nupkg" ]]; then
@@ -165,7 +162,6 @@ structure_build_artifacts() {
     echo "Processing NUPKG: $nupkg" >&2
     process_nupkg "$nupkg" "./structured_build_artifacts/nupkg"
   done < <(find build-artifacts -name "*.nupkg" -print0)
-  echo "current files: $(ls -la build-artifacts)" >&2
 
   while IFS= read -r -d '' generic; do
     if [[ ! -f "$generic" ]]; then
@@ -174,7 +170,7 @@ structure_build_artifacts() {
     fi
     echo "Processing generic file: $generic" >&2
     process_generic "$generic" "./structured_build_artifacts/generic"
-  done < <(find build-artifacts \( -not -name "*.deb" -not -name "*.rpm" -not -name "*.asc" -not -name "*.jar" -not -name "*.pom" \) -type f -print0)
+  done < <(find build-artifacts \( -not -name "*.deb" -not -name "*.rpm" -not -name "*.asc" -not -name "*.jar" -not -name "*.pom" -not -name "*.nupkg" \) -type f -print0)
 }
 
 upload_deb_packages() {
@@ -289,7 +285,8 @@ upload_jar_packages() {
     read -r -a metadata < <(get_jar_metadata "$artifact_dir/${base_name}.jar")
     pkgname="${metadata[0]}"
     version="${metadata[1]}"
-    group_id="${metadata[2]}"
+    # Group might be empty if this is a simple jar file. Use :- to handle empty group_id.
+    group_id="${metadata[2]:-}"
 
     echo "  Package: $pkgname, Version: $version, Group ID: $group_id" >&2
 
@@ -306,6 +303,34 @@ upload_jar_packages() {
       fi
     done
   done < <(find . \( -name "*.jar" -o -name "*.pom" \) -print0)
+}
+
+upload_nupkg_packages() {
+  if [[ "$DRY_RUN" == "true" ]]; then
+    echo "Would upload NuGet packages to JFrog..." >&2
+  else
+    echo "Uploading NuGet packages to JFrog..." >&2
+  fi
+  while IFS= read -r -d '' nupkg; do
+    if [[ ! -f "$nupkg" ]]; then
+      continue
+    fi
+
+    echo "  Uploading NuGet package: $nupkg" >&2
+    run jf rt upload "$nupkg" "$PROJECT-nuget-dev-local" --flat=false \
+      --build-name="$BUILD_NAME" \
+      --build-number="$ARTIFACT_BUILD_NUMBER" \
+      --project="$PROJECT"
+
+    # Upload signature if it exists
+    if [[ -f "$nupkg.asc" ]]; then
+      echo "  Uploading signature: $nupkg.asc" >&2
+      run jf rt upload "$nupkg.asc" "$PROJECT-nuget-dev-local" --flat=false \
+        --build-name="$BUILD_NAME" \
+        --build-number="$ARTIFACT_BUILD_NUMBER" \
+        --project="$PROJECT"
+    fi
+  done < <(find . -name "*.nupkg" -print0)
 }
 
 upload_generic_files() {
@@ -414,7 +439,11 @@ main() {
   echo "Dry run: $DRY_RUN" >&2
   echo "Build number: $BUILD_NUMBER" >&2
   echo "Metadata build number: $METADATA_BUILD_NUMBER" >&2
-  echo "current files: $(ls -la build-artifacts)" >&2
+
+  if [[ ! -d build-artifacts ]]; then
+    error "build-artifacts directory does not exist. Artifacts must be downloaded before running this script."
+  fi
+
   mkdir -p structured_build_artifacts
   shopt -s globstar nullglob
 
@@ -429,6 +458,9 @@ main() {
   cd ..
   cd jar
   upload_jar_packages
+  cd ..
+  cd nupkg
+  upload_nupkg_packages
   cd ..
   cd generic
   upload_generic_files
