@@ -64,9 +64,6 @@ while [[ $# -gt 0 ]]; do
                         BUILD_NAME="$1"
                 elif [[ -z ${VERSION-} ]]; then
                         VERSION="$1"
-                elif [[ -z ${JAR_GROUP_ID-} ]]; then
-                        # Optional argument
-                        JAR_GROUP_ID="$1"
                 elif [[ -z ${BUILD_NUMBER-} ]]; then
                         BUILD_NUMBER="$1"
                 elif [[ -z ${METADATA_BUILD_NUMBER-} ]]; then
