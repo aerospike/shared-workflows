@@ -166,6 +166,15 @@ process_generic() {
 
     local dir
     dir=$(dirname "$file")
-    mkdir -p "$dest_dir/$dir"
-    cp -v "$file" "$dest_dir/$dir" >&2
+    # Strip "build-artifacts" prefix to preserve only relative path within build-artifacts
+
+    if [[ "$dir" == "build-artifacts" ]]; then
+        # File is at root of build-artifacts, no subdirectory
+        cp -v "$file" "$dest_dir/" >&2
+    else
+        # Strip "build-artifacts/" prefix for subdirectories if present
+        dir="${dir#build-artifacts/}"
+        mkdir -p "$dest_dir/$dir"
+        cp -v "$file" "$dest_dir/$dir" >&2
+    fi
 }

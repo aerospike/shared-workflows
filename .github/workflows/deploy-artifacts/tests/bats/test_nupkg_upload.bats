@@ -12,9 +12,10 @@ load "$HELPERS_DIR/assertions.bash"
 setup_file() {
   setup_test_artifacts
   
-  # Verify expected NuGet package fixtures exist
+  # Verify expected NuGet package fixtures exist (root and subdirectory)
   local -a expected_nupkgs=(
     "$BUILD_ARTIFACTS_DIR/Aerospike.Client.8.0.2.nupkg"
+    "$BUILD_ARTIFACTS_DIR/nuget/Aerospike.HelloWorld.1.0.0.nupkg"
   )
   
   local missing=0
@@ -82,8 +83,8 @@ teardown_file() {
     fi
   done
 
-  # Verify we found exactly 1 NuGet package command
-  [[ ${#nupkg_commands[@]} -eq 1 ]] || (echo "Expected 1 NuGet command, found ${#nupkg_commands[@]}" >&2 && return 1)
+  # Verify we found exactly 2 NuGet package commands (root and subdirectory)
+  [[ ${#nupkg_commands[@]} -eq 2 ]] || (echo "Expected 2 NuGet commands, found ${#nupkg_commands[@]}" >&2 && return 1)
 
   # Verify NuGet packages were found and processed
   [[ $nupkg_found == true ]] || (echo "NuGet package upload not found" >&2 && return 1)
@@ -106,5 +107,61 @@ teardown_file() {
       [[ $cmd == *"--flat=false"* ]] || (echo "NuGet upload missing --flat=false: $cmd" >&2 && return 1)
     done <<< "$nupkg_commands"
   fi
+}
+
+@test "NuGet packages in subdirectories are uploaded to correct repository" {
+  # Run entrypoint with dry-run
+  local output
+  output=$(run_entrypoint_dry_run "test-project" "test-build" "v1.0.0" "12345" "12345-metadata")
+
+  # Extract upload commands
+  local upload_commands
+  upload_commands=$(extract_upload_commands "$output")
+
+  # Parse commands into array
+  mapfile -t upload_cmd_array < <(echo "$upload_commands")
+
+  # Find ALL NuGet package upload commands and verify they ALL go to NuGet repository (not generic)
+  local nupkg_count=0
+  local nupkg_in_subdir_found=false
+  local wrong_repo_found=false
+  local expected_repo="test-project-nuget-dev-local"
+  local wrong_repo="test-project-generic-dev-local"
+
+  for cmd in "${upload_cmd_array[@]}"; do
+    if [[ $cmd =~ \.nupkg ]]; then
+      nupkg_count=$((nupkg_count + 1))
+
+      # Check if this is the subdirectory package
+      if [[ $cmd =~ nuget/.*\.nupkg ]] || [[ $cmd =~ Aerospike\.HelloWorld ]]; then
+        nupkg_in_subdir_found=true
+      fi
+
+      # Extract repository from command - CRITICAL: Check ALL NuGet packages
+      local repo
+      if [[ $cmd =~ jf\ +rt\ +upload\ +[^\ ]+\ +([^\ ]+) ]]; then
+        repo="${BASH_REMATCH[1]}"
+      fi
+
+      # Verify ALL NuGet packages go to NuGet repository, NEVER to generic
+      if [[ "$repo" == "$wrong_repo" ]]; then
+        echo "FAIL: NuGet package uploaded to wrong repository (generic): $cmd" >&2
+        wrong_repo_found=true
+      elif [[ "$repo" != "$expected_repo" ]]; then
+        echo "FAIL: NuGet package uploaded to unexpected repository: $repo (expected: $expected_repo)" >&2
+        echo "Command: $cmd" >&2
+        wrong_repo_found=true
+      fi
+    fi
+  done
+
+  # Verify we found both NuGet packages (root and subdirectory)
+  [[ $nupkg_count -eq 2 ]] || (echo "Expected 2 NuGet packages, found $nupkg_count" >&2 && return 1)
+
+  # Verify we found the subdirectory package
+  [[ $nupkg_in_subdir_found == true ]] || (echo "NuGet package in subdirectory not found" >&2 && return 1)
+
+  # CRITICAL: Verify NO packages went to wrong repository - this test MUST fail if bug exists
+  [[ $wrong_repo_found == false ]] || (echo "NuGet packages were uploaded to wrong repository (generic instead of nuget)" >&2 && return 1)
 }
 

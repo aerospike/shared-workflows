@@ -37,6 +37,15 @@ else
 fi
 cp -v tests/some/structure/Aerospike.Client.8.0.2.nupkg  "$BUILD_ARTIFACTS_DIR/Aerospike.Client.8.0.2.nupkg"
 
+# Create NuGet package in subdirectory to match real-world scenario
+mkdir -p "$BUILD_ARTIFACTS_DIR/nuget"
+if [[ -f "tests/some/structure/Aerospike.Client.8.0.2.nupkg" ]]; then
+    cp "tests/some/structure/Aerospike.Client.8.0.2.nupkg" "$BUILD_ARTIFACTS_DIR/nuget/Aerospike.HelloWorld.1.0.0.nupkg"
+    echo "   Copied Aerospike.Client.8.0.2.nupkg as nuget/Aerospike.HelloWorld.1.0.0.nupkg"
+else
+    echo "Error: tests/some/structure/Aerospike.Client.8.0.2.nupkg not found. Cannot create nested NuGet package." >&2
+    exit 1
+fi
 
 # Create some additional test files with valid formats
 # Create a valid JAR file (JAR is a ZIP with META-INF/MANIFEST.MF)

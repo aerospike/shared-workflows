@@ -49,8 +49,8 @@ teardown_file() {
   local build_commands
   build_commands=$(extract_build_commands "$output")
   
-  # Verify command counts
-  assert_command_count "$upload_commands" 9
+  # Verify command counts (includes 2 NuGet packages: root + subdirectory)
+  assert_command_count "$upload_commands" 10
   assert_command_count "$build_commands" 3
   
   # Parse commands into arrays
@@ -89,6 +89,17 @@ teardown_file() {
   [[ $jar_found == true ]] || (echo "JAR file upload not found" >&2 && return 1)
   [[ $zip_found == true ]] || (echo "ZIP file upload not found" >&2 && return 1)
   [[ $tar_found == true ]] || (echo "TAR.GZ file upload not found" >&2 && return 1)
+
+  # NuGet packages should ONLY go to nuget-dev-local, never generic-dev-local
+  # nuget has special handling so gets extra verification.
+  local nupkg_in_generic_found=false
+  for cmd in "${upload_cmd_array[@]}"; do
+    if [[ $cmd =~ \.nupkg ]] && [[ $cmd =~ test-project-generic-dev-local ]]; then
+      echo "FAIL: NuGet package found in generic repository upload: $cmd" >&2
+      nupkg_in_generic_found=true
+    fi
+  done
+  [[ $nupkg_in_generic_found == false ]] || (echo "NuGet packages were incorrectly uploaded to generic repository" >&2 && return 1)
   
   # Validate build-publish command
   local found_publish=false
