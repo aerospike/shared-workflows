@@ -21,7 +21,13 @@ else
     echo "Error: tests/nano-tiny_8.4-1_arm64.deb not found. Cannot create mock DEB file." >&2
     exit 1
 fi
-
+if [[ -f "tests/some/structure/Aerospike.Client.8.0.2.nupkg" ]]; then
+    cp "tests/some/structure/Aerospike.Client.8.0.2.nupkg" "$BUILD_ARTIFACTS_DIR/Aerospike.Client.8.0.2.nupkg"
+    echo "   Copied Aerospike.Client.8.0.2.nupkg"
+else
+    echo "Error: tests/some/structure/Aerospike.Client.8.0.2.nupkg not found. Cannot create mock NuGet package." >&2
+    exit 1
+fi
 if [[ -f "tests/test-1.0-2.noarch.rpm" ]]; then
     cp "tests/test-1.0-2.noarch.rpm" "$BUILD_ARTIFACTS_DIR/"
     echo "   Copied test-1.0-2.noarch.rpm"

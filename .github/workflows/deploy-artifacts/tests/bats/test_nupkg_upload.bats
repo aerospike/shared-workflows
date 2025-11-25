@@ -61,6 +61,7 @@ teardown_file() {
   
   # Find NuGet package upload commands
   local nupkg_found=false
+  local nupkg_commands=()
   for cmd in "${upload_cmd_array[@]}"; do
     if [[ $cmd =~ \.nupkg ]]; then
       nupkg_found=true
@@ -74,12 +75,16 @@ teardown_file() {
         filename="${BASH_REMATCH[1]}"
       fi
       
+      nupkg_commands+=("$cmd")
       # Validate command structure
       assert_upload_command_valid "$cmd" "$filename" "$expected_repo" "" \
         "test-build" "12345-artifacts" "test-project"
     fi
   done
-  
+
+  # Verify we found exactly 1 NuGet package command
+  [[ ${#nupkg_commands[@]} -eq 1 ]] || (echo "Expected 1 NuGet command, found ${#nupkg_commands[@]}" >&2 && return 1)
+
   # Verify NuGet packages were found and processed
   [[ $nupkg_found == true ]] || (echo "NuGet package upload not found" >&2 && return 1)
 }
