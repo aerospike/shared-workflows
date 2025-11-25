@@ -35,7 +35,7 @@ get_jar_metadata() {
     
     # If groupId is still empty (e.g., javadoc jars), try to locate main JAR in same folder
     if [[ -z "$group_id" ]]; then
-        main_jar_candidate="$dir/${pkgname}-${version}.jar"
+        main_jar_candidate="${pkgname}-${version}.jar"
 
         if [[ -f "$main_jar_candidate" && "$main_jar_candidate" != "$jar" ]]; then
             pom_props=$(unzip -Z1 "$main_jar_candidate" 2>/dev/null | awk '/pom\.properties$/ {print; exit}')
