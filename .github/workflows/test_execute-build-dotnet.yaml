@@ -1,7 +1,7 @@
 name: Test Execute Build Dotnet Workflow
 on:
   workflow_dispatch:
-  pull_request:
+  push:
     branches: [main, feature/INFRA-253-integrate-nuget-in-cicd]
 
 permissions:
@@ -37,7 +37,7 @@ jobs:
         echo "Nuget package created"
         find .
       gh-source-path: repo-source
-      gh-artifact-directory: bin/Release/
+      gh-artifact-directory: AerospikeHelloWorld/bin/Release/
       gh-artifact-name: build-artifacts-dotnet
       oidc-provider-name: gh-dev-test
       oidc-audience: aerospike/testing
