@@ -29,9 +29,21 @@ get_jar_metadata() {
     else
         # Fallback to filename parsing if pom.properties is not found
         pkgname=$(echo "$filename" | sed -E 's/-[0-9][0-9A-Za-z._\-]*\.jar$//')
-        version=$(echo "$filename" | sed -E 's/^[^-]+-([0-9][0-9A-Za-z._\-]*)\.jar$/\1/')
+        version=$(echo "$filename" | sed -E 's/^.*-([0-9]+\.[0-9]+\.[0-9]+).*\.jar$/\1/')
         group_id=""
     fi
+    
+    # If groupId is still empty (e.g., javadoc jars), try to locate main JAR in same folder
+    if [[ -z "$group_id" ]]; then
+        main_jar_candidate="$dir/${pkgname}-${version}.jar"
+
+        if [[ -f "$main_jar_candidate" && "$main_jar_candidate" != "$jar" ]]; then
+            pom_props=$(unzip -Z1 "$main_jar_candidate" 2>/dev/null | awk '/pom\.properties$/ {print; exit}')
+            if [[ -n "$pom_props" ]]; then
+                group_id=$(unzip -p "$jar" "$pom_props" | grep '^groupId=' | cut -d= -f2)
+            fi
+        fi
+    fi    
 
     # Return package name, version, and group_id
     echo "$pkgname $version $group_id"
