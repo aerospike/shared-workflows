@@ -26,7 +26,7 @@ jobs:
       jf-project: test
       jf-build-name: test-build
       jf-build-id: ${{ github.run_number }}-buildinfo-dotnet
-      working-directory: repo-source/.github/workflows/execute-build/test_apps/DotnetHelloWorld
+      working-directory: repo-source/.github/workflows/execute-build/test_apps/DotnetHelloWorld/AerospikeHelloWorld
       build-script: |
         echo "Building dotnet project in $(pwd)"
         echo "cwd contents: $(ls -la)"
