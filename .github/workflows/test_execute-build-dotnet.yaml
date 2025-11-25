@@ -28,7 +28,8 @@ jobs:
       jf-build-id: ${{ github.run_number }}-buildinfo-dotnet
       working-directory: repo-source/.github/workflows/execute-build/test_apps/DotnetHelloWorld
       build-script: |
-        echo "Building dotnet project"
+        echo "Building dotnet project in $(pwd)"
+        echo "cwd contents: $(ls -la)"
         dotnet restore
         dotnet build --configuration Release --no-restore
         echo "Creating nuget package"
