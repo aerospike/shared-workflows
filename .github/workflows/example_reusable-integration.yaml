@@ -208,7 +208,7 @@ jobs:
         run: |
           .github/workflows/execute-build/test_apps/hi/package.sh --target hi --version ${{ needs.extract-version.outputs.version }} \
             --packages-dir build-artifacts --output-dir packaged-artifacts
-          find build-artifacts
+          cp -i build-artifacts/*.nupkg packaged-artifacts
       - name: Upload packaged Artifacts
         uses: actions/upload-artifact@v5
         with:
