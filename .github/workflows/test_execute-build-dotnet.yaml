@@ -9,17 +9,6 @@ permissions:
   id-token: write
 
 jobs:
-  # execute-build:
-  #     runs-on: ubuntu-latest
-  #     steps:
-  #       - run: cd ${ project-directory }
-  #       - name: Restore dependencies
-  #         run: dotnet restore
-  #       - name: Build
-  #         run: dotnet build --configuration Release --no-restore
-  #       - name: Create nuget package
-  #         shell: pwsh
-  #         run: dotnet pack --no-build
   test-execute-build-workflow:
     uses: ./.github/workflows/reusable_execute-build.yaml
     with:
