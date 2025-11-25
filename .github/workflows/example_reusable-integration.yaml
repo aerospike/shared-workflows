@@ -60,14 +60,14 @@ jobs:
       matrix:
         include:
           # Ubuntu/Debian family (x86_64)
-          - distro: jammy
-            arch: x86_64
-            runs-on: ubuntu-22.04
-            emulated: false
-          - distro: noble
-            arch: x86_64
-            runs-on: ubuntu-22.04
-            emulated: false
+          #   - distro: jammy
+          #     arch: x86_64
+          #     runs-on: ubuntu-22.04
+          #     emulated: false
+          #   - distro: noble
+          #     arch: x86_64
+          #     runs-on: ubuntu-22.04
+          #     emulated: false
           #   - distro: trixie
           #     arch: x86_64
           #     runs-on: ubuntu-22.04
@@ -162,7 +162,8 @@ jobs:
       oidc-audience: aerospike/testing
       publish-build-info: true
       dry-run: false # default
-  test-execute-build-workflow:
+  build-dotnet-packages:
+    needs: extract-version
     uses: ./.github/workflows/reusable_execute-build.yaml
     with:
       jf-project: test
@@ -191,7 +192,7 @@ jobs:
   # building and packaging could be done in the build step if we wanted to package on the distro as the build
   # but here we do it separate. It takes the output from the matrix builds and uploads them to gitub in a single directory.
   package-built-artifacts:
-    needs: [build-packages, extract-version]
+    needs: [build-packages, build-dotnet-packages, extract-version]
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout
