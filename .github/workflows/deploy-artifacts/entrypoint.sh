@@ -480,6 +480,7 @@ main() {
         upload_jar_packages
         cd ..
         cd nupkg
+        echo "starting nupkg upload" >&2
         upload_nupkg_packages
         cd ..
         cd generic
