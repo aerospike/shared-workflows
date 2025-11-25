@@ -1,5 +1,9 @@
 name: Execute Build
 
+permissions:
+  contents: read
+  id-token: write
+
 on:
   workflow_call:
     inputs:
