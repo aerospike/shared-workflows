@@ -368,7 +368,7 @@ upload_nupkg_packages() {
                 fi
 
                 echo "  Pushing NuGet package: $nupkg" >&2
-                run jf nuget push "$nupkg" -Source Artifactory \
+                run jf nuget push "$nupkg" \
                         --build-name="$BUILD_NAME" \
                         --build-number="$ARTIFACT_BUILD_NUMBER" \
                         --project="$PROJECT" \
@@ -391,7 +391,7 @@ upload_nupkg_packages() {
                 fi
 
                 echo "  Pushing NuGet symbol package: $snupkg" >&2
-                run jf nuget push "$snupkg" -Source ArtifactorySymbols \
+                run jf nuget push "$snupkg" \
                         --build-name="$BUILD_NAME" \
                         --build-number="$ARTIFACT_BUILD_NUMBER" \
                         --project="$PROJECT" \

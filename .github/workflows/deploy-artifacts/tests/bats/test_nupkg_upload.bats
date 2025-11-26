@@ -85,8 +85,8 @@ teardown_file() {
       nupkg_found=true
       
       nupkg_commands+=("$cmd")
-      # Verify command structure: jf nuget push <file> -Source Artifactory --build-name=... --build-number=... --project=... --skip-duplicate
-      [[ $cmd =~ jf\ +nuget\ +push\ +.*\.nupkg\ +-Source\ +Artifactory ]] || (echo "Invalid jf nuget push command: $cmd" >&2 && return 1)
+      # Verify command structure: jf nuget push <file> --build-name=... --build-number=... --project=... -SkipDuplicate
+      [[ $cmd =~ jf\ +nuget\ +push\ +.*\.nupkg ]] || (echo "Invalid jf nuget push command: $cmd" >&2 && return 1)
       [[ $cmd =~ --build-name=test-build ]] || (echo "Missing --build-name flag: $cmd" >&2 && return 1)
       [[ $cmd =~ --build-number=12345-artifacts ]] || (echo "Missing --build-number flag: $cmd" >&2 && return 1)
       [[ $cmd =~ --project=test-project ]] || (echo "Missing --project flag: $cmd" >&2 && return 1)
@@ -115,7 +115,6 @@ teardown_file() {
   
   if [[ -n "$push_commands" ]]; then
     while IFS= read -r cmd; do
-      [[ $cmd =~ -Source\ +Artifactory ]] || (echo "jf nuget push missing -Source Artifactory: $cmd" >&2 && return 1)
       [[ $cmd =~ --build-name=test-build ]] || (echo "jf nuget push missing --build-name: $cmd" >&2 && return 1)
       [[ $cmd =~ --build-number=12345-artifacts ]] || (echo "jf nuget push missing --build-number: $cmd" >&2 && return 1)
       [[ $cmd =~ --project=test-project ]] || (echo "jf nuget push missing --project: $cmd" >&2 && return 1)
@@ -154,18 +153,6 @@ teardown_file() {
         nupkg_in_subdir_found=true
       fi
 
-      # Extract source from command
-      local source
-      if [[ $cmd =~ -Source\ +([^\ ]+) ]]; then
-        source="${BASH_REMATCH[1]}"
-      fi
-
-      # Verify ALL NuGet packages use Artifactory source (not ArtifactorySymbols for .nupkg files)
-      if [[ "$source" != "Artifactory" ]]; then
-        echo "FAIL: NuGet package (.nupkg) pushed to wrong source: $source (expected: Artifactory)" >&2
-        echo "Command: $cmd" >&2
-        wrong_source_found=true
-      fi
     fi
   done
 

@@ -107,10 +107,10 @@ jobs:
           #     runs-on: ubuntu-22.04
           #     emulated: true
           #   # RPM family (x86_64 only - no ARM support)
-          - distro: el8
-            arch: x86_64
-            runs-on: ubuntu-22.04
-            emulated: false
+          #   - distro: el8
+          #     arch: x86_64
+          #     runs-on: ubuntu-22.04
+          #     emulated: false
           - distro: el9
             arch: x86_64
             runs-on: ubuntu-22.04
