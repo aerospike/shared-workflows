@@ -345,7 +345,10 @@ configure_nuget_sources() {
         else
                 echo "Configuring NuGet sources using jf nuget-config..." >&2
                 local server_id
-                server_id=$(jf c show | grep -E "^\s*Server ID" | awk '{print $3}' | head -n1 || echo "default")
+                server_id=$(jf c show | grep "Server ID:" | awk '{print $3}' | head -n1)
+                if [[ -z "$server_id" ]]; then
+                        error "Failed to extract server-id from JFrog CLI configuration"
+                fi
 
                 run jf nuget-config --server-id-resolve="$server_id" --repo-resolve="$repo_name"
         fi
@@ -368,7 +371,7 @@ upload_nupkg_packages() {
                 fi
 
                 echo "  Pushing NuGet package: $nupkg" >&2
-                run jf nuget push "$nupkg" \
+                run jf nuget push "$nupkg" -Source "${PROJECT}-nuget-dev-local" \
                         --build-name="$BUILD_NAME" \
                         --build-number="$ARTIFACT_BUILD_NUMBER" \
                         --project="$PROJECT" \
@@ -391,7 +394,7 @@ upload_nupkg_packages() {
                 fi
 
                 echo "  Pushing NuGet symbol package: $snupkg" >&2
-                run jf nuget push "$snupkg" \
+                run jf nuget push "$snupkg" -Source "${PROJECT}-nuget-dev-local" \
                         --build-name="$BUILD_NAME" \
                         --build-number="$ARTIFACT_BUILD_NUMBER" \
                         --project="$PROJECT" \
