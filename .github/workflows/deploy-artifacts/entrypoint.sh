@@ -347,9 +347,7 @@ configure_nuget_sources() {
                 local server_id
                 server_id=$(jf c show | grep -E "^\s*Server ID" | awk '{print $3}' | head -n1 || echo "default")
 
-                # Configure NuGet to use the JFrog repository for resolve and deploy
-                run jf nuget-config --server-id-resolve="$server_id" --repo-resolve="$repo_name" \
-                        --server-id-deploy="$server_id" --repo-deploy="$repo_name"
+                run jf nuget-config --server-id-resolve="$server_id" --repo-resolve="$repo_name"
         fi
 }
 

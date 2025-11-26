@@ -62,11 +62,9 @@ teardown_file() {
   while IFS= read -r cmd; do
     if [[ $cmd =~ jf\ +nuget-config ]]; then
       nuget_config_found=true
-      # Verify repository name is present
       [[ $cmd =~ test-project-nuget-dev-local ]] || (echo "Invalid repository name in jf nuget-config: $cmd" >&2 && return 1)
-      # Verify --repo-resolve and --repo-deploy are present
       [[ $cmd =~ --repo-resolve= ]] || (echo "Missing --repo-resolve in jf nuget-config: $cmd" >&2 && return 1)
-      [[ $cmd =~ --repo-deploy= ]] || (echo "Missing --repo-deploy in jf nuget-config: $cmd" >&2 && return 1)
+      [[ $cmd =~ --server-id-resolve= ]] || (echo "Missing --server-id-resolve in jf nuget-config: $cmd" >&2 && return 1)
     fi
   done <<< "$nuget_commands"
   
