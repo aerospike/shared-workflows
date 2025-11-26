@@ -224,7 +224,7 @@ extract_upload_commands() {
 extract_nuget_commands() {
   local output="$1"
   # Strip ANSI color codes and extract NuGet commands with leading spaces
-  echo "$output" | sed 's/\x1b\[[0-9;]*m//g' | grep -E "^\s+(nuget\s+(sources|setapikey)|jf\s+nuget\s+push)" | sed 's/^\s*//'
+  echo "$output" | sed 's/\x1b\[[0-9;]*m//g' | grep -E "^\s+(jf\s+nuget\s+(config|push))" | sed 's/^\s*//'
 }
 
 # Extract all jf rt build-* commands from output

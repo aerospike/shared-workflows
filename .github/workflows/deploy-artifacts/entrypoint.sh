@@ -337,31 +337,19 @@ upload_jar_packages() {
 }
 
 configure_nuget_sources() {
-        local nuget_source_url="${JF_URL}/artifactory/api/nuget/v3/${PROJECT}-nuget-dev-local/index.json"
-        local nuget_symbols_url="${JF_URL}/artifactory/api/nuget/v3/${PROJECT}-nuget-dev-local/symbols"
+        local repo_name="${PROJECT}-nuget-dev-local"
 
         if [[ $DRY_RUN == "true" ]]; then
-                echo "Would configure NuGet sources..." >&2
-                echo "  Source: Artifactory -> $nuget_source_url" >&2
-                echo "  Symbols: ArtifactorySymbols -> $nuget_symbols_url" >&2
-                echo "  API Key: $OIDC_USER:***" >&2
+                echo "Would configure NuGet sources using jf nuget-config..." >&2
+                echo "  Repository: $repo_name" >&2
         else
-                echo "Configuring NuGet sources..." >&2
-                # Add NuGet source (remove if exists first to avoid duplicates)
-                run nuget sources Remove -Name Artifactory -NonInteractive 2>/dev/null || true
-                run nuget sources Add -Name Artifactory -Source "$nuget_source_url" \
-                        -username "$OIDC_USER" -password "$OIDC_TOKEN" -NonInteractive
+                echo "Configuring NuGet sources using jf nuget-config..." >&2
+                local server_id
+                server_id=$(jf c show | grep -E "^\s*Server ID" | awk '{print $3}' | head -n1 || echo "default")
 
-                # Set API key for the source
-                run nuget setapikey "${OIDC_USER}:${OIDC_TOKEN}" -Source Artifactory -NonInteractive
-
-                # Add symbols source
-                run nuget sources Remove -Name ArtifactorySymbols -NonInteractive 2>/dev/null || true
-                run nuget sources Add -Name ArtifactorySymbols -Source "$nuget_symbols_url" \
-                        -username "$OIDC_USER" -password "$OIDC_TOKEN" -NonInteractive
-
-                # Set API key for symbols source
-                run nuget setapikey "${OIDC_USER}:${OIDC_TOKEN}" -Source ArtifactorySymbols -NonInteractive
+                # Configure NuGet to use the JFrog repository for resolve and deploy
+                run jf nuget-config --server-id-resolve="$server_id" --repo-resolve="$repo_name" \
+                        --server-id-deploy="$server_id" --repo-deploy="$repo_name"
         fi
 }
 
