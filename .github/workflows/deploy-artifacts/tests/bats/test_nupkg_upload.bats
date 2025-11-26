@@ -90,7 +90,7 @@ teardown_file() {
       [[ $cmd =~ --build-name=test-build ]] || (echo "Missing --build-name flag: $cmd" >&2 && return 1)
       [[ $cmd =~ --build-number=12345-artifacts ]] || (echo "Missing --build-number flag: $cmd" >&2 && return 1)
       [[ $cmd =~ --project=test-project ]] || (echo "Missing --project flag: $cmd" >&2 && return 1)
-      [[ $cmd =~ --skip-duplicate ]] || (echo "Missing --skip-duplicate flag: $cmd" >&2 && return 1)
+      [[ $cmd =~ -SkipDuplicate ]] || (echo "Missing -SkipDuplicate flag: $cmd" >&2 && return 1)
     fi
   done
 
@@ -119,7 +119,7 @@ teardown_file() {
       [[ $cmd =~ --build-name=test-build ]] || (echo "jf nuget push missing --build-name: $cmd" >&2 && return 1)
       [[ $cmd =~ --build-number=12345-artifacts ]] || (echo "jf nuget push missing --build-number: $cmd" >&2 && return 1)
       [[ $cmd =~ --project=test-project ]] || (echo "jf nuget push missing --project: $cmd" >&2 && return 1)
-      [[ $cmd =~ --skip-duplicate ]] || (echo "jf nuget push missing --skip-duplicate: $cmd" >&2 && return 1)
+      [[ $cmd =~ -SkipDuplicate ]] || (echo "jf nuget push missing -SkipDuplicate: $cmd" >&2 && return 1)
     done <<< "$push_commands"
   fi
 }
