@@ -349,7 +349,7 @@ configure_nuget_sources() {
                 if [[ -z "$server_id" ]]; then
                         error "Failed to extract server-id from JFrog CLI configuration"
                 fi
-
+                echo "Running jf nuget-config --server-id-resolve=$server_id --repo-resolve=$repo_name" >&2
                 run jf nuget-config --server-id-resolve="$server_id" --repo-resolve="$repo_name"
         fi
 }

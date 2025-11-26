@@ -13,3 +13,4 @@ Release
 bin
 obj
 .vs
+.jfrog/projects/nuget.yaml
