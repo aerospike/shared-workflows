@@ -168,6 +168,15 @@ structure_build_artifacts() {
                 process_nupkg "$nupkg" "./structured_build_artifacts/nupkg"
         done < <(find build-artifacts -name "*.nupkg" -print0)
 
+        while IFS= read -r -d '' snupkg; do
+                if [[ ! -f $snupkg ]]; then
+                        continue
+                fi
+
+                echo "Processing SNUPKG: $snupkg" >&2
+                process_nupkg "$snupkg" "./structured_build_artifacts/nupkg"
+        done < <(find build-artifacts -name "*.snupkg" -print0)
+
         while IFS= read -r -d '' generic; do
                 if [[ ! -f $generic ]]; then
                         echo "Skipping non-file: $generic" >&2
@@ -175,7 +184,7 @@ structure_build_artifacts() {
                 fi
                 echo "Processing generic file: $generic" >&2
                 process_generic "$generic" "./structured_build_artifacts/generic"
-        done < <(find build-artifacts \( -not -name "*.deb" -not -name "*.rpm" -not -name "*.asc" -not -name "*.jar" -not -name "*.pom" -not -name "*.nupkg" \) -type f -print0)
+        done < <(find build-artifacts \( -not -name "*.deb" -not -name "*.rpm" -not -name "*.asc" -not -name "*.jar" -not -name "*.pom" -not -name "*.nupkg" -not -name "*.snupkg" \) -type f -print0)
 }
 
 upload_deb_packages() {
@@ -327,24 +336,59 @@ upload_jar_packages() {
         done < <(find . \( -name "*.jar" -o -name "*.pom" \) -print0)
 }
 
+configure_nuget_sources() {
+        local nuget_source_url="${JF_URL}/artifactory/api/nuget/v3/${PROJECT}-nuget-dev-local/index.json"
+        local nuget_symbols_url="${JF_URL}/artifactory/api/nuget/v3/${PROJECT}-nuget-dev-local/symbols"
+
+        if [[ $DRY_RUN == "true" ]]; then
+                echo "Would configure NuGet sources..." >&2
+                echo "  Source: Artifactory -> $nuget_source_url" >&2
+                echo "  Symbols: ArtifactorySymbols -> $nuget_symbols_url" >&2
+                echo "  API Key: $OIDC_USER:***" >&2
+        else
+                echo "Configuring NuGet sources..." >&2
+                # Add NuGet source (remove if exists first to avoid duplicates)
+                run nuget sources Remove -Name Artifactory -NonInteractive 2>/dev/null || true
+                run nuget sources Add -Name Artifactory -Source "$nuget_source_url" \
+                        -username "$OIDC_USER" -password "$OIDC_TOKEN" -NonInteractive
+
+                # Set API key for the source
+                run nuget setapikey "${OIDC_USER}:${OIDC_TOKEN}" -Source Artifactory -NonInteractive
+
+                # Add symbols source
+                run nuget sources Remove -Name ArtifactorySymbols -NonInteractive 2>/dev/null || true
+                run nuget sources Add -Name ArtifactorySymbols -Source "$nuget_symbols_url" \
+                        -username "$OIDC_USER" -password "$OIDC_TOKEN" -NonInteractive
+
+                # Set API key for symbols source
+                run nuget setapikey "${OIDC_USER}:${OIDC_TOKEN}" -Source ArtifactorySymbols -NonInteractive
+        fi
+}
+
 upload_nupkg_packages() {
         if [[ $DRY_RUN == "true" ]]; then
                 echo "Would upload NuGet packages to JFrog..." >&2
         else
                 echo "Uploading NuGet packages to JFrog..." >&2
         fi
+
+        # Configure NuGet sources once before processing packages
+        configure_nuget_sources
+
+        # Upload .nupkg files using jf nuget push (automatically handles build-info)
         while IFS= read -r -d '' nupkg; do
                 if [[ ! -f $nupkg ]]; then
                         continue
                 fi
 
-                echo "  Uploading NuGet package: $nupkg" >&2
-                run jf rt upload "$nupkg" "$PROJECT-nuget-dev-local" --flat=false \
+                echo "  Pushing NuGet package: $nupkg" >&2
+                run jf nuget push "$nupkg" -Source Artifactory \
                         --build-name="$BUILD_NAME" \
                         --build-number="$ARTIFACT_BUILD_NUMBER" \
-                        --project="$PROJECT"
+                        --project="$PROJECT" \
+                        --skip-duplicate
 
-                # Upload signature if it exists
+                # Upload signature if it exists (signatures still use jf rt upload)
                 if [[ -f "$nupkg.asc" ]]; then
                         echo "  Uploading signature: $nupkg.asc" >&2
                         run jf rt upload "$nupkg.asc" "$PROJECT-nuget-dev-local" --flat=false \
@@ -353,6 +397,20 @@ upload_nupkg_packages() {
                                 --project="$PROJECT"
                 fi
         done < <(find . -name "*.nupkg" -print0)
+
+        # Upload .snupkg files (symbol packages) using jf nuget push
+        while IFS= read -r -d '' snupkg; do
+                if [[ ! -f $snupkg ]]; then
+                        continue
+                fi
+
+                echo "  Pushing NuGet symbol package: $snupkg" >&2
+                run jf nuget push "$snupkg" -Source ArtifactorySymbols \
+                        --build-name="$BUILD_NAME" \
+                        --build-number="$ARTIFACT_BUILD_NUMBER" \
+                        --project="$PROJECT" \
+                        --skip-duplicate
+        done < <(find . -name "*.snupkg" -print0)
 }
 
 upload_generic_files() {
@@ -462,6 +520,15 @@ main() {
 
         if [[ ! -d build-artifacts ]]; then
                 error "build-artifacts directory does not exist. Artifacts must be downloaded before running this script."
+        fi
+
+        # Validate OIDC credentials for NuGet uploads
+        if [[ -z ${OIDC_USER-} ]] || [[ -z ${OIDC_TOKEN-} ]]; then
+                error "OIDC_USER and OIDC_TOKEN environment variables are required for NuGet package uploads"
+        fi
+
+        if [[ -z ${JF_URL-} ]]; then
+                error "JF_URL environment variable is required for NuGet package uploads"
         fi
 
         mkdir -p structured_build_artifacts

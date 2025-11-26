@@ -53,82 +53,103 @@ teardown_file() {
   # Verify "Processing NUPKG:" messages appear
   assert_processing_message "$output" "NUPKG"
   
-  # Extract upload commands
-  local upload_commands
-  upload_commands=$(extract_upload_commands "$output")
+  # Extract NuGet commands
+  local nuget_commands
+  nuget_commands=$(extract_nuget_commands "$output")
   
-  # Parse commands into array
-  mapfile -t upload_cmd_array < <(echo "$upload_commands")
+  # Verify NuGet source configuration commands exist
+  local sources_add_found=false
+  local setapikey_found=false
+  while IFS= read -r cmd; do
+    if [[ $cmd =~ nuget\ +sources\ +Add ]]; then
+      sources_add_found=true
+      [[ $cmd =~ -Name\ +(Artifactory|ArtifactorySymbols) ]] || (echo "Invalid source name in: $cmd" >&2 && return 1)
+      [[ $cmd =~ test-project-nuget-dev-local ]] || (echo "Invalid source URL in: $cmd" >&2 && return 1)
+    elif [[ $cmd =~ nuget\ +setapikey ]]; then
+      setapikey_found=true
+      [[ $cmd =~ -Source\ +(Artifactory|ArtifactorySymbols) ]] || (echo "Invalid source in setapikey: $cmd" >&2 && return 1)
+    fi
+  done <<< "$nuget_commands"
   
-  # Find NuGet package upload commands
+  [[ $sources_add_found == true ]] || (echo "NuGet sources Add command not found" >&2 && return 1)
+  [[ $setapikey_found == true ]] || (echo "NuGet setapikey command not found" >&2 && return 1)
+  
+  # Extract jf nuget push commands
+  local push_commands
+  push_commands=$(echo "$nuget_commands" | grep "jf nuget push" || true)
+  
+  # Parse push commands into array
+  mapfile -t push_cmd_array < <(echo "$push_commands")
+  
+  # Find NuGet package push commands
   local nupkg_found=false
   local nupkg_commands=()
-  for cmd in "${upload_cmd_array[@]}"; do
+  for cmd in "${push_cmd_array[@]}"; do
     if [[ $cmd =~ \.nupkg ]]; then
       nupkg_found=true
       
-      # NuGet packages go to NuGet-specific repository
-      local expected_repo="test-project-nuget-dev-local"
-      
-      # Extract filename from command
-      local filename
-      if [[ $cmd =~ ([^/]+\.nupkg) ]]; then
-        filename="${BASH_REMATCH[1]}"
-      fi
-      
       nupkg_commands+=("$cmd")
-      # Validate command structure
-      assert_upload_command_valid "$cmd" "$filename" "$expected_repo" "" \
-        "test-build" "12345-artifacts" "test-project"
+      # Verify command structure: jf nuget push <file> -Source Artifactory --build-name=... --build-number=... --project=... --skip-duplicate
+      [[ $cmd =~ jf\ +nuget\ +push\ +.*\.nupkg\ +-Source\ +Artifactory ]] || (echo "Invalid jf nuget push command: $cmd" >&2 && return 1)
+      [[ $cmd =~ --build-name=test-build ]] || (echo "Missing --build-name flag: $cmd" >&2 && return 1)
+      [[ $cmd =~ --build-number=12345-artifacts ]] || (echo "Missing --build-number flag: $cmd" >&2 && return 1)
+      [[ $cmd =~ --project=test-project ]] || (echo "Missing --project flag: $cmd" >&2 && return 1)
+      [[ $cmd =~ --skip-duplicate ]] || (echo "Missing --skip-duplicate flag: $cmd" >&2 && return 1)
     fi
   done
 
   # Verify we found exactly 2 NuGet package commands (root and subdirectory)
-  [[ ${#nupkg_commands[@]} -eq 2 ]] || (echo "Expected 2 NuGet commands, found ${#nupkg_commands[@]}" >&2 && return 1)
+  [[ ${#nupkg_commands[@]} -eq 2 ]] || (echo "Expected 2 NuGet push commands, found ${#nupkg_commands[@]}" >&2 && return 1)
 
   # Verify NuGet packages were found and processed
-  [[ $nupkg_found == true ]] || (echo "NuGet package upload not found" >&2 && return 1)
+  [[ $nupkg_found == true ]] || (echo "NuGet package push not found" >&2 && return 1)
 }
 
-@test "NuGet packages preserve directory structure" {
+@test "NuGet packages use correct jf nuget push commands" {
   local output
   output=$(run_entrypoint_dry_run "test-project" "test-build" "v1.0.0" "12345" "12345-metadata")
   
-  # Extract upload commands
-  local upload_commands
-  upload_commands=$(extract_upload_commands "$output")
+  # Extract NuGet commands
+  local nuget_commands
+  nuget_commands=$(extract_nuget_commands "$output")
   
-  # Check that --flat=false is present for NuGet uploads
-  local nupkg_commands
-  nupkg_commands=$(echo "$upload_commands" | grep -E "\.nupkg" || true)
+  # Verify jf nuget push commands use correct flags
+  local push_commands
+  push_commands=$(echo "$nuget_commands" | grep "jf nuget push.*\.nupkg" || true)
   
-  if [[ -n "$nupkg_commands" ]]; then
+  if [[ -n "$push_commands" ]]; then
     while IFS= read -r cmd; do
-      [[ $cmd == *"--flat=false"* ]] || (echo "NuGet upload missing --flat=false: $cmd" >&2 && return 1)
-    done <<< "$nupkg_commands"
+      [[ $cmd =~ -Source\ +Artifactory ]] || (echo "jf nuget push missing -Source Artifactory: $cmd" >&2 && return 1)
+      [[ $cmd =~ --build-name=test-build ]] || (echo "jf nuget push missing --build-name: $cmd" >&2 && return 1)
+      [[ $cmd =~ --build-number=12345-artifacts ]] || (echo "jf nuget push missing --build-number: $cmd" >&2 && return 1)
+      [[ $cmd =~ --project=test-project ]] || (echo "jf nuget push missing --project: $cmd" >&2 && return 1)
+      [[ $cmd =~ --skip-duplicate ]] || (echo "jf nuget push missing --skip-duplicate: $cmd" >&2 && return 1)
+    done <<< "$push_commands"
   fi
 }
 
-@test "NuGet packages in subdirectories are uploaded to correct repository" {
+@test "NuGet packages in subdirectories are pushed correctly" {
   # Run entrypoint with dry-run
   local output
   output=$(run_entrypoint_dry_run "test-project" "test-build" "v1.0.0" "12345" "12345-metadata")
 
-  # Extract upload commands
-  local upload_commands
-  upload_commands=$(extract_upload_commands "$output")
+  # Extract NuGet commands
+  local nuget_commands
+  nuget_commands=$(extract_nuget_commands "$output")
+
+  # Extract jf nuget push commands
+  local push_commands
+  push_commands=$(echo "$nuget_commands" | grep "jf nuget push.*\.nupkg" || true)
 
   # Parse commands into array
-  mapfile -t upload_cmd_array < <(echo "$upload_commands")
+  mapfile -t push_cmd_array < <(echo "$push_commands")
 
-  # Find ALL NuGet package upload commands and verify they ALL go to NuGet repository (not generic)
+  # Find ALL NuGet package push commands
   local nupkg_count=0
   local nupkg_in_subdir_found=false
-  local wrong_repo_found=false
-  local expected_repo="test-project-nuget-dev-local"
-  local wrong_repo="test-project-generic-dev-local"
+  local wrong_source_found=false
 
-  for cmd in "${upload_cmd_array[@]}"; do
+  for cmd in "${push_cmd_array[@]}"; do
     if [[ $cmd =~ \.nupkg ]]; then
       nupkg_count=$((nupkg_count + 1))
 
@@ -137,20 +158,17 @@ teardown_file() {
         nupkg_in_subdir_found=true
       fi
 
-      # Extract repository from command - CRITICAL: Check ALL NuGet packages
-      local repo
-      if [[ $cmd =~ jf\ +rt\ +upload\ +[^\ ]+\ +([^\ ]+) ]]; then
-        repo="${BASH_REMATCH[1]}"
+      # Extract source from command
+      local source
+      if [[ $cmd =~ -Source\ +([^\ ]+) ]]; then
+        source="${BASH_REMATCH[1]}"
       fi
 
-      # Verify ALL NuGet packages go to NuGet repository, NEVER to generic
-      if [[ "$repo" == "$wrong_repo" ]]; then
-        echo "FAIL: NuGet package uploaded to wrong repository (generic): $cmd" >&2
-        wrong_repo_found=true
-      elif [[ "$repo" != "$expected_repo" ]]; then
-        echo "FAIL: NuGet package uploaded to unexpected repository: $repo (expected: $expected_repo)" >&2
+      # Verify ALL NuGet packages use Artifactory source (not ArtifactorySymbols for .nupkg files)
+      if [[ "$source" != "Artifactory" ]]; then
+        echo "FAIL: NuGet package (.nupkg) pushed to wrong source: $source (expected: Artifactory)" >&2
         echo "Command: $cmd" >&2
-        wrong_repo_found=true
+        wrong_source_found=true
       fi
     fi
   done
@@ -161,7 +179,7 @@ teardown_file() {
   # Verify we found the subdirectory package
   [[ $nupkg_in_subdir_found == true ]] || (echo "NuGet package in subdirectory not found" >&2 && return 1)
 
-  # CRITICAL: Verify NO packages went to wrong repository - this test MUST fail if bug exists
-  [[ $wrong_repo_found == false ]] || (echo "NuGet packages were uploaded to wrong repository (generic instead of nuget)" >&2 && return 1)
+  # CRITICAL: Verify NO packages used wrong source
+  [[ $wrong_source_found == false ]] || (echo "NuGet packages were pushed to wrong source" >&2 && return 1)
 }
 

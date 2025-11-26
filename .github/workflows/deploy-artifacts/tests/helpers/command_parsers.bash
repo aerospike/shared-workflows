@@ -112,13 +112,119 @@ parse_jf_build_command() {
   done
 }
 
+# Parse a jf nuget push command into structured data
+# Usage: parse_jf_nuget_push_command "jf nuget push ..."
+# Returns: key=value pairs via stdout
+parse_jf_nuget_push_command() {
+  local cmd="$1"
+  local -A result=()
+  
+  # Extract file path (first argument after "jf nuget push")
+  if [[ $cmd =~ jf\ +nuget\ +push\ +([^\ ]+) ]]; then
+    result[file_path]="${BASH_REMATCH[1]}"
+  fi
+  
+  if [[ $cmd =~ -Source\ +([^\ ]+) ]]; then
+    result[source]="${BASH_REMATCH[1]}"
+  fi
+  
+  if [[ $cmd =~ --build-name=([^\ ]+) ]]; then
+    result[build_name]="${BASH_REMATCH[1]}"
+  fi
+  
+  if [[ $cmd =~ --build-number=([^\ ]+) ]]; then
+    result[build_number]="${BASH_REMATCH[1]}"
+  fi
+  
+  if [[ $cmd =~ --project=([^\ ]+) ]]; then
+    result[project]="${BASH_REMATCH[1]}"
+  fi
+  
+  if [[ $cmd =~ --skip-duplicate ]]; then
+    result[skip_duplicate]="true"
+  fi
+  
+  # Return results
+  for key in "${!result[@]}"; do
+    echo "${key}=${result[$key]}"
+  done
+}
+
+# Parse a nuget sources Add command
+# Usage: parse_nuget_sources_command "nuget sources Add ..."
+# Returns: key=value pairs via stdout
+parse_nuget_sources_command() {
+  local cmd="$1"
+  local -A result=()
+  
+  # Extract source name (-Name value)
+  if [[ $cmd =~ -Name\ +([^\ ]+) ]]; then
+    result[name]="${BASH_REMATCH[1]}"
+  fi
+  
+  if [[ $cmd =~ -Source\ +([^\ ]+) ]]; then
+    result[source]="${BASH_REMATCH[1]}"
+  fi
+  
+  if [[ $cmd =~ -username\ +([^\ ]+) ]]; then
+    result[username]="${BASH_REMATCH[1]}"
+  fi
+  
+  # Extract password (-password value, may be masked)
+  if [[ $cmd =~ -password\ +([^\ ]+) ]]; then
+    result[password]="${BASH_REMATCH[1]}"
+  fi
+  
+  if [[ $cmd =~ -NonInteractive ]]; then
+    result[non_interactive]="true"
+  fi
+  
+  for key in "${!result[@]}"; do
+    echo "${key}=${result[$key]}"
+  done
+}
+
+# Parse a nuget setapikey command
+# Usage: parse_nuget_setapikey_command "nuget setapikey ..."
+# Returns: key=value pairs via stdout
+parse_nuget_setapikey_command() {
+  local cmd="$1"
+  local -A result=()
+  
+  # Extract API key (first argument after "nuget setapikey")
+  if [[ $cmd =~ nuget\ +setapikey\ +([^\ ]+) ]]; then
+    result[api_key]="${BASH_REMATCH[1]}"
+  fi
+  
+  if [[ $cmd =~ -Source\ +([^\ ]+) ]]; then
+    result[source]="${BASH_REMATCH[1]}"
+  fi
+  
+  if [[ $cmd =~ -NonInteractive ]]; then
+    result[non_interactive]="true"
+  fi
+  
+  for key in "${!result[@]}"; do
+    echo "${key}=${result[$key]}"
+  done
+}
+
 # Extract all jf rt upload commands from output
 # Usage: extract_upload_commands "$output"
 # Returns: array of commands (one per line)
 extract_upload_commands() {
   local output="$1"
   # Strip ANSI color codes and extract commands with leading spaces
-  echo "$output" | sed 's/\x1b\[[0-9;]*m//g' | grep -E "^\s+jf rt upload" | sed 's/^\s*//'
+  echo "$output" | sed 's/\x1b\[[0-9;]*m//g' | grep -E "^\s+(jf rt upload|jf nuget push)" | sed 's/^\s*//'
+}
+
+# Extract all nuget commands from output
+# Usage: extract_nuget_commands "$output"
+# Returns: array of commands (one per line)
+extract_nuget_commands() {
+  local output="$1"
+  # Strip ANSI color codes and extract NuGet commands with leading spaces
+  echo "$output" | sed 's/\x1b\[[0-9;]*m//g' | grep -E "^\s+(nuget\s+(sources|setapikey)|jf\s+nuget\s+push)" | sed 's/^\s*//'
 }
 
 # Extract all jf rt build-* commands from output
