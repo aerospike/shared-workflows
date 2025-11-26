@@ -338,19 +338,29 @@ upload_jar_packages() {
 
 configure_nuget_sources() {
         local repo_name="${PROJECT}-nuget-dev-local"
+        local nuget_source_url="${JF_URL}/artifactory/api/nuget/v3/${repo_name}/index.json"
+        local nuget_symbols_url="${JF_URL}/artifactory/api/nuget/v3/${repo_name}/symbols"
 
         if [[ $DRY_RUN == "true" ]]; then
-                echo "Would configure NuGet sources using jf nuget-config..." >&2
+                echo "Would configure NuGet sources..." >&2
                 echo "  Repository: $repo_name" >&2
         else
-                echo "Configuring NuGet sources using jf nuget-config..." >&2
+                echo "Configuring NuGet sources..." >&2
                 local server_id
                 server_id=$(jf c show | grep "Server ID:" | awk '{print $3}' | head -n1)
                 if [[ -z "$server_id" ]]; then
                         error "Failed to extract server-id from JFrog CLI configuration"
                 fi
-                echo "Running jf nuget-config --server-id-resolve=$server_id --repo-resolve=$repo_name" >&2
+
                 run jf nuget-config --server-id-resolve="$server_id" --repo-resolve="$repo_name"
+
+                run jf nuget sources Add -Name "$repo_name" -Source "$nuget_source_url" -NonInteractive
+
+                run jf nuget setapikey "${OIDC_USER}:${OIDC_TOKEN}" -Source "$repo_name" -NonInteractive
+
+                run jf nuget sources Add -Name "${repo_name}Symbols" -Source "$nuget_symbols_url" -NonInteractive
+
+                run jf nuget setapikey "${OIDC_USER}:${OIDC_TOKEN}" -Source "${repo_name}Symbols" -NonInteractive
         fi
 }
 

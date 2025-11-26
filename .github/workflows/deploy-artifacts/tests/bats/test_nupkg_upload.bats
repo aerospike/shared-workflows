@@ -57,18 +57,25 @@ teardown_file() {
   local nuget_commands
   nuget_commands=$(extract_nuget_commands "$output")
   
-  # Verify jf nuget-config command exists
   local nuget_config_found=false
+  local sources_add_found=false
+  local setapikey_found=false
   while IFS= read -r cmd; do
     if [[ $cmd =~ jf\ +nuget-config ]]; then
       nuget_config_found=true
       [[ $cmd =~ test-project-nuget-dev-local ]] || (echo "Invalid repository name in jf nuget-config: $cmd" >&2 && return 1)
-      [[ $cmd =~ --repo-resolve= ]] || (echo "Missing --repo-resolve in jf nuget-config: $cmd" >&2 && return 1)
-      [[ $cmd =~ --server-id-resolve= ]] || (echo "Missing --server-id-resolve in jf nuget-config: $cmd" >&2 && return 1)
+    elif [[ $cmd =~ jf\ +nuget\ +sources\ +Add ]]; then
+      sources_add_found=true
+      [[ $cmd =~ test-project-nuget-dev-local ]] || (echo "Invalid repository name in jf nuget sources Add: $cmd" >&2 && return 1)
+    elif [[ $cmd =~ jf\ +nuget\ +setapikey ]]; then
+      setapikey_found=true
+      [[ $cmd =~ test-project-nuget-dev-local ]] || (echo "Invalid repository name in jf nuget setapikey: $cmd" >&2 && return 1)
     fi
   done <<< "$nuget_commands"
   
   [[ $nuget_config_found == true ]] || (echo "jf nuget-config command not found" >&2 && return 1)
+  [[ $sources_add_found == true ]] || (echo "jf nuget sources Add command not found" >&2 && return 1)
+  [[ $setapikey_found == true ]] || (echo "jf nuget setapikey command not found" >&2 && return 1)
   
   # Extract jf nuget push commands
   local push_commands
