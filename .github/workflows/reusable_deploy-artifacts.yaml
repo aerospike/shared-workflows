@@ -107,11 +107,6 @@ jobs:
           oidc-provider-name: ${{ inputs.oidc-provider-name }}
           oidc-audience: ${{ inputs.oidc-audience }}
 
-      - name: Setup NuGet CLI
-        uses: nuget/setup-nuget@v2
-        with:
-          nuget-version: latest
-
       - name: Check JFrog Configuration
         run: |
           jf c show
@@ -131,10 +126,6 @@ jobs:
       - name: Deploy Artifacts
         id: deploy
         shell: bash
-        env:
-          JF_URL: ${{ inputs.jf-url }}
-          OIDC_USER: ${{ steps.jf.outputs.oidc-user }}
-          OIDC_TOKEN: ${{ steps.jf.outputs.oidc-token }}
         run: |
           chmod +x ${{ inputs.gh-checkout-path }}/.github/workflows/deploy-artifacts/entrypoint.sh
           dry_run_arg=""

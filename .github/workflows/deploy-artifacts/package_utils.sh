@@ -156,8 +156,61 @@ process_deb() {
     echo "$target/$deb_name"
 }
 
+# Function to extract NuGet package metadata
+get_nupkg_metadata() {
+    local nupkg="$1"
+    local filename="${nupkg##*/}"
+    local pkgname version
+
+    # NuGet package filename format: PackageName.Version.nupkg
+    # Extract package name and version from filename
+    # Handle cases like: PackageName.1.0.0.nupkg or PackageName.SubPackage.1.0.0.nupkg
+    if [[ $filename =~ ^(.+)\.[0-9] ]]; then
+        # Extract everything before the version (last sequence of digits/dots before .nupkg)
+        pkgname=$(echo "$filename" | sed -E 's/\.[0-9][0-9A-Za-z._\-]*\.(nupkg|snupkg)$//')
+        version=$(echo "$filename" | sed -E 's/^.+\.([0-9][0-9A-Za-z._\-]*)\.(nupkg|snupkg)$/\1/')
+    else
+        # Fallback: try to extract from .nuspec inside the package
+        if command -v unzip >/dev/null 2>&1; then
+            local nuspec
+            nuspec=$(unzip -Z1 "$nupkg" 2>/dev/null | grep -E '\.nuspec$' | head -n1)
+            if [[ -n "$nuspec" ]]; then
+                pkgname=$(unzip -p "$nupkg" "$nuspec" 2>/dev/null | grep -oP '<id>\K[^<]+' | head -n1)
+                version=$(unzip -p "$nupkg" "$nuspec" 2>/dev/null | grep -oP '<version>\K[^<]+' | head -n1)
+            fi
+        fi
+        # If still no match, use filename-based parsing
+        if [[ -z "$pkgname" ]]; then
+            pkgname=$(echo "$filename" | sed -E 's/\.[0-9][0-9A-Za-z._\-]*\.(nupkg|snupkg)$//')
+            version=$(echo "$filename" | sed -E 's/^.+\.([0-9][0-9A-Za-z._\-]*)\.(nupkg|snupkg)$/\1/')
+        fi
+    fi
+
+    echo "$pkgname $version"
+}
+
 process_nupkg() {
-    process_generic "$1" "$2"
+    local nupkg="$1"
+    local dest_dir="$2"
+    local nupkg_dir
+    nupkg_dir=$(dirname "$nupkg")
+    local nupkg_basename
+    nupkg_basename=$(basename "$nupkg")
+    local base_name="${nupkg_basename%.nupkg}"
+    base_name="${base_name%.snupkg}"
+
+    process_generic "$nupkg" "$dest_dir"
+
+    if [[ "$nupkg_dir" == "build-artifacts" ]]; then
+        local csproj_file="build-artifacts/${base_name}.csproj"
+    else
+        local csproj_file="${nupkg_dir}/${base_name}.csproj"
+    fi
+
+    if [[ -f "$csproj_file" ]]; then
+        echo "Copying .csproj file: $csproj_file" >&2
+        process_generic "$csproj_file" "$dest_dir"
+    fi
 }
 
 process_generic() {
