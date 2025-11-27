@@ -338,7 +338,7 @@ upload_jar_packages() {
 
 configure_nuget_sources() {
         local repo_name="${PROJECT}-nuget-dev-local"
-        local nuget_source_url="${JF_URL}/artifactory/api/nuget/v3/${repo_name}/index.json"
+        local nuget_source_url="${JF_URL}/artifactory/api/nuget/${repo_name}"
         local nuget_symbols_url="${JF_URL}/artifactory/api/nuget/v3/${repo_name}/symbols"
 
         if [[ $DRY_RUN == "true" ]]; then
