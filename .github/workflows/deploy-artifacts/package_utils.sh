@@ -57,6 +57,9 @@ process_rpm() {
     echo "Copying RPM to: $target" >&2
     rpm_name=$(basename "$rpm")
     cp -v "$rpm" "$target/$rpm_name" >&2
+    if [[ -f "${rpm}.asc" ]]; then
+        cp -v "${rpm}.asc" "$target/$rpm_name" >&2
+    fi
 }
 
 get_codename_for_deb() {
@@ -86,6 +89,9 @@ process_deb() {
     echo "Copying DEB to: $target" >&2
     deb_name=$(basename "$deb")
     cp -v "$deb" "$target/$deb_name" >&2
+    if [[ -f "${deb}.asc" ]]; then
+        cp -v "${deb}.asc" "$target/$deb_name" >&2
+    fi
     echo "$target/$deb_name"
 }
 
