@@ -385,7 +385,7 @@ upload_nupkg_packages() {
                         --build-name="$BUILD_NAME" \
                         --build-number="$ARTIFACT_BUILD_NUMBER" \
                         --project="$PROJECT" \
-                        -SkipDuplicate
+                        -NonInteractive
 
                 # Upload signature if it exists (signatures still use jf rt upload)
                 if [[ -f "$nupkg.asc" ]]; then
@@ -408,7 +408,7 @@ upload_nupkg_packages() {
                         --build-name="$BUILD_NAME" \
                         --build-number="$ARTIFACT_BUILD_NUMBER" \
                         --project="$PROJECT" \
-                        -SkipDuplicate
+                        -NonInteractive
         done < <(find . -name "*.snupkg" -print0)
 }
 
