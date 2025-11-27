@@ -381,7 +381,7 @@ upload_nupkg_packages() {
                 fi
 
                 echo "  Pushing NuGet package: $nupkg" >&2
-                run jf nuget push "$nupkg" -Source "${PROJECT}-nuget-dev-local" \
+                run jf nuget add "$nupkg" -Source "${PROJECT}-nuget-dev-local" \
                         --build-name="$BUILD_NAME" \
                         --build-number="$ARTIFACT_BUILD_NUMBER" \
                         --project="$PROJECT" \
@@ -404,7 +404,7 @@ upload_nupkg_packages() {
                 fi
 
                 echo "  Pushing NuGet symbol package: $snupkg" >&2
-                run jf nuget push "$snupkg" -Source "${PROJECT}-nuget-dev-local" \
+                run jf nuget add "$snupkg" -Source "${PROJECT}-nuget-dev-local" \
                         --build-name="$BUILD_NAME" \
                         --build-number="$ARTIFACT_BUILD_NUMBER" \
                         --project="$PROJECT" \
