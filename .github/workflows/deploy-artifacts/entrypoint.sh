@@ -134,7 +134,7 @@ structure_build_artifacts() {
 
     echo "Processing DEB: $deb" >&2
     process_deb "$deb" "./structured_build_artifacts/deb"
-  done < <(find build-artifacts -name "*.deb" -o -name "*.deb.asc"-print0)
+  done < <(find build-artifacts -name "*.deb" -print0)
   while IFS= read -r -d '' rpm; do
     if [[ ! -f "$rpm" ]]; then
       continue
@@ -142,7 +142,7 @@ structure_build_artifacts() {
 
     echo "Processing RPM: $rpm" >&2
     process_rpm "$rpm" "./structured_build_artifacts/rpm"
-  done < <(find build-artifacts -name "*.rpm" -o -name "*.rpm.asc" -print0)
+  done < <(find build-artifacts -name "*.rpm" -print0)
   echo "current files: $(ls -la build-artifacts)" >&2
 
   while IFS= read -r -d '' nupkg; do
