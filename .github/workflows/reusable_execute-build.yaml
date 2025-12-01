@@ -102,6 +102,28 @@ on:
         type: string
         default: .
 
+      # Java/Maven setup
+      setup-java:
+        description: Whether to set up Java environment
+        required: false
+        type: boolean
+        default: false
+      java-version:
+        description: Java version to set up (e.g., "17", "21")
+        required: false
+        type: string
+        default: "21"
+      java-distribution:
+        description: Java distribution (temurin, zulu, adopt, corretto, etc.)
+        required: false
+        type: string
+        default: temurin
+      java-cache:
+        description: Package manager to cache (maven, gradle, sbt).
+        required: false
+        type: string
+        default: maven
+
     outputs:
       gh-artifact-name:
         description: The name of the uploaded artifacts on github
@@ -150,6 +172,14 @@ jobs:
           fetch-tags: true
           submodules: recursive
           fetch-depth: 1
+
+      - name: Set up Java
+        if: inputs.setup-java
+        uses: actions/setup-java@v4
+        with:
+          distribution: ${{ inputs.java-distribution }}
+          java-version: ${{ inputs.java-version }}
+          cache: ${{ inputs.java-cache }}
 
       - name: Set up JFrog CLI
         uses: jfrog/setup-jfrog-cli@5b06f730cc5a6f55d78b30753f8583454b08c0aa # v4.8.1

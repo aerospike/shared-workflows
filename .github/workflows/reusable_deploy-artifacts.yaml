@@ -33,6 +33,10 @@ on:
         required: false
         type: boolean
         default: false
+      jar-group-id:
+        description: Maven group ID for JAR artifacts (used as fallback when metadata doesn't provide one)
+        required: false
+        type: string
       gh-artifact-name:
         description: Name of signed artifacts on github
         required: false
@@ -117,6 +121,7 @@ jobs:
         with:
           name: ${{ inputs.gh-artifact-name }}
           path: ./build-artifacts
+
       - name: Verify artifacts
         shell: bash
         run: |
@@ -132,11 +137,17 @@ jobs:
             dry_run_arg="--dry-run"
           fi
 
+          jar_group_id_arg=""
+          if [ -n "${{ inputs.jar-group-id }}" ]; then
+            jar_group_id_arg="--jar-group-id ${{ inputs.jar-group-id }}"
+          fi
+
           ${{ inputs.gh-checkout-path }}/.github/workflows/deploy-artifacts/entrypoint.sh \
             "${{ inputs.jf-project }}" \
             "${{ inputs.jf-build-name }}" \
             "${{ inputs.version }}" \
             "${{ inputs.jf-build-id }}" \
             "${{ inputs.jf-metadata-build-id }}" \
-            $dry_run_arg
+            $dry_run_arg \
+            $jar_group_id_arg
           echo "jf-build-id=${{ inputs.jf-build-id }}" >> $GITHUB_OUTPUT
