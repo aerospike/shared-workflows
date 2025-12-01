@@ -263,7 +263,6 @@ upload_rpm_packages() {
     done < <(find . -name "*.rpm" -print0)
 }
 
-
 upload_jar_packages() {
     if [[ $DRY_RUN == "true" ]]; then
         echo "Would upload JAR/POM files to JFrog..." >&2
@@ -276,7 +275,7 @@ upload_jar_packages() {
 
     while IFS= read -r -d '' artifact; do
         if [[ ! -f $artifact ]]; then
-                continue
+            continue
         fi
 
         # Get the directory and base name
@@ -288,7 +287,7 @@ upload_jar_packages() {
         # Skip if we've already processed this base artifact
         artifact_key="$artifact_dir/$base_name"
         if [[ -n ${processed_artifacts[$artifact_key]-} ]]; then
-                continue
+            continue
         fi
         processed_artifacts[$artifact_key]=1
 
@@ -298,8 +297,8 @@ upload_jar_packages() {
         # Extract metadata from JAR (must exist since process_jar copies JAR+POM together)
         local jar_file="$artifact_dir/${base_name}.jar"
         if [[ ! -f $jar_file ]]; then
-                echo "  Warning: JAR file not found for $artifact, skipping" >&2
-                continue
+            echo "  Warning: JAR file not found for $artifact, skipping" >&2
+            continue
         fi
         read -r -a metadata < <(get_jar_metadata "$jar_file")
         pkgname="${metadata[0]}"
@@ -308,40 +307,39 @@ upload_jar_packages() {
         # Group ID priority: metadata > flag > empty
         # If metadata has group_id, use it; otherwise use JAR_GROUP_ID if provided via flag
         if [[ -n ${metadata[2]-} ]]; then
-                group_id="${metadata[2]}"
+            group_id="${metadata[2]}"
         else
-                group_id="${JAR_GROUP_ID-}"
+            group_id="${JAR_GROUP_ID-}"
         fi
 
         # If no group_id is available, move to generic directory for generic upload
         if [[ -z $group_id ]]; then
-                echo "  Moving JAR without group_id to generic directory: $artifact" >&2
-                for ext in jar pom jar.asc pom.asc; do
-                        local artifact_file="$artifact_dir/${base_name}.${ext}"
-                        if [[ -f $artifact_file ]]; then
-                                mv "$artifact_file" "../generic/"
-                        fi
-                done
-                continue
+            echo "  Moving JAR without group_id to generic directory: $artifact" >&2
+            for ext in jar pom jar.asc pom.asc; do
+                local artifact_file="$artifact_dir/${base_name}.${ext}"
+                if [[ -f $artifact_file ]]; then
+                    mv "$artifact_file" "../generic/"
+                fi
+            done
+            continue
         fi
 
         echo "  Package: $pkgname, Version: $version, Group ID: $group_id" >&2
 
         # Upload all related Maven artifact files (jar, pom, signatures)
         for ext in jar pom jar.asc pom.asc; do
-                local artifact_file="$artifact_dir/${base_name}.${ext}"
-                if [[ -f $artifact_file ]]; then
-                        echo "  Uploading $ext: $artifact_file" >&2
-                        run jf rt upload "$artifact_file" "$PROJECT-maven-dev-local" --flat=false \
-                                --build-name="$BUILD_NAME" \
-                                --build-number="$ARTIFACT_BUILD_NUMBER" \
-                                --project="$PROJECT" \
-                                --target-props "group_id=$group_id;package_name=$pkgname;version=$version"
-                fi
+            local artifact_file="$artifact_dir/${base_name}.${ext}"
+            if [[ -f $artifact_file ]]; then
+                echo "  Uploading $ext: $artifact_file" >&2
+                run jf rt upload "$artifact_file" "$PROJECT-maven-dev-local" --flat=false \
+                    --build-name="$BUILD_NAME" \
+                    --build-number="$ARTIFACT_BUILD_NUMBER" \
+                    --project="$PROJECT" \
+                    --target-props "group_id=$group_id;package_name=$pkgname;version=$version"
+            fi
         done
     done < <(find . \( -name "*.jar" -o -name "*.pom" \) -print0)
 }
-
 
 upload_nupkg_packages() {
     if [[ $DRY_RUN == "true" ]]; then
@@ -362,7 +360,7 @@ upload_nupkg_packages() {
         local nupkg_filename
         nupkg_filename=$(basename "$nupkg")
 
-        if [[ -z "$pkgname" ]] || [[ -z "$pkgversion" ]]; then
+        if [[ -z $pkgname ]] || [[ -z $pkgversion ]]; then
             echo "Warning: Failed to extract metadata from $nupkg, using filename-based path" >&2
             pkgname="${nupkg_filename%.nupkg}"
             pkgversion="unknown"
@@ -396,7 +394,7 @@ upload_nupkg_packages() {
         local snupkg_filename
         snupkg_filename=$(basename "$snupkg")
 
-        if [[ -z "$pkgname" ]] || [[ -z "$pkgversion" ]]; then
+        if [[ -z $pkgname ]] || [[ -z $pkgversion ]]; then
             echo "Warning: Failed to extract metadata from $snupkg, using filename-based path" >&2
             pkgname="${snupkg_filename%.snupkg}"
             pkgversion="unknown"

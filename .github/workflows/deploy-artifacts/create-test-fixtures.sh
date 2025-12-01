@@ -15,8 +15,8 @@ mkdir -p "$BUILD_ARTIFACTS_DIR"
 # Copy real test fixtures
 echo "Copying test fixtures..."
 if [[ -f "tests/nano-tiny_8.4-1_arm64.deb" ]]; then
-        cp "tests/nano-tiny_8.4-1_arm64.deb" "$BUILD_ARTIFACTS_DIR/test-ubuntu22.04.deb"
-        echo "  Copied nano-tiny_8.4-1_arm64.deb as test-ubuntu22.04.deb"
+    cp "tests/nano-tiny_8.4-1_arm64.deb" "$BUILD_ARTIFACTS_DIR/test-ubuntu22.04.deb"
+    echo "  Copied nano-tiny_8.4-1_arm64.deb as test-ubuntu22.04.deb"
 else
     echo "Error: tests/nano-tiny_8.4-1_arm64.deb not found. Cannot create mock DEB file." >&2
     exit 1
@@ -29,11 +29,11 @@ else
     exit 1
 fi
 if [[ -f "tests/test-1.0-2.noarch.rpm" ]]; then
-        cp "tests/test-1.0-2.noarch.rpm" "$BUILD_ARTIFACTS_DIR/"
-        echo "   Copied test-1.0-2.noarch.rpm"
+    cp "tests/test-1.0-2.noarch.rpm" "$BUILD_ARTIFACTS_DIR/"
+    echo "   Copied test-1.0-2.noarch.rpm"
 else
-        echo "Error: tests/test-1.0-2.noarch.rpm not found. Cannot create mock RPM file." >&2
-        exit 1
+    echo "Error: tests/test-1.0-2.noarch.rpm not found. Cannot create mock RPM file." >&2
+    exit 1
 fi
 cp -v tests/some/structure/Aerospike.Client.8.0.2.nupkg "$BUILD_ARTIFACTS_DIR/Aerospike.Client.8.0.2.nupkg"
 
@@ -69,18 +69,18 @@ echo "test-nested-dir-content" >"$BUILD_ARTIFACTS_DIR/nested/dir/test-nested-dir
 # Create nested directory structure
 mkdir -p "$BUILD_ARTIFACTS_DIR/nested/dir"
 if [[ -f "tests/nano-tiny_8.4-1_arm64.deb" ]]; then
-        cp "tests/nano-tiny_8.4-1_arm64.deb" "$BUILD_ARTIFACTS_DIR/nested/dir/test-debian12.deb"
-        echo "   Copied nano-tiny_8.4-1_arm64.deb as nested test-debian12.deb"
+    cp "tests/nano-tiny_8.4-1_arm64.deb" "$BUILD_ARTIFACTS_DIR/nested/dir/test-debian12.deb"
+    echo "   Copied nano-tiny_8.4-1_arm64.deb as nested test-debian12.deb"
 else
-        echo "Error: tests/nano-tiny_8.4-1_arm64.deb not found. This file is required for nested test fixtures." >&2
-        exit 1
+    echo "Error: tests/nano-tiny_8.4-1_arm64.deb not found. This file is required for nested test fixtures." >&2
+    exit 1
 fi
 if [[ -f "tests/test-1.0-2.noarch.rpm" ]]; then
-        cp "tests/test-1.0-2.noarch.rpm" "$BUILD_ARTIFACTS_DIR/nested/dir/nested.rpm"
-        echo "   Copied test-1.0-2.noarch.rpm as nested.rpm"
+    cp "tests/test-1.0-2.noarch.rpm" "$BUILD_ARTIFACTS_DIR/nested/dir/nested.rpm"
+    echo "   Copied test-1.0-2.noarch.rpm as nested.rpm"
 else
-        echo "Error: tests/test-1.0-2.noarch.rpm not found. This file is required for nested test fixtures." >&2
-        exit 1
+    echo "Error: tests/test-1.0-2.noarch.rpm not found. This file is required for nested test fixtures." >&2
+    exit 1
 fi
 
 echo "Test files created:"

@@ -178,13 +178,13 @@ get_nupkg_metadata() {
     local pkgname version
 
     # First, try to extract from .nuspec inside the package
-    if command -v unzip >/dev/null 2>&1 && [[ -f "$nupkg" ]]; then
+    if command -v unzip >/dev/null 2>&1 && [[ -f $nupkg ]]; then
         local nuspec
         nuspec=$(unzip -Z1 "$nupkg" 2>/dev/null | grep -E '\.nuspec$' | head -n1)
-        if [[ -n "$nuspec" ]]; then
+        if [[ -n $nuspec ]]; then
             pkgname=$(unzip -p "$nupkg" "$nuspec" 2>/dev/null | grep -oP '<id>\K[^<]+' | head -n1)
             version=$(unzip -p "$nupkg" "$nuspec" 2>/dev/null | grep -oP '<version>\K[^<]+' | head -n1)
-            if [[ -n "$pkgname" ]] && [[ -n "$version" ]]; then
+            if [[ -n $pkgname ]] && [[ -n $version ]]; then
                 echo "$pkgname $version"
                 return
             fi
@@ -201,7 +201,7 @@ get_nupkg_metadata() {
     # Version pattern: starts with digit, may contain dots, dashes, and alphanumeric
     version=$(echo "$base" | grep -oE '[0-9]+(\.[0-9]+)+(-[0-9A-Za-z._\-]+)?$' || echo "")
 
-    if [[ -n "$version" ]]; then
+    if [[ -n $version ]]; then
         # Package name is everything before the version
         # quoting because of shellchk rules.
         pkgname="${base%."${version}"}"
@@ -226,13 +226,13 @@ process_nupkg() {
 
     process_generic "$nupkg" "$dest_dir"
 
-    if [[ "$nupkg_dir" == "build-artifacts" ]]; then
+    if [[ $nupkg_dir == "build-artifacts" ]]; then
         local csproj_file="build-artifacts/${base_name}.csproj"
     else
         local csproj_file="${nupkg_dir}/${base_name}.csproj"
     fi
 
-    if [[ -f "$csproj_file" ]]; then
+    if [[ -f $csproj_file ]]; then
         echo "Copying .csproj file: $csproj_file" >&2
         process_generic "$csproj_file" "$dest_dir"
     fi
@@ -246,7 +246,7 @@ process_generic() {
     dir=$(dirname "$file")
     # Strip "build-artifacts" prefix to preserve only relative path within build-artifacts
 
-    if [[ "$dir" == "build-artifacts" ]]; then
+    if [[ $dir == "build-artifacts" ]]; then
         # File is at root of build-artifacts, no subdirectory
         cp -v "$file" "$dest_dir/" >&2
     else
