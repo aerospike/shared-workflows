@@ -203,7 +203,7 @@ get_nupkg_metadata() {
 
     if [[ -n $version ]]; then
         # Package name is everything before the version
-        # quoting because of shellchk rules.
+        # quoting because of shellcheck rules.
         pkgname="${base%."${version}"}"
     else
         # Last resort: use filename without extension
