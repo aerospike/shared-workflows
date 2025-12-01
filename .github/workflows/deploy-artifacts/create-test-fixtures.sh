@@ -35,7 +35,6 @@ else
     echo "Error: tests/test-1.0-2.noarch.rpm not found. Cannot create mock RPM file." >&2
     exit 1
 fi
-cp -v tests/some/structure/Aerospike.Client.8.0.2.nupkg "$BUILD_ARTIFACTS_DIR/Aerospike.Client.8.0.2.nupkg"
 
 # Create NuGet package in subdirectory to match real-world scenario
 mkdir -p "$BUILD_ARTIFACTS_DIR/nuget"
