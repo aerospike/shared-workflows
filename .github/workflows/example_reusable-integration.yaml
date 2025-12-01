@@ -180,9 +180,9 @@ jobs:
         echo "cwd contents: $(ls -la)"
         dotnet restore
         dotnet build --configuration Release --no-restore
-        echo "Creating nuget package"
+        echo "Creating NuGet package"
         dotnet pack --no-build
-        echo "Nuget package created"
+        echo "NuGet package created"
         find .
       gh-source-path: repo-source
       gh-artifact-directory: AerospikeHelloWorld/bin/Release/
