@@ -162,28 +162,38 @@ get_nupkg_metadata() {
     local filename="${nupkg##*/}"
     local pkgname version
 
-    # NuGet package filename format: PackageName.Version.nupkg
-    # Extract package name and version from filename
-    # Handle cases like: PackageName.1.0.0.nupkg or PackageName.SubPackage.1.0.0.nupkg
-    if [[ $filename =~ ^(.+)\.[0-9] ]]; then
-        # Extract everything before the version (last sequence of digits/dots before .nupkg)
-        pkgname=$(echo "$filename" | sed -E 's/\.[0-9][0-9A-Za-z._\-]*\.(nupkg|snupkg)$//')
-        version=$(echo "$filename" | sed -E 's/^.+\.([0-9][0-9A-Za-z._\-]*)\.(nupkg|snupkg)$/\1/')
-    else
-        # Fallback: try to extract from .nuspec inside the package
-        if command -v unzip >/dev/null 2>&1; then
-            local nuspec
-            nuspec=$(unzip -Z1 "$nupkg" 2>/dev/null | grep -E '\.nuspec$' | head -n1)
-            if [[ -n "$nuspec" ]]; then
-                pkgname=$(unzip -p "$nupkg" "$nuspec" 2>/dev/null | grep -oP '<id>\K[^<]+' | head -n1)
-                version=$(unzip -p "$nupkg" "$nuspec" 2>/dev/null | grep -oP '<version>\K[^<]+' | head -n1)
+    # First, try to extract from .nuspec inside the package
+    if command -v unzip >/dev/null 2>&1 && [[ -f "$nupkg" ]]; then
+        local nuspec
+        nuspec=$(unzip -Z1 "$nupkg" 2>/dev/null | grep -E '\.nuspec$' | head -n1)
+        if [[ -n "$nuspec" ]]; then
+            pkgname=$(unzip -p "$nupkg" "$nuspec" 2>/dev/null | grep -oP '<id>\K[^<]+' | head -n1)
+            version=$(unzip -p "$nupkg" "$nuspec" 2>/dev/null | grep -oP '<version>\K[^<]+' | head -n1)
+            if [[ -n "$pkgname" ]] && [[ -n "$version" ]]; then
+                echo "$pkgname $version"
+                return
             fi
         fi
-        # If still no match, use filename-based parsing
-        if [[ -z "$pkgname" ]]; then
-            pkgname=$(echo "$filename" | sed -E 's/\.[0-9][0-9A-Za-z._\-]*\.(nupkg|snupkg)$//')
-            version=$(echo "$filename" | sed -E 's/^.+\.([0-9][0-9A-Za-z._\-]*)\.(nupkg|snupkg)$/\1/')
-        fi
+    fi
+
+    # Fallback: extract from filename
+    # NuGet package filename format: PackageName.Version.nupkg
+    # Remove extension first, then extract version (last sequence matching version pattern)
+    local base="${filename%.nupkg}"
+    base="${base%.snupkg}"
+
+    # Extract version: find the last dot-separated segment that starts with a digit
+    # Version pattern: starts with digit, may contain dots, dashes, and alphanumeric
+    version=$(echo "$base" | grep -oE '[0-9]+(\.[0-9]+)+(-[0-9A-Za-z._\-]+)?$' || echo "")
+
+    if [[ -n "$version" ]]; then
+        # Package name is everything before the version
+        # quoting because of shellchk rules.
+        pkgname="${base%."${version}"}"
+    else
+        # Last resort: use filename without extension
+        pkgname="$base"
+        version="unknown"
     fi
 
     echo "$pkgname $version"

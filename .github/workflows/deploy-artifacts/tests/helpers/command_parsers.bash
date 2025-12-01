@@ -218,13 +218,13 @@ extract_upload_commands() {
   echo "$output" | sed 's/\x1b\[[0-9;]*m//g' | grep -E "^\s+(jf rt upload|jf nuget push)" | sed 's/^\s*//'
 }
 
-# Extract all nuget commands from output
+# Extract all nuget upload commands from output
 # Usage: extract_nuget_commands "$output"
 # Returns: array of commands (one per line)
 extract_nuget_commands() {
   local output="$1"
-  # Strip ANSI color codes and extract NuGet commands with leading spaces
-  echo "$output" | sed 's/\x1b\[[0-9;]*m//g' | grep -E "^\s+(jf\s+nuget\s+(config|sources|setapikey|push))" | sed 's/^\s*//'
+  # Strip ANSI color codes and extract jf rt upload commands targeting nuget repositories
+  echo "$output" | sed 's/\x1b\[[0-9;]*m//g' | grep -E "^\s+jf rt upload.*\.(nupkg|snupkg).*-nuget-dev-local" | sed 's/^\s*//'
 }
 
 # Extract all jf rt build-* commands from output
