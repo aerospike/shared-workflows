@@ -18,8 +18,8 @@ if [[ -f "tests/nano-tiny_8.4-1_arm64.deb" ]]; then
         cp "tests/nano-tiny_8.4-1_arm64.deb" "$BUILD_ARTIFACTS_DIR/test-ubuntu22.04.deb"
         echo "  Copied nano-tiny_8.4-1_arm64.deb as test-ubuntu22.04.deb"
 else
-        echo "Error: tests/nano-tiny_8.4-1_arm64.deb not found. Cannot create mock DEB file." >&2
-        exit 1
+    echo "Error: tests/nano-tiny_8.4-1_arm64.deb not found. Cannot create mock DEB file." >&2
+    exit 1
 fi
 if [[ -f "tests/some/structure/Aerospike.Client.8.0.2.nupkg" ]]; then
     cp "tests/some/structure/Aerospike.Client.8.0.2.nupkg" "$BUILD_ARTIFACTS_DIR/Aerospike.Client.8.0.2.nupkg"
@@ -35,7 +35,7 @@ else
         echo "Error: tests/test-1.0-2.noarch.rpm not found. Cannot create mock RPM file." >&2
         exit 1
 fi
-cp -v tests/some/structure/Aerospike.Client.8.0.2.nupkg  "$BUILD_ARTIFACTS_DIR/Aerospike.Client.8.0.2.nupkg"
+cp -v tests/some/structure/Aerospike.Client.8.0.2.nupkg "$BUILD_ARTIFACTS_DIR/Aerospike.Client.8.0.2.nupkg"
 
 # Create NuGet package in subdirectory to match real-world scenario
 mkdir -p "$BUILD_ARTIFACTS_DIR/nuget"

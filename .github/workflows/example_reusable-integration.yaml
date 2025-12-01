@@ -39,7 +39,12 @@ jobs:
   extract-version:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@95d9a5deda9de15063e7595e9719c11c38c90ae2 # v2.13.2
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
       - name: Extract Version
         id: extract
         uses: ./.github/actions/extract-version-from-tag
@@ -195,12 +200,17 @@ jobs:
     needs: [build-packages, build-dotnet-packages, extract-version]
     runs-on: ubuntu-22.04
     steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@95d9a5deda9de15063e7595e9719c11c38c90ae2 # v2.13.2
+        with:
+          egress-policy: audit
+
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
           fetch-depth: 1
       - name: Download All Matrix Artifacts
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
         with:
           path: build-artifacts
           merge-multiple: true
@@ -210,7 +220,7 @@ jobs:
             --packages-dir build-artifacts --output-dir packaged-artifacts
           cp -i build-artifacts/*.nupkg packaged-artifacts
       - name: Upload packaged Artifacts
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         with:
           name: build-artifacts
           path: packaged-artifacts
@@ -262,6 +272,11 @@ jobs:
     runs-on: ubuntu-22.04
     if: github.actor != 'dependabot[bot]'
     steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@95d9a5deda9de15063e7595e9719c11c38c90ae2 # v2.13.2
+        with:
+          egress-policy: audit
+
       - name: Install JFrog CLI
         id: jf
         uses: jfrog/setup-jfrog-cli@5b06f730cc5a6f55d78b30753f8583454b08c0aa # v4.8.1
@@ -272,7 +287,7 @@ jobs:
           oidc-provider-name: gh-dev-test
           oidc-audience: aerospike/testing
       - name: Docker login to Artifactory
-        uses: docker/login-action@v3
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
         with:
           registry: artifact.aerospike.io/test-container-dev-local
           username: ${{ steps.jf.outputs.oidc-user }}
@@ -313,6 +328,11 @@ jobs:
       image: rockylinux:9
     needs: [extract-version, deploy-artifacts]
     steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@95d9a5deda9de15063e7595e9719c11c38c90ae2 # v2.13.2
+        with:
+          egress-policy: audit
+
       - name: Install JFrog CLI
         id: jf
         uses: jfrog/setup-jfrog-cli@5b06f730cc5a6f55d78b30753f8583454b08c0aa # v4.8.1
