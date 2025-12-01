@@ -12,7 +12,7 @@ load "$HELPERS_DIR/assertions.bash"
 setup_file() {
   setup_test_artifacts
   
-  # Verify expected generic file fixtures exist
+  # Verify expected file fixtures exist (JAR as Maven artifact, ZIP and TAR.GZ as generic)
   local -a expected_files=(
     "$BUILD_ARTIFACTS_DIR/test.jar"
     "$BUILD_ARTIFACTS_DIR/test.zip"
@@ -56,16 +56,17 @@ teardown_file() {
   # Parse commands into arrays
   mapfile -t upload_cmd_array < <(echo "$upload_commands")
   
-  # Validate generic file uploads (JAR, ZIP, TAR.GZ)
+  # Validate file uploads (JAR as Maven, ZIP and TAR.GZ as generic)
   local jar_found=false
   local zip_found=false
   local tar_found=false
   
   for cmd in "${upload_cmd_array[@]}"; do
-    # Check for JAR file
+    # Check for JAR file (should be uploaded as Maven artifact)
     if [[ $cmd =~ test\.jar ]]; then
       jar_found=true
-      assert_upload_command_valid "$cmd" "test.jar" "test-project-generic-dev-local" "" \
+      assert_upload_command_valid "$cmd" "test.jar" "test-project-maven-dev-local" \
+        "group_id=com.example.test;package_name=test.jar;version=test.jar" \
         "test-build" "12345-artifacts" "test-project"
     fi
     
@@ -84,7 +85,7 @@ teardown_file() {
     fi
   done
   
-  # Verify generic files were found
+  # Verify files were found
   [[ $jar_found == true ]] || (echo "JAR file upload not found" >&2 && return 1)
   [[ $zip_found == true ]] || (echo "ZIP file upload not found" >&2 && return 1)
   [[ $tar_found == true ]] || (echo "TAR.GZ file upload not found" >&2 && return 1)
