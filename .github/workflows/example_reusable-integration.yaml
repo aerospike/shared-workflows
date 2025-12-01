@@ -37,7 +37,7 @@ jobs:
   extract-version:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - name: Extract Version
         id: extract
         uses: ./.github/actions/extract-version-from-tag
@@ -170,7 +170,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           fetch-depth: 1
       - name: Download All Matrix Artifacts

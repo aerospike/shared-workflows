@@ -86,7 +86,7 @@ jobs:
       CHECKOUT_REF: ${{ inputs.gh-workflows-ref }}
     steps:
       - name: Checkout shared-workflows repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           repository: aerospike/shared-workflows
           ref: ${{ env.CHECKOUT_REF }}

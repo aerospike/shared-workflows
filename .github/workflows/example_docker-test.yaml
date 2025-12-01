@@ -13,7 +13,7 @@ jobs:
   extract-version:
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - name: Extract Version
         id: extract
         uses: ./.github/actions/extract-version-from-tag
