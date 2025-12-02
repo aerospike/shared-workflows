@@ -103,7 +103,7 @@ on:
         value: ${{ jobs.build.outputs.image-ref }}
       tags:
         description: Comma separated list of tags used
-        value: ${{ jobs.build.outputs.tag }}
+        value: ${{ jobs.build.outputs.tags }}
       immutable-tag:
         description: Immutable tag (registry/image:version_timestamp)
         value: ${{ jobs.build.outputs.immutable-tag }}
@@ -123,7 +123,7 @@ jobs:
     outputs:
       digest: ${{ steps.build.outputs.digest }}
       image-ref: ${{ steps.meta.outputs.image-ref }}
-      tag: ${{ steps.tags.outputs.tags }}
+      tags: ${{ steps.tags.outputs.tags }}
       immutable-tag: ${{ steps.tags.outputs.immutable-tag }}
 
     steps:
