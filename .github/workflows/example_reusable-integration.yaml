@@ -217,7 +217,7 @@ jobs:
       oidc-audience: aerospike/testing
       dry-run: false
   build-docker-deploy:
-    uses: aerospike/shared-workflows/.github/workflows/reusable_docker-build-deploy.yaml@ci/docker-tags
+    uses: aerospike/shared-workflows/.github/workflows/reusable_docker-build-deploy.yaml@feature/INFRA-255-support-multiple-docker-tag
     needs: [extract-version, package-built-artifacts] #don't really need package-built-artifacts but we need that to finish first.
     with:
       jf-project: test
