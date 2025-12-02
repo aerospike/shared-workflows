@@ -11,7 +11,7 @@ on:
       image-name:
         type: string
         required: true
-        description: image name without registry
+        description: Docker image name (repository component, without registry). Used to construct the full image path (e.g., "test-image" becomes "registry/project-repo/test-image:tag")
       jf-project:
         type: string
         required: true
@@ -21,7 +21,7 @@ on:
       app-name:
         type: string
         required: false
-        description: Name of the application
+        description: Human-readable application name for OCI labels (defaults to image-name). Can differ from image-name for display purposes (e.g., image-name="aerospike-server-enterprise", app-name="Aerospike Server Enterprise")
       attest:
         type: boolean
         default: true

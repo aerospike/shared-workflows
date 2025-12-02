@@ -22,12 +22,12 @@ jobs:
 ### Required
 
 - `app-version` (string, required): Version of the application (e.g., `1.2.3`)
-- `image-name` (string, required): Image repository/name (no registry)
+- `image-name` (string, required): Docker image name (repository component, without registry). Used to construct the full image path (e.g., `test-image` becomes `artifact.aerospike.io/database-container-dev-local/test-image:tag`)
 - `jf-project` (string, required): JFrog project key
 
 ### Optional / defaults
 
-- `app-name` (string, optional): Name of the application (defaults to `image-name` for OCI labels)
+- `app-name` (string, optional): Human-readable application name for OCI labels (defaults to `image-name`). Can differ from `image-name` for display purposes (e.g., `image-name="aerospike-server-enterprise"`, `app-name="Aerospike Server Enterprise"`)
 - `attest` (boolean, default `true`): Generate SLSA build-provenance attestation
 - `build-args-json` (string, default `{}`): JSON object of build-args passed to docker build (e.g., `{"VERSION":"7.0.0","BUILD_DATE":"2024-01-15T10:30:00Z","SOURCE_VERSION":"abc123"}`)
 - `context` (string, default `.`): Docker build context directory
