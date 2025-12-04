@@ -8,27 +8,27 @@ This workflow executes a custom build script and uploads the resulting artifacts
 
 ## Inputs
 
-| Input                   | Description                                                                 | Required | Default                         |
-| ----------------------- | --------------------------------------------------------------------------- | -------- | ------------------------------- |
-| `jf-project`            | JFrog Artifactory project name                                              | Yes      | -                               |
-| `jf-build-name`         | Name for this build in artifactory                                          | Yes      | -                               |
-| `jf-build-id`           | Build ID for this build in artifactory                                      | Yes      | -                               |
-| `build-script`          | Inline bash commands to execute                                             | No\*     | -                               |
-| `build-script-path`     | Path to the build script file to execute                                    | No\*     | -                               |
-| `gh-artifact-directory` | Directory that will contain all artifacts from this build                   | Yes      | -                               |
-| `gh-artifact-name`      | Name for the uploaded artifacts                                             | No       | `build-artifacts`               |
-| `gh-retention-days`     | Retention days for the artifacts                                            | No       | `1`                             |
-| `working-directory`     | Working directory for build script execution                                | No       | -                               |
-| `jf-url`                | JFrog Artifactory URL                                                       | No       | `https://artifact.aerospike.io` |
-| `oidc-provider-name`    | OIDC provider name                                                          | No       | `gh-aerospike`                  |
-| `oidc-audience`         | OIDC audience                                                               | No       | `aerospike`                     |
-| `runs-on`               | The runner to use for the build                                             | No       | `ubuntu-22.04`                  |
-| `gh-checkout-path`      | Directory to checkout the shared-workflows repository into                  | No       | `shared-workflows`              |
-| `gh-workflows-ref`      | Git reference to checkout shared-workflows repository (tag, branch, or SHA) | No       | `v2.0.2`                        |
-| `gh-source-repository`  | Repository to checkout for source code (format owner/repo)                  | No       | `${{ github.repository }}`      |
-| `gh-source-ref`         | Reference to checkout for source repository (branch, tag, or commit)        | No       | -                               |
-| `gh-source-path`        | Directory to checkout the source repository into                            | No       | `local`                         |
-| `dry-run`               | Whether to run in dry-run mode                                              | No       | `false`                         |
+| Input                   | Description                                                          | Required | Default                         |
+| ----------------------- | -------------------------------------------------------------------- | -------- | ------------------------------- |
+| `jf-project`            | JFrog Artifactory project name                                       | Yes      | -                               |
+| `jf-build-name`         | Name for this build in artifactory                                   | Yes      | -                               |
+| `jf-build-id`           | Build ID for this build in artifactory                               | Yes      | -                               |
+| `build-script`          | Inline bash commands to execute                                      | No\*     | -                               |
+| `build-script-path`     | Path to the build script file to execute                             | No\*     | -                               |
+| `gh-artifact-directory` | Directory that will contain all artifacts from this build            | Yes      | -                               |
+| `gh-artifact-name`      | Name for the uploaded artifacts                                      | No       | `build-artifacts`               |
+| `gh-retention-days`     | Retention days for the artifacts                                     | No       | `1`                             |
+| `working-directory`     | Working directory for build script execution                         | No       | -                               |
+| `jf-url`                | JFrog Artifactory URL                                                | No       | `https://artifact.aerospike.io` |
+| `oidc-provider-name`    | OIDC provider name                                                   | No       | `gh-aerospike`                  |
+| `oidc-audience`         | OIDC audience                                                        | No       | `aerospike`                     |
+| `runs-on`               | The runner to use for the build                                      | No       | `ubuntu-22.04`                  |
+| `gh-checkout-path`      | Directory to checkout the shared-workflows repository into           | No       | `shared-workflows`              |
+| `gh-workflows-ref`      | Git ref for shared-workflows (**should match your `uses:` version**) | Yes      | -                               |
+| `gh-source-repository`  | Repository to checkout for source code (format owner/repo)           | No       | `${{ github.repository }}`      |
+| `gh-source-ref`         | Reference to checkout for source repository (branch, tag, or commit) | No       | -                               |
+| `gh-source-path`        | Directory to checkout the source repository into                     | No       | `local`                         |
+| `dry-run`               | Whether to run in dry-run mode                                       | No       | `false`                         |
 
 \*Either `build-script` or `build-script-path` is required, but not both.
 
@@ -56,7 +56,7 @@ jobs:
       gh-artifact-directory: dist
       gh-artifact-name: my-build-artifacts
       gh-retention-days: 7
-      gh-workflows-ref: v2.0.2 # IMPORTANT: Set to match the ref in your 'uses:' line
+      gh-workflows-ref: v2.0.2 # Should match the version in your 'uses:' line
       dry-run: false
 ```
 
@@ -74,19 +74,13 @@ jobs:
       gh-artifact-directory: dist
       gh-artifact-name: my-build-artifacts
       gh-retention-days: 7
-      gh-workflows-ref: v2.0.2 # IMPORTANT: Set to match the ref in your 'uses:' line
+      gh-workflows-ref: v2.0.2 # Should match the version in your 'uses:' line
       dry-run: false
 ```
 
-## Important Notes
+## Required: gh-workflows-ref
 
-### gh-workflows-ref Parameter
-
-**For external consumers**: When calling this workflow with a specific version (e.g., `@v2.0.3`), you should explicitly set `gh-workflows-ref: v2.0.3` to match the ref used in your `uses:` line. This ensures consistency between the workflow version and the entrypoint scripts version.
-
-**Why this matters**: GitHub Actions doesn't provide access to the ref used in the `uses:` line from within the reusable workflow. If you don't set `gh-workflows-ref`, it will default to `v2.0.2`, which may not match the workflow version you're using, potentially causing inconsistencies.
-
-**Example**: If calling `uses: aerospike/shared-workflows/.github/workflows/reusable_execute-build.yaml@v2.0.3`, also set `gh-workflows-ref: v2.0.3`.
+The `gh-workflows-ref` input is **required** and must match the version in your `uses:` line. See [Why gh-workflows-ref is required](../docs/CICD-with-shared-actions.md#why-gh-workflows-ref-is-required) for details on this GitHub Actions limitation.
 
 ## Build Script Requirements
 

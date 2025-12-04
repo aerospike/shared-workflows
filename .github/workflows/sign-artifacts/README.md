@@ -9,15 +9,15 @@ This is a reusable GitHub Actions workflow that signs binary artifacts using GPG
 
 ## Inputs
 
-| Name                    | Type     | Required | Description                                                                                    |
-| ----------------------- | -------- | -------- | ---------------------------------------------------------------------------------------------- |
-| `gh-unsigned-artifacts` | `string` | No       | Previously uploaded artifacts to sign. Default: `build-artifacts`                              |
-| `gh-artifact-name`      | `string` | No       | Name for the uploaded signed artifacts. Default: `signed-artifacts`                            |
-| `gh-retention-days`     | `number` | No       | Number of days to retain the signed artifacts. Default: `1`                                    |
-| `gh-checkout-path`      | `string` | No       | Directory to checkout the shared-workflows repository into. Default: `shared-workflows`        |
-| `gh-workflows-ref`      | `string` | No       | Git reference to checkout shared-workflows repository (tag, branch, or SHA). Default: `v2.0.2` |
-| `runs-on`               | `string` | No       | The runner to use. Default: `ubuntu-22.04`                                                     |
-| `nuget-environment`     | `string` | No       | SSL.com environment name for NuGet signing. Default: `PROD`                                    |
+| Name                    | Type     | Required | Description                                                                             |
+| ----------------------- | -------- | -------- | --------------------------------------------------------------------------------------- |
+| `gh-unsigned-artifacts` | `string` | No       | Previously uploaded artifacts to sign. Default: `build-artifacts`                       |
+| `gh-artifact-name`      | `string` | No       | Name for the uploaded signed artifacts. Default: `signed-artifacts`                     |
+| `gh-retention-days`     | `number` | No       | Number of days to retain the signed artifacts. Default: `1`                             |
+| `gh-checkout-path`      | `string` | No       | Directory to checkout the shared-workflows repository into. Default: `shared-workflows` |
+| `gh-workflows-ref`      | `string` | Yes      | Git ref for shared-workflows (**should match your `uses:` version**)                    |
+| `runs-on`               | `string` | No       | The runner to use. Default: `ubuntu-22.04`                                              |
+| `nuget-environment`     | `string` | No       | SSL.com environment name for NuGet signing. Default: `PROD`                             |
 
 ## Secrets
 
@@ -52,7 +52,7 @@ jobs:
       gh-unsigned-artifacts: test-fixtures
       gh-artifact-name: signed-artifacts # optional, defaults to signed-artifacts
       gh-retention-days: 7 # optional, defaults to 1
-      gh-workflows-ref: v2.0.2 # IMPORTANT: Set to match the ref in your 'uses:' line
+      gh-workflows-ref: v2.0.2 # Should match the version in your 'uses:' line
     secrets:
       gpg-private-key: ${{ secrets.GPG_SECRET_KEY }}
       gpg-public-key: ${{ secrets.GPG_PUBLIC_KEY }}
@@ -64,13 +64,9 @@ jobs:
       es-totp_secret: ${{ secrets.ES_TOTP_SECRET }}
 ```
 
-## Important Notes
+## Required: gh-workflows-ref
 
-### gh-workflows-ref Parameter
-
-**For external consumers**: When calling this workflow with a specific version (e.g., `@v2.0.3`), you should explicitly set `gh-workflows-ref: v2.0.3` to match the ref used in your `uses:` line. This ensures consistency between the workflow version and the entrypoint scripts version.
-
-**Why this matters**: GitHub Actions doesn't provide access to the ref used in the `uses:` line from within the reusable workflow. If you don't set `gh-workflows-ref`, it will default to the previous release, which may not match the workflow version you're using, potentially causing inconsistencies.
+The `gh-workflows-ref` input is **required** and must match the version in your `uses:` line. See [Why gh-workflows-ref is required](../docs/CICD-with-shared-actions.md#why-gh-workflows-ref-is-required) for details.
 
 ## Outputs
 

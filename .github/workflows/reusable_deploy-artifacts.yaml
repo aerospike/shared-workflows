@@ -26,6 +26,13 @@ on:
         description: Version of the artifact to upload
         required: true
         type: string
+      gh-workflows-ref:
+        description: |
+          Git reference for shared-workflows checkout. Should match the version in your 'uses:' line.
+          GitHub Actions doesn't expose the called workflow's ref, so this is required.
+          See: .github/workflows/docs/CICD-with-shared-actions.md#why-gh-workflows-ref-is-required
+        required: true
+        type: string
 
       # Optional inputs
       dry-run:
@@ -47,11 +54,6 @@ on:
         required: false
         type: string
         default: shared-workflows
-      gh-workflows-ref:
-        description: Git reference to checkout shared-workflows repository (tag, branch, or SHA)
-        required: false
-        type: string
-        default: v2.0.2
       gh-retention-days:
         description: Retention days for the artifacts
         required: false
