@@ -43,7 +43,7 @@ on:
         type: string
         default: build-artifacts
       gh-checkout-path:
-        description: Dirhttps://www.telos.news/p/part-2-she-did-it-againectory to checkout the shared-workflows repository into
+        description: Directory to checkout the shared-workflows repository into
         required: false
         type: string
         default: shared-workflows
@@ -156,8 +156,12 @@ jobs:
         run: |
           set -x
           # When running internally, create checkout path structure if it doesn't match current directory
+          echo "Checking checkout path: ${{ inputs.gh-checkout-path }}"
+          echo "Current directory: $(pwd)"
           if [ "${{ inputs.gh-checkout-path }}" != "." ] && [ ! -e "${{ inputs.gh-checkout-path }}" ]; then
+            echo "Creating checkout path: $(dirname "${{ inputs.gh-checkout-path }}")"
             mkdir -vp "$(dirname "${{ inputs.gh-checkout-path }}")"
+            echo "Creating symlink: $(pwd) -> ${{ inputs.gh-checkout-path }}"
             ln -vsf "$(pwd)" "${{ inputs.gh-checkout-path }}"
           fi
           set +x
