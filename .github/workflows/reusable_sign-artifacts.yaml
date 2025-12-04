@@ -88,22 +88,12 @@ jobs:
           echo "Found nuget packages: $(ls unsigned-nuget-packages/)"
           echo "count=$(ls unsigned-nuget-packages/ | wc -l)" >> $GITHUB_OUTPUT
       - name: Checkout shared-workflows repository
-        if: github.repository != 'aerospike/shared-workflows'
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
           repository: aerospike/shared-workflows
           ref: ${{ inputs.gh-workflows-ref }}
           path: ${{ inputs.gh-checkout-path }}
           fetch-depth: 1
-
-      - name: Prepare checkout path for internal use
-        if: github.repository == 'aerospike/shared-workflows'
-        run: |
-          # When running internally, create checkout path structure if it doesn't match current directory
-          if [ "${{ inputs.gh-checkout-path }}" != "." ] && [ ! -e "${{ inputs.gh-checkout-path }}" ]; then
-            mkdir -vp "$(dirname "${{ inputs.gh-checkout-path }}")"
-            ln -sf "$(pwd)" "${{ inputs.gh-checkout-path }}"
-          fi
 
       - name: Set up GPG
         uses: aerospike/shared-workflows/.github/actions/setup-gpg@a3356acbde7fcda4b9e632b9b4f6ed83ce48b87d # v2.0.2
@@ -140,8 +130,9 @@ jobs:
           sudo apt-get update && sudo apt-get install dpkg-sig dpkg-dev -y
       - name: Sign Artifacts
         run: |
-          chmod +x ${{ inputs.gh-checkout-path }}/.github/workflows/sign-artifacts/entrypoint.sh
-          ${{ inputs.gh-checkout-path }}/.github/workflows/sign-artifacts/entrypoint.sh 'unsigned-artifacts/**/*' '${{ inputs.gh-artifact-name }}'
+          entrypoint="${{ inputs.gh-checkout-path }}/.github/workflows/sign-artifacts/entrypoint.sh"
+          chmod +x "$entrypoint"
+          "$entrypoint" 'unsigned-artifacts/**/*' '${{ inputs.gh-artifact-name }}'
       - name: Upload Artifacts
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         with:

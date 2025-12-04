@@ -93,22 +93,12 @@ jobs:
           egress-policy: audit
 
       - name: Checkout shared-workflows repository
-        if: github.repository != 'aerospike/shared-workflows'
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
           repository: aerospike/shared-workflows
           ref: ${{ inputs.gh-workflows-ref }}
           path: ${{ inputs.gh-checkout-path }}
           fetch-depth: 1
-
-      - name: Prepare checkout path for internal use
-        if: github.repository == 'aerospike/shared-workflows'
-        run: |
-          # When running internally, create checkout path structure if it doesn't match current directory
-          if [ "${{ inputs.gh-checkout-path }}" != "." ] && [ ! -e "${{ inputs.gh-checkout-path }}" ]; then
-            mkdir -vp "$(dirname "${{ inputs.gh-checkout-path }}")"
-            ln -sf "$(pwd)" "${{ inputs.gh-checkout-path }}"
-          fi
 
       - name: Setup JFrog CLI
         uses: jfrog/setup-jfrog-cli@5b06f730cc5a6f55d78b30753f8583454b08c0aa # v4.8.1
@@ -139,7 +129,8 @@ jobs:
         id: deploy
         shell: bash
         run: |
-          chmod +x ${{ inputs.gh-checkout-path }}/.github/workflows/deploy-artifacts/entrypoint.sh
+          entrypoint="${{ inputs.gh-checkout-path }}/.github/workflows/deploy-artifacts/entrypoint.sh"
+          chmod +x "$entrypoint"
           dry_run_arg=""
           if [ "${{ inputs.dry-run }}" = "true" ]; then
             dry_run_arg="--dry-run"
@@ -150,7 +141,7 @@ jobs:
             jar_group_id_arg="--jar-group-id ${{ inputs.jar-group-id }}"
           fi
 
-          ${{ inputs.gh-checkout-path }}/.github/workflows/deploy-artifacts/entrypoint.sh \
+          "$entrypoint" \
             "${{ inputs.jf-project }}" \
             "${{ inputs.jf-build-name }}" \
             "${{ inputs.version }}" \
