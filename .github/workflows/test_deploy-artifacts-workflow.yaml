@@ -34,9 +34,9 @@ jobs:
       jf-url: https://artifact.aerospike.io
       oidc-provider-name: gh-aerospike
       oidc-audience: aerospike
+      gh-checkout-path: . # Use current directory for internal calls
       gh-artifact-name: test-fixtures
       dry-run: true
-      gh-workflows-ref: v2.0.2
 
   run-tests:
     runs-on: ubuntu-22.04

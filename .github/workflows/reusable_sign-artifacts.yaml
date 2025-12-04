@@ -68,8 +68,6 @@ jobs:
     runs-on: ${{ inputs.runs-on }}
     outputs:
       gh-artifact-name: ${{ steps.sign-outputs.outputs.gh-artifact-name }}
-    env:
-      CHECKOUT_REF: ${{ inputs.gh-workflows-ref }}
     steps:
       - name: Download Unsigned Artifacts
         uses: actions/download-artifact@v4
@@ -85,10 +83,11 @@ jobs:
           echo "Found nuget packages: $(ls unsigned-nuget-packages/)"
           echo "count=$(ls unsigned-nuget-packages/ | wc -l)" >> $GITHUB_OUTPUT
       - name: Checkout shared-workflows repository
+        if: github.repository != 'aerospike/shared-workflows'
         uses: actions/checkout@v5
         with:
           repository: aerospike/shared-workflows
-          ref: ${{ env.CHECKOUT_REF }}
+          ref: ${{ inputs.gh-workflows-ref }}
           path: ${{ inputs.gh-checkout-path }}
           fetch-depth: 1
 

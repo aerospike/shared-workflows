@@ -24,6 +24,8 @@ This workflow creates JFrog release bundles by bundling one or more builds into 
 
 ## Example Usage
 
+**Note**: The example below shows the pattern for external consumers using tagged versions. Internal workflows in this repository use relative paths (e.g., `uses: ./.github/workflows/reusable_create-release-bundle.yaml`) for development and testing.
+
 ### Basic release bundle creation
 
 ```yaml
@@ -35,15 +37,25 @@ on:
 
 jobs:
   create-release-bundle:
-    uses: ./.github/workflows/reusable_create-release-bundle.yaml
+    uses: aerospike/shared-workflows/.github/workflows/reusable_create-release-bundle.yaml@v2.0.2
     with:
       jf-project: database
       jf-build-names: "database-build,client-build"
       jf-bundle-name: database-release
       version: ${{ github.ref_name }}
-      gh-workflows-ref: v2.0.2 # Use specific shared-workflows version
+      gh-workflows-ref: v2.0.2 # IMPORTANT: Set to match the ref in your 'uses:' line
       dry-run: false
 ```
+
+## Important Notes
+
+### gh-workflows-ref Parameter
+
+**For external consumers**: When calling this workflow with a specific version (e.g., `@v2.0.3`), you should explicitly set `gh-workflows-ref: v2.0.3` to match the ref used in your `uses:` line. This ensures consistency between the workflow version and the entrypoint scripts version.
+
+**Why this matters**: GitHub Actions doesn't provide access to the ref used in the `uses:` line from within the reusable workflow. If you don't set `gh-workflows-ref`, it will default to `v2.0.2`, which may not match the workflow version you're using, potentially causing inconsistencies.
+
+**Example**: If calling `uses: aerospike/shared-workflows/.github/workflows/reusable_create-release-bundle.yaml@v2.0.3`, also set `gh-workflows-ref: v2.0.3`.
 
 ## Prerequisites
 

@@ -124,14 +124,13 @@ jobs:
       gh-artifact-name: ${{ steps.build-info.outputs.gh-artifact-name }}
       jf-build-id: ${{ steps.build-info.outputs.jf-build-id }}
       jf-build-name: ${{ steps.build-info.outputs.jf-build-name }}
-    env:
-      CHECKOUT_REF: ${{ inputs.gh-workflows-ref }}
     steps:
       - name: Checkout shared-workflows repository
+        if: github.repository != 'aerospike/shared-workflows'
         uses: actions/checkout@v5
         with:
           repository: aerospike/shared-workflows
-          ref: ${{ env.CHECKOUT_REF }}
+          ref: ${{ inputs.gh-workflows-ref }}
           path: ${{ inputs.gh-checkout-path }}
           fetch-depth: 1
 

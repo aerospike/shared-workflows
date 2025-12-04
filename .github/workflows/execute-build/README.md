@@ -26,13 +26,15 @@ This workflow executes a custom build script and uploads the resulting artifacts
 | `gh-checkout-path`      | Directory to checkout the shared-workflows repository into                  | No       | `shared-workflows`              |
 | `gh-workflows-ref`      | Git reference to checkout shared-workflows repository (tag, branch, or SHA) | No       | `v2.0.2`                        |
 | `gh-source-repository`  | Repository to checkout for source code (format owner/repo)                  | No       | `${{ github.repository }}`      |
-| `gh-workflows-ref`      | Reference to checkout for source repository (branch, tag, or commit)        | No       | -                               |
+| `gh-source-ref`         | Reference to checkout for source repository (branch, tag, or commit)        | No       | -                               |
 | `gh-source-path`        | Directory to checkout the source repository into                            | No       | `local`                         |
 | `dry-run`               | Whether to run in dry-run mode                                              | No       | `false`                         |
 
 \*Either `build-script` or `build-script-path` is required, but not both.
 
 ## Example Usage
+
+**Note**: The examples below show the pattern for external consumers using tagged versions. Internal workflows in this repository use relative paths (e.g., `uses: ./.github/workflows/reusable_execute-build.yaml`) for development and testing.
 
 ### Using inline build commands
 
@@ -54,7 +56,7 @@ jobs:
       gh-artifact-directory: dist
       gh-artifact-name: my-build-artifacts
       gh-retention-days: 7
-      gh-workflows-ref: v2.0.2 # Use specific shared-workflows version
+      gh-workflows-ref: v2.0.2 # IMPORTANT: Set to match the ref in your 'uses:' line
       dry-run: false
 ```
 
@@ -72,9 +74,19 @@ jobs:
       gh-artifact-directory: dist
       gh-artifact-name: my-build-artifacts
       gh-retention-days: 7
-      gh-workflows-ref: v2.0.2 # Use specific shared-workflows version
+      gh-workflows-ref: v2.0.2 # IMPORTANT: Set to match the ref in your 'uses:' line
       dry-run: false
 ```
+
+## Important Notes
+
+### gh-workflows-ref Parameter
+
+**For external consumers**: When calling this workflow with a specific version (e.g., `@v2.0.3`), you should explicitly set `gh-workflows-ref: v2.0.3` to match the ref used in your `uses:` line. This ensures consistency between the workflow version and the entrypoint scripts version.
+
+**Why this matters**: GitHub Actions doesn't provide access to the ref used in the `uses:` line from within the reusable workflow. If you don't set `gh-workflows-ref`, it will default to `v2.0.2`, which may not match the workflow version you're using, potentially causing inconsistencies.
+
+**Example**: If calling `uses: aerospike/shared-workflows/.github/workflows/reusable_execute-build.yaml@v2.0.3`, also set `gh-workflows-ref: v2.0.3`.
 
 ## Build Script Requirements
 

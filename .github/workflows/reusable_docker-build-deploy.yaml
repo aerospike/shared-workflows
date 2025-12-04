@@ -260,8 +260,8 @@ jobs:
       #     shell: bash
       #     run: |
       #       echo "JFROG_CLI_BUILD_NAME=${{ env.JFROG_CLI_BUILD_NAME }}"
-      #       jf docker pull ${{ inputs.tag }} --build-name="${{ env.JFROG_CLI_BUILD_NAME }}" --build-number="$JFROG_CLI_BUILD_NUMBER"
-      #       jf docker scan ${{ inputs.tag }} --build-name="${{ env.JFROG_CLI_BUILD_NAME }}" --build-number="$JFROG_CLI_BUILD_NUMBER"
+      #       jf docker pull ${{ steps.tags.outputs.immutable-tag }} --build-name="${{ env.JFROG_CLI_BUILD_NAME }}" --build-number="$JFROG_CLI_BUILD_NUMBER"
+      #       jf docker scan ${{ steps.tags.outputs.immutable-tag }} --build-name="${{ env.JFROG_CLI_BUILD_NAME }}" --build-number="$JFROG_CLI_BUILD_NUMBER"
       - name: Create build info for docker image
         id: meta
         shell: bash

@@ -17,10 +17,10 @@ jobs:
       jf-bundle-name: test-release-bundle
       version: v1.0.0
       jf-url: https://artifact.aerospike.io
+      gh-checkout-path: . # Use current directory for internal calls
       oidc-provider-name: gh-aerospike
       oidc-audience: aerospike
       dry-run: true
-      gh-workflows-ref: v2.0.2
 
   run-tests:
     runs-on: ubuntu-22.04

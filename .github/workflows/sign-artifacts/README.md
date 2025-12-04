@@ -40,6 +40,8 @@ Notes:
 
 ## Example Usage
 
+**Note**: The example below shows the pattern for external consumers using tagged versions. Internal workflows in this repository use relative paths (e.g., `uses: ./.github/workflows/reusable_sign-artifacts.yaml`) for development and testing.
+
 From another workflow:
 
 ```yaml
@@ -50,7 +52,7 @@ jobs:
       gh-unsigned-artifacts: test-fixtures
       gh-artifact-name: signed-artifacts # optional, defaults to signed-artifacts
       gh-retention-days: 7 # optional, defaults to 1
-      gh-workflows-ref: v2.0.2 # Use specific shared-workflows version
+      gh-workflows-ref: v2.0.2 # IMPORTANT: Set to match the ref in your 'uses:' line
     secrets:
       gpg-private-key: ${{ secrets.GPG_SECRET_KEY }}
       gpg-public-key: ${{ secrets.GPG_PUBLIC_KEY }}
@@ -61,6 +63,14 @@ jobs:
       credential_id: ${{ secrets.CREDENTIAL_ID }}
       es-totp_secret: ${{ secrets.ES_TOTP_SECRET }}
 ```
+
+## Important Notes
+
+### gh-workflows-ref Parameter
+
+**For external consumers**: When calling this workflow with a specific version (e.g., `@v2.0.3`), you should explicitly set `gh-workflows-ref: v2.0.3` to match the ref used in your `uses:` line. This ensures consistency between the workflow version and the entrypoint scripts version.
+
+**Why this matters**: GitHub Actions doesn't provide access to the ref used in the `uses:` line from within the reusable workflow. If you don't set `gh-workflows-ref`, it will default to the previous release, which may not match the workflow version you're using, potentially causing inconsistencies.
 
 ## Outputs
 

@@ -68,14 +68,13 @@ permissions:
 jobs:
   create-release-bundle:
     runs-on: ${{ inputs.runs-on }}
-    env:
-      CHECKOUT_REF: ${{ inputs.gh-workflows-ref }}
     steps:
       - name: Checkout shared-workflows repository
+        if: github.repository != 'aerospike/shared-workflows'
         uses: actions/checkout@v5
         with:
           repository: aerospike/shared-workflows
-          ref: ${{ env.CHECKOUT_REF }}
+          ref: ${{ inputs.gh-workflows-ref }}
           path: ${{ inputs.gh-checkout-path }}
           fetch-depth: 1
 

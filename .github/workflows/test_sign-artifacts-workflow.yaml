@@ -34,8 +34,8 @@ jobs:
       credential_id: ${{ secrets.CREDENTIAL_ID }}
       es-totp_secret: ${{ secrets.ES_TOTP_SECRET }}
     with:
+      gh-checkout-path: . # Use current directory for internal calls
       gh-unsigned-artifacts: test-fixtures
-      gh-workflows-ref: v2.0.2
 
   verify-nuget-signatures:
     needs: test-sign-workflow
