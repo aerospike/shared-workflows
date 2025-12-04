@@ -137,10 +137,11 @@ jobs:
         #   emulated: false
     with:
       runs-on: ${{ matrix.runs-on }}
+      gh-workflows-ref: ${{ github.sha }}
       jf-project: test
       jf-build-name: test-build
       jf-build-id: ${{ github.run_number }}-buildinfo-${{ matrix.distro }}-${{ matrix.arch }}
-      # gh-checkout-path defaults to 'shared-workflow
+      # gh-checkout-path defaults to 'shared-workflows'
       gh-source-path: repo-source
       working-directory: repo-source/.github/workflows/execute-build/test_apps/hi
       build-script: |
@@ -203,6 +204,7 @@ jobs:
     uses: ./.github/workflows/reusable_sign-artifacts.yaml
     with:
       # gh-checkout-path defaults to 'shared-workflows'
+      gh-workflows-ref: ${{ github.sha }}
       gh-retention-days: 1
       gh-artifact-name: packaged-artifacts
     secrets:
@@ -214,6 +216,7 @@ jobs:
     needs: [sign-artifacts, extract-version]
     uses: ./.github/workflows/reusable_deploy-artifacts.yaml
     with:
+      gh-workflows-ref: ${{ github.sha }}
       # gh-checkout-path defaults to 'shared-workflows'
       jf-project: test
       jf-build-name: test-build
@@ -368,6 +371,7 @@ jobs:
     uses: ./.github/workflows/reusable_create-release-bundle.yaml
     if: github.event_name == 'workflow_dispatch'
     with:
+      gh-workflows-ref: ${{ github.sha }}
       # gh-checkout-path defaults to 'shared-workflows'
       jf-project: test
       jf-build-names: test-build:${{ github.run_number }},test-build-container:${{ github.run_number }}

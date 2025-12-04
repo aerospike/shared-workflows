@@ -15,6 +15,7 @@ jobs:
       jf-project: test
       jf-build-name: test-build
       jf-build-id: v1.0.0
+      gh-workflows-ref: ${{ github.sha }}
       build-script: |
         echo "Need to ensure current-source is correctly present and building"
         cat current-source/README.md &&\

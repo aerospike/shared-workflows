@@ -31,6 +31,7 @@ jobs:
     needs: upload-test-gh-artifacts
     uses: ./.github/workflows/reusable_deploy-artifacts.yaml
     with:
+      gh-workflows-ref: ${{ github.sha }}
       jf-project: test
       jf-build-name: test-upload-workflow
       version: v1.0.0

@@ -45,7 +45,7 @@ jobs:
     with:
       # gh-checkout-path defaults to 'shared-workflows'
       gh-unsigned-artifacts: test-fixtures
-
+      gh-workflows-ref: ${{ github.sha }}
   verify-nuget-signatures:
     if: github.actor != 'dependabot[bot]'
     needs: test-sign-workflow
