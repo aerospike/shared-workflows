@@ -33,6 +33,10 @@ on:
         required: false
         type: boolean
         default: false
+      jar-group-id:
+        description: Maven group ID for JAR artifacts (used as fallback when metadata doesn't provide one)
+        required: false
+        type: string
       gh-artifact-name:
         description: Name of signed artifacts on github
         required: false
@@ -83,9 +87,14 @@ jobs:
     outputs:
       jf-build-id: ${{ steps.deploy.outputs.jf-build-id }}
     steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@95d9a5deda9de15063e7595e9719c11c38c90ae2 # v2.13.2
+        with:
+          egress-policy: audit
+
       - name: Checkout shared-workflows repository
         if: github.repository != 'aerospike/shared-workflows'
-        uses: actions/checkout@v5
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
           repository: aerospike/shared-workflows
           ref: ${{ inputs.gh-workflows-ref }}
@@ -107,10 +116,11 @@ jobs:
           jf rt ping
 
       - name: Download artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
         with:
           name: ${{ inputs.gh-artifact-name }}
           path: ./build-artifacts
+
       - name: Verify artifacts
         shell: bash
         run: |
@@ -126,11 +136,17 @@ jobs:
             dry_run_arg="--dry-run"
           fi
 
+          jar_group_id_arg=""
+          if [ -n "${{ inputs.jar-group-id }}" ]; then
+            jar_group_id_arg="--jar-group-id ${{ inputs.jar-group-id }}"
+          fi
+
           ${{ inputs.gh-checkout-path }}/.github/workflows/deploy-artifacts/entrypoint.sh \
             "${{ inputs.jf-project }}" \
             "${{ inputs.jf-build-name }}" \
             "${{ inputs.version }}" \
             "${{ inputs.jf-build-id }}" \
             "${{ inputs.jf-metadata-build-id }}" \
-            $dry_run_arg
+            $dry_run_arg \
+            $jar_group_id_arg
           echo "jf-build-id=${{ inputs.jf-build-id }}" >> $GITHUB_OUTPUT

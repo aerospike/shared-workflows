@@ -102,6 +102,28 @@ on:
         type: string
         default: .
 
+      # Java/Maven setup
+      setup-java:
+        description: Whether to set up Java environment
+        required: false
+        type: boolean
+        default: false
+      java-version:
+        description: Java version to set up (e.g., "17", "21")
+        required: false
+        type: string
+        default: "21"
+      java-distribution:
+        description: Java distribution (temurin, zulu, adopt, corretto, etc.)
+        required: false
+        type: string
+        default: temurin
+      java-cache:
+        description: Package manager to cache (maven, gradle, sbt).
+        required: false
+        type: string
+        default: maven
+
     outputs:
       gh-artifact-name:
         description: The name of the uploaded artifacts on github
@@ -125,9 +147,14 @@ jobs:
       jf-build-id: ${{ steps.build-info.outputs.jf-build-id }}
       jf-build-name: ${{ steps.build-info.outputs.jf-build-name }}
     steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@95d9a5deda9de15063e7595e9719c11c38c90ae2 # v2.13.2
+        with:
+          egress-policy: audit
+
       - name: Checkout shared-workflows repository
         if: github.repository != 'aerospike/shared-workflows'
-        uses: actions/checkout@v5
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
           repository: aerospike/shared-workflows
           ref: ${{ inputs.gh-workflows-ref }}
@@ -136,7 +163,7 @@ jobs:
 
       - name: Checkout source repository
         if: inputs.gh-source-path != ''
-        uses: actions/checkout@v5
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
           repository: ${{ inputs.gh-source-repository }}
           ref: ${{ inputs.gh-source-ref }}
@@ -144,6 +171,14 @@ jobs:
           fetch-tags: true
           submodules: recursive
           fetch-depth: 1
+
+      - name: Set up Java
+        if: inputs.setup-java
+        uses: actions/setup-java@v4
+        with:
+          distribution: ${{ inputs.java-distribution }}
+          java-version: ${{ inputs.java-version }}
+          cache: ${{ inputs.java-cache }}
 
       - name: Set up JFrog CLI
         uses: jfrog/setup-jfrog-cli@5b06f730cc5a6f55d78b30753f8583454b08c0aa # v4.8.1
@@ -186,7 +221,7 @@ jobs:
             ${{ inputs.dry-run && '--dry-run' || '' }}
       - name: Upload Artifacts
         if: inputs.dry-run != true
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         with:
           name: ${{ inputs.gh-artifact-name }}
           path: ${{ inputs.working-directory != '' && format('{0}/{1}', inputs.working-directory, inputs.gh-artifact-directory) || inputs.gh-artifact-directory }}
