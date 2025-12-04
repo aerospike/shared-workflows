@@ -43,7 +43,7 @@ on:
         type: string
         default: build-artifacts
       gh-checkout-path:
-        description: Directory to checkout the shared-workflows repository into
+        description: Dirhttps://www.telos.news/p/part-2-she-did-it-againectory to checkout the shared-workflows repository into
         required: false
         type: string
         default: shared-workflows
