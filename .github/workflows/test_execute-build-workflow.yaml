@@ -19,7 +19,7 @@ jobs:
         echo "Need to ensure current-source is correctly present and building"
         cat current-source/README.md &&\
         cd project-location/.github/workflows/execute-build/test_apps/hi && make
-      gh-checkout-path: . # Use current directory for internal calls
+      gh-checkout-path: project-location
       gh-source-path: current-source
       gh-artifact-directory: project-location/.github/workflows/execute-build/test_apps/hi/build
       gh-artifact-name: test-execute-build

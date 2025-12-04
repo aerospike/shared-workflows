@@ -161,6 +161,15 @@ jobs:
           path: ${{ inputs.gh-checkout-path }}
           fetch-depth: 1
 
+      - name: Prepare checkout path for internal use
+        if: github.repository == 'aerospike/shared-workflows'
+        run: |
+          # When running internally, create checkout path structure if it doesn't match current directory
+          if [ "${{ inputs.gh-checkout-path }}" != "." ] && [ ! -e "${{ inputs.gh-checkout-path }}" ]; then
+            mkdir -p "$(dirname "${{ inputs.gh-checkout-path }}")"
+            ln -sf "$(pwd)" "${{ inputs.gh-checkout-path }}"
+          fi
+
       - name: Checkout source repository
         if: inputs.gh-source-path != ''
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1

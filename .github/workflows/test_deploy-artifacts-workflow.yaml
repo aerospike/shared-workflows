@@ -40,6 +40,7 @@ jobs:
       oidc-provider-name: gh-aerospike
       oidc-audience: aerospike
       gh-checkout-path: . # Use current directory for internal calls
+      # gh-checkout-path defaults to 'shared-workflows'
       gh-artifact-name: test-fixtures
       dry-run: true
 

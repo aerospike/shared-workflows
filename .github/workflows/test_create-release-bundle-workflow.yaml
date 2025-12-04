@@ -17,7 +17,7 @@ jobs:
       jf-bundle-name: test-release-bundle
       version: v1.0.0
       jf-url: https://artifact.aerospike.io
-      gh-checkout-path: . # Use current directory for internal calls
+      # gh-checkout-path defaults to 'shared-workflows'
       oidc-provider-name: gh-aerospike
       oidc-audience: aerospike
       dry-run: true

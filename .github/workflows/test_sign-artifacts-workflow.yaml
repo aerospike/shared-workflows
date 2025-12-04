@@ -43,7 +43,7 @@ jobs:
       credential_id: ${{ secrets.CREDENTIAL_ID }}
       es-totp_secret: ${{ secrets.ES_TOTP_SECRET }}
     with:
-      gh-checkout-path: . # Use current directory for internal calls
+      # gh-checkout-path defaults to 'shared-workflows'
       gh-unsigned-artifacts: test-fixtures
 
   verify-nuget-signatures:
