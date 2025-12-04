@@ -163,6 +163,9 @@ jobs:
             mkdir -vp "$(dirname "${{ inputs.gh-checkout-path }}")"
             echo "Creating symlink: $(pwd) -> ${{ inputs.gh-checkout-path }}"
             ln -vsf "$(pwd)" "${{ inputs.gh-checkout-path }}"
+            echo "current directory contents: $(ls -la)"
+            echo "checkout path contents: $(ls -la "${{ inputs.gh-checkout-path }}")"
+            echo "parent directory contents: $(ls -la ../)"
           fi
           set +x
       - name: Checkout shared-workflows repository
