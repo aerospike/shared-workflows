@@ -161,29 +161,6 @@ jobs:
           path: ${{ inputs.gh-checkout-path }}
           fetch-depth: 1
 
-      - name: Prepare checkout path for internal use
-        if: github.repository == 'aerospike/shared-workflows'
-        run: |
-          # When running internally, create symlink to checkout path if it doesn't match current directory
-          checkout_path="${{ inputs.gh-checkout-path }}"
-          echo "Preparing checkout path: $checkout_path"
-          echo "Current directory: $(pwd)"
-          if [ "$checkout_path" != "." ] && [ ! -e "$checkout_path" ]; then
-            parent_dir=$(dirname "$checkout_path")
-            echo "Parent directory: $parent_dir"
-            # Only create parent directory if it's not the current directory
-            if [ "$parent_dir" != "." ]; then
-              mkdir -p "$parent_dir"
-            fi
-            ln -sf "$(pwd)" "$checkout_path"
-            echo "Created symlink: $checkout_path -> $(pwd)"
-            ls -la "$checkout_path" || echo "Symlink verification failed"
-          elif [ -e "$checkout_path" ]; then
-            echo "Checkout path already exists: $checkout_path"
-            ls -la "$checkout_path"
-          else
-            echo "Using current directory (checkout_path is '.')"
-          fi
       - name: Checkout source repository
         if: inputs.gh-source-path != ''
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
@@ -215,17 +192,13 @@ jobs:
       - name: Execute Build Script
         shell: bash
         run: |
-          # Resolve entrypoint path - handle both symlinks and direct paths
-          entrypoint_path="${{ inputs.gh-checkout-path }}/.github/workflows/execute-build/entrypoint.sh"
-          if [ -e "$entrypoint_path" ]; then
-            entrypoint=$(realpath "$entrypoint_path")
+          # When running internally, use current directory; otherwise use checkout path
+          if [ "${{ github.repository }}" = "aerospike/shared-workflows" ]; then
+            entrypoint_path=".github/workflows/execute-build/entrypoint.sh"
           else
-            echo "Error: Entrypoint not found at $entrypoint_path"
-            echo "Current directory: $(pwd)"
-            echo "Checkout path contents:"
-            ls -la "${{ inputs.gh-checkout-path }}" 2>&1 || echo "Checkout path does not exist"
-            exit 1
+            entrypoint_path="${{ inputs.gh-checkout-path }}/.github/workflows/execute-build/entrypoint.sh"
           fi
+          entrypoint=$(realpath "$entrypoint_path")
           chmod +x "$entrypoint"
           if [[ -n "${{ inputs.working-directory }}" ]]; then
             cd "${{ inputs.working-directory }}"
