@@ -372,14 +372,6 @@ upload_nupkg_packages() {
             --build-name="$BUILD_NAME" \
             --build-number="$ARTIFACT_BUILD_NUMBER" \
             --project="$PROJECT"
-
-        if [[ -f "$nupkg.asc" ]]; then
-            echo "  Uploading signature: $nupkg.asc" >&2
-            run jf rt upload "$nupkg.asc" "$PROJECT-nuget-dev-local/${pkgname}/${pkgversion}/${nupkg_filename}.asc" \
-                --build-name="$BUILD_NAME" \
-                --build-number="$ARTIFACT_BUILD_NUMBER" \
-                --project="$PROJECT"
-        fi
     done < <(find . -name "*.nupkg" -print0)
 
     while IFS= read -r -d '' snupkg; do

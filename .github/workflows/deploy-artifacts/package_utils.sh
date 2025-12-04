@@ -217,25 +217,12 @@ get_nupkg_metadata() {
 process_nupkg() {
     local nupkg="$1"
     local dest_dir="$2"
-    local nupkg_dir
-    nupkg_dir=$(dirname "$nupkg")
     local nupkg_basename
     nupkg_basename=$(basename "$nupkg")
     local base_name="${nupkg_basename%.nupkg}"
     base_name="${base_name%.snupkg}"
 
     process_generic "$nupkg" "$dest_dir"
-
-    if [[ $nupkg_dir == "build-artifacts" ]]; then
-        local csproj_file="build-artifacts/${base_name}.csproj"
-    else
-        local csproj_file="${nupkg_dir}/${base_name}.csproj"
-    fi
-
-    if [[ -f $csproj_file ]]; then
-        echo "Copying .csproj file: $csproj_file" >&2
-        process_generic "$csproj_file" "$dest_dir"
-    fi
 }
 
 process_generic() {
