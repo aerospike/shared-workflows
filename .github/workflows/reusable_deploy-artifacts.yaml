@@ -106,7 +106,7 @@ jobs:
         run: |
           # When running internally, create checkout path structure if it doesn't match current directory
           if [ "${{ inputs.gh-checkout-path }}" != "." ] && [ ! -e "${{ inputs.gh-checkout-path }}" ]; then
-            mkdir -p "$(dirname "${{ inputs.gh-checkout-path }}")"
+            mkdir -vp "$(dirname "${{ inputs.gh-checkout-path }}")"
             ln -sf "$(pwd)" "${{ inputs.gh-checkout-path }}"
           fi
 
