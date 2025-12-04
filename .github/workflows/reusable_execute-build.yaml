@@ -151,25 +151,7 @@ jobs:
         uses: step-security/harden-runner@95d9a5deda9de15063e7595e9719c11c38c90ae2 # v2.13.2
         with:
           egress-policy: audit
-      - name: Prepare checkout path for internal use
-        if: github.repository == 'aerospike/shared-workflows'
-        run: |
-          set -x
-          # When running internally, create checkout path structure if it doesn't match current directory
-          echo "Checking checkout path: ${{ inputs.gh-checkout-path }}"
-          echo "Current directory: $(pwd)"
-          if [ "${{ inputs.gh-checkout-path }}" != "." ] && [ ! -e "${{ inputs.gh-checkout-path }}" ]; then
-            echo "Creating checkout path: $(dirname "${{ inputs.gh-checkout-path }}")"
-            mkdir -vp "$(dirname "${{ inputs.gh-checkout-path }}")"
-            echo "Creating symlink: $(pwd) -> ${{ inputs.gh-checkout-path }}"
-            ln -vsf "$(pwd)" "${{ inputs.gh-checkout-path }}"
-            echo "current directory contents: $(ls -la)"
-            echo "checkout path contents: $(ls -la "${{ inputs.gh-checkout-path }}")"
-            echo "parent directory contents: $(ls -la ../)"
-          fi
-          set +x
       - name: Checkout shared-workflows repository
-        if: github.repository != 'aerospike/shared-workflows'
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
           repository: aerospike/shared-workflows
@@ -208,6 +190,7 @@ jobs:
       - name: Execute Build Script
         shell: bash
         run: |
+          # Entrypoint scripts are always in the shared-workflows checkout location
           entrypoint=$(realpath ${{ inputs.gh-checkout-path }}/.github/workflows/execute-build/entrypoint.sh)
           chmod +x "$entrypoint"
           if [[ -n "${{ inputs.working-directory }}" ]]; then
