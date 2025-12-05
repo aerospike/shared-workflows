@@ -7,3 +7,10 @@
 memory-bank
 memory-bank-external
 .cursorrules-external
+
+Debug
+Release
+bin
+obj
+.vs
+.jfrog/projects/nuget.yaml

@@ -171,8 +171,58 @@ process_deb() {
     echo "$target/$deb_name"
 }
 
+# Function to extract NuGet package metadata
+get_nupkg_metadata() {
+    local nupkg="$1"
+    local filename="${nupkg##*/}"
+    local pkgname version
+
+    # First, try to extract from .nuspec inside the package
+    if command -v unzip >/dev/null 2>&1 && [[ -f $nupkg ]]; then
+        local nuspec
+        nuspec=$(unzip -Z1 "$nupkg" 2>/dev/null | grep -E '\.nuspec$' | head -n1)
+        if [[ -n $nuspec ]]; then
+            pkgname=$(unzip -p "$nupkg" "$nuspec" 2>/dev/null | grep -oP '<id>\K[^<]+' | head -n1)
+            version=$(unzip -p "$nupkg" "$nuspec" 2>/dev/null | grep -oP '<version>\K[^<]+' | head -n1)
+            if [[ -n $pkgname ]] && [[ -n $version ]]; then
+                echo "$pkgname $version"
+                return
+            fi
+        fi
+    fi
+
+    # Fallback: extract from filename
+    # NuGet package filename format: PackageName.Version.nupkg
+    # Remove extension first, then extract version (last sequence matching version pattern)
+    local base="${filename%.nupkg}"
+    base="${base%.snupkg}"
+
+    # Extract version: find the last dot-separated segment that starts with a digit
+    # Version pattern: starts with digit, may contain dots, dashes, and alphanumeric
+    version=$(echo "$base" | grep -oE '[0-9]+(\.[0-9]+)+(-[0-9A-Za-z._\-]+)?$' || echo "")
+
+    if [[ -n $version ]]; then
+        # Package name is everything before the version
+        # quoting because of shellcheck rules.
+        pkgname="${base%."${version}"}"
+    else
+        # Last resort: use filename without extension
+        pkgname="$base"
+        version="unknown"
+    fi
+
+    echo "$pkgname $version"
+}
+
 process_nupkg() {
-    process_generic "$1" "$2"
+    local nupkg="$1"
+    local dest_dir="$2"
+    local nupkg_basename
+    nupkg_basename=$(basename "$nupkg")
+    local base_name="${nupkg_basename%.nupkg}"
+    base_name="${base_name%.snupkg}"
+
+    process_generic "$nupkg" "$dest_dir"
 }
 
 process_generic() {
@@ -181,6 +231,15 @@ process_generic() {
 
     local dir
     dir=$(dirname "$file")
-    mkdir -p "$dest_dir/$dir"
-    cp -v "$file" "$dest_dir/$dir" >&2
+    # Strip "build-artifacts" prefix to preserve only relative path within build-artifacts
+
+    if [[ $dir == "build-artifacts" ]]; then
+        # File is at root of build-artifacts, no subdirectory
+        cp -v "$file" "$dest_dir/" >&2
+    else
+        # Strip "build-artifacts/" prefix for subdirectories if present
+        dir="${dir#build-artifacts/}"
+        mkdir -p "$dest_dir/$dir"
+        cp -v "$file" "$dest_dir/$dir" >&2
+    fi
 }

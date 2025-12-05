@@ -9,12 +9,17 @@ load "$HELPERS_DIR/setup.bash"
 load "$HELPERS_DIR/command_parsers.bash"
 load "$HELPERS_DIR/assertions.bash"
 
+# Source package_utils.sh for get_nupkg_metadata
+# shellcheck disable=SC1091
+source "$DEPLOY_ARTIFACTS_DIR/package_utils.sh"
+
 setup_file() {
   setup_test_artifacts
   
-  # Verify expected NuGet package fixtures exist
+  # Verify expected NuGet package fixtures exist (root and subdirectory)
   local -a expected_nupkgs=(
     "$BUILD_ARTIFACTS_DIR/Aerospike.Client.8.0.2.nupkg"
+    "$BUILD_ARTIFACTS_DIR/nuget/Aerospike.HelloWorld.1.0.0.nupkg"
   )
   
   local missing=0
@@ -52,54 +57,132 @@ teardown_file() {
   # Verify "Processing NUPKG:" messages appear
   assert_processing_message "$output" "NUPKG"
   
-  # Extract upload commands
-  local upload_commands
-  upload_commands=$(extract_upload_commands "$output")
+  # Extract NuGet upload commands
+  local nuget_commands
+  nuget_commands=$(extract_nuget_commands "$output")
   
   # Parse commands into array
-  mapfile -t upload_cmd_array < <(echo "$upload_commands")
+  mapfile -t nuget_cmd_array < <(echo "$nuget_commands")
   
   # Find NuGet package upload commands
   local nupkg_found=false
-  for cmd in "${upload_cmd_array[@]}"; do
+  local nupkg_commands=()
+  for cmd in "${nuget_cmd_array[@]}"; do
     if [[ $cmd =~ \.nupkg ]]; then
       nupkg_found=true
       
-      # NuGet packages go to NuGet-specific repository
-      local expected_repo="test-project-nuget-dev-local"
-      
-      # Extract filename from command
-      local filename
-      if [[ $cmd =~ ([^/]+\.nupkg) ]]; then
-        filename="${BASH_REMATCH[1]}"
-      fi
-      
-      # Validate command structure
-      assert_upload_command_valid "$cmd" "$filename" "$expected_repo" "" \
-        "test-build" "12345-artifacts" "test-project"
+      nupkg_commands+=("$cmd")
+      # Verify command structure: jf rt upload <file> <repo>/<pkgname>/<version>/<filename> --build-name=... --build-number=... --project=...
+      [[ $cmd =~ jf\ +rt\ +upload\ +.*\.nupkg ]] || (echo "Invalid jf rt upload command: $cmd" >&2 && return 1)
+      [[ $cmd =~ test-project-nuget-dev-local ]] || (echo "Missing or incorrect repository name: $cmd" >&2 && return 1)
+      [[ $cmd =~ --build-name=test-build ]] || (echo "Missing --build-name flag: $cmd" >&2 && return 1)
+      [[ $cmd =~ --build-number=12345-artifacts ]] || (echo "Missing --build-number flag: $cmd" >&2 && return 1)
+      [[ $cmd =~ --project=test-project ]] || (echo "Missing --project flag: $cmd" >&2 && return 1)
+      # Verify NuGet layout structure: <pkgname>/<version>/<filename>
+      [[ $cmd =~ test-project-nuget-dev-local/[^/]+/[^/]+/.*\.nupkg ]] || (echo "Invalid NuGet layout path: $cmd" >&2 && return 1)
     fi
   done
-  
+
+  # Verify we found exactly 2 NuGet package commands (root and subdirectory)
+  [[ ${#nupkg_commands[@]} -eq 2 ]] || (echo "Expected 2 NuGet upload commands, found ${#nupkg_commands[@]}" >&2 && return 1)
+
   # Verify NuGet packages were found and processed
   [[ $nupkg_found == true ]] || (echo "NuGet package upload not found" >&2 && return 1)
 }
 
-@test "NuGet packages preserve directory structure" {
+@test "NuGet packages use correct jf rt upload commands" {
   local output
   output=$(run_entrypoint_dry_run "test-project" "test-build" "v1.0.0" "12345" "12345-metadata")
   
-  # Extract upload commands
+  # Extract NuGet commands
+  local nuget_commands
+  nuget_commands=$(extract_nuget_commands "$output")
+  
+  # Verify jf rt upload commands use correct flags and layout
   local upload_commands
-  upload_commands=$(extract_upload_commands "$output")
+  upload_commands=$(echo "$nuget_commands" | grep "\.nupkg" || true)
   
-  # Check that --flat=false is present for NuGet uploads
-  local nupkg_commands
-  nupkg_commands=$(echo "$upload_commands" | grep -E "\.nupkg" || true)
-  
-  if [[ -n "$nupkg_commands" ]]; then
+  if [[ -n "$upload_commands" ]]; then
     while IFS= read -r cmd; do
-      [[ $cmd == *"--flat=false"* ]] || (echo "NuGet upload missing --flat=false: $cmd" >&2 && return 1)
-    done <<< "$nupkg_commands"
+      [[ $cmd =~ jf\ +rt\ +upload ]] || (echo "Not a jf rt upload command: $cmd" >&2 && return 1)
+      [[ $cmd =~ test-project-nuget-dev-local ]] || (echo "Missing or incorrect repository name: $cmd" >&2 && return 1)
+      [[ $cmd =~ --build-name=test-build ]] || (echo "jf rt upload missing --build-name: $cmd" >&2 && return 1)
+      [[ $cmd =~ --build-number=12345-artifacts ]] || (echo "jf rt upload missing --build-number: $cmd" >&2 && return 1)
+      [[ $cmd =~ --project=test-project ]] || (echo "jf rt upload missing --project: $cmd" >&2 && return 1)
+      # Verify NuGet layout structure: <pkgname>/<version>/<filename>
+      [[ $cmd =~ test-project-nuget-dev-local/[^/]+/[^/]+/.*\.nupkg ]] || (echo "Invalid NuGet layout path: $cmd" >&2 && return 1)
+    done <<< "$upload_commands"
   fi
+}
+
+@test "NuGet packages in subdirectories are uploaded correctly" {
+  # Run entrypoint with dry-run
+  local output
+  output=$(run_entrypoint_dry_run "test-project" "test-build" "v1.0.0" "12345" "12345-metadata")
+
+  # Extract NuGet commands
+  local nuget_commands
+  nuget_commands=$(extract_nuget_commands "$output")
+
+  # Parse commands into array
+  mapfile -t nuget_cmd_array < <(echo "$nuget_commands")
+
+  # Find ALL NuGet package upload commands
+  local nupkg_count=0
+  local nupkg_in_subdir_found=false
+  local wrong_repo_found=false
+
+  for cmd in "${nuget_cmd_array[@]}"; do
+    if [[ $cmd =~ \.nupkg ]]; then
+      nupkg_count=$((nupkg_count + 1))
+
+      # Check if this is the subdirectory package (Aerospike.HelloWorld)
+      if [[ $cmd =~ Aerospike\.HelloWorld ]]; then
+        nupkg_in_subdir_found=true
+      fi
+
+      # Verify correct repository
+      if [[ ! $cmd =~ test-project-nuget-dev-local ]]; then
+        wrong_repo_found=true
+      fi
+    fi
+  done
+
+  # Verify we found both NuGet packages (root and subdirectory)
+  [[ $nupkg_count -eq 2 ]] || (echo "Expected 2 NuGet packages, found $nupkg_count" >&2 && return 1)
+
+  # Verify we found the subdirectory package
+  [[ $nupkg_in_subdir_found == true ]] || (echo "NuGet package in subdirectory not found" >&2 && return 1)
+
+  # CRITICAL: Verify NO packages used wrong repository
+  [[ $wrong_repo_found == false ]] || (echo "NuGet packages were uploaded to wrong repository" >&2 && return 1)
+}
+
+@test "NuGet metadata parsing extracts package name and version correctly" {
+  # Test case 1: Standard version format
+  local -a metadata
+  read -r -a metadata <<< "$(get_nupkg_metadata "Aerospike.HelloWorld.1.0.0.nupkg")"
+  [[ "${metadata[0]}" == "Aerospike.HelloWorld" ]] || (echo "Failed to extract package name from Aerospike.HelloWorld.1.0.0.nupkg: got ${metadata[0]}" >&2 && return 1)
+  [[ "${metadata[1]}" == "1.0.0" ]] || (echo "Failed to extract version from Aerospike.HelloWorld.1.0.0.nupkg: got ${metadata[1]}" >&2 && return 1)
+
+  # Test case 2: Version with pre-release suffix
+  read -r -a metadata <<< "$(get_nupkg_metadata "MyPackage.2.3.4-beta.nupkg")"
+  [[ "${metadata[0]}" == "MyPackage" ]] || (echo "Failed to extract package name from MyPackage.2.3.4-beta.nupkg: got ${metadata[0]}" >&2 && return 1)
+  [[ "${metadata[1]}" == "2.3.4-beta" ]] || (echo "Failed to extract version from MyPackage.2.3.4-beta.nupkg: got ${metadata[1]}" >&2 && return 1)
+
+  # Test case 3: Package with sub-package name
+  read -r -a metadata <<< "$(get_nupkg_metadata "Package.SubPackage.1.0.0.1.nupkg")"
+  [[ "${metadata[0]}" == "Package.SubPackage" ]] || (echo "Failed to extract package name from Package.SubPackage.1.0.0.1.nupkg: got ${metadata[0]}" >&2 && return 1)
+  [[ "${metadata[1]}" == "1.0.0.1" ]] || (echo "Failed to extract version from Package.SubPackage.1.0.0.1.nupkg: got ${metadata[1]}" >&2 && return 1)
+
+  # Test case 4: Symbol package
+  read -r -a metadata <<< "$(get_nupkg_metadata "TestPackage.3.2.1.snupkg")"
+  [[ "${metadata[0]}" == "TestPackage" ]] || (echo "Failed to extract package name from TestPackage.3.2.1.snupkg: got ${metadata[0]}" >&2 && return 1)
+  [[ "${metadata[1]}" == "3.2.1" ]] || (echo "Failed to extract version from TestPackage.3.2.1.snupkg: got ${metadata[1]}" >&2 && return 1)
+
+  # Test case 5: Version with build metadata
+  read -r -a metadata <<< "$(get_nupkg_metadata "Some.Package.5.6.7-alpha.1.nupkg")"
+  [[ "${metadata[0]}" == "Some.Package" ]] || (echo "Failed to extract package name from Some.Package.5.6.7-alpha.1.nupkg: got ${metadata[0]}" >&2 && return 1)
+  [[ "${metadata[1]}" == "5.6.7-alpha.1" ]] || (echo "Failed to extract version from Some.Package.5.6.7-alpha.1.nupkg: got ${metadata[1]}" >&2 && return 1)
 }
 

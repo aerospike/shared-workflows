@@ -168,6 +168,15 @@ structure_build_artifacts() {
         process_nupkg "$nupkg" "./structured_build_artifacts/nupkg"
     done < <(find build-artifacts -name "*.nupkg" -print0)
 
+    while IFS= read -r -d '' snupkg; do
+        if [[ ! -f $snupkg ]]; then
+            continue
+        fi
+
+        echo "Processing SNUPKG: $snupkg" >&2
+        process_nupkg "$snupkg" "./structured_build_artifacts/nupkg"
+    done < <(find build-artifacts -name "*.snupkg" -print0)
+
     while IFS= read -r -d '' generic; do
         if [[ ! -f $generic ]]; then
             echo "Skipping non-file: $generic" >&2
@@ -175,7 +184,7 @@ structure_build_artifacts() {
         fi
         echo "Processing generic file: $generic" >&2
         process_generic "$generic" "./structured_build_artifacts/generic"
-    done < <(find build-artifacts \( -not -name "*.deb" -not -name "*.rpm" -not -name "*.asc" -not -name "*.jar" -not -name "*.pom" -not -name "*.nupkg" \) -type f -print0)
+    done < <(find build-artifacts \( -not -name "*.deb" -not -name "*.rpm" -not -name "*.asc" -not -name "*.jar" -not -name "*.pom" -not -name "*.nupkg" -not -name "*.snupkg" -not -name "*.csproj" \) -type f -print0)
 }
 
 upload_deb_packages() {
@@ -285,8 +294,13 @@ upload_jar_packages() {
         # Determine which file to use for metadata extraction (prefer POM as it's the source of truth)
         local pkgname version group_id
 
-        # Fallback: Extract metadata from JAR if no POM exists
-        read -r -a metadata < <(get_jar_metadata "$artifact_dir/${base_name}.jar")
+        # Extract metadata from JAR (must exist since process_jar copies JAR+POM together)
+        local jar_file="$artifact_dir/${base_name}.jar"
+        if [[ ! -f $jar_file ]]; then
+            echo "  Warning: JAR file not found for $artifact, skipping" >&2
+            continue
+        fi
+        read -r -a metadata < <(get_jar_metadata "$jar_file")
         pkgname="${metadata[0]}"
         version="${metadata[1]}"
 
@@ -333,26 +347,58 @@ upload_nupkg_packages() {
     else
         echo "Uploading NuGet packages to JFrog..." >&2
     fi
+
     while IFS= read -r -d '' nupkg; do
         if [[ ! -f $nupkg ]]; then
             continue
         fi
 
+        local -a metadata
+        read -r -a metadata < <(get_nupkg_metadata "$nupkg")
+        local pkgname="${metadata[0]}"
+        local pkgversion="${metadata[1]}"
+        local nupkg_filename
+        nupkg_filename=$(basename "$nupkg")
+
+        if [[ -z $pkgname ]] || [[ -z $pkgversion ]]; then
+            echo "Warning: Failed to extract metadata from $nupkg, using filename-based path" >&2
+            pkgname="${nupkg_filename%.nupkg}"
+            pkgversion="unknown"
+        fi
+
         echo "  Uploading NuGet package: $nupkg" >&2
-        run jf rt upload "$nupkg" "$PROJECT-nuget-dev-local" --flat=false \
+        echo "    Package: $pkgname, Version: $pkgversion" >&2
+        run jf rt upload "$nupkg" "$PROJECT-nuget-dev-local/${pkgname}/${pkgversion}/${nupkg_filename}" \
             --build-name="$BUILD_NAME" \
             --build-number="$ARTIFACT_BUILD_NUMBER" \
             --project="$PROJECT"
-
-        # Upload signature if it exists
-        if [[ -f "$nupkg.asc" ]]; then
-            echo "  Uploading signature: $nupkg.asc" >&2
-            run jf rt upload "$nupkg.asc" "$PROJECT-nuget-dev-local" --flat=false \
-                --build-name="$BUILD_NAME" \
-                --build-number="$ARTIFACT_BUILD_NUMBER" \
-                --project="$PROJECT"
-        fi
     done < <(find . -name "*.nupkg" -print0)
+
+    while IFS= read -r -d '' snupkg; do
+        if [[ ! -f $snupkg ]]; then
+            continue
+        fi
+
+        local -a metadata
+        read -r -a metadata < <(get_nupkg_metadata "$snupkg")
+        local pkgname="${metadata[0]}"
+        local pkgversion="${metadata[1]}"
+        local snupkg_filename
+        snupkg_filename=$(basename "$snupkg")
+
+        if [[ -z $pkgname ]] || [[ -z $pkgversion ]]; then
+            echo "Warning: Failed to extract metadata from $snupkg, using filename-based path" >&2
+            pkgname="${snupkg_filename%.snupkg}"
+            pkgversion="unknown"
+        fi
+
+        echo "  Uploading NuGet symbol package: $snupkg" >&2
+        echo "    Package: $pkgname, Version: $pkgversion" >&2
+        run jf rt upload "$snupkg" "$PROJECT-nuget-dev-local/${pkgname}/${pkgversion}/${snupkg_filename}" \
+            --build-name="$BUILD_NAME" \
+            --build-number="$ARTIFACT_BUILD_NUMBER" \
+            --project="$PROJECT"
+    done < <(find . -name "*.snupkg" -print0)
 }
 
 upload_generic_files() {
@@ -372,7 +418,7 @@ upload_generic_files() {
                 --build-number="$ARTIFACT_BUILD_NUMBER" \
                 --project="$PROJECT"
         fi
-    done < <(find . \( -not -name "*.deb" -not -name "*.rpm" -not -name "*.asc" -not -name "*.nupkg" \) -print0)
+    done < <(find . \( -not -name "*.deb" -not -name "*.rpm" -not -name "*.asc" -not -name "*.jar" -not -name "*.pom" -not -name "*.nupkg" -not -name "*.snupkg" -not -name "*.csproj" \) -type f -print0)
 }
 
 # Collects build-info metadata by querying Artifactory for JSON files.
