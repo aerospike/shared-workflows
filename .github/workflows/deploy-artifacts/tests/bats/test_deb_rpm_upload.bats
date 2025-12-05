@@ -148,7 +148,7 @@ teardown_file() {
   upload_commands=$(extract_upload_commands "$output")
   build_commands=$(extract_build_commands "$output")
   
-  assert_command_count "$upload_commands" 9
+  assert_command_count "$upload_commands" 10
   assert_command_count "$build_commands" 3
   
   mapfile -t upload_cmd_array < <(echo "$upload_commands")

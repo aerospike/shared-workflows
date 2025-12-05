@@ -3,6 +3,8 @@ on:
   workflow_dispatch:
   pull_request:
     branches: [main]
+  push:
+    branches: [main]
 
 permissions:
   id-token: write
@@ -63,14 +65,14 @@ jobs:
       matrix:
         include:
           # Ubuntu/Debian family (x86_64)
-          - distro: jammy
-            arch: x86_64
-            runs-on: ubuntu-22.04
-            emulated: false
-          - distro: noble
-            arch: x86_64
-            runs-on: ubuntu-22.04
-            emulated: false
+          #   - distro: jammy
+          #     arch: x86_64
+          #     runs-on: ubuntu-22.04
+          #     emulated: false
+          #   - distro: noble
+          #     arch: x86_64
+          #     runs-on: ubuntu-22.04
+          #     emulated: false
           #   - distro: trixie
           #     arch: x86_64
           #     runs-on: ubuntu-22.04
@@ -110,10 +112,10 @@ jobs:
           #     runs-on: ubuntu-22.04
           #     emulated: true
           #   # RPM family (x86_64 only - no ARM support)
-          - distro: el8
-            arch: x86_64
-            runs-on: ubuntu-22.04
-            emulated: false
+          #   - distro: el8
+          #     arch: x86_64
+          #     runs-on: ubuntu-22.04
+          #     emulated: false
           - distro: el9
             arch: x86_64
             runs-on: ubuntu-22.04
@@ -165,13 +167,37 @@ jobs:
       oidc-audience: aerospike/testing
       publish-build-info: true
       dry-run: false # default
+  build-dotnet-packages:
+    needs: extract-version
+    uses: ./.github/workflows/reusable_execute-build.yaml
+    with:
+      jf-project: test
+      jf-build-name: test-build
+      jf-build-id: ${{ github.run_number }}-buildinfo-dotnet
+      working-directory: repo-source/.github/workflows/execute-build/test_apps/DotnetHelloWorld/AerospikeHelloWorld
+      build-script: |
+        echo "Building dotnet project in $(pwd)"
+        echo "cwd contents: $(ls -la)"
+        dotnet restore
+        dotnet build --configuration Release --no-restore
+        echo "Creating NuGet package"
+        dotnet pack --no-build
+        echo "NuGet package created"
+        find .
+      gh-source-path: repo-source
+      gh-artifact-directory: AerospikeHelloWorld/bin/Release/
+      gh-artifact-name: build-artifacts-dotnet
+      oidc-provider-name: gh-dev-test
+      oidc-audience: aerospike/testing
+      dry-run: false
+      gh-workflows-ref: feature/INFRA-253-integrate-nuget-in-cicd
   # This job demonstrates custom packaging logic using standard GitHub Actions (actions/checkout, actions/download-artifact, actions/upload-artifact)
   # No reusable actions from shared-workflows are used here - this is custom packaging logic that could be done in the build step
   # In this case it is using fpm to generate debs and rpms and uploading them to be processed further.
   # building and packaging could be done in the build step if we wanted to package on the distro as the build
   # but here we do it separate. It takes the output from the matrix builds and uploads them to gitub in a single directory.
   package-built-artifacts:
-    needs: [build-packages, extract-version]
+    needs: [build-packages, build-dotnet-packages, extract-version]
     runs-on: ubuntu-22.04
     steps:
       - name: Harden the runner (Audit all outbound calls)
@@ -192,6 +218,7 @@ jobs:
         run: |
           .github/workflows/execute-build/test_apps/hi/package.sh --target hi --version ${{ needs.extract-version.outputs.version }} \
             --packages-dir build-artifacts --output-dir packaged-artifacts
+          cp -i build-artifacts/*.nupkg packaged-artifacts
       - name: Upload packaged Artifacts
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         with:
@@ -211,6 +238,10 @@ jobs:
       gpg-private-key: ${{ secrets.GPG_SECRET_KEY }}
       gpg-public-key: ${{ secrets.GPG_PUBLIC_KEY }}
       gpg-key-pass: ${{ secrets.GPG_PASS }}
+      es-username: ${{ secrets.ES_USERNAME }}
+      es-password: ${{ secrets.ES_PASSWORD }}
+      credential_id: ${{ secrets.CREDENTIAL_ID }}
+      es-totp_secret: ${{ secrets.ES_TOTP_SECRET }}
 
   deploy-artifacts:
     needs: [sign-artifacts, extract-version]

@@ -104,6 +104,18 @@ on:
         type: string
         default: .
 
+      # Dotnet setup
+      setup-dotnet:
+        description: Whether to set up Dotnet environment
+        required: false
+        type: boolean
+        default: false
+      dotnet-version:
+        description: Dotnet version to set up (e.g., "7.0", "8.0")
+        required: false
+        type: string
+        default: "8.0"
+
       # Java/Maven setup
       setup-java:
         description: Whether to set up Java environment

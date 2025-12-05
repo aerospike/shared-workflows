@@ -58,6 +58,10 @@ run_entrypoint_dry_run() {
         local metadata_build_number="${5:-12345-metadata}"
 
         cd "$TEST_DIR" || exit 1
+        # Set required environment variables for NuGet CLI
+        export JF_URL="${JF_URL:-https://artifact.aerospike.io}"
+        export OIDC_USER="${OIDC_USER:-test-user@aerospike.com}"
+        export OIDC_TOKEN="${OIDC_TOKEN:-test-token}"
         "$DEPLOY_ARTIFACTS_DIR/entrypoint.sh" \
                 "$project" \
                 "$build_name" \

@@ -1,0 +1,34 @@
+name: Test Execute Build Dotnet Workflow
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, feature/INFRA-253-integrate-nuget-in-cicd]
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  test-execute-build-workflow:
+    uses: ./.github/workflows/reusable_execute-build.yaml
+    with:
+      jf-project: test
+      jf-build-name: test-build
+      jf-build-id: ${{ github.run_number }}-buildinfo-dotnet
+      working-directory: repo-source/.github/workflows/execute-build/test_apps/DotnetHelloWorld/AerospikeHelloWorld
+      build-script: |
+        echo "Building dotnet project in $(pwd)"
+        echo "cwd contents: $(ls -la)"
+        dotnet restore
+        dotnet build --configuration Release --no-restore
+        echo "Creating NuGet package"
+        dotnet pack --no-build
+        echo "NuGet package created"
+        find .
+      gh-source-path: repo-source
+      gh-artifact-directory: AerospikeHelloWorld/bin/Release/
+      gh-artifact-name: build-artifacts-dotnet
+      oidc-provider-name: gh-dev-test
+      oidc-audience: aerospike/testing
+      dry-run: false
+      gh-workflows-ref: v2.0.2
