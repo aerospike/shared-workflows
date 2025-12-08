@@ -218,6 +218,9 @@ jobs:
         run: |
           .github/workflows/execute-build/test_apps/hi/package.sh --target hi --version ${{ needs.extract-version.outputs.version }} \
             --packages-dir build-artifacts --output-dir packaged-artifacts
+      - name: Copy NuGet packages
+        if: github.actor != 'dependabot[bot]'
+        run: |
           cp -i build-artifacts/*.nupkg packaged-artifacts
       - name: Upload packaged Artifacts
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
