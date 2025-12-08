@@ -43,9 +43,9 @@ jobs:
       credential_id: ${{ secrets.CREDENTIAL_ID }}
       es-totp_secret: ${{ secrets.ES_TOTP_SECRET }}
     with:
+      # gh-checkout-path defaults to 'shared-workflows'
       gh-unsigned-artifacts: test-fixtures
-      gh-workflows-ref: v2.0.2
-
+      gh-workflows-ref: ${{ github.sha }}
   verify-nuget-signatures:
     if: github.actor != 'dependabot[bot]'
     needs: test-sign-workflow

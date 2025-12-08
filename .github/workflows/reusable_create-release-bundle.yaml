@@ -23,6 +23,13 @@ on:
         description: Version of the release bundle
         required: true
         type: string
+      gh-workflows-ref:
+        description: |
+          Git reference for shared-workflows checkout. Should match the version in your 'uses:' line.
+          GitHub Actions doesn't expose the called workflow's ref, so this is required.
+          See: .github/workflows/docs/CICD-with-shared-actions.md#why-gh-workflows-ref-is-required
+        required: true
+        type: string
 
       # Optional inputs
       dry-run:
@@ -35,11 +42,6 @@ on:
         required: false
         type: string
         default: shared-workflows
-      gh-workflows-ref:
-        description: Git reference to checkout shared-workflows repository (tag, branch, or SHA)
-        required: false
-        type: string
-        default: v2.0.2
       jf-url:
         required: false
         description: JFrog Artifactory URL
@@ -68,8 +70,6 @@ permissions:
 jobs:
   create-release-bundle:
     runs-on: ${{ inputs.runs-on }}
-    env:
-      CHECKOUT_REF: ${{ inputs.gh-workflows-ref }}
     steps:
       - name: Harden the runner (Audit all outbound calls)
         uses: step-security/harden-runner@95d9a5deda9de15063e7595e9719c11c38c90ae2 # v2.13.2
@@ -80,7 +80,7 @@ jobs:
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
           repository: aerospike/shared-workflows
-          ref: ${{ env.CHECKOUT_REF }}
+          ref: ${{ inputs.gh-workflows-ref }}
           path: ${{ inputs.gh-checkout-path }}
           fetch-depth: 1
 
@@ -101,12 +101,13 @@ jobs:
       - name: Create Release Bundle
         shell: bash
         run: |
-          chmod +x ${{ inputs.gh-checkout-path }}/.github/workflows/create-release-bundle/entrypoint.sh
+          entrypoint="${{ inputs.gh-checkout-path }}/.github/workflows/create-release-bundle/entrypoint.sh"
+          chmod +x "$entrypoint"
           dry_run_arg=""
           if [ "${{ inputs.dry-run }}" = "true" ]; then
             dry_run_arg="--dry-run"
           fi
-          "${{ inputs.gh-checkout-path }}/.github/workflows/create-release-bundle/entrypoint.sh" \
+          "$entrypoint" \
             --project "${{ inputs.jf-project }}" \
             --build-names "${{ inputs.jf-build-names }}" \
             --bundle-name "${{ inputs.jf-bundle-name }}" \

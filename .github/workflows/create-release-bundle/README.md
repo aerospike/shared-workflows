@@ -19,10 +19,12 @@ This workflow creates JFrog release bundles by bundling one or more builds into 
 | `oidc-audience`      | OIDC audience for authentication                           | No       | `aerospike`                     |
 | `runs-on`            | The runner to use for the build                            | No       | `ubuntu-22.04`                  |
 | `gh-checkout-path`   | Directory to checkout the shared-workflows repository into | No       | `shared-workflows`              |
-| `gh-workflows-ref`   | Git reference to checkout shared-workflows repository      | No       | `v2.0.2`                        |
+| `gh-workflows-ref`   | Git ref for shared-workflows (**should match `uses:`**)    | Yes      | -                               |
 | `dry-run`            | Whether to run in dry-run mode                             | No       | `false`                         |
 
 ## Example Usage
+
+**Note**: The example below shows the pattern for external consumers using tagged versions. Internal workflows in this repository use relative paths (e.g., `uses: ./.github/workflows/reusable_create-release-bundle.yaml`) for development and testing.
 
 ### Basic release bundle creation
 
@@ -35,15 +37,19 @@ on:
 
 jobs:
   create-release-bundle:
-    uses: ./.github/workflows/reusable_create-release-bundle.yaml
+    uses: aerospike/shared-workflows/.github/workflows/reusable_create-release-bundle.yaml@v2.0.2
     with:
       jf-project: database
       jf-build-names: "database-build,client-build"
       jf-bundle-name: database-release
       version: ${{ github.ref_name }}
-      gh-workflows-ref: v2.0.2 # Use specific shared-workflows version
+      gh-workflows-ref: v2.0.2 # Should match the version in your 'uses:' line
       dry-run: false
 ```
+
+## Required: gh-workflows-ref
+
+The `gh-workflows-ref` input is **required** and must match the version in your `uses:` line. See [Why gh-workflows-ref is required](../docs/CICD-with-shared-actions.md#why-gh-workflows-ref-is-required) for details.
 
 ## Prerequisites
 

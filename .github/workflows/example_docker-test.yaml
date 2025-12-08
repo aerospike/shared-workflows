@@ -34,7 +34,7 @@ jobs:
     with:
       jf-project: test
       image-name: test-image
-      tag: artifact.aerospike.io/test-container-dev-local/test-image:${{ needs.extract-version.outputs.version }}
+      app-version: ${{ needs.extract-version.outputs.version }}
       context: ./.github/workflows/execute-build/test_apps/hi
       file: ./.github/workflows/execute-build/test_apps/hi/Dockerfile
       jf-build-name: test-container
