@@ -14,7 +14,8 @@ handle_error() {
 get_jar_metadata() {
     local jar="$1"
     local filename="${jar##*/}" # Get just the filename without path
-    local jar_dir="$(dirname "$jar")"
+    local jar_dir
+    jar_dir="$(dirname "$jar")"
     local pkgname version group_id
     local pom_props
 
