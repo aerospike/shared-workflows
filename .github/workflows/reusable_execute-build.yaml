@@ -20,6 +20,13 @@ on:
         description: JFrog Artifactory project name
         required: true
         type: string
+      gh-workflows-ref:
+        description: |
+          Git reference for shared-workflows checkout. Should match the version in your 'uses:' line.
+          GitHub Actions doesn't expose the called workflow's ref, so this is required.
+          See: .github/workflows/docs/CICD-with-shared-actions.md#why-gh-workflows-ref-is-required
+        required: true
+        type: string
 
       # Optional inputs
       build-script:
@@ -47,11 +54,6 @@ on:
         required: false
         type: string
         default: shared-workflows
-      gh-workflows-ref:
-        description: Git reference to checkout shared-workflows repository (tag, branch, or SHA)
-        required: false
-        type: string
-        default: v2.0.2
       gh-retention-days:
         description: Retention days for the github artifacts
         required: false
@@ -158,19 +160,16 @@ jobs:
       gh-artifact-name: ${{ steps.build-info.outputs.gh-artifact-name }}
       jf-build-id: ${{ steps.build-info.outputs.jf-build-id }}
       jf-build-name: ${{ steps.build-info.outputs.jf-build-name }}
-    env:
-      CHECKOUT_REF: ${{ inputs.gh-workflows-ref }}
     steps:
       - name: Harden the runner (Audit all outbound calls)
         uses: step-security/harden-runner@95d9a5deda9de15063e7595e9719c11c38c90ae2 # v2.13.2
         with:
           egress-policy: audit
-
       - name: Checkout shared-workflows repository
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
           repository: aerospike/shared-workflows
-          ref: ${{ env.CHECKOUT_REF }}
+          ref: ${{ inputs.gh-workflows-ref }}
           path: ${{ inputs.gh-checkout-path }}
           fetch-depth: 1
 
@@ -205,7 +204,8 @@ jobs:
       - name: Execute Build Script
         shell: bash
         run: |
-          entrypoint=$(realpath ${{ inputs.gh-checkout-path }}/.github/workflows/execute-build/entrypoint.sh)
+          # Entrypoint scripts are always in the shared-workflows checkout location
+          entrypoint=$(realpath "${{ inputs.gh-checkout-path }}/.github/workflows/execute-build/entrypoint.sh")
           chmod +x "$entrypoint"
           if [[ -n "${{ inputs.working-directory }}" ]]; then
             cd "${{ inputs.working-directory }}"

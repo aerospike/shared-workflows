@@ -63,22 +63,28 @@ The typical pattern combines both pipelines: build and sign according to ecosyst
 jobs:
   # Artifact pipeline: build → sign (GPG) → deploy
   build-artifacts:
-    uses: aerospike/shared-workflows/.github/workflows/reusable_execute-build.yaml@<sha>
-    # ... build deb/rpm/generic files ...
+    uses: aerospike/shared-workflows/.github/workflows/reusable_execute-build.yaml@v2.0.3
+    with:
+      gh-workflows-ref: v2.0.3 # Required: must match @v2.0.3 above
+      # ... build deb/rpm/generic files ...
 
   sign-artifacts:
     needs: build-artifacts
-    uses: aerospike/shared-workflows/.github/workflows/reusable_sign-artifacts.yaml@<sha>
-    # ... GPG sign packages ...
+    uses: aerospike/shared-workflows/.github/workflows/reusable_sign-artifacts.yaml@v2.0.3
+    with:
+      gh-workflows-ref: v2.0.3
+      # ... GPG sign packages ...
 
   deploy-artifacts:
     needs: sign-artifacts
-    uses: aerospike/shared-workflows/.github/workflows/reusable_deploy-artifacts.yaml@<sha>
-    # ... deploy signed artifacts to JFrog ...
+    uses: aerospike/shared-workflows/.github/workflows/reusable_deploy-artifacts.yaml@v2.0.3
+    with:
+      gh-workflows-ref: v2.0.3
+      # ... deploy signed artifacts to JFrog ...
 
   # Docker pipeline: build with attestations → deploy
   build-docker:
-    uses: aerospike/shared-workflows/.github/workflows/reusable_docker-build-deploy.yaml@<sha>
+    uses: aerospike/shared-workflows/.github/workflows/reusable_docker-build-deploy.yaml@v2.0.3
     with:
       attest: true # SLSA attestation (container ecosystem standard)
       sbom: true # Software Bill of Materials
@@ -87,13 +93,54 @@ jobs:
   # Unified release: bundle all builds together
   release-bundle:
     needs: [deploy-artifacts, build-docker]
-    uses: aerospike/shared-workflows/.github/workflows/reusable_create-release-bundle.yaml@<sha>
+    uses: aerospike/shared-workflows/.github/workflows/reusable_create-release-bundle.yaml@v2.0.3
     with:
+      gh-workflows-ref: v2.0.3
       jf-build-names: "myapp:${{ github.run_number }},myapp-container:${{ github.run_number }}"
       # Single bundle containing both artifact and container builds
 ```
 
 For a complete working example see [example_reusable-integration.yaml](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/example_reusable-integration.yaml).
+
+---
+
+## Why gh-workflows-ref is required
+
+All shared workflows require the `gh-workflows-ref` input, which **should match** the version in your `uses:` line:
+
+```yaml
+jobs:
+  build:
+    uses: aerospike/shared-workflows/.github/workflows/reusable_execute-build.yaml@v2.0.3
+    with:
+      gh-workflows-ref: v2.0.3 # Should match @v2.0.3 above
+      # ... other inputs ...
+```
+
+### The problem
+
+GitHub Actions has a fundamental limitation: **reusable workflows cannot access their own ref**. When you call `uses: org/repo/.github/workflows/workflow.yaml@v2.0.3`, the workflow itself has no way to know it was called with `@v2.0.3`.
+
+The available context variables don't help:
+
+- `github.sha` → SHA of the _caller's_ commit, not shared-workflows
+- `github.workflow_sha` → SHA of the _caller's_ workflow file, not the reusable one
+- `github.ref` → ref of the _caller's_ repository
+
+There is no `github.called_workflow_ref` or similar.
+
+### Why this matters
+
+These workflows need to checkout their own repository to access entrypoint scripts (bash scripts that do the actual work). Without knowing which version was called, they can't checkout the matching scripts—leading to version mismatches where the workflow is v2.0.3 but the scripts are from a different version.
+
+### Known issue
+
+This is a long-standing GitHub Actions limitation with no native solution:
+
+- [actions/runner#2417](https://github.com/actions/runner/issues/2417)
+- [community/discussions#38659](https://github.com/orgs/community/discussions/38659)
+
+Third-party workarounds exist but don't pass security review. Until GitHub adds native support, `gh-workflows-ref` is the reliable solution.
 
 ---
 

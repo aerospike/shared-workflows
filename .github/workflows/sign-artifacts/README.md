@@ -9,15 +9,15 @@ This is a reusable GitHub Actions workflow that signs binary artifacts using GPG
 
 ## Inputs
 
-| Name                    | Type     | Required | Description                                                                                    |
-| ----------------------- | -------- | -------- | ---------------------------------------------------------------------------------------------- |
-| `gh-unsigned-artifacts` | `string` | No       | Previously uploaded artifacts to sign. Default: `build-artifacts`                              |
-| `gh-artifact-name`      | `string` | No       | Name for the uploaded signed artifacts. Default: `signed-artifacts`                            |
-| `gh-retention-days`     | `number` | No       | Number of days to retain the signed artifacts. Default: `1`                                    |
-| `gh-checkout-path`      | `string` | No       | Directory to checkout the shared-workflows repository into. Default: `shared-workflows`        |
-| `gh-workflows-ref`      | `string` | No       | Git reference to checkout shared-workflows repository (tag, branch, or SHA). Default: `v2.0.2` |
-| `runs-on`               | `string` | No       | The runner to use. Default: `ubuntu-22.04`                                                     |
-| `nuget-environment`     | `string` | No       | SSL.com environment name for NuGet signing. Default: `PROD`                                    |
+| Name                    | Type     | Required | Description                                                                             |
+| ----------------------- | -------- | -------- | --------------------------------------------------------------------------------------- |
+| `gh-unsigned-artifacts` | `string` | No       | Previously uploaded artifacts to sign. Default: `build-artifacts`                       |
+| `gh-artifact-name`      | `string` | No       | Name for the uploaded signed artifacts. Default: `signed-artifacts`                     |
+| `gh-retention-days`     | `number` | No       | Number of days to retain the signed artifacts. Default: `1`                             |
+| `gh-checkout-path`      | `string` | No       | Directory to checkout the shared-workflows repository into. Default: `shared-workflows` |
+| `gh-workflows-ref`      | `string` | Yes      | Git ref for shared-workflows (**should match your `uses:` version**)                    |
+| `runs-on`               | `string` | No       | The runner to use. Default: `ubuntu-22.04`                                              |
+| `nuget-environment`     | `string` | No       | SSL.com environment name for NuGet signing. Default: `PROD`                             |
 
 ## Secrets
 
@@ -40,6 +40,8 @@ Notes:
 
 ## Example Usage
 
+**Note**: The example below shows the pattern for external consumers using tagged versions. Internal workflows in this repository use relative paths (e.g., `uses: ./.github/workflows/reusable_sign-artifacts.yaml`) for development and testing.
+
 From another workflow:
 
 ```yaml
@@ -50,7 +52,7 @@ jobs:
       gh-unsigned-artifacts: test-fixtures
       gh-artifact-name: signed-artifacts # optional, defaults to signed-artifacts
       gh-retention-days: 7 # optional, defaults to 1
-      gh-workflows-ref: v2.0.2 # Use specific shared-workflows version
+      gh-workflows-ref: v2.0.2 # Should match the version in your 'uses:' line
     secrets:
       gpg-private-key: ${{ secrets.GPG_SECRET_KEY }}
       gpg-public-key: ${{ secrets.GPG_PUBLIC_KEY }}
@@ -61,6 +63,10 @@ jobs:
       credential_id: ${{ secrets.CREDENTIAL_ID }}
       es-totp_secret: ${{ secrets.ES_TOTP_SECRET }}
 ```
+
+## Required: gh-workflows-ref
+
+The `gh-workflows-ref` input is **required** and must match the version in your `uses:` line. See [Why gh-workflows-ref is required](../docs/CICD-with-shared-actions.md#why-gh-workflows-ref-is-required) for details.
 
 ## Outputs
 

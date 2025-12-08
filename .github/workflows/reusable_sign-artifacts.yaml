@@ -3,6 +3,15 @@ name: Sign Artifacts
 on:
   workflow_call:
     inputs:
+      # Required inputs
+      gh-workflows-ref:
+        description: |
+          Git reference for shared-workflows checkout. Should match the version in your 'uses:' line.
+          GitHub Actions doesn't expose the called workflow's ref, so this is required.
+          See: .github/workflows/docs/CICD-with-shared-actions.md#why-gh-workflows-ref-is-required
+        required: true
+        type: string
+
       # Optional inputs
       gh-artifact-name:
         description: Name to upload signed artifacts as
@@ -14,11 +23,6 @@ on:
         required: false
         type: string
         default: shared-workflows
-      gh-workflows-ref:
-        description: Git reference to checkout shared-workflows repository (tag, branch, or SHA)
-        required: false
-        type: string
-        default: v2.0.2
       gh-retention-days:
         description: Retention days for the artifacts
         required: false
@@ -68,8 +72,6 @@ jobs:
     runs-on: ${{ inputs.runs-on }}
     outputs:
       gh-artifact-name: ${{ steps.sign-outputs.outputs.gh-artifact-name }}
-    env:
-      CHECKOUT_REF: ${{ inputs.gh-workflows-ref }}
     steps:
       - name: Harden the runner (Audit all outbound calls)
         uses: step-security/harden-runner@95d9a5deda9de15063e7595e9719c11c38c90ae2 # v2.13.2
@@ -93,7 +95,7 @@ jobs:
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
           repository: aerospike/shared-workflows
-          ref: ${{ env.CHECKOUT_REF }}
+          ref: ${{ inputs.gh-workflows-ref }}
           path: ${{ inputs.gh-checkout-path }}
           fetch-depth: 1
 
@@ -132,8 +134,9 @@ jobs:
           sudo apt-get update && sudo apt-get install dpkg-sig dpkg-dev -y
       - name: Sign Artifacts
         run: |
-          chmod +x ${{ inputs.gh-checkout-path }}/.github/workflows/sign-artifacts/entrypoint.sh
-          ${{ inputs.gh-checkout-path }}/.github/workflows/sign-artifacts/entrypoint.sh 'unsigned-artifacts/**/*' '${{ inputs.gh-artifact-name }}'
+          entrypoint="${{ inputs.gh-checkout-path }}/.github/workflows/sign-artifacts/entrypoint.sh"
+          chmod +x "$entrypoint"
+          "$entrypoint" 'unsigned-artifacts/**/*' '${{ inputs.gh-artifact-name }}'
       - name: Upload Artifacts
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         with:

@@ -15,6 +15,7 @@ jobs:
       jf-project: test
       jf-build-name: test-build
       jf-build-id: v1.0.0
+      gh-workflows-ref: ${{ github.sha }}
       build-script: |
         echo "Need to ensure current-source is correctly present and building"
         cat current-source/README.md &&\
@@ -28,7 +29,6 @@ jobs:
       oidc-provider-name: gh-dev-test
       oidc-audience: aerospike/testing
       dry-run: false # default
-      gh-workflows-ref: v2.0.2
 
   # Test the entrypoint script directly
   run-tests:

@@ -12,15 +12,16 @@ jobs:
   test-create-release-bundle-workflow:
     uses: ./.github/workflows/reusable_create-release-bundle.yaml
     with:
+      gh-workflows-ref: ${{ github.sha }}
       jf-project: test
       jf-build-names: test-build-1:1728052628123,test-build-2:1728052628123
       jf-bundle-name: test-release-bundle
       version: v1.0.0
       jf-url: https://artifact.aerospike.io
+      # gh-checkout-path defaults to 'shared-workflows'
       oidc-provider-name: gh-aerospike
       oidc-audience: aerospike
       dry-run: true
-      gh-workflows-ref: v2.0.2
 
   run-tests:
     runs-on: ubuntu-22.04
