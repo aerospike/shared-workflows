@@ -13,43 +13,45 @@ handle_error() {
 # Function to extract JAR metadata
 get_jar_metadata() {
     local jar="$1"
-    local filename="${jar##*/}" # Get just the filename without path
+    local filename="${jar##*/}"
     local jar_dir
     jar_dir="$(dirname "$jar")"
-    local pkgname version group_id
+    local pkgname version group_id=""
     local pom_props
 
-    # Initial parsing - handle versions with SNAPSHOT, SNAPSHOT_<hash>, etc.
-    pkgname=$(echo "$filename" | sed -E 's/-[0-9][0-9A-Za-z._\-]*\.jar$//')
-    version=$(echo "$filename" | sed -E 's/^[^-]+-([0-9][0-9A-Za-z._\-]*)\.jar$/\1/')
+    local base_no_ext="${filename%.jar}"
 
+    # Extract version from end of base name
+    version=$(echo "$base_no_ext" | sed -E 's/^.*-([0-9][0-9A-Za-z._\-]+)(-javadoc|-sources)?$/\1/')
+
+    pkgname=$(echo "$base_no_ext" | sed -E "s/-${version}(-javadoc|-sources)?$//")
+
+    # Try pom.properties first
     pom_props=$(unzip -Z1 "$jar" | awk '/pom\.properties$/ {print; exit}')
     if [[ -n $pom_props ]]; then
         pkgname=$(unzip -p "$jar" "$pom_props" | grep '^artifactId=' | cut -d= -f2)
         version=$(unzip -p "$jar" "$pom_props" | grep '^version=' | cut -d= -f2)
         group_id=$(unzip -p "$jar" "$pom_props" | grep '^groupId=' | cut -d= -f2)
-    else
-        # Fallback to filename parsing if pom.properties is not found
-        pkgname=$(echo "$filename" | sed -E 's/-[0-9][0-9A-Za-z._\-]*\.jar$//')
-        version=$(echo "$filename" | sed -E 's/^.*-([0-9]+\.[0-9]+\.[0-9]+).*\.jar$/\1/')
-        group_id=""
     fi
 
-    # If groupId is still empty (e.g., javadoc jars), try to locate main JAR in same folder
+    # If groupId still empty (javadoc/sources), find main artifact in same folder
     if [[ -z $group_id ]]; then
-        main_jar_candidate="${jar_dir}/${pkgname}-${version}.jar"
+        local main_jar
+        main_jar=$(ls "$jar_dir/$pkgname"-*.jar 2>/dev/null \
+                       | grep -vE '(javadoc|sources)' \
+                       | head -n 1)
 
-        if [[ -f $main_jar_candidate && $main_jar_candidate != "$jar" ]]; then
-            pom_props=$(unzip -Z1 "$main_jar_candidate" 2>/dev/null | awk '/pom\.properties$/ {print; exit}')
+        if [[ -f $main_jar && "$main_jar" != "$jar" ]]; then
+            pom_props=$(unzip -Z1 "$main_jar" 2>/dev/null | awk '/pom\.properties$/ {print; exit}')
             if [[ -n $pom_props ]]; then
-                group_id=$(unzip -p "$main_jar_candidate" "$pom_props" | grep '^groupId=' | cut -d= -f2)
+                group_id=$(unzip -p "$main_jar" "$pom_props" | grep '^groupId=' | cut -d= -f2)
             fi
         fi
     fi
 
-    # Return package name, version, and group_id
     echo "$pkgname $version $group_id"
 }
+
 
 # Function to extract RPM metadata and distribution
 # Unlike for debs this requires parsing the name (because the distro name is not standard)

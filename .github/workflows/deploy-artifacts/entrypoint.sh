@@ -471,7 +471,7 @@ AQL
 
 # This function handles publishing the tree of build info to jfrog
 # 1. publish the signed artifacts
-# 2. append metadata and artifact builld infos to new build info
+# 2. append metadata and artifact build infos to new build info
 # 3. publish the new build info
 publish_build_info() {
     run jf rt build-publish "$BUILD_NAME" "$ARTIFACT_BUILD_NUMBER" --project="$PROJECT"

@@ -2,7 +2,7 @@
 **/build-output
 .DS_Store
 **/test-artifacts
-
+.idea
 .cursorrules
 memory-bank
 memory-bank-external
