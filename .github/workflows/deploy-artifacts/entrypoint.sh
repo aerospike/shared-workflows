@@ -477,7 +477,14 @@ publish_build_info() {
     run jf rt build-publish "$BUILD_NAME" "$ARTIFACT_BUILD_NUMBER" --project="$PROJECT"
 
     # Minimal VCS addition
+    CURRENT_DIR=$(pwd)
+    echo "current working directory: $CURRENT_DIR"
+    ls -la
+    
     pushd "$GITHUB_WORKSPACE" >/dev/null
+    CURRENT_DIR=$(pwd)
+    echo "current working directory: $CURRENT_DIR"
+    ls -la
     run jf rt bag "$BUILD_NAME" "$ARTIFACT_BUILD_NUMBER"
     popd >/dev/null
     
