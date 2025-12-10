@@ -477,8 +477,10 @@ publish_build_info() {
     run jf rt build-publish "$BUILD_NAME" "$ARTIFACT_BUILD_NUMBER" --project="$PROJECT"
 
     # Minimal VCS addition
+    pushd "$GITHUB_WORKSPACE" >/dev/null
     run jf rt bag "$BUILD_NAME" "$ARTIFACT_BUILD_NUMBER"
-
+    popd >/dev/null
+    
     discover_build_infos "$PROJECT" "$BUILD_NAME" "$METADATA_BUILD_NUMBER*" "$PROJECT-build-info" || true
 
     # Access the results
