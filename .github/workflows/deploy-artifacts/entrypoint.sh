@@ -476,6 +476,9 @@ AQL
 publish_build_info() {
     run jf rt build-publish "$BUILD_NAME" "$ARTIFACT_BUILD_NUMBER" --project="$PROJECT"
 
+    # Minimal VCS addition
+    run jf rt bag "$BUILD_NAME" "$ARTIFACT_BUILD_NUMBER"
+
     discover_build_infos "$PROJECT" "$BUILD_NAME" "$METADATA_BUILD_NUMBER*" "$PROJECT-build-info" || true
 
     # Access the results
@@ -483,8 +486,10 @@ publish_build_info() {
         echo "Found ${#CHILD_BUILD_IDS_RESULT[@]} child builds:" >&2
         for build_id in "${CHILD_BUILD_IDS_RESULT[@]}"; do
             echo "  $BUILD_NAME/$build_id"
+            child_build_name="${build_id%%/*}"
+            child_build_number="${build_id#*/}" 
             run jf rt build-append "$BUILD_NAME" "$BUILD_NUMBER" \
-                "$BUILD_NAME" "$build_id" --project="$PROJECT"
+                "$child_build_name" "$child_build_number" --project="$PROJECT"
         done
     fi
 
