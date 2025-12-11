@@ -158,6 +158,26 @@ structure_build_artifacts() {
         echo "Processing JAR: $jar" >&2
         process_jar "$jar" "./structured_build_artifacts/jar"
     done < <(find build-artifacts -name "*.jar" -print0)
+    
+    while IFS= read -r -d '' pom; do
+        [[ -f $pom ]] || continue
+        echo "Processing POM: $pom" >&2
+        filename=$(basename "$pom")
+        
+        # Extract metadata from POM
+        group_id=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='groupId'])" "$pom" 2>/dev/null)
+        artifact_id=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='artifactId'])" "$pom" 2>/dev/null)
+        version=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='version'])" "$pom" 2>/dev/null)
+        
+        group_path="${group_id//./\/}"
+        
+        target="./structured_build_artifacts/jar/${group_path}/${artifact_id}/${version}"
+        mkdir -p "$target"
+        cp "$pom" "$target/"
+        if [[ -f "$pom.asc" ]]; then
+            cp "$pom.asc" "$target/"
+        fi
+    done < <(find build-artifacts -name "*.pom" -print0)
 
     while IFS= read -r -d '' nupkg; do
         if [[ ! -f $nupkg ]]; then
@@ -291,30 +311,34 @@ upload_jar_packages() {
         fi
         processed_artifacts[$artifact_key]=1
 
-        # Determine which file to use for metadata extraction (prefer POM as it's the source of truth)
-        local pkgname version group_id
-
-        # Extract metadata from JAR (must exist since process_jar copies JAR+POM together)
+        # Check if JAR exists
         local jar_file="$artifact_dir/${base_name}.jar"
-        if [[ ! -f $jar_file ]]; then
-            echo "  Warning: JAR file not found for $artifact, skipping" >&2
-            continue
+        local pom_file="$artifact_dir/${base_name}.pom"
+        
+        # Extract metadata - prefer POM, fallback to JAR
+        local pkgname version group_id
+        
+        if [[ -f $pom_file ]]; then
+            # Extract from POM
+            group_id=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='groupId'])" "$pom_file" 2>/dev/null)
+            pkgname=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='artifactId'])" "$pom_file" 2>/dev/null)
+            version=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='version'])" "$pom_file" 2>/dev/null)
+        elif [[ -f $jar_file ]]; then
+            # Fallback: Extract from JAR metadata
+            read -r -a metadata < <(get_jar_metadata "$jar_file")
+            pkgname="${metadata[0]}"
+            version="${metadata[1]}"
+            group_id="${metadata[2]-${JAR_GROUP_ID-}}"
         fi
-        read -r -a metadata < <(get_jar_metadata "$jar_file")
-        pkgname="${metadata[0]}"
-        version="${metadata[1]}"
 
-        # Group ID priority: metadata > flag > empty
-        # If metadata has group_id, use it; otherwise use JAR_GROUP_ID if provided via flag
-        if [[ -n ${metadata[2]-} ]]; then
-            group_id="${metadata[2]}"
-        else
+        # Fallback to JAR_GROUP_ID flag if still empty
+        if [[ -z $group_id ]]; then
             group_id="${JAR_GROUP_ID-}"
         fi
 
-        # If no group_id is available, move to generic directory for generic upload
+        # If no group_id is available, move to generic directory
         if [[ -z $group_id ]]; then
-            echo "  Moving JAR without group_id to generic directory: $artifact" >&2
+            echo "  Moving artifacts without group_id to generic directory: $base_name" >&2
             for ext in jar pom jar.asc pom.asc; do
                 local artifact_file="$artifact_dir/${base_name}.${ext}"
                 if [[ -f $artifact_file ]]; then
@@ -325,8 +349,15 @@ upload_jar_packages() {
         fi
 
         echo "  Package: $pkgname, Version: $version, Group ID: $group_id" >&2
+        
+        # Determine artifact type
+        if [[ -f $jar_file ]]; then
+            echo "  Type: JAR + POM" >&2
+        else
+            echo "  Type: POM only (parent/BOM)" >&2
+        fi
 
-        # Upload all related Maven artifact files (jar, pom, signatures)
+        # Upload all related Maven artifact files that exist
         for ext in jar pom jar.asc pom.asc; do
             local artifact_file="$artifact_dir/${base_name}.${ext}"
             if [[ -f $artifact_file ]]; then
