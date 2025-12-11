@@ -316,34 +316,37 @@ upload_jar_packages() {
         fi
         processed_artifacts[$artifact_key]=1
 
-        # Check if JAR exists
+        # Determine which file to use for metadata extraction (prefer POM as it's the source of truth)
+        local pkgname version group_id
+
+        # Extract metadata from JAR (must exist since process_jar copies JAR+POM together)
         local jar_file="$artifact_dir/${base_name}.jar"
         local pom_file="$artifact_dir/${base_name}.pom"
         
-        # Extract metadata - prefer POM, fallback to JAR
-        local pkgname version group_id
-        
-        if [[ -f $pom_file ]]; then
-            # Extract from POM
-            group_id=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='groupId'])" "$pom_file" 2>/dev/null)
-            pkgname=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='artifactId'])" "$pom_file" 2>/dev/null)
-            version=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='version'])" "$pom_file" 2>/dev/null)
-        elif [[ -f $jar_file ]]; then
-            # Fallback: Extract from JAR metadata
+        if [[ -f $jar_file ]]; then
+            # Standard case: extract from JAR
             read -r -a metadata < <(get_jar_metadata "$jar_file")
             pkgname="${metadata[0]}"
             version="${metadata[1]}"
             group_id="${metadata[2]-${JAR_GROUP_ID-}}"
+        
+        elif [[ -f $pom_file ]]; then
+            # Standalone POM case
+            pkgname=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='artifactId'])" "$pom_file" 2>/dev/null)
+            version=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='version'])" "$pom_file" 2>/dev/null)
+            group_id=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='groupId'])" "$pom_file" 2>/dev/null)
         fi
-
-        # Fallback to JAR_GROUP_ID flag if still empty
+        
+        # Group ID priority:
+        # 1. group_id already extracted (either via POM or metadata)
+        # 2. fallback to JAR_GROUP_ID
         if [[ -z $group_id ]]; then
             group_id="${JAR_GROUP_ID-}"
         fi
 
-        # If no group_id is available, move to generic directory
+        # If no group_id is available, move to generic directory for generic upload
         if [[ -z $group_id ]]; then
-            echo "  Moving artifacts without group_id to generic directory: $base_name" >&2
+            echo "  Moving JAR without group_id to generic directory: $artifact" >&2
             for ext in jar pom jar.asc pom.asc; do
                 local artifact_file="$artifact_dir/${base_name}.${ext}"
                 if [[ -f $artifact_file ]]; then
@@ -354,15 +357,8 @@ upload_jar_packages() {
         fi
 
         echo "  Package: $pkgname, Version: $version, Group ID: $group_id" >&2
-        
-        # Determine artifact type
-        if [[ -f $jar_file ]]; then
-            echo "  Type: JAR + POM" >&2
-        else
-            echo "  Type: POM only (parent/BOM)" >&2
-        fi
 
-        # Upload all related Maven artifact files that exist
+        # Upload all related Maven artifact files (jar, pom, signatures)
         for ext in jar pom jar.asc pom.asc; do
             local artifact_file="$artifact_dir/${base_name}.${ext}"
             if [[ -f $artifact_file ]]; then
