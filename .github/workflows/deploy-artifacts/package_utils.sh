@@ -36,9 +36,13 @@ get_jar_metadata() {
     # If groupId is still empty (e.g., javadoc/sources jars), locate main artifact in same folder
     if [[ -z $group_id ]]; then
         local main_jar
-        main_jar=$(ls "$jar_dir/$pkgname"-*.jar 2>/dev/null |
-            grep -vE '(javadoc|sources)' |
-            head -n 1)
+        for jar in "$jar_dir/$pkgname"-*.jar; do
+            [ -e "$jar" ] || continue
+            if [[ $jar != *javadoc* && $jar != *sources* ]]; then
+                main_jar="$jar"
+                break
+            fi
+        done
 
         if [[ -f $main_jar && $main_jar != "$jar" ]]; then
             pom_props=$(unzip -Z1 "$main_jar" 2>/dev/null | awk '/pom\.properties$/ {print; exit}')
