@@ -33,14 +33,14 @@ get_jar_metadata() {
         group_id=$(unzip -p "$jar" "$pom_props" | grep '^groupId=' | cut -d= -f2)
     fi
 
-    # If groupId is still empty (common for javadoc/sources jars), locate main artifact in same folder
+    # If groupId is still empty (e.g., javadoc/sources jars), locate main artifact in same folder
     if [[ -z $group_id ]]; then
         local main_jar
-        main_jar=$(ls "$jar_dir/$pkgname"-*.jar 2>/dev/null \
-                       | grep -vE '(javadoc|sources)' \
-                       | head -n 1)
+        main_jar=$(ls "$jar_dir/$pkgname"-*.jar 2>/dev/null |
+            grep -vE '(javadoc|sources)' |
+            head -n 1)
 
-        if [[ -f $main_jar && "$main_jar" != "$jar" ]]; then
+        if [[ -f $main_jar && $main_jar != "$jar" ]]; then
             pom_props=$(unzip -Z1 "$main_jar" 2>/dev/null | awk '/pom\.properties$/ {print; exit}')
             if [[ -n $pom_props ]]; then
                 group_id=$(unzip -p "$main_jar" "$pom_props" | grep '^groupId=' | cut -d= -f2)
@@ -51,7 +51,6 @@ get_jar_metadata() {
     # Return pkgname, version, groupId
     echo "$pkgname $version $group_id"
 }
-
 
 # Function to extract RPM metadata and distribution
 # Unlike for debs this requires parsing the name (because the distro name is not standard)

@@ -158,24 +158,24 @@ structure_build_artifacts() {
         echo "Processing JAR: $jar" >&2
         process_jar "$jar" "./structured_build_artifacts/jar"
     done < <(find build-artifacts -name "*.jar" -print0)
-    
+
     while IFS= read -r -d '' pom; do
         [[ -f $pom ]] || continue
         base_name=$(basename "$pom" .pom)
         jar_file="$(dirname "$pom")/$base_name.jar"
-    
+
         # Skip if a corresponding JAR exists (already handled)
         [[ -f $jar_file ]] && continue
-    
+
         echo "Processing standalone POM: $pom" >&2
-                
+
         # Extract metadata from POM
         group_id=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='groupId'])" "$pom" 2>/dev/null)
         artifact_id=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='artifactId'])" "$pom" 2>/dev/null)
         version=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='version'])" "$pom" 2>/dev/null)
-        
+
         group_path="${group_id//./\/}"
-        
+
         target="./structured_build_artifacts/jar/${group_path}/${artifact_id}/${version}"
         mkdir -p "$target"
         cp "$pom" "$target/"
@@ -322,21 +322,21 @@ upload_jar_packages() {
         # Extract metadata from JAR (must exist since process_jar copies JAR+POM together)
         local jar_file="$artifact_dir/${base_name}.jar"
         local pom_file="$artifact_dir/${base_name}.pom"
-        
+
         if [[ -f $jar_file ]]; then
             # Standard case: extract from JAR
             read -r -a metadata < <(get_jar_metadata "$jar_file")
             pkgname="${metadata[0]}"
             version="${metadata[1]}"
             group_id="${metadata[2]-${JAR_GROUP_ID-}}"
-        
+
         elif [[ -f $pom_file ]]; then
             # Standalone POM case
             pkgname=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='artifactId'])" "$pom_file" 2>/dev/null)
             version=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='version'])" "$pom_file" 2>/dev/null)
             group_id=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='groupId'])" "$pom_file" 2>/dev/null)
         fi
-        
+
         # Group ID priority:
         # 1. group_id already extracted (either via POM or metadata)
         # 2. fallback to JAR_GROUP_ID
