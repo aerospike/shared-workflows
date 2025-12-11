@@ -21,12 +21,11 @@ get_jar_metadata() {
 
     local base_no_ext="${filename%.jar}"
 
-    # Extract version from end of base name
-    version=$(echo "$base_no_ext" | sed -E 's/^.*-([0-9][0-9A-Za-z._\-]+)(-javadoc|-sources)?$/\1/')
+    version=$(echo "$base_no_ext" | sed -E 's/^.*-([0-9][0-9A-Za-z._-]+)-(javadoc|sources)$/\1/')
 
     pkgname=$(echo "$base_no_ext" | sed -E "s/-${version}(-javadoc|-sources)?$//")
 
-    # Try pom.properties first
+    # Try reading from pom.properties inside the jar
     pom_props=$(unzip -Z1 "$jar" | awk '/pom\.properties$/ {print; exit}')
     if [[ -n $pom_props ]]; then
         pkgname=$(unzip -p "$jar" "$pom_props" | grep '^artifactId=' | cut -d= -f2)
@@ -34,7 +33,7 @@ get_jar_metadata() {
         group_id=$(unzip -p "$jar" "$pom_props" | grep '^groupId=' | cut -d= -f2)
     fi
 
-    # If groupId still empty (javadoc/sources), find main artifact in same folder
+    # If groupId is still empty (common for javadoc/sources jars), locate main artifact in same folder
     if [[ -z $group_id ]]; then
         local main_jar
         main_jar=$(ls "$jar_dir/$pkgname"-*.jar 2>/dev/null \
@@ -49,6 +48,7 @@ get_jar_metadata() {
         fi
     fi
 
+    # Return pkgname, version, groupId
     echo "$pkgname $version $group_id"
 }
 
