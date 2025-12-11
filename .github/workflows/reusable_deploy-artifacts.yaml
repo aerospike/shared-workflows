@@ -128,6 +128,9 @@ jobs:
         run: |
           echo "Build artifacts: $(find ./build-artifacts)"
 
+      - name: Install xmllint
+        run: sudo apt-get update && sudo apt-get install -y libxml2-utils
+        
       - name: Deploy Artifacts
         id: deploy
         shell: bash

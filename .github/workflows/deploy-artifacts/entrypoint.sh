@@ -161,9 +161,14 @@ structure_build_artifacts() {
     
     while IFS= read -r -d '' pom; do
         [[ -f $pom ]] || continue
-        echo "Processing POM: $pom" >&2
-        filename=$(basename "$pom")
-        
+        base_name=$(basename "$pom" .pom)
+        jar_file="$(dirname "$pom")/$base_name.jar"
+    
+        # Skip if a corresponding JAR exists (already handled)
+        [[ -f $jar_file ]] && continue
+    
+        echo "Processing standalone POM: $pom" >&2
+                
         # Extract metadata from POM
         group_id=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='groupId'])" "$pom" 2>/dev/null)
         artifact_id=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='artifactId'])" "$pom" 2>/dev/null)
