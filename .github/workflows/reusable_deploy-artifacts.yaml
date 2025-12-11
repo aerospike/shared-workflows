@@ -128,9 +128,22 @@ jobs:
         run: |
           echo "Build artifacts: $(find ./build-artifacts)"
 
-      - name: Install xmllint
+      - name: Install xmllint and Verify
         shell: bash
-        run: sudo apt-get update && sudo apt-get install -y libxml2-utils
+        run: |
+          echo "Attempting to install libxml2-utils for xmllint..."
+          # The -y flag confirms installation automatically.
+          sudo apt-get update -y
+          sudo apt-get install -y libxml2-utils
+          
+          # Verification: Check if the command is now available
+          if command -v xmllint > /dev/null 2>&1; then
+            echo "xmllint is installed successfully."
+          else
+            echo "Error: xmllint command not found after installation attempt."
+            # Exit with an error to stop the workflow if installation failed.
+            exit 1
+          fi
         
       - name: Deploy Artifacts
         id: deploy
