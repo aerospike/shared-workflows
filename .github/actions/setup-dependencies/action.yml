@@ -1,7 +1,7 @@
-name: "Setup Dependencies"
-description: "Install common dependencies for workflows"
+name: Setup Dependencies
+description: Install common dependencies for workflows
 runs:
-  using: "composite"
+  using: composite
   steps:
     - name: Install Dependencies
       shell: bash
