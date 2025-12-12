@@ -1,0 +1,17 @@
+name: "Setup Dependencies"
+description: "Install common dependencies for workflows"
+runs:
+  using: "composite"
+  steps:
+    - name: Install Dependencies
+      shell: bash
+      run: |
+        sudo apt-get update -y
+        sudo apt-get install -y libxml2-utils jq curl
+
+    - name: Verify Installations
+      shell: bash
+      run: |
+        command -v xmllint || exit 1
+        command -v jq || exit 1
+        command -v curl || exit 1

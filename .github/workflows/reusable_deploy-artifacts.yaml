@@ -102,6 +102,8 @@ jobs:
           path: ${{ inputs.gh-checkout-path }}
           fetch-depth: 1
 
+      - uses: ./.github/actions/setup-dependencies
+
       - name: Setup JFrog CLI
         id: jf
         uses: jfrog/setup-jfrog-cli@5b06f730cc5a6f55d78b30753f8583454b08c0aa # v4.8.1
@@ -127,21 +129,6 @@ jobs:
         shell: bash
         run: |
           echo "Build artifacts: $(find ./build-artifacts)"
-
-      - name: Install xmllint and Verify
-        shell: bash
-        run: |
-          echo "Attempting to install libxml2-utils for xmllint..."
-
-          sudo apt-get update -y
-          sudo apt-get install -y libxml2-utils
-
-          if command -v xmllint > /dev/null 2>&1; then
-            echo "xmllint is installed successfully."
-          else
-            echo "Error: xmllint command not found after installation attempt."
-            exit 1
-          fi
 
       - name: Deploy Artifacts
         id: deploy
