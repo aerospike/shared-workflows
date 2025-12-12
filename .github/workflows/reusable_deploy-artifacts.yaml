@@ -94,6 +94,21 @@ jobs:
         with:
           egress-policy: audit
 
+      - name: Install xmllint and Verify
+        shell: bash
+        run: |
+          echo "Attempting to install libxml2-utils for xmllint..."
+
+          sudo apt-get update -y
+          sudo apt-get install -y libxml2-utils
+
+          if command -v xmllint > /dev/null 2>&1; then
+            echo "xmllint is installed successfully."
+          else
+            echo "Error: xmllint command not found after installation attempt."
+            exit 1
+          fi
+
       - name: Checkout shared-workflows repository
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
         with:
@@ -127,21 +142,6 @@ jobs:
         shell: bash
         run: |
           echo "Build artifacts: $(find ./build-artifacts)"
-
-      - name: Install xmllint and Verify
-        shell: bash
-        run: |
-          echo "Attempting to install libxml2-utils for xmllint..."
-
-          sudo apt-get update -y
-          sudo apt-get install -y libxml2-utils
-
-          if command -v xmllint > /dev/null 2>&1; then
-            echo "xmllint is installed successfully."
-          else
-            echo "Error: xmllint command not found after installation attempt."
-            exit 1
-          fi
 
       - name: Deploy Artifacts
         id: deploy
