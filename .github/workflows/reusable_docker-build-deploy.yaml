@@ -136,7 +136,7 @@ jobs:
 
       - name: Install JFrog CLI
         id: jf
-        uses: jfrog/setup-jfrog-cli@5b06f730cc5a6f55d78b30753f8583454b08c0aa # v4.8.1
+        uses: step-security/setup-jfrog-cli@a6b41f8338bea0983ddff6bd4ede7d2dcd81e1fa # v4.8.1
         env:
           JF_URL: ${{ inputs.jf-url }}
           JF_PROJECT: ${{ inputs.jf-project }}
@@ -165,7 +165,7 @@ jobs:
           password: ${{ steps.jf.outputs.oidc-token }}
 
       - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
-      - uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3
+      - uses: step-security/setup-buildx-action@8c8aef2d414c0b66518fee2b7084e0986f82d7ac # v3.11.1
       - name: Compute tags
         id: tags
         shell: bash

@@ -114,7 +114,7 @@ jobs:
           fi
           mkdir -p ${{ inputs.gh-artifact-name }}/nuget
       - name: Sign NuGet Packages with SSL.com
-        uses: sslcom/esigner-codesign@a272724cb13abe0abc579c6c40f7899969b6942b # v1.3.1
+        uses: step-security/esigner-codesign@8ff3d1cc0f91d52f5641fe33f81efed2aa0823d6 # v1.0.0
         if: steps.nuget-packages.outputs.count > 0
         with:
           command: batch_sign
