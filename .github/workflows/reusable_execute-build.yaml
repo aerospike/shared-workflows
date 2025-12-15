@@ -182,7 +182,7 @@ jobs:
           path: ${{ inputs.gh-source-path }}
           fetch-tags: true
           submodules: recursive
-          fetch-depth: 1
+          fetch-depth: 0
 
       - name: Set up Java
         if: inputs.setup-java
