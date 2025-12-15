@@ -36,10 +36,10 @@ get_jar_metadata() {
     # If groupId is still empty (e.g., javadoc/sources jars), locate main artifact in same folder
     if [[ -z $group_id ]]; then
         local main_jar=""
-        for jar in "$jar_dir/$pkgname"-*.jar; do
-            [ -e "$jar" ] || continue
-            if [[ $jar != *javadoc* && $jar != *sources* ]]; then
-                main_jar="$jar"
+        for candidate_jar in "$jar_dir/$pkgname"-*.jar; do
+            [ -e "$candidate_jar" ] || continue
+            if [[ $candidate_jar != *javadoc* && $candidate_jar != *sources* ]]; then
+                main_jar="$candidate_jar"
                 break
             fi
         done
