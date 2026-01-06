@@ -193,7 +193,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.ghcr-pat }}      
+          password: ${{ secrets.ghcr-pat }}
 
       - name: Set up Java
         if: inputs.setup-java
