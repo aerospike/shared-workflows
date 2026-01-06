@@ -126,7 +126,27 @@ jobs:
       - name: Verify artifacts
         shell: bash
         run: |
-          echo "Build artifacts: $(find ./build-artifacts)"
+          echo "Before filtering:"
+          find build-artifacts
+          PREFIX="${{ inputs.gh-artifact-name }}"
+          # Default prefix if empty
+          if [[ -z "$PREFIX" ]]; then
+            PREFIX="signed-artifacts"
+          fi
+          echo "Using PREFIX: $PREFIX"
+          # Keep only folders starting with prefix
+          for f in build-artifacts/*; do
+            base=$(basename "$f")
+            if [[ "$base" == "$PREFIX"* ]]; then
+              echo "KEEP: $f"
+            else
+              echo "REMOVE: $f"
+              rm -rf "$f"
+            fi
+          done
+
+          echo "After filtering:"
+          find build-artifacts
 
       - name: Deploy Artifacts
         id: deploy

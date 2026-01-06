@@ -138,6 +138,10 @@ on:
         type: string
         default: maven
 
+    secrets:
+      ghcr-pat:
+        required: true
+
     outputs:
       gh-artifact-name:
         description: The name of the uploaded artifacts on github
@@ -183,6 +187,13 @@ jobs:
           fetch-tags: true
           submodules: recursive
           fetch-depth: 1
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.ghcr-pat }}      
 
       - name: Set up Java
         if: inputs.setup-java
@@ -232,6 +243,7 @@ jobs:
             --project "${{ inputs.jf-project }}" \
             ${{ inputs.publish-build-info && '--publish-build-info' || '' }} \
             ${{ inputs.dry-run && '--dry-run' || '' }}
+
       - name: Upload Artifacts
         if: inputs.dry-run != true
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
