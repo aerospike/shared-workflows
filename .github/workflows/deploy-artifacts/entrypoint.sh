@@ -159,6 +159,31 @@ structure_build_artifacts() {
         process_jar "$jar" "./structured_build_artifacts/jar"
     done < <(find build-artifacts -name "*.jar" -print0)
 
+    while IFS= read -r -d '' pom; do
+        [[ -f $pom ]] || continue
+        base_name=$(basename "$pom" .pom)
+        jar_file="$(dirname "$pom")/$base_name.jar"
+
+        # Skip if a corresponding JAR exists (already handled)
+        [[ -f $jar_file ]] && continue
+
+        echo "Processing standalone POM: $pom" >&2
+
+        # Extract metadata from POM
+        group_id=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='groupId'])" "$pom" 2>/dev/null)
+        artifact_id=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='artifactId'])" "$pom" 2>/dev/null)
+        version=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='version'])" "$pom" 2>/dev/null)
+
+        group_path="${group_id//./\/}"
+
+        target="./structured_build_artifacts/jar/${group_path}/${artifact_id}/${version}"
+        mkdir -p "$target"
+        cp "$pom" "$target/"
+        if [[ -f "$pom.asc" ]]; then
+            cp "$pom.asc" "$target/"
+        fi
+    done < <(find build-artifacts -name "*.pom" -print0)
+
     while IFS= read -r -d '' nupkg; do
         if [[ ! -f $nupkg ]]; then
             continue
@@ -296,19 +321,26 @@ upload_jar_packages() {
 
         # Extract metadata from JAR (must exist since process_jar copies JAR+POM together)
         local jar_file="$artifact_dir/${base_name}.jar"
-        if [[ ! -f $jar_file ]]; then
-            echo "  Warning: JAR file not found for $artifact, skipping" >&2
-            continue
-        fi
-        read -r -a metadata < <(get_jar_metadata "$jar_file")
-        pkgname="${metadata[0]}"
-        version="${metadata[1]}"
+        local pom_file="$artifact_dir/${base_name}.pom"
 
-        # Group ID priority: metadata > flag > empty
-        # If metadata has group_id, use it; otherwise use JAR_GROUP_ID if provided via flag
-        if [[ -n ${metadata[2]-} ]]; then
-            group_id="${metadata[2]}"
-        else
+        if [[ -f $jar_file ]]; then
+            # Standard case: extract from JAR
+            read -r -a metadata < <(get_jar_metadata "$jar_file")
+            pkgname="${metadata[0]}"
+            version="${metadata[1]}"
+            group_id="${metadata[2]-${JAR_GROUP_ID-}}"
+
+        elif [[ -f $pom_file ]]; then
+            # Standalone POM case
+            pkgname=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='artifactId'])" "$pom_file" 2>/dev/null)
+            version=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='version'])" "$pom_file" 2>/dev/null)
+            group_id=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='groupId'])" "$pom_file" 2>/dev/null)
+        fi
+
+        # Group ID priority:
+        # 1. group_id already extracted (either via POM or metadata)
+        # 2. fallback to JAR_GROUP_ID
+        if [[ -z $group_id ]]; then
             group_id="${JAR_GROUP_ID-}"
         fi
 
@@ -471,7 +503,7 @@ AQL
 
 # This function handles publishing the tree of build info to jfrog
 # 1. publish the signed artifacts
-# 2. append metadata and artifact builld infos to new build info
+# 2. append metadata and artifact build infos to new build info
 # 3. publish the new build info
 publish_build_info() {
     run jf rt build-publish "$BUILD_NAME" "$ARTIFACT_BUILD_NUMBER" --project="$PROJECT"

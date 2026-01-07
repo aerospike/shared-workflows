@@ -66,7 +66,7 @@ teardown_file() {
     if [[ $cmd =~ test\.jar ]]; then
       jar_found=true
       assert_upload_command_valid "$cmd" "test.jar" "test-project-maven-dev-local" \
-        "group_id=com.example.test;package_name=test.jar;version=test.jar" \
+        "group_id=com.example.test;package_name=test;version=test" \
         "test-build" "12345-artifacts" "test-project"
     fi
     
