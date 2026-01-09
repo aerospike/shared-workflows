@@ -101,9 +101,6 @@ on:
         required: false
         type: string
         default: .
-    secrets:
-      ghcr-pat:
-        required: true
 
     outputs:
       gh-artifact-name:
