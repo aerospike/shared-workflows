@@ -121,7 +121,7 @@ jobs:
           PREFIX="${{ inputs.gh-artifact-name }}"
           # Default prefix if empty
           if [[ -z "$PREFIX" ]]; then
-            PREFIX="signed-artifacts"
+            PREFIX="signed-artifacts-${{ inputs.version }}
           fi
           echo "Using PREFIX: $PREFIX"
           # Keep only folders starting with prefix
