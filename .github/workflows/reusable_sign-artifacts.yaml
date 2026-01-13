@@ -128,7 +128,7 @@ jobs:
       - name: Sign Artifacts
         run: |
           chmod +x ${{ inputs.gh-checkout-path }}/.github/workflows/sign-artifacts/entrypoint.sh
-          ${{ inputs.gh-checkout-path }}/.github/workflows/sign-artifacts/entrypoint.sh 'unsigned-artifacts/**/*' '${{ inputs.gh-artifact-name }}'
+          ${{ inputs.gh-checkout-path }}/.github/workflows/sign-artifacts/entrypoint.sh 'unsigned-artifacts' '${{ inputs.gh-artifact-name }}'
       - name: Upload Artifacts
         uses: actions/upload-artifact@v5
         with:
