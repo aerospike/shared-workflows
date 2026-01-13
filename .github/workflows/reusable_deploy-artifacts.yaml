@@ -127,7 +127,7 @@ jobs:
           # Keep only folders starting with prefix
           for f in build-artifacts/*; do
             base=$(basename "$f")
-            if [[ "$base" == "$PREFIX"* ]]; then
+            if [[ "$f" =~ "$PREFIX" ]]; then
               echo "KEEP: $f"
             else
               echo "REMOVE: $f"
