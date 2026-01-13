@@ -74,7 +74,7 @@ jobs:
       - name: Download Unsigned Artifacts
         uses: actions/download-artifact@v6
         with:
-          name: ${{ inputs.gh-unsigned-artifacts }}
+          pattern: ${{ inputs.gh-unsigned-artifacts }}*
           path: unsigned-artifacts
           merge-multiple: true
       - name: Get nuget packages
