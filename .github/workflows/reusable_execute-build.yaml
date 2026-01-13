@@ -155,13 +155,6 @@ jobs:
           oidc-provider-name: ${{ inputs.oidc-provider-name }}
           oidc-audience: ${{ inputs.oidc-audience }}
 
-      - name: Docker login to Artifactory
-        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3
-        with:
-          registry: ${{ steps.registry.outputs.registry }}
-          username: ${{ steps.jf.outputs.oidc-user }}
-          password: ${{ steps.jf.outputs.oidc-token }}
-
       - name: Execute Build Script
         shell: bash
         run: |
