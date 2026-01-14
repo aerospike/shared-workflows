@@ -1,0 +1,4 @@
+# CODEOWNERS for shared-workflows
+
+# Default - dev-infra owns all files
+*   @dev-infra
