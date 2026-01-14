@@ -33,6 +33,10 @@ on:
         required: false
         type: string
         default: build-artifacts
+      gh-unsigned-artifacts-pattern:
+        description: Pattern to match unsigned artifacts. If provided, will be used instead of gh-unsigned-artifacts with wildcard matching
+        required: false
+        type: string
       runs-on:
         description: The runner to use for the build
         required: false
@@ -78,10 +82,28 @@ jobs:
         with:
           egress-policy: audit
 
-      - name: Download Unsigned Artifacts
+      - name: Validate artifact input parameters
+        shell: bash
+        run: |
+          if [[ -n "${{ inputs.gh-unsigned-artifacts-pattern }}" && "${{ inputs.gh-unsigned-artifacts }}" != "build-artifacts" ]]; then
+            echo "Error: Cannot specify both gh-unsigned-artifacts-pattern and gh-unsigned-artifacts"
+            echo "Use gh-unsigned-artifacts-pattern for pattern-based matching"
+            echo "Use gh-unsigned-artifacts for exact name matching (default: build-artifacts)"
+            exit 1
+          fi
+
+      - name: Download Unsigned Artifacts by name
+        if: ${{ !inputs.gh-unsigned-artifacts-pattern }}
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
-          pattern: ${{ inputs.gh-unsigned-artifacts }}*
+          name: ${{ inputs.gh-unsigned-artifacts }}
+          path: unsigned-artifacts
+
+      - name: Download Unsigned Artifacts by pattern
+        if: ${{ inputs.gh-unsigned-artifacts-pattern }}
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          pattern: ${{ inputs.gh-unsigned-artifacts-pattern }}
           path: unsigned-artifacts
           merge-multiple: true
       - name: Get nuget packages

@@ -49,6 +49,10 @@ on:
         required: false
         type: string
         default: signed-artifacts
+      gh-download-pattern:
+        description: Pattern to match artifacts on github. If provided, will be used instead of gh-artifact-name with wildcard matching
+        required: false
+        type: string
       gh-checkout-path:
         description: Directory to checkout the shared-workflows repository into
         required: false
@@ -132,11 +136,30 @@ jobs:
           jf c show
           jf rt ping
 
-      - name: Download artifacts
+      - name: Validate artifact input parameters
+        shell: bash
+        run: |
+          if [[ -n "${{ inputs.gh-download-pattern }}" && "${{ inputs.gh-artifact-name }}" != "signed-artifacts" ]]; then
+            echo "Error: Cannot specify both gh-download-pattern and gh-artifact-name"
+            echo "Use gh-download-pattern for pattern-based matching"
+            echo "Use gh-artifact-name for exact name matching (default: signed-artifacts)"
+            exit 1
+          fi
+
+      - name: Download artifacts by name
+        if: ${{ !inputs.gh-download-pattern }}
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
-          pattern: ${{ inputs.gh-artifact-name }}*
+          name: ${{ inputs.gh-artifact-name }}
           path: ./build-artifacts
+
+      - name: Download artifacts by pattern
+        if: ${{ inputs.gh-download-pattern }}
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          pattern: ${{ inputs.gh-download-pattern }}
+          path: ./build-artifacts
+          merge-multiple: true
 
       - name: Verify artifacts
         shell: bash
