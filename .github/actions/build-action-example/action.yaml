@@ -1,0 +1,44 @@
+name: Build Action Example
+description: Example build action for reusable_artifacts-cicd.yaml
+inputs:
+  artifact-directory:
+    description: Directory where artifacts are created
+    required: false
+    default: dist
+  artifact-name:
+    description: Artifact name to upload
+    required: false
+    default: build-artifacts-example
+  build-script:
+    description: Optional inline build script
+    required: false
+    default: ""
+outputs:
+  artifact-directory:
+    description: Directory containing build artifacts
+    value: ${{ steps.outputs.outputs.artifact-directory }}
+  artifact-name:
+    description: Artifact name to upload
+    value: ${{ steps.outputs.outputs.artifact-name }}
+runs:
+  using: composite
+  steps:
+    - name: Run build
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "BUILD_ACTION_INPUTS=${BUILD_ACTION_INPUTS:-}" >&2
+        if [[ -n "${{ inputs.build-script }}" ]]; then
+          bash -lc "${{ inputs.build-script }}"
+        else
+          mkdir -p "${{ inputs.artifact-directory }}"
+          echo "example artifact" > "${{ inputs.artifact-directory }}/example.txt"
+        fi
+    - name: Set outputs
+      id: outputs
+      shell: bash
+      run: |
+        {
+          echo "artifact-directory=${{ inputs.artifact-directory }}"
+          echo "artifact-name=${{ inputs.artifact-name }}"
+        } >> "$GITHUB_OUTPUT"

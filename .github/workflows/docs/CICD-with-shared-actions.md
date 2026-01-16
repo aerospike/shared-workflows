@@ -113,6 +113,25 @@ jobs:
     secrets: inherit
 ```
 
+### Custom build action (optional)
+
+You can provide a build action instead of `build-script`/`build-script-path`. The action can emit outputs for `artifact-directory` and `artifact-name` to control what gets uploaded. The JSON string in `build-action-inputs` is passed to the action via the `BUILD_ACTION_INPUTS` environment variable. The `build-action` value must include a ref (format `owner/repo/path@ref`).
+
+```yaml
+jobs:
+  ci:
+    uses: aerospike/shared-workflows/.github/workflows/reusable_artifacts-cicd.yaml@v2.0.3
+    with:
+      gh-workflows-ref: v2.0.3
+      jf-project: my-project
+      jf-build-name: my-app
+      version: 1.2.3
+      build-action: owner/repo/path@v1
+      build-action-inputs: >-
+        {"target":"release"}
+    secrets: inherit
+```
+
 ## Example Usage
 
 The typical pattern combines both pipelines: build and sign according to ecosystem, then unify in a release bundle.

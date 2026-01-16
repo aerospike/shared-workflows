@@ -39,6 +39,25 @@ on:
         required: false
         type: string
         default: ""
+      build-action:
+        description: |
+          Optional build action to run instead of build-script/build-script-path.
+          When set, build-script/build-script-path must be empty.
+        required: false
+        type: string
+        default: ""
+      build-action-inputs:
+        description: JSON object of inputs to pass to build-action
+        required: false
+        type: string
+        default: "{}"
+      build-info-mode:
+        description: |
+          When using build-action, controls build-info publishing.
+          Allowed values: "orchestrator" (default) or "action"
+        required: false
+        type: string
+        default: orchestrator
       dotnet-version:
         description: Dotnet version to set up when preset=dotnet (e.g., "8.0")
         required: false
@@ -195,19 +214,24 @@ jobs:
               ;;
           esac
 
-          resolve_override() {
-            local name="$1"
-            local value="$2"
-            local preset_value="$3"
-            case "$value" in
-              "") echo "$preset_value" ;;
-              true|false) echo "$value" ;;
+          if [[ -n "${{ inputs.build-action }}" ]]; then
+            if [[ -n "${{ inputs.build-script }}" || -n "${{ inputs.build-script-path }}" ]]; then
+              echo "Error: build-action cannot be combined with build-script/build-script-path" >&2
+              exit 1
+            fi
+            case "${{ inputs.build-info-mode }}" in
+              orchestrator|action) ;;
               *)
-                echo "Error: invalid $name override '$value' (allowed: '', 'true', 'false')" >&2
+                echo "Error: build-info-mode must be 'orchestrator' or 'action'" >&2
                 exit 1
                 ;;
             esac
-          }
+          else
+            if [[ -z "${{ inputs.build-script }}" && -z "${{ inputs.build-script-path }}" ]]; then
+              echo "Error: Either build-script or build-script-path must be given when build-action is not set" >&2
+              exit 1
+            fi
+          fi
 
           # Build IDs:
           # - jf_build_id: parent build id (overall pipeline)
@@ -232,33 +256,209 @@ jobs:
 
   build:
     needs: resolve
+    runs-on: ${{ matrix.runs-on }}
     strategy:
       fail-fast: true
       matrix: ${{ fromJSON(inputs.matrix-json) }}
-    uses: ./.github/workflows/reusable_execute-build.yaml
-    with:
-      build-script: ${{ inputs.build-script }}
-      build-script-path: ${{ inputs.build-script-path }}
-      dry-run: ${{ inputs.dry-run }}
-      gh-artifact-directory: ${{ inputs.gh-artifact-directory }}
-      gh-artifact-name: build-artifacts-${{ matrix.distro }}-${{ matrix.arch }}
-      gh-checkout-path: ${{ inputs.gh-checkout-path }}
-      gh-retention-days: ${{ inputs.gh-retention-days }}
-      gh-source-path: ${{ inputs.gh-source-path }}
-      gh-source-ref: ${{ inputs.gh-source-ref }}
-      gh-source-repository: ${{ inputs.gh-source-repository }}
-      gh-workflows-ref: ${{ inputs.gh-workflows-ref }}
-      jf-build-id: ${{ needs.resolve.outputs.jf-metadata-build-id }}-${{ matrix.distro }}-${{ matrix.arch }}
-      jf-build-name: ${{ inputs.jf-build-name }}
-      jf-project: ${{ inputs.jf-project }}
-      jf-url: ${{ inputs.jf-url }}
-      oidc-audience: ${{ inputs.oidc-audience }}
-      oidc-provider-name: ${{ inputs.oidc-provider-name }}
-      publish-build-info: true
-      runs-on: ${{ matrix.runs-on }}
-      setup-dotnet: ${{ needs.resolve.outputs.setup-dotnet == 'true' }}
-      dotnet-version: ${{ inputs.dotnet-version }}
-      working-directory: ${{ needs.resolve.outputs.resolved-working-directory }}
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@20cf305ff2072d973412fa9b1e3a4f227bda3c76 # v2.14.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout shared-workflows repository
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          repository: aerospike/shared-workflows
+          ref: ${{ inputs.gh-workflows-ref }}
+          path: ${{ inputs.gh-checkout-path }}
+          fetch-depth: 1
+
+      - name: Checkout source repository
+        if: inputs.gh-source-path != ''
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          repository: ${{ inputs.gh-source-repository }}
+          ref: ${{ inputs.gh-source-ref }}
+          path: ${{ inputs.gh-source-path }}
+          fetch-tags: true
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Set up Dotnet
+        if: needs.resolve.outputs.setup-dotnet == 'true'
+        uses: actions/setup-dotnet@2016bd2012dba4e32de620c46fe006a3ac9f0602 # v5.0.1
+        with:
+          dotnet-version: ${{ inputs.dotnet-version }}
+
+      - name: Set up JFrog CLI
+        uses: step-security/setup-jfrog-cli@a6b41f8338bea0983ddff6bd4ede7d2dcd81e1fa # v4.8.1
+        env:
+          JF_URL: ${{ inputs.jf-url }}
+          JF_PROJECT: ${{ inputs.jf-project }}
+        with:
+          oidc-provider-name: ${{ inputs.oidc-provider-name }}
+          oidc-audience: ${{ inputs.oidc-audience }}
+
+      - name: Parse build action reference
+        if: inputs.build-action != ''
+        id: build-action-ref
+        shell: bash
+        run: |
+          action_ref="${{ inputs.build-action }}"
+          if [[ "$action_ref" != *@* ]]; then
+            echo "Error: build-action must include a ref (owner/repo/path@ref)" >&2
+            exit 1
+          fi
+
+          repo_path="${action_ref%@*}"
+          ref="${action_ref#*@}"
+
+          owner="${repo_path%%/*}"
+          rest="${repo_path#*/}"
+          repo="${rest%%/*}"
+          path=""
+          if [[ "$rest" != "$repo" ]]; then
+            path="${rest#*/}"
+          fi
+
+          if [[ -z "$owner" || -z "$repo" ]]; then
+            echo "Error: build-action must start with owner/repo" >&2
+            exit 1
+          fi
+
+          echo "repo=$owner/$repo" >> "$GITHUB_OUTPUT"
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+          echo "path=$path" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout build action repository
+        if: inputs.build-action != ''
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          repository: ${{ steps.build-action-ref.outputs.repo }}
+          ref: ${{ steps.build-action-ref.outputs.ref }}
+          path: build-action-src
+          fetch-depth: 1
+
+      - name: Link build action
+        if: inputs.build-action != ''
+        shell: bash
+        run: |
+          rm -f build-action
+          if [[ -n "${{ steps.build-action-ref.outputs.path }}" ]]; then
+            ln -s "build-action-src/${{ steps.build-action-ref.outputs.path }}" build-action
+          else
+            ln -s "build-action-src" build-action
+          fi
+
+      - name: Run build action
+        if: inputs.build-action != ''
+        id: build-action
+        uses: ./build-action
+        env:
+          ARTIFACT_DIRECTORY: ${{ inputs.gh-artifact-directory }}
+          BUILD_ID: ${{ needs.resolve.outputs.jf-metadata-build-id }}-${{ matrix.distro }}-${{ matrix.arch }}
+          BUILD_NAME: ${{ inputs.jf-build-name }}
+          BUILD_ACTION_INPUTS: ${{ inputs.build-action-inputs }}
+          GH_SOURCE_PATH: ${{ inputs.gh-source-path }}
+          PROJECT: ${{ inputs.jf-project }}
+          VERSION: ${{ inputs.version }}
+          WORKING_DIRECTORY: ${{ needs.resolve.outputs.resolved-working-directory }}
+
+      - name: Execute build script
+        if: inputs.build-action == ''
+        shell: bash
+        run: |
+          entrypoint=$(realpath "${{ inputs.gh-checkout-path }}/.github/workflows/execute-build/entrypoint.sh")
+          chmod +x "$entrypoint"
+          if [[ -n "${{ needs.resolve.outputs.resolved-working-directory }}" ]]; then
+            cd "${{ needs.resolve.outputs.resolved-working-directory }}"
+          fi
+          echo "Working directory: $(pwd)"
+          echo "Entrypoint script: $entrypoint"
+
+          if ${{ inputs.build-script != '' }}; then
+            script_arg="--build-script"
+            script_value='${{ inputs.build-script }}'
+          elif ${{ inputs.build-script-path != '' }}; then
+            script_arg="--build-script-path"
+            script_value="${{ inputs.build-script-path }}"
+          else
+            echo "Error: Either build-script or build-script-path must be given"
+            exit 1
+          fi
+
+          "$entrypoint" \
+            "$script_arg" "$script_value" \
+            --artifact-directory "${{ inputs.gh-artifact-directory }}" \
+            --build-name "${{ inputs.jf-build-name }}" \
+            --build-id "${{ needs.resolve.outputs.jf-metadata-build-id }}-${{ matrix.distro }}-${{ matrix.arch }}" \
+            --project "${{ inputs.jf-project }}" \
+            --publish-build-info \
+            ${{ inputs.dry-run && '--dry-run' || '' }}
+
+      - name: Publish build-info (build action)
+        if: inputs.build-action != '' && inputs.build-info-mode == 'orchestrator'
+        shell: bash
+        run: |
+          build_id="${{ needs.resolve.outputs.jf-metadata-build-id }}-${{ matrix.distro }}-${{ matrix.arch }}"
+          if [[ -n "${{ needs.resolve.outputs.resolved-working-directory }}" ]]; then
+            cd "${{ needs.resolve.outputs.resolved-working-directory }}"
+          fi
+
+          run_optional() {
+            "$@" || echo "Warning: $*" >&2
+          }
+
+          run_optional jf rt build-collect-env "${{ inputs.jf-build-name }}" "$build_id" --project="${{ inputs.jf-project }}"
+          run_optional jf rt build-add-git "${{ inputs.jf-build-name }}" "$build_id" --project="${{ inputs.jf-project }}"
+          jf rt build-publish "${{ inputs.jf-build-name }}" "$build_id" --project="${{ inputs.jf-project }}"
+
+      - name: Resolve artifacts
+        id: artifacts
+        shell: bash
+        env:
+          ACTION_ARTIFACT_DIR: ${{ steps.build-action.outputs.artifact-directory }}
+          ACTION_ARTIFACT_NAME: ${{ steps.build-action.outputs.artifact-name }}
+        run: |
+          artifact_dir=""
+          artifact_name=""
+
+          if [[ "${{ inputs.build-action }}" != "" ]]; then
+            if [[ -z "$ACTION_ARTIFACT_DIR" || -z "$ACTION_ARTIFACT_NAME" ]]; then
+              echo "Error: build action must output artifact-directory and artifact-name" >&2
+              exit 1
+            fi
+            artifact_dir="$ACTION_ARTIFACT_DIR"
+            artifact_name="$ACTION_ARTIFACT_NAME"
+          else
+            artifact_dir="${{ inputs.gh-artifact-directory }}"
+            artifact_name="build-artifacts-${{ matrix.distro }}-${{ matrix.arch }}"
+          fi
+
+          if [[ -z "$artifact_dir" ]]; then
+            echo "Error: artifact-directory is required (from build action or input)" >&2
+            exit 1
+          fi
+
+          upload_path="$artifact_dir"
+          if [[ -n "${{ needs.resolve.outputs.resolved-working-directory }}" ]]; then
+            upload_path="${{ needs.resolve.outputs.resolved-working-directory }}/$artifact_dir"
+          fi
+
+          {
+            echo "artifact_dir=$artifact_dir"
+            echo "artifact_name=$artifact_name"
+            echo "upload_path=$upload_path"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Upload Artifacts
+        if: inputs.dry-run != true
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: ${{ steps.artifacts.outputs.artifact_name }}
+          path: ${{ steps.artifacts.outputs.upload_path }}
+          retention-days: ${{ inputs.gh-retention-days }}
 
   collect-matrix-artifacts:
     needs: [resolve, build]
@@ -267,7 +467,7 @@ jobs:
       - name: Download matrix artifacts
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
-          pattern: build-artifacts-*
+          pattern: "*"
           path: build-artifacts
           merge-multiple: true
       - name: Upload merged artifacts
