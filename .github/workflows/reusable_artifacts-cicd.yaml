@@ -39,13 +39,6 @@ on:
         required: false
         type: string
         default: ""
-      deploy:
-        description: |
-          Override deploy behavior. Leave empty to use preset defaults.
-          Allowed values: "", "true", "false"
-        required: false
-        type: string
-        default: ""
       dotnet-version:
         description: Dotnet version to set up when preset=dotnet (e.g., "8.0")
         required: false
@@ -86,6 +79,14 @@ on:
         required: false
         type: string
         default: ""
+      matrix-json:
+        description: |
+          Optional limited matrix definition for simple matrix builds.
+          Expected schema: {"include":[{"runs-on":"ubuntu-22.04","distro":"jammy","arch":"x86_64","emulated":false}]}
+        required: false
+        type: string
+        default: >-
+          {"include":[{"runs-on":"ubuntu-22.04","distro":"jammy","arch":"x86_64"}]}
       jf-url:
         description: JFrog Artifactory URL
         required: false
@@ -109,8 +110,8 @@ on:
       preset:
         description: |
           Preset controlling sensible defaults.
-          - default/custom: sign=true, deploy=true
-          - dotnet: sign=true, deploy=true, setup-dotnet=true
+          - default/custom: setup-dotnet=false
+          - dotnet: setup-dotnet=true
           - docker: not supported here (use reusable_docker-build-deploy.yaml directly)
         required: false
         type: string
@@ -120,13 +121,6 @@ on:
         required: false
         type: string
         default: ubuntu-22.04
-      sign:
-        description: |
-          Override sign behavior. Leave empty to use preset defaults.
-          Allowed values: "", "true", "false"
-        required: false
-        type: string
-        default: ""
       working-directory:
         description: |
           Working directory for build script execution. Defaults to gh-source-path (so builds run inside the checked out source repo).
@@ -153,7 +147,7 @@ on:
 
     outputs:
       gh-artifact-name:
-        description: Final GitHub artifact name (signed-artifacts or build-artifacts)
+        description: Final GitHub artifact name (signed-artifacts)
         value: ${{ jobs.resolve.outputs.gh-artifact-name }}
       jf-build-id:
         description: JFrog parent build id used for deploy/build-info aggregation
@@ -176,8 +170,6 @@ jobs:
       gh-artifact-name: ${{ steps.resolve.outputs.gh_artifact_name }}
       jf-build-id: ${{ steps.resolve.outputs.jf_build_id }}
       jf-metadata-build-id: ${{ steps.resolve.outputs.jf_metadata_build_id }}
-      resolved-deploy: ${{ steps.resolve.outputs.resolved_deploy }}
-      resolved-sign: ${{ steps.resolve.outputs.resolved_sign }}
       resolved-working-directory: ${{ steps.resolve.outputs.resolved_working_directory }}
       setup-dotnet: ${{ steps.resolve.outputs.setup_dotnet }}
     steps:
@@ -188,13 +180,9 @@ jobs:
 
           case "${{ inputs.preset }}" in
             default|custom)
-              preset_sign=true
-              preset_deploy=true
               setup_dotnet=false
               ;;
             dotnet)
-              preset_sign=true
-              preset_deploy=true
               setup_dotnet=true
               ;;
             docker)
@@ -221,9 +209,6 @@ jobs:
             esac
           }
 
-          resolved_sign="$(resolve_override sign '${{ inputs.sign }}' "$preset_sign")"
-          resolved_deploy="$(resolve_override deploy '${{ inputs.deploy }}' "$preset_deploy")"
-
           # Build IDs:
           # - jf_build_id: parent build id (overall pipeline)
           # - jf_metadata_build_id: build-info produced during build and later aggregated into the parent
@@ -235,51 +220,65 @@ jobs:
             resolved_working_directory="${{ inputs.gh-source-path }}"
           fi
 
-          final_artifact_name="build-artifacts"
-          if [[ "$resolved_sign" == "true" ]]; then
-            final_artifact_name="signed-artifacts"
-          fi
+          final_artifact_name="signed-artifacts"
 
           {
             echo "gh_artifact_name=$final_artifact_name"
             echo "jf_build_id=$build_id"
             echo "jf_metadata_build_id=$metadata_build_id"
-            echo "resolved_sign=$resolved_sign"
-            echo "resolved_deploy=$resolved_deploy"
             echo "resolved_working_directory=$resolved_working_directory"
             echo "setup_dotnet=$setup_dotnet"
           } >> "$GITHUB_OUTPUT"
 
   build:
     needs: resolve
+    strategy:
+      fail-fast: true
+      matrix: ${{ fromJSON(inputs.matrix-json) }}
     uses: ./.github/workflows/reusable_execute-build.yaml
     with:
       build-script: ${{ inputs.build-script }}
       build-script-path: ${{ inputs.build-script-path }}
       dry-run: ${{ inputs.dry-run }}
       gh-artifact-directory: ${{ inputs.gh-artifact-directory }}
-      gh-artifact-name: build-artifacts
+      gh-artifact-name: build-artifacts-${{ matrix.distro }}-${{ matrix.arch }}
       gh-checkout-path: ${{ inputs.gh-checkout-path }}
       gh-retention-days: ${{ inputs.gh-retention-days }}
       gh-source-path: ${{ inputs.gh-source-path }}
       gh-source-ref: ${{ inputs.gh-source-ref }}
       gh-source-repository: ${{ inputs.gh-source-repository }}
       gh-workflows-ref: ${{ inputs.gh-workflows-ref }}
-      jf-build-id: ${{ needs.resolve.outputs.jf-metadata-build-id }}
+      jf-build-id: ${{ needs.resolve.outputs.jf-metadata-build-id }}-${{ matrix.distro }}-${{ matrix.arch }}
       jf-build-name: ${{ inputs.jf-build-name }}
       jf-project: ${{ inputs.jf-project }}
       jf-url: ${{ inputs.jf-url }}
       oidc-audience: ${{ inputs.oidc-audience }}
       oidc-provider-name: ${{ inputs.oidc-provider-name }}
       publish-build-info: true
-      runs-on: ${{ inputs.runs-on }}
+      runs-on: ${{ matrix.runs-on }}
       setup-dotnet: ${{ needs.resolve.outputs.setup-dotnet == 'true' }}
       dotnet-version: ${{ inputs.dotnet-version }}
       working-directory: ${{ needs.resolve.outputs.resolved-working-directory }}
 
-  sign:
-    if: needs.resolve.outputs.resolved-sign == 'true'
+  collect-matrix-artifacts:
     needs: [resolve, build]
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Download matrix artifacts
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          pattern: build-artifacts-*
+          path: build-artifacts
+          merge-multiple: true
+      - name: Upload merged artifacts
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: build-artifacts
+          path: build-artifacts
+          retention-days: ${{ inputs.gh-retention-days }}
+
+  sign:
+    needs: [resolve, collect-matrix-artifacts]
     uses: ./.github/workflows/reusable_sign-artifacts.yaml
     with:
       gh-artifact-name: signed-artifacts
@@ -292,33 +291,11 @@ jobs:
     secrets: inherit
 
   deploy-signed:
-    if: needs.resolve.outputs.resolved-deploy == 'true' && needs.resolve.outputs.resolved-sign == 'true'
     needs: [resolve, sign]
     uses: ./.github/workflows/reusable_deploy-artifacts.yaml
     with:
       dry-run: ${{ inputs.dry-run }}
       gh-artifact-name: signed-artifacts
-      gh-checkout-path: ${{ inputs.gh-checkout-path }}
-      gh-retention-days: ${{ inputs.gh-retention-days }}
-      gh-workflows-ref: ${{ inputs.gh-workflows-ref }}
-      jar-group-id: ${{ inputs.jar-group-id }}
-      jf-build-id: ${{ needs.resolve.outputs.jf-build-id }}
-      jf-build-name: ${{ inputs.jf-build-name }}
-      jf-metadata-build-id: ${{ needs.resolve.outputs.jf-metadata-build-id }}
-      jf-project: ${{ inputs.jf-project }}
-      jf-url: ${{ inputs.jf-url }}
-      oidc-audience: ${{ inputs.oidc-audience }}
-      oidc-provider-name: ${{ inputs.oidc-provider-name }}
-      runs-on: ${{ inputs.runs-on }}
-      version: ${{ inputs.version }}
-
-  deploy-unsigned:
-    if: needs.resolve.outputs.resolved-deploy == 'true' && needs.resolve.outputs.resolved-sign != 'true'
-    needs: [resolve, build]
-    uses: ./.github/workflows/reusable_deploy-artifacts.yaml
-    with:
-      dry-run: ${{ inputs.dry-run }}
-      gh-artifact-name: build-artifacts
       gh-checkout-path: ${{ inputs.gh-checkout-path }}
       gh-retention-days: ${{ inputs.gh-retention-days }}
       gh-workflows-ref: ${{ inputs.gh-workflows-ref }}
