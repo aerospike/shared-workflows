@@ -55,6 +55,42 @@ sequenceDiagram
 
 ---
 
+## Recommended: entrypoints
+
+For most repositories, start with:
+
+- `reusable_artifacts-cicd.yaml`: **Artifacts pipeline** (build → optional sign → optional deploy) with a small, opinionated input surface.
+- `reusable_docker-build-deploy.yaml`: **Docker pipeline** (container images). This stays separate to avoid parameter explosion.
+
+### Artifacts CI/CD (recommended)
+
+This wraps `reusable_execute-build.yaml`, `reusable_sign-artifacts.yaml`, and `reusable_deploy-artifacts.yaml` for the common case.
+
+```yaml
+jobs:
+  ci:
+    uses: aerospike/shared-workflows/.github/workflows/reusable_artifacts-cicd.yaml@v2.0.3
+    with:
+      gh-workflows-ref: v2.0.3 # Must match @v2.0.3 above
+      jf-project: my-project
+      jf-build-name: my-app
+      version: 1.2.3
+      gh-artifact-directory: dist
+      build-script: |
+        make build
+
+      # Optional:
+      # preset: default|dotnet|custom (docker is not supported here; use reusable_docker-build-deploy.yaml)
+      # sign: "true"|"false"   # override preset
+      # deploy: "true"|"false" # override preset
+    secrets: inherit
+```
+
+Notes:
+
+- `reusable_artifacts-cicd.yaml` generates a unique parent `jf-build-id` internally (millisecond timestamp) and uses a distinct metadata build-id for the build-info produced during the build.
+- If signing is enabled (via preset or override), you must provide the required signing secrets (GPG, and SSL.com secrets if `.nupkg` files are present). Using `secrets: inherit` is simplest.
+
 ## Example Usage
 
 The typical pattern combines both pipelines: build and sign according to ecosystem, then unify in a release bundle.

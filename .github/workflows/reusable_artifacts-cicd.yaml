@@ -1,0 +1,334 @@
+name: Artifacts CI/CD
+
+on:
+  workflow_call:
+    inputs:
+      # Required inputs
+      gh-artifact-directory:
+        description: Directory (relative to working-directory) where the build produces artifacts
+        required: true
+        type: string
+      gh-workflows-ref:
+        description: |
+          Git reference for shared-workflows checkout. Should match the version in your 'uses:' line.
+          GitHub Actions doesn't expose the called workflow's ref, so this is required.
+          See: .github/workflows/docs/CICD-with-shared-actions.md#why-gh-workflows-ref-is-required
+        required: true
+        type: string
+      jf-build-name:
+        description: JFrog build name
+        required: true
+        type: string
+      jf-project:
+        description: JFrog Artifactory project name
+        required: true
+        type: string
+      version:
+        description: Version of the artifact to upload
+        required: true
+        type: string
+
+      # Optional inputs (minimal surface)
+      build-script:
+        description: Inline build script to execute (set either this or build-script-path)
+        required: false
+        type: string
+        default: ""
+      build-script-path:
+        description: Path to a build script to execute (set either this or build-script)
+        required: false
+        type: string
+        default: ""
+      deploy:
+        description: |
+          Override deploy behavior. Leave empty to use preset defaults.
+          Allowed values: "", "true", "false"
+        required: false
+        type: string
+        default: ""
+      dotnet-version:
+        description: Dotnet version to set up when preset=dotnet (e.g., "8.0")
+        required: false
+        type: string
+        default: "8.0"
+      dry-run:
+        description: Whether to run in dry-run mode (no uploads)
+        required: false
+        type: boolean
+        default: false
+      gh-checkout-path:
+        description: Directory to checkout the shared-workflows repository into
+        required: false
+        type: string
+        default: shared-workflows
+      gh-retention-days:
+        description: Retention days for GitHub artifacts
+        required: false
+        type: number
+        default: 1
+      gh-source-path:
+        description: Directory to checkout the source repository into. If empty string, source checkout is skipped.
+        required: false
+        type: string
+        default: local
+      gh-source-ref:
+        description: Reference to checkout for source repository (branch, tag, or commit)
+        required: false
+        type: string
+        default: ""
+      gh-source-repository:
+        description: Repository to checkout for source code (format owner/repo)
+        required: false
+        type: string
+        default: ${{ github.repository }}
+      jar-group-id:
+        description: Maven group ID for JAR artifacts (fallback when metadata doesn't provide one)
+        required: false
+        type: string
+        default: ""
+      jf-url:
+        description: JFrog Artifactory URL
+        required: false
+        type: string
+        default: https://artifact.aerospike.io
+      nuget-environment:
+        description: NuGet signing environment when NuGet packages are present (passed to sign-artifacts)
+        required: false
+        type: string
+        default: PROD
+      oidc-audience:
+        description: OIDC audience value for token
+        required: false
+        type: string
+        default: aerospike/testing
+      oidc-provider-name:
+        description: JFrog OIDC provider name
+        required: false
+        type: string
+        default: gh-dev-test
+      preset:
+        description: |
+          Preset controlling sensible defaults.
+          - default/custom: sign=true, deploy=true
+          - dotnet: sign=true, deploy=true, setup-dotnet=true
+          - docker: not supported here (use reusable_docker-build-deploy.yaml directly)
+        required: false
+        type: string
+        default: default
+      runs-on:
+        description: Runner to use for all jobs
+        required: false
+        type: string
+        default: ubuntu-22.04
+      sign:
+        description: |
+          Override sign behavior. Leave empty to use preset defaults.
+          Allowed values: "", "true", "false"
+        required: false
+        type: string
+        default: ""
+      working-directory:
+        description: |
+          Working directory for build script execution. Defaults to gh-source-path (so builds run inside the checked out source repo).
+          Set empty string to keep the runner root.
+        required: false
+        type: string
+        default: ""
+
+    secrets:
+      gpg-private-key:
+        required: false
+      gpg-public-key:
+        required: false
+      gpg-key-pass:
+        required: false
+      es-username:
+        required: false
+      es-password:
+        required: false
+      credential_id:
+        required: false
+      es-totp_secret:
+        required: false
+
+    outputs:
+      gh-artifact-name:
+        description: Final GitHub artifact name (signed-artifacts or build-artifacts)
+        value: ${{ jobs.resolve.outputs.gh-artifact-name }}
+      jf-build-id:
+        description: JFrog parent build id used for deploy/build-info aggregation
+        value: ${{ jobs.resolve.outputs.jf-build-id }}
+      jf-build-name:
+        description: JFrog build name
+        value: ${{ inputs.jf-build-name }}
+      jf-metadata-build-id:
+        description: JFrog build id used for the build-info produced during build
+        value: ${{ jobs.resolve.outputs.jf-metadata-build-id }}
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  resolve:
+    runs-on: ubuntu-22.04
+    outputs:
+      gh-artifact-name: ${{ steps.resolve.outputs.gh_artifact_name }}
+      jf-build-id: ${{ steps.resolve.outputs.jf_build_id }}
+      jf-metadata-build-id: ${{ steps.resolve.outputs.jf_metadata_build_id }}
+      resolved-deploy: ${{ steps.resolve.outputs.resolved_deploy }}
+      resolved-sign: ${{ steps.resolve.outputs.resolved_sign }}
+      resolved-working-directory: ${{ steps.resolve.outputs.resolved_working_directory }}
+      setup-dotnet: ${{ steps.resolve.outputs.setup_dotnet }}
+    steps:
+      - id: resolve
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          case "${{ inputs.preset }}" in
+            default|custom)
+              preset_sign=true
+              preset_deploy=true
+              setup_dotnet=false
+              ;;
+            dotnet)
+              preset_sign=true
+              preset_deploy=true
+              setup_dotnet=true
+              ;;
+            docker)
+              echo "Error: preset=docker is not supported by reusable_artifacts-cicd.yaml. Use reusable_docker-build-deploy.yaml directly." >&2
+              exit 1
+              ;;
+            *)
+              echo "Error: unknown preset '${{ inputs.preset }}' (allowed: default, dotnet, docker, custom)" >&2
+              exit 1
+              ;;
+          esac
+
+          resolve_override() {
+            local name="$1"
+            local value="$2"
+            local preset_value="$3"
+            case "$value" in
+              "") echo "$preset_value" ;;
+              true|false) echo "$value" ;;
+              *)
+                echo "Error: invalid $name override '$value' (allowed: '', 'true', 'false')" >&2
+                exit 1
+                ;;
+            esac
+          }
+
+          resolved_sign="$(resolve_override sign '${{ inputs.sign }}' "$preset_sign")"
+          resolved_deploy="$(resolve_override deploy '${{ inputs.deploy }}' "$preset_deploy")"
+
+          # Build IDs:
+          # - jf_build_id: parent build id (overall pipeline)
+          # - jf_metadata_build_id: build-info produced during build and later aggregated into the parent
+          build_id="$(date +%s%3N)"
+          metadata_build_id="${build_id}-buildinfo"
+
+          resolved_working_directory="${{ inputs.working-directory }}"
+          if [[ -z "$resolved_working_directory" ]]; then
+            resolved_working_directory="${{ inputs.gh-source-path }}"
+          fi
+
+          final_artifact_name="build-artifacts"
+          if [[ "$resolved_sign" == "true" ]]; then
+            final_artifact_name="signed-artifacts"
+          fi
+
+          {
+            echo "gh_artifact_name=$final_artifact_name"
+            echo "jf_build_id=$build_id"
+            echo "jf_metadata_build_id=$metadata_build_id"
+            echo "resolved_sign=$resolved_sign"
+            echo "resolved_deploy=$resolved_deploy"
+            echo "resolved_working_directory=$resolved_working_directory"
+            echo "setup_dotnet=$setup_dotnet"
+          } >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: resolve
+    uses: ./.github/workflows/reusable_execute-build.yaml
+    with:
+      build-script: ${{ inputs.build-script }}
+      build-script-path: ${{ inputs.build-script-path }}
+      dry-run: ${{ inputs.dry-run }}
+      gh-artifact-directory: ${{ inputs.gh-artifact-directory }}
+      gh-artifact-name: build-artifacts
+      gh-checkout-path: ${{ inputs.gh-checkout-path }}
+      gh-retention-days: ${{ inputs.gh-retention-days }}
+      gh-source-path: ${{ inputs.gh-source-path }}
+      gh-source-ref: ${{ inputs.gh-source-ref }}
+      gh-source-repository: ${{ inputs.gh-source-repository }}
+      gh-workflows-ref: ${{ inputs.gh-workflows-ref }}
+      jf-build-id: ${{ needs.resolve.outputs.jf-metadata-build-id }}
+      jf-build-name: ${{ inputs.jf-build-name }}
+      jf-project: ${{ inputs.jf-project }}
+      jf-url: ${{ inputs.jf-url }}
+      oidc-audience: ${{ inputs.oidc-audience }}
+      oidc-provider-name: ${{ inputs.oidc-provider-name }}
+      publish-build-info: true
+      runs-on: ${{ inputs.runs-on }}
+      setup-dotnet: ${{ needs.resolve.outputs.setup-dotnet == 'true' }}
+      dotnet-version: ${{ inputs.dotnet-version }}
+      working-directory: ${{ needs.resolve.outputs.resolved-working-directory }}
+
+  sign:
+    if: needs.resolve.outputs.resolved-sign == 'true'
+    needs: [resolve, build]
+    uses: ./.github/workflows/reusable_sign-artifacts.yaml
+    with:
+      gh-artifact-name: signed-artifacts
+      gh-checkout-path: ${{ inputs.gh-checkout-path }}
+      gh-retention-days: ${{ inputs.gh-retention-days }}
+      gh-unsigned-artifacts: build-artifacts
+      gh-workflows-ref: ${{ inputs.gh-workflows-ref }}
+      nuget-environment: ${{ inputs.nuget-environment }}
+      runs-on: ${{ inputs.runs-on }}
+    secrets: inherit
+
+  deploy-signed:
+    if: needs.resolve.outputs.resolved-deploy == 'true' && needs.resolve.outputs.resolved-sign == 'true'
+    needs: [resolve, sign]
+    uses: ./.github/workflows/reusable_deploy-artifacts.yaml
+    with:
+      dry-run: ${{ inputs.dry-run }}
+      gh-artifact-name: signed-artifacts
+      gh-checkout-path: ${{ inputs.gh-checkout-path }}
+      gh-retention-days: ${{ inputs.gh-retention-days }}
+      gh-workflows-ref: ${{ inputs.gh-workflows-ref }}
+      jar-group-id: ${{ inputs.jar-group-id }}
+      jf-build-id: ${{ needs.resolve.outputs.jf-build-id }}
+      jf-build-name: ${{ inputs.jf-build-name }}
+      jf-metadata-build-id: ${{ needs.resolve.outputs.jf-metadata-build-id }}
+      jf-project: ${{ inputs.jf-project }}
+      jf-url: ${{ inputs.jf-url }}
+      oidc-audience: ${{ inputs.oidc-audience }}
+      oidc-provider-name: ${{ inputs.oidc-provider-name }}
+      runs-on: ${{ inputs.runs-on }}
+      version: ${{ inputs.version }}
+
+  deploy-unsigned:
+    if: needs.resolve.outputs.resolved-deploy == 'true' && needs.resolve.outputs.resolved-sign != 'true'
+    needs: [resolve, build]
+    uses: ./.github/workflows/reusable_deploy-artifacts.yaml
+    with:
+      dry-run: ${{ inputs.dry-run }}
+      gh-artifact-name: build-artifacts
+      gh-checkout-path: ${{ inputs.gh-checkout-path }}
+      gh-retention-days: ${{ inputs.gh-retention-days }}
+      gh-workflows-ref: ${{ inputs.gh-workflows-ref }}
+      jar-group-id: ${{ inputs.jar-group-id }}
+      jf-build-id: ${{ needs.resolve.outputs.jf-build-id }}
+      jf-build-name: ${{ inputs.jf-build-name }}
+      jf-metadata-build-id: ${{ needs.resolve.outputs.jf-metadata-build-id }}
+      jf-project: ${{ inputs.jf-project }}
+      jf-url: ${{ inputs.jf-url }}
+      oidc-audience: ${{ inputs.oidc-audience }}
+      oidc-provider-name: ${{ inputs.oidc-provider-name }}
+      runs-on: ${{ inputs.runs-on }}
+      version: ${{ inputs.version }}
