@@ -85,8 +85,17 @@ on:
           Expected schema: {"include":[{"runs-on":"ubuntu-22.04","distro":"jammy","arch":"x86_64","emulated":false}]}
         required: false
         type: string
-        default: >-
-          {"include":[{"runs-on":"ubuntu-22.04","distro":"jammy","arch":"x86_64"}]}
+        default: |-
+          {
+            "include": [
+              {
+                "runs-on": "ubuntu-22.04",
+                "distro": "jammy",
+                "arch": "x86_64",
+                "emulated": false
+              }
+            ]
+          }
       jf-url:
         description: JFrog Artifactory URL
         required: false
@@ -195,20 +204,6 @@ jobs:
               ;;
           esac
 
-          resolve_override() {
-            local name="$1"
-            local value="$2"
-            local preset_value="$3"
-            case "$value" in
-              "") echo "$preset_value" ;;
-              true|false) echo "$value" ;;
-              *)
-                echo "Error: invalid $name override '$value' (allowed: '', 'true', 'false')" >&2
-                exit 1
-                ;;
-            esac
-          }
-
           # Build IDs:
           # - jf_build_id: parent build id (overall pipeline)
           # - jf_metadata_build_id: build-info produced during build and later aggregated into the parent
@@ -237,8 +232,20 @@ jobs:
       matrix: ${{ fromJSON(inputs.matrix-json) }}
     uses: ./.github/workflows/reusable_execute-build.yaml
     with:
-      build-script: ${{ inputs.build-script }}
-      build-script-path: ${{ inputs.build-script-path }}
+      build-script: |
+        set -euo pipefail
+        export DISTRO='${{ matrix.distro }}'
+        export ARCH='${{ matrix.arch }}'
+        export EMULATED='${{ matrix.emulated }}'
+        if ${{ inputs.build-script != '' }}; then
+          ${{ inputs.build-script }}
+        elif ${{ inputs.build-script-path != '' }}; then
+          bash "${{ inputs.build-script-path }}"
+        else
+          echo "Error: either build-script or build-script-path must be provided" >&2
+          exit 1
+        fi
+      build-script-path: ""
       dry-run: ${{ inputs.dry-run }}
       gh-artifact-directory: ${{ inputs.gh-artifact-directory }}
       gh-artifact-name: build-artifacts-${{ matrix.distro }}-${{ matrix.arch }}

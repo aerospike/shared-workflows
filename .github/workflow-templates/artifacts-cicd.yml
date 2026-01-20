@@ -3,7 +3,7 @@
 # Copy into your repository as .github/workflows/ci.yml (or use as a GitHub workflow template).
 #
 # This is the recommended "just works" artifact pipeline:
-# build → optional sign → optional deploy
+# build → sign → deploy
 
 name: CI/CD (artifacts)
 
@@ -38,4 +38,6 @@ jobs:
       #     {"runs-on":"ubuntu-22.04","distro":"jammy","arch":"x86_64"},
       #     {"runs-on":"ubuntu-22.04","distro":"noble","arch":"x86_64"}
       #   ]}
+      # post-sign hook (advanced):
+      # - add a follow-on job that depends on this job and consumes signed artifacts
     secrets: inherit

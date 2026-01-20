@@ -1,0 +1,181 @@
+name: Example Artifacts CI/CD (drop-in)
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  id-token: write
+  contents: read
+  packages: write
+  attestations: write
+
+# This workflow demonstrates a drop-in artifacts pipeline using reusable_artifacts-cicd.yaml.
+# It mirrors the artifact outputs of the advanced example, but with a simplified flow.
+
+jobs:
+  extract-version:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@20cf305ff2072d973412fa9b1e3a4f227bda3c76 # v2.14.0
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+      - name: Extract Version
+        id: extract
+        uses: ./.github/actions/extract-version-from-tag
+        with:
+          version-file: .github/workflows/VERSION.example
+    outputs:
+      version: ${{ steps.extract.outputs.version }}
+      git_tag: ${{ steps.extract.outputs.git_tag }}
+
+  artifacts-cicd:
+    uses: ./.github/workflows/reusable_artifacts-cicd.yaml
+    needs: extract-version
+    with:
+      gh-workflows-ref: ${{ github.sha }}
+      jf-project: test
+      jf-build-name: test-build
+      version: ${{ needs.extract-version.outputs.version }}
+      gh-source-path: repo-source
+      working-directory: repo-source/.github/workflows/execute-build/test_apps/hi
+      gh-artifact-directory: packaged-artifacts
+      build-script: |
+        echo "DISTRO: $DISTRO"
+        echo "ARCH: $ARCH"
+        echo "EMULATED: $EMULATED"
+        make docker-build
+        .github/workflows/execute-build/test_apps/hi/package.sh \
+          --target hi \
+          --version ${{ needs.extract-version.outputs.version }} \
+          --packages-dir build \
+          --output-dir packaged-artifacts
+      matrix-json: >-
+        {"include":[
+          {"runs-on":"ubuntu-22.04","distro":"el9","arch":"x86_64","emulated":false},
+          {"runs-on":"ubuntu-22.04","distro":"jammy","arch":"arm64","emulated":false}
+        ]}
+      oidc-provider-name: gh-dev-test
+      oidc-audience: aerospike/testing
+      dry-run: false
+    secrets: inherit
+
+  use-artifacts:
+    needs: [artifacts-cicd, extract-version]
+    runs-on: ubuntu-22.04
+    if: github.actor != 'dependabot[bot]'
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@20cf305ff2072d973412fa9b1e3a4f227bda3c76 # v2.14.0
+        with:
+          egress-policy: audit
+      - name: Install JFrog CLI
+        id: jf
+        uses: step-security/setup-jfrog-cli@a6b41f8338bea0983ddff6bd4ede7d2dcd81e1fa # v4.8.1
+        env:
+          JF_URL: https://artifact.aerospike.io
+          JF_PROJECT: test
+        with:
+          oidc-provider-name: gh-dev-test
+          oidc-audience: aerospike/testing
+      - name: Install packages
+        run: |
+          set -euo pipefail
+          wget -qO - https://artifact.aerospike.io/artifactory/api/security/keypair/aerospike/public \
+          | sudo gpg --dearmor -o /usr/share/keyrings/aerospike.gpg
+
+          export DEBIAN_FRONTEND=noninteractive
+          CODENAME=$(lsb_release -sc)
+          ARCH=$(dpkg --print-architecture)
+          KEYRING=/usr/share/keyrings/aerospike.gpg
+          REPO="artifact.aerospike.io/artifactory/test-deb-dev-local"
+
+          sudo install -m 600 /dev/null /etc/apt/auth.conf.d/aerospike.conf
+          {
+            echo "machine artifact.aerospike.io"
+            echo "login ${{ steps.jf.outputs.oidc-user }}"
+            echo "password ${{ steps.jf.outputs.oidc-token }}"
+          } | sudo tee /etc/apt/auth.conf.d/aerospike.conf >/dev/null
+
+          cat <<EOF | sudo tee /etc/apt/sources.list.d/aerospike.list
+          deb [arch=$ARCH signed-by=$KEYRING] https://$REPO $CODENAME main
+          EOF
+
+          sudo apt-get update && sudo apt-get install hi -y
+          echo "the test binary says:"
+          hi
+
+  use-rpm-artifacts:
+    runs-on: ubuntu-22.04
+    if: github.actor != 'dependabot[bot]'
+    container:
+      image: rockylinux:9
+    needs: [extract-version, artifacts-cicd]
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@20cf305ff2072d973412fa9b1e3a4f227bda3c76 # v2.14.0
+        with:
+          egress-policy: audit
+      - name: Install JFrog CLI
+        id: jf
+        uses: step-security/setup-jfrog-cli@a6b41f8338bea0983ddff6bd4ede7d2dcd81e1fa # v4.8.1
+        env:
+          JF_URL: https://artifact.aerospike.io
+          JF_PROJECT: test
+        with:
+          oidc-provider-name: gh-dev-test
+          oidc-audience: aerospike/testing
+      - name: Set up RPM repository
+        run: |
+          JF_USERNAME=${{ steps.jf.outputs.oidc-user }}
+          JF_TOKEN=${{ steps.jf.outputs.oidc-token }}
+          if [ -f /etc/os-release ]; then
+              . /etc/os-release
+              case "$ID" in
+                  rhel|centos|almalinux|rocky)
+                      DIST="el${VERSION_ID%%.*}"
+                      ;;
+                  amzn)
+                      if [[ "$VERSION_ID" == "2023" ]]; then
+                          DIST="amzn2023"
+                      else
+                          echo "Unsupported Amazon Linux version: $VERSION_ID"
+                          exit 1
+                      fi
+                      ;;
+                  *)
+                      echo "Unsupported distro: $ID"
+                      exit 1
+                      ;;
+              esac
+          else
+              echo "Cannot determine OS version"
+              exit 1
+          fi
+
+          ARCH=$(uname -m)
+          REPO_FILE="/etc/yum.repos.d/aerospike-${DIST,,}-all.repo"
+
+          tee "$REPO_FILE" > /dev/null <<EOF
+          [aerospike-${DIST,,}-test]
+          name=Aerospike RPM Repo DEV for ${DIST^^} (\$basearch)
+          baseurl=https://artifact.aerospike.io/artifactory/test-rpm-dev-local/${DIST,,}/$ARCH/
+          username=${JF_USERNAME}
+          password=${JF_TOKEN}
+          enabled=1
+          gpgcheck=1
+          gpgkey=https://artifact.aerospike.io/artifactory/api/security/keypair/aerospike/public
+          EOF
+          echo "--------------------------------"
+          cat "$REPO_FILE"
+          echo "--------------------------------"
+          echo "Aerospike .repo file written to $REPO_FILE"
+      - name: Install RPMs
+        run: |
+          yum install hi -y
+          echo "the test binary says:"
+          hi
