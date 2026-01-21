@@ -33,6 +33,35 @@
 						"type": "boolean",
 						"default": false,
 						"description": "Whether the build is emulated (used by build scripts that support emulation)"
+					},
+					"working-directory": {
+						"type": "string",
+						"minLength": 1,
+						"description": "Override working directory for build scripts"
+					},
+					"gh-artifact-directory": {
+						"type": "string",
+						"minLength": 1,
+						"description": "Override artifact directory to upload for this matrix entry"
+					},
+					"build-script": {
+						"type": "string",
+						"minLength": 1,
+						"description": "Override build script (inline)"
+					},
+					"build-script-path": {
+						"type": "string",
+						"minLength": 1,
+						"description": "Override build script path"
+					},
+					"setup-dotnet": {
+						"type": "boolean",
+						"description": "Enable dotnet setup for this matrix entry"
+					},
+					"dotnet-version": {
+						"type": "string",
+						"minLength": 1,
+						"description": "Override dotnet SDK version for this matrix entry"
 					}
 				}
 			}
@@ -52,6 +81,16 @@
 					"distro": "noble",
 					"arch": "x86_64",
 					"emulated": false
+				},
+				{
+					"runs-on": "ubuntu-22.04",
+					"distro": "jammy",
+					"arch": "x86_64",
+					"build-script": "./scripts/build-dotnet.sh",
+					"working-directory": "src/dotnet",
+					"gh-artifact-directory": "src/dotnet/artifacts",
+					"setup-dotnet": true,
+					"dotnet-version": "8.0.x"
 				}
 			]
 		}

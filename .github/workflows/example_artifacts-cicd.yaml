@@ -57,7 +57,18 @@ jobs:
       matrix-json: >-
         {"include":[
           {"runs-on":"ubuntu-22.04","distro":"el9","arch":"x86_64","emulated":false},
-          {"runs-on":"ubuntu-22.04","distro":"jammy","arch":"arm64","emulated":false}
+          {"runs-on":"ubuntu-22.04","distro":"jammy","arch":"arm64","emulated":false},
+          {
+            "runs-on":"ubuntu-22.04",
+            "distro":"dotnet",
+            "arch":"x86_64",
+            "emulated":false,
+            "working-directory":"repo-source/.github/workflows/execute-build/test_apps/DotnetHelloWorld/AerospikeHelloWorld",
+            "gh-artifact-directory":"AerospikeHelloWorld/bin/Release/",
+            "build-script":"dotnet restore && dotnet build --configuration Release --no-restore && dotnet pack --no-build",
+            "setup-dotnet":true,
+            "dotnet-version":"8.0.x"
+          }
         ]}
       oidc-provider-name: gh-dev-test
       oidc-audience: aerospike/testing

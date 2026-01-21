@@ -32,7 +32,6 @@ jobs:
         make build
 
       # Optional:
-      # preset: default|dotnet|custom
       # matrix-json: >-
       #   {"include":[
       #     {"runs-on":"ubuntu-22.04","distro":"jammy","arch":"x86_64"},

@@ -80,18 +80,28 @@ jobs:
         make build
 
       # Optional:
-      # preset: default|dotnet|custom (docker is not supported here; use reusable_docker-build-deploy.yaml)
     secrets: inherit
 ```
 
 Notes:
 
 - `reusable_artifacts-cicd.yaml` generates a unique parent `jf-build-id` internally (millisecond timestamp) and uses a distinct metadata build-id for the build-info produced during the build.
-- If signing is enabled (via preset or override), you must provide the required signing secrets (GPG, and SSL.com secrets if `.nupkg` files are present). Using `secrets: inherit` is simplest.
+- Signing is always enabled; provide the required signing secrets (GPG, and SSL.com secrets if `.nupkg` files are present). Using `secrets: inherit` is simplest.
 
 ### Simple matrix builds (optional)
 
 Use `matrix-json` to run a constrained matrix while keeping the rest of the workflow simple. Each matrix job publishes its own build-info and artifacts, then the workflow aggregates build-info and merges artifacts before signing/deploying.
+
+Matrix entries can override these per-build settings:
+
+- `working-directory`
+- `gh-artifact-directory`
+- `build-script`
+- `build-script-path`
+- `setup-dotnet`
+- `dotnet-version`
+
+Precedence is always: **matrix entry override → workflow input defaults**.
 
 ```yaml
 jobs:
@@ -111,6 +121,25 @@ jobs:
           {"runs-on":"ubuntu-22.04","distro":"noble","arch":"x86_64"}
         ]}
     secrets: inherit
+```
+
+#### Dotnet matrix entry example
+
+```yaml
+matrix-json: >-
+  {"include":[
+    {"runs-on":"ubuntu-22.04","distro":"jammy","arch":"x86_64"},
+    {
+      "runs-on":"ubuntu-22.04",
+      "distro":"dotnet",
+      "arch":"x86_64",
+      "working-directory":"src/dotnet",
+      "gh-artifact-directory":"src/dotnet/artifacts",
+      "build-script":"./scripts/build-dotnet.sh",
+      "setup-dotnet":true,
+      "dotnet-version":"8.0.x"
+    }
+  ]}
 ```
 
 ## Example Usage

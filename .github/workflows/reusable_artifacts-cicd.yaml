@@ -40,7 +40,7 @@ on:
         type: string
         default: ""
       dotnet-version:
-        description: Dotnet version to set up when preset=dotnet (e.g., "8.0")
+        description: Dotnet version to set up when setup-dotnet is enabled (e.g., "8.0")
         required: false
         type: string
         default: "8.0"
@@ -116,20 +116,16 @@ on:
         required: false
         type: string
         default: gh-dev-test
-      preset:
-        description: |
-          Preset controlling sensible defaults.
-          - default/custom: setup-dotnet=false
-          - dotnet: setup-dotnet=true
-          - docker: not supported here (use reusable_docker-build-deploy.yaml directly)
-        required: false
-        type: string
-        default: default
       runs-on:
         description: Runner to use for all jobs
         required: false
         type: string
         default: ubuntu-22.04
+      setup-dotnet:
+        description: Whether to set up dotnet for builds
+        required: false
+        type: boolean
+        default: false
       working-directory:
         description: |
           Working directory for build script execution. Defaults to gh-source-path (so builds run inside the checked out source repo).
@@ -187,22 +183,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          case "${{ inputs.preset }}" in
-            default|custom)
-              setup_dotnet=false
-              ;;
-            dotnet)
-              setup_dotnet=true
-              ;;
-            docker)
-              echo "Error: preset=docker is not supported by reusable_artifacts-cicd.yaml. Use reusable_docker-build-deploy.yaml directly." >&2
-              exit 1
-              ;;
-            *)
-              echo "Error: unknown preset '${{ inputs.preset }}' (allowed: default, dotnet, docker, custom)" >&2
-              exit 1
-              ;;
-          esac
+          setup_dotnet="${{ inputs.setup-dotnet }}"
 
           # Build IDs:
           # - jf_build_id: parent build id (overall pipeline)
@@ -237,17 +218,25 @@ jobs:
         export DISTRO='${{ matrix.distro }}'
         export ARCH='${{ matrix.arch }}'
         export EMULATED='${{ matrix.emulated }}'
-        if ${{ inputs.build-script != '' }}; then
-          ${{ inputs.build-script }}
-        elif ${{ inputs.build-script-path != '' }}; then
-          bash "${{ inputs.build-script-path }}"
+        matrix_build_script='${{ matrix['build-script'] || '' }}'
+        matrix_build_script_path='${{ matrix['build-script-path'] || '' }}'
+        input_build_script='${{ inputs.build-script }}'
+        input_build_script_path='${{ inputs.build-script-path }}'
+        if [[ -n "$matrix_build_script" ]]; then
+          eval "$matrix_build_script"
+        elif [[ -n "$matrix_build_script_path" ]]; then
+          bash "$matrix_build_script_path"
+        elif [[ -n "$input_build_script" ]]; then
+          eval "$input_build_script"
+        elif [[ -n "$input_build_script_path" ]]; then
+          bash "$input_build_script_path"
         else
           echo "Error: either build-script or build-script-path must be provided" >&2
           exit 1
         fi
       build-script-path: ""
       dry-run: ${{ inputs.dry-run }}
-      gh-artifact-directory: ${{ inputs.gh-artifact-directory }}
+      gh-artifact-directory: ${{ matrix['gh-artifact-directory'] || inputs.gh-artifact-directory }}
       gh-artifact-name: build-artifacts-${{ matrix.distro }}-${{ matrix.arch }}
       gh-checkout-path: ${{ inputs.gh-checkout-path }}
       gh-retention-days: ${{ inputs.gh-retention-days }}
@@ -263,9 +252,9 @@ jobs:
       oidc-provider-name: ${{ inputs.oidc-provider-name }}
       publish-build-info: true
       runs-on: ${{ matrix.runs-on }}
-      setup-dotnet: ${{ needs.resolve.outputs.setup-dotnet == 'true' }}
-      dotnet-version: ${{ inputs.dotnet-version }}
-      working-directory: ${{ needs.resolve.outputs.resolved-working-directory }}
+      setup-dotnet: ${{ matrix['setup-dotnet'] != null && matrix['setup-dotnet'] || matrix['setup-dotnet'] == null && needs.resolve.outputs.setup-dotnet == 'true' }}
+      dotnet-version: ${{ matrix['dotnet-version'] || inputs.dotnet-version }}
+      working-directory: ${{ matrix['working-directory'] || needs.resolve.outputs.resolved-working-directory }}
 
   collect-matrix-artifacts:
     needs: [resolve, build]
