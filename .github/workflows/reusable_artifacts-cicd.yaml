@@ -225,7 +225,7 @@ jobs:
         input_build_script='${{ inputs.build-script }}'
         input_build_script_path='${{ inputs.build-script-path }}'
         if [[ -n "$matrix_build_script" ]]; then
-          eval "$matrix_build_script"
+          bash -x -c "$matrix_build_script"
         elif [[ -n "$matrix_build_script_path" ]]; then
           bash "$matrix_build_script_path"
         elif [[ -n "$input_build_script" ]]; then
