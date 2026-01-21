@@ -211,6 +211,7 @@ jobs:
         shell: bash
         run: |
           # Entrypoint scripts are always in the shared-workflows checkout location
+          set -x
           entrypoint=$(realpath "${{ inputs.gh-checkout-path }}/.github/workflows/execute-build/entrypoint.sh")
           chmod +x "$entrypoint"
           if [[ -n "${{ inputs.working-directory }}" ]]; then
