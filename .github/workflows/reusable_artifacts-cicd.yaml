@@ -182,6 +182,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          set -x
 
           setup_dotnet="${{ inputs.setup-dotnet }}"
 
@@ -215,6 +216,7 @@ jobs:
     with:
       build-script: |
         set -euo pipefail
+        set -x
         export DISTRO='${{ matrix.distro }}'
         export ARCH='${{ matrix.arch }}'
         export EMULATED='${{ matrix.emulated }}'
