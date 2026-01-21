@@ -229,7 +229,15 @@ jobs:
             echo "Error: Either build-script or build-script-path must be given"
             exit 1
           fi
-
+          echo "Executing entrypoint"
+          echo "script_arg: $script_arg"
+          echo "script_value: $script_value"
+          echo "artifact-directory: ${{ inputs.gh-artifact-directory }}"
+          echo "build-name: ${{ inputs.jf-build-name }}"
+          echo "build-id: ${{ inputs.jf-build-id }}"
+          echo "project: ${{ inputs.jf-project }}"
+          echo "publish-build-info: ${{ inputs.publish-build-info }}"
+          echo "dry-run: ${{ inputs.dry-run }}"
           "$entrypoint" \
             "$script_arg" "$script_value" \
             --artifact-directory "${{ inputs.gh-artifact-directory }}" \
