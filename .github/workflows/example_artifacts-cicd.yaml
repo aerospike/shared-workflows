@@ -57,7 +57,7 @@ jobs:
       matrix-json: >-
         {"include":[
           {"runs-on":"ubuntu-22.04","distro":"el9","arch":"x86_64","emulated":false},
-          {"runs-on":"ubuntu-22.04","distro":"jammy","arch":"arm64","emulated":false},
+          {"runs-on":"ubuntu-22.04","distro":"jammy","arch":"x86_64","emulated":false},
           {
             "runs-on":"ubuntu-22.04",
             "distro":"dotnet",

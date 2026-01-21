@@ -220,22 +220,10 @@ jobs:
         export DISTRO='${{ matrix.distro }}'
         export ARCH='${{ matrix.arch }}'
         export EMULATED='${{ matrix.emulated }}'
-        matrix_build_script='${{ matrix['build-script'] || '' }}'
-        matrix_build_script_path='${{ matrix['build-script-path'] || '' }}'
-        input_build_script='${{ inputs.build-script }}'
-        input_build_script_path='${{ inputs.build-script-path }}'
-        if [[ -n "$matrix_build_script" ]]; then
-          echo "Executing matrix build script"
-          bash -x -c "$matrix_build_script"
-        elif [[ -n "$matrix_build_script_path" ]]; then
-          echo "Executing matrix build script path"
-          bash -x "$matrix_build_script_path"
-        elif [[ -n "$input_build_script" ]]; then
-          echo "Executing input build script"
-          bash -x -c "$input_build_script"
-        elif [[ -n "$input_build_script_path" ]]; then
-          echo "Executing input build script path"
-          bash -x "$input_build_script_path"
+        if [[ -n "${{ matrix['build-script-path'] || inputs.build-script-path }}" ]]; then
+          bash "${{ matrix['build-script-path'] || inputs.build-script-path }}"
+        elif [[ -n "${{ matrix['build-script'] || inputs.build-script }}" ]]; then
+          ${{ matrix['build-script'] || inputs.build-script }}
         else
           echo "Error: either build-script or build-script-path must be provided" >&2
           exit 1
