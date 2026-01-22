@@ -218,25 +218,8 @@ jobs:
       matrix: ${{ fromJSON(inputs.matrix-json) }}
     uses: ./.github/workflows/reusable_execute-build.yaml
     with:
-      build-script: |
-        set -eo pipefail # do not use -u since this is not the default for gha
-
-        export DISTRO='${{ matrix.distro }}'
-        export ARCH='${{ matrix.arch }}'
-        export EMULATED='${{ matrix.emulated }}'
-        if ${{ matrix['build-script-path'] != '' }}; then
-          bash "${{ matrix['build-script-path'] }}"
-        elif ${{ matrix['build-script'] != '' }}; then
-          ${{ matrix['build-script'] }}
-        elif ${{ inputs.build-script-path != '' }}; then
-          bash "${{ inputs.build-script-path }}"
-        elif ${{ inputs.build-script != '' }}; then
-          ${{ inputs.build-script }}
-        else
-          echo "Error: either build-script or build-script-path must be provided" >&2
-          exit 1
-        fi
-      build-script-path: ""
+      build-script: ${{ matrix['build-script'] || inputs.build-script }}
+      build-script-path: ${{ matrix['build-script-path'] || inputs.build-script-path }}
       build-env: ${{ matrix['build-env'] || inputs.build-env }}
       dry-run: ${{ inputs.dry-run }}
       gh-artifact-directory: ${{ matrix['gh-artifact-directory'] || inputs.gh-artifact-directory }}
