@@ -52,7 +52,7 @@ jobs:
         make clean all
         echo "I am $(whoami) and I am in the groups $(groups)"
         echo "The current directory is $(pwd)"
-        echo "The current directory contents are $(ls -la)"
+        echo "The current directory contents are $(ls -laR)"
         ./package.sh \
           --target hi \
           --version ${{ needs.extract-version.outputs.version }} \
