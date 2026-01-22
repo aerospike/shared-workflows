@@ -2,7 +2,6 @@
 
 export PS4='+($LINENO): ${FUNCNAME[0]:+${FUNCNAME[0]}(): }'
 trap 'handle_error ${LINENO}' ERR
-set -x
 # shellcheck disable=SC2317
 handle_error() {
     local exit_code=$?
@@ -109,10 +108,6 @@ create_deb_package() {
     local arch="$2"
     local binary_path="$3"
     local distro_version="${DISTRO_VERSIONS[$distro]}"
-
-    # Ensure binary is executable
-    chmod +x "$binary_path"
-
     local package_name="${TARGET}_${VERSION}_${distro_version}_${arch}.deb"
     local output_path="$OUTPUT_DIR/$package_name"
 
@@ -133,9 +128,6 @@ create_rpm_package() {
     local arch="$2"
     local binary_path="$3"
     local distro_version="${DISTRO_VERSIONS[$distro]}"
-
-    # Ensure binary is executable
-    chmod +x "$binary_path"
 
     local package_name="${TARGET}-${VERSION}-1.${distro_version}.${arch}.rpm"
     local output_path="$OUTPUT_DIR/$package_name"
