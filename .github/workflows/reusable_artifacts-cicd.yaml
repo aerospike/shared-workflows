@@ -39,6 +39,11 @@ on:
         required: false
         type: string
         default: ""
+      build-env:
+        description: Multiline KEY=VALUE pairs to inject into the build step
+        required: false
+        type: string
+        default: ""
       dotnet-version:
         description: Dotnet version to set up when setup-dotnet is enabled (e.g., "8.0")
         required: false
@@ -232,6 +237,7 @@ jobs:
           exit 1
         fi
       build-script-path: ""
+      build-env: ${{ matrix['build-env'] || inputs.build-env }}
       dry-run: ${{ inputs.dry-run }}
       gh-artifact-directory: ${{ matrix['gh-artifact-directory'] || inputs.gh-artifact-directory }}
       gh-artifact-name: build-artifacts-${{ matrix.distro }}-${{ matrix.arch }}

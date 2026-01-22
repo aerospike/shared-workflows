@@ -39,6 +39,11 @@ on:
         required: false
         type: string
         default: ""
+      build-env:
+        description: Multiline KEY=VALUE pairs to inject into the build step
+        required: false
+        type: string
+        default: ""
       dry-run:
         description: Whether to run in dry-run mode
         required: false
@@ -209,7 +214,28 @@ jobs:
 
       - name: Execute Build Script
         shell: bash
+        env:
+          BUILD_ENV: ${{ inputs.build-env }}
         run: |
+          # handle inject build-env into the build step
+          if [[ -n "${BUILD_ENV:-}" ]]; then
+            while IFS= read -r line; do
+              line="${line%$'\r'}"
+              [[ -z "$line" ]] && continue
+              [[ "$line" == \#* ]] && continue
+              if [[ "$line" != *=* ]]; then
+                echo "Error: build-env lines must be KEY=VALUE (got: $line)" >&2
+                exit 1
+              fi
+              key="${line%%=*}"
+              value="${line#*=}"
+              if [[ -z "$key" || ! "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+                echo "Error: invalid env var name '$key' in build-env" >&2
+                exit 1
+              fi
+              export "$key=$value"
+            done <<<"$BUILD_ENV"
+          fi
           # Entrypoint scripts are always in the shared-workflows checkout location
           entrypoint=$(realpath "${{ inputs.gh-checkout-path }}/.github/workflows/execute-build/entrypoint.sh")
           chmod +x "$entrypoint"

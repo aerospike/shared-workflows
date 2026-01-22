@@ -98,6 +98,7 @@ Matrix entries can override these per-build settings:
 - `gh-artifact-directory`
 - `build-script`
 - `build-script-path`
+- `build-env`
 - `setup-dotnet`
 - `dotnet-version`
 
@@ -136,6 +137,7 @@ matrix-json: >-
       "working-directory":"src/dotnet",
       "gh-artifact-directory":"src/dotnet/artifacts",
       "build-script":"./scripts/build-dotnet.sh",
+      "build-env":"DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1",
       "setup-dotnet":true,
       "dotnet-version":"8.0.x"
     }

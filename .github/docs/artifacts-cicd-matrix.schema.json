@@ -54,6 +54,11 @@
 						"minLength": 1,
 						"description": "Override build script path"
 					},
+					"build-env": {
+						"type": "string",
+						"minLength": 1,
+						"description": "Override build env for this matrix entry (multiline KEY=VALUE)"
+					},
 					"setup-dotnet": {
 						"type": "boolean",
 						"description": "Enable dotnet setup for this matrix entry"
@@ -89,6 +94,7 @@
 					"build-script": "./scripts/build-dotnet.sh",
 					"working-directory": "src/dotnet",
 					"gh-artifact-directory": "src/dotnet/artifacts",
+					"build-env": "DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1",
 					"setup-dotnet": true,
 					"dotnet-version": "8.0.x"
 				}
