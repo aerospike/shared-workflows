@@ -48,8 +48,9 @@ jobs:
         echo "DISTRO: $DISTRO"
         echo "ARCH: $ARCH"
         echo "EMULATED: $EMULATED"
-        make docker-build
-        package.sh \
+        env | sort
+        make clean all
+        ./package.sh \
           --target hi \
           --version ${{ needs.extract-version.outputs.version }} \
           --packages-dir build \

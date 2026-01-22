@@ -111,8 +111,11 @@ else
 		echo "ARCH: $$ARCH, EMULATED: $$EMULATED" && \
 		command -v $$CC && \
 		$$CC --version && \
-		$$CC $(CFLAGS) -o $(BUILD_DIR)/$(DISTRO)/$(ARCH)/$(TARGET) $(SOURCE)'
+	$$CC $(CFLAGS) -o $(BUILD_DIR)/$(DISTRO)/$(ARCH)/$(TARGET) $(SOURCE)'
 endif
+	@echo "Build complete"
+
+
 # Clean
 clean:
 	@rm -rf $(BUILD_DIR)
