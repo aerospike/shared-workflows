@@ -40,7 +40,7 @@ on:
         type: string
         default: ""
       build-env:
-        description: Multiline KEY=VALUE pairs to inject into the build step
+        description: Semicolon-delimited KEY=VALUE pairs (use \; for literal semicolon, \\ for backslash)
         required: false
         type: string
         default: ""
@@ -220,7 +220,7 @@ jobs:
     with:
       build-script: ${{ matrix['build-script'] || inputs.build-script }}
       build-script-path: ${{ matrix['build-script-path'] || inputs.build-script-path }}
-      build-env: ${{ matrix['build-env'] || inputs.build-env }}
+      build-env: ${{ format('MATRIX_JSON={0}{1}', toJSON(matrix), (matrix['build-env'] || inputs.build-env) != '' && format(';{0}', matrix['build-env'] || inputs.build-env) || '') }}
       dry-run: ${{ inputs.dry-run }}
       gh-artifact-directory: ${{ matrix['gh-artifact-directory'] || inputs.gh-artifact-directory }}
       gh-artifact-name: build-artifacts-${{ matrix.distro }}-${{ matrix.arch }}
@@ -241,6 +241,7 @@ jobs:
       setup-dotnet: ${{ matrix['setup-dotnet'] != null && matrix['setup-dotnet'] || matrix['setup-dotnet'] == null && needs.resolve.outputs.setup-dotnet == 'true' }}
       dotnet-version: ${{ matrix['dotnet-version'] || inputs.dotnet-version }}
       working-directory: ${{ matrix['working-directory'] || needs.resolve.outputs.resolved-working-directory }}
+    secrets: inherit
 
   collect-matrix-artifacts:
     needs: [resolve, build]
@@ -252,6 +253,10 @@ jobs:
           pattern: build-artifacts-*
           path: build-artifacts
           merge-multiple: true
+      - name: Print build-artifacts contents
+        run: |
+          echo Downloaded collected
+          find build-artifacts
       - name: Upload merged artifacts
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:

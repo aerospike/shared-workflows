@@ -59,7 +59,7 @@ Use `matrix-json` to run a constrained matrix while keeping the rest of the work
 
 `matrix-json` must conform to `.github/docs/artifacts-cicd-matrix.schema.json`.
 
-The build script receives `DISTRO`, `ARCH`, and `EMULATED` environment variables derived from the matrix entry.
+Use matrix fields for values the workflow already expects (`runs-on`, `distro`, `arch`). Use `build-env` only for extra variables your script needs. Use `\;` for literal semicolons.
 
 Matrix entries can override these per-build settings:
 
@@ -98,11 +98,8 @@ jobs:
 ```yaml
 matrix-json: >-
   {"include":[
-    {"runs-on":"ubuntu-22.04","distro":"jammy","arch":"x86_64"},
     {
       "runs-on":"ubuntu-22.04",
-      "distro":"dotnet",
-      "arch":"x86_64",
       "working-directory":"src/dotnet",
       "gh-artifact-directory":"src/dotnet/artifacts",
       "build-script":"./scripts/build-dotnet.sh",

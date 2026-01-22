@@ -45,6 +45,12 @@ jobs:
       working-directory: repo-source/.github/workflows/execute-build/test_apps/hi
       gh-artifact-directory: packaged-artifacts
       build-script: |
+        # matrix-json is injected into the environment as MATRIX_JSON
+        # we can use jq to extract the values we need
+        DISTRO=$(jq -r '.distro' <<<"$MATRIX_JSON")
+        ARCH=$(jq -r '.arch' <<<"$MATRIX_JSON")
+        # emulated is set in the environment by the reusable_artifacts-cicd.yaml workflow
+        EMULATED=$EMULATED
         echo "DISTRO: $DISTRO"
         echo "ARCH: $ARCH"
         echo "EMULATED: $EMULATED"
@@ -60,16 +66,16 @@ jobs:
           --output-dir packaged-artifacts
       matrix-json: >-
         {"include":[
-          {"runs-on":"ubuntu-22.04","distro":"el9","arch":"x86_64","emulated":false},
-          {"runs-on":"ubuntu-22.04","distro":"jammy","arch":"x86_64","emulated":false},
+          {"runs-on":"ubuntu-22.04","distro":"el9","arch":"x86_64", build-env: "EMULATED=false"},
+          {"runs-on":"ubuntu-22.04","distro":"jammy","arch":"x86_64", build-env: "EMULATED=false"},
           {
             "runs-on":"ubuntu-22.04",
             "distro":"dotnet",
             "arch":"x86_64",
-            "emulated":false,
             "working-directory":"repo-source/.github/workflows/execute-build/test_apps/DotnetHelloWorld/AerospikeHelloWorld",
             "gh-artifact-directory":"AerospikeHelloWorld/bin/Release/",
             "build-script":"dotnet restore && dotnet build --configuration Release --no-restore && dotnet pack --no-build",
+            "build-env":"DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1",
             "setup-dotnet":true,
             "dotnet-version":"8.0.x"
           }

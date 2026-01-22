@@ -40,7 +40,7 @@ on:
         type: string
         default: ""
       build-env:
-        description: Multiline KEY=VALUE pairs to inject into the build step
+        description: Semicolon-delimited KEY=VALUE pairs (use \; for literal semicolon, \\ for backslash)
         required: false
         type: string
         default: ""
@@ -219,22 +219,43 @@ jobs:
         run: |
           # handle inject build-env into the build step
           if [[ -n "${BUILD_ENV:-}" ]]; then
-            while IFS= read -r line; do
-              line="${line%$'\r'}"
-              [[ -z "$line" ]] && continue
-              [[ "$line" == \#* ]] && continue
-              if [[ "$line" != *=* ]]; then
-                echo "Error: build-env lines must be KEY=VALUE (got: $line)" >&2
+            current=""
+            escape="false"
+            pairs=()
+            for (( i=0; i<${#BUILD_ENV}; i++ )); do
+              char="${BUILD_ENV:i:1}"
+              if [[ "$escape" == "true" ]]; then
+                current+="$char"
+                escape="false"
+                continue
+              fi
+              if [[ "$char" == "\\" ]]; then
+                escape="true"
+                continue
+              fi
+              if [[ "$char" == ";" ]]; then
+                pairs+=("$current")
+                current=""
+                continue
+              fi
+              current+="$char"
+            done
+            pairs+=("$current")
+
+            for pair in "${pairs[@]}"; do
+              [[ -z "$pair" ]] && continue
+              if [[ "$pair" != *=* ]]; then
+                echo "Error: build-env entries must be KEY=VALUE (got: $pair)" >&2
                 exit 1
               fi
-              key="${line%%=*}"
-              value="${line#*=}"
+              key="${pair%%=*}"
+              value="${pair#*=}"
               if [[ -z "$key" || ! "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
                 echo "Error: invalid env var name '$key' in build-env" >&2
                 exit 1
               fi
               export "$key=$value"
-            done <<<"$BUILD_ENV"
+            done
           fi
           # Entrypoint scripts are always in the shared-workflows checkout location
           entrypoint=$(realpath "${{ inputs.gh-checkout-path }}/.github/workflows/execute-build/entrypoint.sh")

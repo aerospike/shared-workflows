@@ -29,11 +29,6 @@
 						"minLength": 1,
 						"description": "Architecture identifier (e.g., x86_64, arm64)"
 					},
-					"emulated": {
-						"type": "boolean",
-						"default": false,
-						"description": "Whether the build is emulated (used by build scripts that support emulation)"
-					},
 					"working-directory": {
 						"type": "string",
 						"minLength": 1,
@@ -57,7 +52,7 @@
 					"build-env": {
 						"type": "string",
 						"minLength": 1,
-						"description": "Override build env for this matrix entry (multiline KEY=VALUE)"
+						"description": "Override build env for this matrix entry (semicolon-delimited KEY=VALUE; use \\; for semicolons)"
 					},
 					"setup-dotnet": {
 						"type": "boolean",
@@ -78,14 +73,12 @@
 				{
 					"runs-on": "ubuntu-22.04",
 					"distro": "jammy",
-					"arch": "x86_64",
-					"emulated": false
+					"arch": "x86_64"
 				},
 				{
 					"runs-on": "ubuntu-22.04",
 					"distro": "noble",
-					"arch": "x86_64",
-					"emulated": false
+					"arch": "x86_64"
 				},
 				{
 					"runs-on": "ubuntu-22.04",
