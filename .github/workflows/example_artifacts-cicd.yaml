@@ -49,7 +49,7 @@ jobs:
         echo "ARCH: $ARCH"
         echo "EMULATED: $EMULATED"
         make docker-build
-        .github/workflows/execute-build/test_apps/hi/package.sh \
+        package.sh \
           --target hi \
           --version ${{ needs.extract-version.outputs.version }} \
           --packages-dir build \
