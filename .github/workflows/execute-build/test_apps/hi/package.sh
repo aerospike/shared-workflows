@@ -168,6 +168,10 @@ main() {
         echo "  Distro: $distro"
         echo "  Arch: $arch"
 
+        if [[ ! -x $binary ]]; then
+            chmod +x "$binary"
+        fi
+
         if [[ ! -v DISTRO_VERSIONS[$distro] ]]; then
             error "Unknown distro: $distro"
         fi
