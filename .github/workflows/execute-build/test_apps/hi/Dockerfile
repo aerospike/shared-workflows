@@ -13,7 +13,7 @@ COPY --chown=builder:builder hi.c Makefile ./
 USER builder
 ENV DISTRO=jammy
 ENV ARCH=x86_64
-RUN make build
+RUN make build && chmod a+x build/jammy/x86_64/hi
 
 FROM gcr.io/distroless/cc-debian12:debug-nonroot
 COPY --from=builder /work/build/jammy/x86_64/hi /usr/local/bin/hi
