@@ -66,8 +66,8 @@ jobs:
           --output-dir packaged-artifacts
       matrix-json: >-
         {"include":[
-          {"runs-on":"ubuntu-22.04","distro":"el9","arch":"x86_64", build-env: "EMULATED=false"},
-          {"runs-on":"ubuntu-22.04","distro":"jammy","arch":"x86_64", build-env: "EMULATED=false"},
+          {"runs-on":"ubuntu-22.04","distro":"el9","arch":"x86_64", "build-env":"EMULATED=false"},
+          {"runs-on":"ubuntu-22.04","distro":"jammy","arch":"x86_64", "build-env":"EMULATED=false"},
           {
             "runs-on":"ubuntu-22.04",
             "distro":"dotnet",
