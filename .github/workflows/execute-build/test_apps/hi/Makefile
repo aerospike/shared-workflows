@@ -113,6 +113,7 @@ else
 		$$CC --version && \
 	$$CC $(CFLAGS) -o $(BUILD_DIR)/$(DISTRO)/$(ARCH)/$(TARGET) $(SOURCE)'
 endif
+	chmod a+x $(BUILD_DIR)/$(DISTRO)/$(ARCH)/$(TARGET)
 	@echo "Build complete"
 
 

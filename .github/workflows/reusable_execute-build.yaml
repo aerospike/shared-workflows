@@ -218,6 +218,7 @@ jobs:
           BUILD_ENV: ${{ inputs.build-env }}
         run: |
           # handle inject build-env into the build step
+          # some care must be taken to allow literal semicolons and backslashes in the build-env
           if [[ -n "${BUILD_ENV:-}" ]]; then
             current=""
             escape="false"
@@ -257,6 +258,7 @@ jobs:
               export "$key=$value"
             done
           fi
+
           # Entrypoint scripts are always in the shared-workflows checkout location
           entrypoint=$(realpath "${{ inputs.gh-checkout-path }}/.github/workflows/execute-build/entrypoint.sh")
           chmod +x "$entrypoint"

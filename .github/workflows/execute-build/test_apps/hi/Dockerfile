@@ -1,7 +1,8 @@
 # checkov:skip=CKV_DOCKER_2: Simple hello world app doesn't need healthcheck
 FROM ubuntu:22.04 AS builder
 
-RUN apt-get update && apt-get install -y build-essential \
+# trunk-ignore(hadolint/DL3008)
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential \
     && useradd -r -m -s /usr/sbin/nologin builder \
     && mkdir -p /work \
     && chown -R builder:builder /work
