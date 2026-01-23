@@ -141,11 +141,11 @@ on:
 
     secrets:
       gpg-private-key:
-        required: false
+        required: true
       gpg-public-key:
-        required: false
+        required: true
       gpg-key-pass:
-        required: false
+        required: true
       es-username:
         required: false
       es-password:
