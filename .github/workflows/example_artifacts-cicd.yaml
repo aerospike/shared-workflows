@@ -1,4 +1,4 @@
-name: Example Artifacts CI/CD (drop-in)
+name: Example Artifacts CI/CD
 on:
   workflow_dispatch:
   pull_request:
@@ -13,7 +13,6 @@ permissions:
   attestations: write
 
 # This workflow demonstrates a drop-in artifacts pipeline using reusable_artifacts-cicd.yaml.
-# It mirrors the artifact outputs of the advanced example, but with a simplified flow.
 
 jobs:
   extract-version:
@@ -44,26 +43,6 @@ jobs:
       gh-source-path: repo-source
       working-directory: repo-source/.github/workflows/execute-build/test_apps/hi
       gh-artifact-directory: packaged-artifacts
-      build-script: |
-        # matrix-json is injected into the environment as MATRIX_JSON
-        # we can use jq to extract the values we need
-        DISTRO=$(jq -r '.distro' <<<"$MATRIX_JSON")
-        ARCH=$(jq -r '.arch' <<<"$MATRIX_JSON")
-        # emulated is set in the environment by the reusable_artifacts-cicd.yaml workflow
-        EMULATED=$EMULATED
-        echo "DISTRO: $DISTRO"
-        echo "ARCH: $ARCH"
-        echo "EMULATED: $EMULATED"
-        env | sort
-        make clean all
-        echo "I am $(whoami) and I am in the groups $(groups)"
-        echo "The current directory is $(pwd)"
-        echo "The current directory contents are $(ls -laR)"
-        ./package.sh \
-          --target hi \
-          --version ${{ needs.extract-version.outputs.version }} \
-          --packages-dir build \
-          --output-dir packaged-artifacts
       matrix-json: >-
         {"include":[
           {"runs-on":"ubuntu-22.04","distro":"el9","arch":"x86_64", "build-env":"EMULATED=false"},
@@ -80,6 +59,23 @@ jobs:
             "dotnet-version":"8.0.x"
           }
         ]}
+      build-script: |
+        # matrix-json is injected into the environment as MATRIX_JSON
+        # we can use jq to extract the values we need
+        DISTRO=$(jq -r '.distro' <<<"$MATRIX_JSON")
+        ARCH=$(jq -r '.arch' <<<"$MATRIX_JSON")
+        # emulated is set in the environment by the reusable_artifacts-cicd.yaml workflow
+        EMULATED=$EMULATED
+        echo "DISTRO: $DISTRO"
+        echo "ARCH: $ARCH"
+        echo "EMULATED: $EMULATED"
+        env | sort
+        make clean all
+        ./package.sh \
+          --target hi \
+          --version ${{ needs.extract-version.outputs.version }} \
+          --packages-dir build \
+          --output-dir packaged-artifacts
       oidc-provider-name: gh-dev-test
       oidc-audience: aerospike/testing
       dry-run: false
@@ -92,6 +88,10 @@ jobs:
       credential_id: ${{ secrets.CREDENTIAL_ID }}
       es-totp_secret: ${{ secrets.ES_TOTP_SECRET }}
 
+  # ########################################################################################
+  ########################################################
+  # The following jobs demonstrate how to use deployed artifacts.
+  ########################################################
   use-artifacts:
     needs: [artifacts-cicd, extract-version]
     runs-on: ubuntu-22.04

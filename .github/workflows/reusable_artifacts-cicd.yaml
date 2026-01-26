@@ -27,8 +27,7 @@ on:
         description: Version of the artifact to upload
         required: true
         type: string
-
-      # Optional inputs (minimal surface)
+      # At least one of build-script or build-script-path must be set
       build-script:
         description: Inline build script to execute (set either this or build-script-path)
         required: false
@@ -39,8 +38,12 @@ on:
         required: false
         type: string
         default: ""
+
+      # Optional inputs
       build-env:
-        description: Semicolon-delimited KEY=VALUE pairs (use \; for literal semicolon, \\ for backslash)
+        description: |
+          Semicolon-delimited KEY=VALUE pairs (use \; for literal semicolon, \\ for backslash)
+          Within the build script, the key-value pairs will be available as environment variables.
         required: false
         type: string
         default: ""
@@ -87,7 +90,10 @@ on:
       matrix-json:
         description: |
           Optional limited matrix definition for simple matrix builds.
-          Expected schema: {"include":[{"runs-on":"ubuntu-22.04","distro":"jammy","arch":"x86_64","emulated":false}]}
+          Example:
+            {"include":[
+              {"runs-on":"ubuntu-22.04","distro":"jammy","arch":"x86_64","build-env":"KEY=VALUE;KEY2=VALUE2;"}
+            ]}
         required: false
         type: string
         default: |-
@@ -97,7 +103,7 @@ on:
                 "runs-on": "ubuntu-22.04",
                 "distro": "jammy",
                 "arch": "x86_64",
-                "emulated": false
+                "build-env": "emulated=false"
               }
             ]
           }
