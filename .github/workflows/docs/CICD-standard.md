@@ -24,8 +24,9 @@ The architecture follows an ecosystem-specific build & sign pattern, where artif
 
 For most repositories, start with:
 
-- `reusable_artifacts-cicd.yaml`: **Artifacts pipeline** (build → sign → deploy) with a small, opinionated input surface.
-- `reusable_docker-build-deploy.yaml`: **Docker pipeline** (container images). This stays separate to avoid parameter explosion.
+- `reusable_artifacts-cicd.yaml`: **Artifacts pipeline** (build → sign → deploy) with a small, opinionated input surface. [README](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/artifacts-cicd/README.md)
+- `reusable_docker-build-deploy.yaml`: **Docker pipeline** (container images). This stays separate to avoid parameter explosion. [README](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/docker-build-deploy/README.md)
+- For release-level artifacts create a promotable release bundle with `reusable_create-release-bundle.yaml`. [README](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/create-release-bundle/README.md)
 
 ### Artifacts CI/CD
 
@@ -112,7 +113,7 @@ matrix-json: >-
 
 ## Example Usage
 
-The typical pattern combines both pipelines: build and sign according to ecosystem, then unify in a release bundle.
+The typical pattern combines both pipelines: Build and sign according to ecosystem, then unify in a release bundle.
 
 For a drop-in artifacts-cicd example see [example_artifacts-cicd.yaml](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/example_artifacts-cicd.yaml).
 
