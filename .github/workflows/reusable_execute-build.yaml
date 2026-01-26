@@ -280,7 +280,7 @@ jobs:
           fi
           echo "Executing entrypoint"
           echo "script_arg: $script_arg"
-          echo "script_value: $script_value"
+
           echo "artifact-directory: ${{ inputs.gh-artifact-directory }}"
           echo "build-name: ${{ inputs.jf-build-name }}"
           echo "build-id: ${{ inputs.jf-build-id }}"

@@ -58,7 +58,7 @@ Notes:
 
 Use `matrix-json` to run a constrained matrix while keeping the rest of the workflow simple. Each matrix job publishes its own build-info and artifacts, then the workflow aggregates build-info and merges artifacts before signing/deploying.
 
-`matrix-json` must conform to `https://github.com/aerospike/shared-workflows/.github/workflows/docs/artifacts-cicd-matrix.schema.json`.
+`matrix-json` must conform to `https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/docs/artifacts-cicd-matrix.schema.json`.
 
 Use matrix fields for values the workflow already expects (`runs-on`, `distro`, `arch`). Use `build-env` only for extra variables your script needs. Use `\;` for literal semicolons.
 

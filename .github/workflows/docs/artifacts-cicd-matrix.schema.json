@@ -1,6 +1,6 @@
 {
 	"$schema": "https://json-schema.org/draft/2020-12/schema",
-	"$id": "https://github.com/aerospike/shared-workflows/.github/docs/artifacts-cicd-matrix.schema.json",
+	"$id": "https://raw.githubusercontent.com/aerospike/shared-workflows/main/.github/workflows/docs/artifacts-cicd-matrix.schema.json",
 	"title": "reusable_artifacts-cicd.yaml matrix-json schema",
 	"type": "object",
 	"required": ["include"],
