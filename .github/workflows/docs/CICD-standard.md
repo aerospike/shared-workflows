@@ -20,16 +20,16 @@ The architecture follows an ecosystem-specific build & sign pattern, where artif
 
 **Create Release Bundle** → combine artifacts and/or docker builds into a single distributable release bundle
 
-## Recommended: entrypoints
+## Standard Workflows for your project
 
 For most repositories, start with:
 
 - `reusable_artifacts-cicd.yaml`: **Artifacts pipeline** (build → sign → deploy) with a small, opinionated input surface.
 - `reusable_docker-build-deploy.yaml`: **Docker pipeline** (container images). This stays separate to avoid parameter explosion.
 
-### Artifacts CI/CD (recommended)
+### Artifacts CI/CD
 
-This wraps `reusable_execute-build.yaml`, `reusable_sign-artifacts.yaml`, and `reusable_deploy-artifacts.yaml` for the common case.
+This wraps the low level `reusable_execute-build.yaml`, `reusable_sign-artifacts.yaml`, and `reusable_deploy-artifacts.yaml` for the common case cicd cases.
 
 ```yaml
 jobs:
@@ -57,7 +57,7 @@ Notes:
 
 Use `matrix-json` to run a constrained matrix while keeping the rest of the workflow simple. Each matrix job publishes its own build-info and artifacts, then the workflow aggregates build-info and merges artifacts before signing/deploying.
 
-`matrix-json` must conform to `.github/docs/artifacts-cicd-matrix.schema.json`.
+`matrix-json` must conform to `https://github.com/aerospike/shared-workflows/.github/workflows/docs/artifacts-cicd-matrix.schema.json`.
 
 Use matrix fields for values the workflow already expects (`runs-on`, `distro`, `arch`). Use `build-env` only for extra variables your script needs. Use `\;` for literal semicolons.
 
