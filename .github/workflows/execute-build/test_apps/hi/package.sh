@@ -2,7 +2,6 @@
 
 export PS4='+($LINENO): ${FUNCNAME[0]:+${FUNCNAME[0]}(): }'
 trap 'handle_error ${LINENO}' ERR
-
 # shellcheck disable=SC2317
 handle_error() {
     local exit_code=$?
@@ -12,8 +11,8 @@ handle_error() {
 }
 
 error() {
-    local reason="${1:-}"
-    if [[ -n "$reason" ]]; then
+    local reason="${1-}"
+    if [[ -n $reason ]]; then
         echo "Error: $reason" >&2
     else
         echo "Error" >&2
@@ -47,36 +46,36 @@ show_help() {
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
-        --version)
-            VERSION="$2"
-            shift 2
-            ;;
-        --target)
-            TARGET="$2"
-            shift 2
-            ;;
-        --packages-dir)
-            PACKAGES_DIR="$2"
-            shift 2
-            ;;
-        --output-dir)
-            OUTPUT_DIR="$2"
-            shift 2
-            ;;
-        --help|-h)
-            show_help
-            exit 0
-            ;;
-        -*)
-            echo "Unknown option: $1" >&2
-            show_help
-            exit 1
-            ;;
-        *)
-            echo "Unexpected positional argument: $1" >&2
-            show_help
-            exit 1
-            ;;
+    --version)
+        VERSION="$2"
+        shift 2
+        ;;
+    --target)
+        TARGET="$2"
+        shift 2
+        ;;
+    --packages-dir)
+        PACKAGES_DIR="$2"
+        shift 2
+        ;;
+    --output-dir)
+        OUTPUT_DIR="$2"
+        shift 2
+        ;;
+    --help | -h)
+        show_help
+        exit 0
+        ;;
+    -*)
+        echo "Unknown option: $1" >&2
+        show_help
+        exit 1
+        ;;
+    *)
+        echo "Unexpected positional argument: $1" >&2
+        show_help
+        exit 1
+        ;;
     esac
 done
 
@@ -109,17 +108,13 @@ create_deb_package() {
     local arch="$2"
     local binary_path="$3"
     local distro_version="${DISTRO_VERSIONS[$distro]}"
-    
-    # Ensure binary is executable
-    chmod +x "$binary_path"
-    
     local package_name="${TARGET}_${VERSION}_${distro_version}_${arch}.deb"
     local output_path="$OUTPUT_DIR/$package_name"
-    
+
     echo "Creating DEB package: $package_name"
     echo "  Binary: $binary_path"
     echo "  Output: $output_path"
-    
+
     fpm -s dir -t deb "${FPM_OPTS[@]}" \
         --package="$output_path" \
         --deb-dist="$distro" \
@@ -133,17 +128,14 @@ create_rpm_package() {
     local arch="$2"
     local binary_path="$3"
     local distro_version="${DISTRO_VERSIONS[$distro]}"
-    
-    # Ensure binary is executable
-    chmod +x "$binary_path"
-    
+
     local package_name="${TARGET}-${VERSION}-1.${distro_version}.${arch}.rpm"
     local output_path="$OUTPUT_DIR/$package_name"
-    
+
     echo "Creating RPM package: $package_name"
     echo "  Binary: $binary_path"
     echo "  Output: $output_path"
-    
+
     fpm -s dir -t rpm "${FPM_OPTS[@]}" \
         --package="$output_path" \
         --rpm-use-file-permissions \
@@ -158,39 +150,43 @@ main() {
     echo ""
     install_fpm
     # Check if packages directory exists
-    if [[ ! -d "$PACKAGES_DIR" ]]; then
+    if [[ ! -d $PACKAGES_DIR ]]; then
         error "Packages directory not found: $PACKAGES_DIR"
     fi
-    
+
     # Create output directory
     mkdir -p "$OUTPUT_DIR"
-    
+
     # Find all binaries and process them
     while IFS= read -r -d '' binary; do
         local rel_path="${binary#"$PACKAGES_DIR/"}"
         local distro_arch="${rel_path%/"$TARGET"}"
         local distro="${distro_arch%/*}"
         local arch="${distro_arch#*/}"
-        
+
         echo "Processing: $binary"
         echo "  Distro: $distro"
         echo "  Arch: $arch"
-        
+
+        if [[ ! -x $binary ]]; then
+            chmod +x "$binary"
+        fi
+
         if [[ ! -v DISTRO_VERSIONS[$distro] ]]; then
             error "Unknown distro: $distro"
         fi
-        
+
         case "$distro" in
-            el*|amzn*)
-                create_rpm_package "$distro" "$arch" "$binary"
-                ;;
-            *)
-                create_deb_package "$distro" "$arch" "$binary"
-                ;;
+        el* | amzn*)
+            create_rpm_package "$distro" "$arch" "$binary"
+            ;;
+        *)
+            create_deb_package "$distro" "$arch" "$binary"
+            ;;
         esac
         echo ""
     done < <(find "$PACKAGES_DIR" -name "$TARGET" -type f -print0)
-    
+
     echo "Packaging complete!"
     echo ""
     echo "Generated packages:"

@@ -1,0 +1,97 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "https://raw.githubusercontent.com/aerospike/shared-workflows/main/.github/workflows/docs/artifacts-cicd-matrix.schema.json",
+	"title": "reusable_artifacts-cicd.yaml matrix-json schema",
+	"type": "object",
+	"required": ["include"],
+	"additionalProperties": false,
+	"properties": {
+		"include": {
+			"type": "array",
+			"minItems": 1,
+			"items": {
+				"type": "object",
+				"required": ["runs-on", "distro", "arch"],
+				"additionalProperties": false,
+				"properties": {
+					"runs-on": {
+						"type": "string",
+						"minLength": 1,
+						"description": "GitHub Actions runner label (e.g., ubuntu-22.04)"
+					},
+					"distro": {
+						"type": "string",
+						"minLength": 1,
+						"description": "Distro identifier (e.g., jammy, noble, el9)"
+					},
+					"arch": {
+						"type": "string",
+						"minLength": 1,
+						"description": "Architecture identifier (e.g., x86_64, arm64)"
+					},
+					"working-directory": {
+						"type": "string",
+						"minLength": 1,
+						"description": "Override working directory for build scripts"
+					},
+					"gh-artifact-directory": {
+						"type": "string",
+						"minLength": 1,
+						"description": "Override artifact directory to upload for this matrix entry"
+					},
+					"build-script": {
+						"type": "string",
+						"minLength": 1,
+						"description": "Override build script (inline)"
+					},
+					"build-script-path": {
+						"type": "string",
+						"minLength": 1,
+						"description": "Override build script path"
+					},
+					"build-env": {
+						"type": "string",
+						"minLength": 1,
+						"description": "Override build env for this matrix entry (semicolon-delimited KEY=VALUE; use \\; for semicolons)"
+					},
+					"setup-dotnet": {
+						"type": "boolean",
+						"description": "Enable dotnet setup for this matrix entry"
+					},
+					"dotnet-version": {
+						"type": "string",
+						"minLength": 1,
+						"description": "Override dotnet SDK version for this matrix entry"
+					}
+				}
+			}
+		}
+	},
+	"examples": [
+		{
+			"include": [
+				{
+					"runs-on": "ubuntu-22.04",
+					"distro": "jammy",
+					"arch": "x86_64"
+				},
+				{
+					"runs-on": "ubuntu-22.04",
+					"distro": "noble",
+					"arch": "x86_64"
+				},
+				{
+					"runs-on": "ubuntu-22.04",
+					"distro": "jammy",
+					"arch": "x86_64",
+					"build-script": "./scripts/build-dotnet.sh",
+					"working-directory": "src/dotnet",
+					"gh-artifact-directory": "src/dotnet/artifacts",
+					"build-env": "DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1",
+					"setup-dotnet": true,
+					"dotnet-version": "8.0.x"
+				}
+			]
+		}
+	]
+}

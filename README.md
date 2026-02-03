@@ -93,6 +93,12 @@ To use a workflow or action from this repository, reference it in your GitHub re
 uses: aerospike/shared-workflows/workflows/workflow-1@ed780e9928d56ef074532dbc6877166d5460587a # v0.1.0
 ```
 
+### CI/CD quick start
+
+- **Artifacts pipeline (recommended)**: `reusable_artifacts-cicd.yaml` (build → optional sign → optional deploy)
+- **Docker pipeline**: `reusable_docker-build-deploy.yaml`
+- **Docs**: see `.github/workflows/docs/CICD-with-shared-actions.md`
+
 ## Contributing
 
 While we welcome contributions from the community, that isn't the intended use case for this repository. We'll try our best but may not respond to your issue or PR. We may close an issue or PR without much feedback.

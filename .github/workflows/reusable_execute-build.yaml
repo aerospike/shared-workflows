@@ -39,6 +39,11 @@ on:
         required: false
         type: string
         default: ""
+      build-env:
+        description: Semicolon-delimited KEY=VALUE pairs (use \; for literal semicolon, \\ for backslash)
+        required: false
+        type: string
+        default: ""
       dry-run:
         description: Whether to run in dry-run mode
         required: false
@@ -192,6 +197,12 @@ jobs:
           java-version: ${{ inputs.java-version }}
           cache: ${{ inputs.java-cache }}
 
+      - name: Set up Dotnet
+        if: inputs.setup-dotnet
+        uses: actions/setup-dotnet@2016bd2012dba4e32de620c46fe006a3ac9f0602 # v5.0.1
+        with:
+          dotnet-version: ${{ inputs.dotnet-version }}
+
       - name: Set up JFrog CLI
         uses: step-security/setup-jfrog-cli@a6b41f8338bea0983ddff6bd4ede7d2dcd81e1fa # v4.8.1
         env:
@@ -203,7 +214,51 @@ jobs:
 
       - name: Execute Build Script
         shell: bash
+        env:
+          BUILD_ENV: ${{ inputs.build-env }}
         run: |
+          # handle inject build-env into the build step
+          # some care must be taken to allow literal semicolons and backslashes in the build-env
+          if [[ -n "${BUILD_ENV:-}" ]]; then
+            current=""
+            escape="false"
+            pairs=()
+            for (( i=0; i<${#BUILD_ENV}; i++ )); do
+              char="${BUILD_ENV:i:1}"
+              if [[ "$escape" == "true" ]]; then
+                current+="$char"
+                escape="false"
+                continue
+              fi
+              if [[ "$char" == "\\" ]]; then
+                escape="true"
+                continue
+              fi
+              if [[ "$char" == ";" ]]; then
+                pairs+=("$current")
+                current=""
+                continue
+              fi
+              current+="$char"
+            done
+            pairs+=("$current")
+
+            for pair in "${pairs[@]}"; do
+              [[ -z "$pair" ]] && continue
+              if [[ "$pair" != *=* ]]; then
+                echo "Error: build-env entries must be KEY=VALUE (got: $pair)" >&2
+                exit 1
+              fi
+              key="${pair%%=*}"
+              value="${pair#*=}"
+              if [[ -z "$key" || ! "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+                echo "Error: invalid env var name '$key' in build-env" >&2
+                exit 1
+              fi
+              export "$key=$value"
+            done
+          fi
+
           # Entrypoint scripts are always in the shared-workflows checkout location
           entrypoint=$(realpath "${{ inputs.gh-checkout-path }}/.github/workflows/execute-build/entrypoint.sh")
           chmod +x "$entrypoint"
@@ -223,7 +278,15 @@ jobs:
             echo "Error: Either build-script or build-script-path must be given"
             exit 1
           fi
+          echo "Executing entrypoint"
+          echo "script_arg: $script_arg"
 
+          echo "artifact-directory: ${{ inputs.gh-artifact-directory }}"
+          echo "build-name: ${{ inputs.jf-build-name }}"
+          echo "build-id: ${{ inputs.jf-build-id }}"
+          echo "project: ${{ inputs.jf-project }}"
+          echo "publish-build-info: ${{ inputs.publish-build-info }}"
+          echo "dry-run: ${{ inputs.dry-run }}"
           "$entrypoint" \
             "$script_arg" "$script_value" \
             --artifact-directory "${{ inputs.gh-artifact-directory }}" \
