@@ -44,7 +44,7 @@ inputs:
   server-type:
     description: Image repository path within the registry
     required: false
-    default: aerospike/aerospike-server-enterprise
+    default: database-container-dev-local/aerospike-server-enterprise
   jfrog-platform-url:
     description: JFrog platform URL
     required: false

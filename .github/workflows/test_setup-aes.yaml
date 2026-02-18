@@ -25,8 +25,8 @@ jobs:
         id: setup-aes
         uses: ./.github/actions/setup-aes
         with:
-          oidc-provider: gh-dev-test
-          oidc-audience: aerospike/testing
+          oidc-provider: ${{ vars.JFROG_OIDC_PROVIDER }}
+          oidc-audience: ${{ vars.JFROG_OIDC_AUDIENCE }}
 
       - name: Verify outputs
         run: |
@@ -64,8 +64,8 @@ jobs:
         with:
           num-nodes: "3"
           startup-timeout: "60"
-          oidc-provider: gh-dev-test
-          oidc-audience: aerospike/testing
+          oidc-provider: ${{ vars.JFROG_OIDC_PROVIDER }}
+          oidc-audience: ${{ vars.JFROG_OIDC_AUDIENCE }}
 
       - name: Verify outputs
         run: |
@@ -106,8 +106,8 @@ jobs:
         uses: ./.github/actions/setup-aes
         with:
           features-content: ${{ secrets.AES_FEATURES_CONF }}
-          oidc-provider: gh-dev-test
-          oidc-audience: aerospike/testing
+          oidc-provider: ${{ vars.JFROG_OIDC_PROVIDER }}
+          oidc-audience: ${{ vars.JFROG_OIDC_AUDIENCE }}
 
       - name: Verify container is running
         run: |
@@ -130,8 +130,8 @@ jobs:
         uses: ./.github/actions/setup-aes
         with:
           env-vars: NAMESPACE=test;SERVICE_THREADS=4
-          oidc-provider: gh-dev-test
-          oidc-audience: aerospike/testing
+          oidc-provider: ${{ vars.JFROG_OIDC_PROVIDER }}
+          oidc-audience: ${{ vars.JFROG_OIDC_AUDIENCE }}
 
       - name: Verify env vars in container
         run: |
@@ -158,8 +158,8 @@ jobs:
         uses: ./.github/actions/setup-aes
         with:
           enable-tls: "true"
-          oidc-provider: gh-dev-test
-          oidc-audience: aerospike/testing
+          oidc-provider: ${{ vars.JFROG_OIDC_PROVIDER }}
+          oidc-audience: ${{ vars.JFROG_OIDC_AUDIENCE }}
 
       - name: Verify TLS outputs
         run: |
