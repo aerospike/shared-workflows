@@ -237,6 +237,9 @@ jobs:
           echo '${{ inputs.build-args-json }}' | to_kv > /tmp/build_args
           echo "$merged_labels" | to_kv > /tmp/labels
 
+          # Add JFROG_TOKEN to build args automatically
+          echo "JFROG_TOKEN=${{ steps.jf.outputs.oidc-token }}" >> /tmp/build_args
+
           # Use heredoc syntax so multi-line values are preserved in GITHUB_ENV
           {
             echo "BUILD_ARGS<<EOF"
