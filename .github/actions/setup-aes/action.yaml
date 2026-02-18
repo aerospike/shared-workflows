@@ -1,0 +1,398 @@
+name: Setup Aerospike Enterprise Server
+description: >
+  Starts one or more Aerospike Enterprise Server containers, optionally forming
+  a cluster, with support for custom config, feature files, and environment
+  variable passthrough.
+
+inputs:
+  server-tag:
+    description: AES Docker image tag (version)
+    required: false
+    default: latest
+  num-nodes:
+    description: Number of cluster nodes (1+)
+    required: false
+    default: "1"
+  container-name-prefix:
+    description: "Container name prefix (nodes: prefix-1, prefix-2, ...)"
+    required: false
+    default: aerospike
+  features-file:
+    description: Path to a features.conf on the runner
+    required: false
+    default: ""
+  features-content:
+    description: Raw features.conf content (e.g. from a GitHub secret). Ignored if features-file is set.
+    required: false
+    default: ""
+  config-file:
+    description: Path to an aerospike.conf on the runner
+    required: false
+    default: ""
+  config-content:
+    description: Raw aerospike.conf content. Ignored if config-file is set.
+    required: false
+    default: ""
+  env-vars:
+    description: Semicolon-delimited KEY=VALUE pairs passed as -e flags to each container. Use \\; for literal semicolons, \\\\ for literal backslashes.
+    required: false
+    default: ""
+  container-repo-url:
+    description: Docker registry hostname
+    required: false
+    default: aerospike.jfrog.io
+  server-type:
+    description: Image repository path within the registry
+    required: false
+    default: aerospike/aerospike-server-enterprise
+  jfrog-platform-url:
+    description: JFrog platform URL
+    required: false
+    default: https://aerospike.jfrog.io
+  oidc-provider:
+    description: JFrog OIDC provider name
+    required: true
+  oidc-audience:
+    description: JFrog OIDC audience
+    required: true
+  network-name:
+    description: Docker network name
+    required: false
+    default: aerospike-net
+  base-port:
+    description: Base host port (node N maps to base-port + N - 1)
+    required: false
+    default: "3000"
+  startup-timeout:
+    description: Seconds to wait for each node and cluster formation
+    required: false
+    default: "30"
+  enable-tls:
+    description: Enable TLS on AES containers
+    required: false
+    default: "false"
+  tls-base-port:
+    description: Base host port for TLS (node N maps to tls-base-port + N - 1)
+    required: false
+    default: "4333"
+
+outputs:
+  container-names:
+    description: Comma-separated container names
+    value: ${{ steps.start-containers.outputs.container-names }}
+  network-name:
+    description: Docker network name created
+    value: ${{ steps.create-network.outputs.network-name }}
+  service-ports:
+    description: Comma-separated host ports
+    value: ${{ steps.start-containers.outputs.service-ports }}
+  tls-service-ports:
+    description: Comma-separated TLS host ports (empty if TLS disabled)
+    value: ${{ steps.start-containers.outputs.tls-service-ports }}
+  tls-cert-dir:
+    description: Directory containing generated TLS certs (empty if TLS disabled)
+    value: ${{ steps.generate-tls-certs.outputs.tls-cert-dir }}
+
+runs:
+  using: composite
+  steps:
+    - name: Validate inputs
+      shell: bash
+      run: |
+        error() { echo "Error: $1" >&2; exit 1; }
+
+        [[ "${{ inputs.num-nodes }}" =~ ^[1-9][0-9]*$ ]] \
+          || error "num-nodes must be a positive integer (got: '${{ inputs.num-nodes }}')"
+        [[ "${{ inputs.base-port }}" =~ ^[1-9][0-9]*$ ]] \
+          || error "base-port must be a positive integer (got: '${{ inputs.base-port }}')"
+        [[ "${{ inputs.startup-timeout }}" =~ ^[1-9][0-9]*$ ]] \
+          || error "startup-timeout must be a positive integer (got: '${{ inputs.startup-timeout }}')"
+
+        if [[ "${{ inputs.enable-tls }}" == "true" ]]; then
+          [[ "${{ inputs.tls-base-port }}" =~ ^[1-9][0-9]*$ ]] \
+            || error "tls-base-port must be a positive integer (got: '${{ inputs.tls-base-port }}')"
+        fi
+
+    - name: Set up JFrog CLI
+      id: jf
+      uses: step-security/setup-jfrog-cli@a6b41f8338bea0983ddff6bd4ede7d2dcd81e1fa # v4.8.1
+      env:
+        JF_URL: ${{ inputs.jfrog-platform-url }}
+      with:
+        oidc-provider-name: ${{ inputs.oidc-provider }}
+        oidc-audience: ${{ inputs.oidc-audience }}
+
+    - name: Docker login
+      uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+      with:
+        registry: ${{ inputs.container-repo-url }}
+        username: ${{ steps.jf.outputs.oidc-user }}
+        password: ${{ steps.jf.outputs.oidc-token }}
+
+    - name: Generate TLS certificates
+      id: generate-tls-certs
+      if: inputs.enable-tls == 'true'
+      shell: bash
+      run: |
+        cert_dir="$(mktemp -d)"
+        cd "$cert_dir"
+
+        num_nodes=${{ inputs.num-nodes }}
+        prefix="${{ inputs.container-name-prefix }}"
+
+        # Generate CA key and self-signed cert
+        openssl req -x509 -newkey rsa:4096 -nodes \
+          -keyout ca.key -out ca.crt -days 365 \
+          -subj "/CN=AES-Test-CA"
+
+        # Build SAN extension file covering all container names
+        {
+          echo "[v3_req]"
+          echo "subjectAltName = @alt_names"
+          echo "[alt_names]"
+          dns_idx=1
+          for (( i=1; i<=num_nodes; i++ )); do
+            echo "DNS.${dns_idx} = ${prefix}-${i}"
+            dns_idx=$(( dns_idx + 1 ))
+          done
+          echo "DNS.${dns_idx} = localhost"
+          echo "IP.1 = 127.0.0.1"
+        } > san.ext
+
+        # Generate server key, CSR, and CA-signed cert with SANs
+        openssl req -newkey rsa:4096 -nodes \
+          -keyout server.key -out server.csr \
+          -subj "/CN=aerospike-tls"
+        openssl x509 -req -in server.csr \
+          -CA ca.crt -CAkey ca.key -CAcreateserial \
+          -out server.crt -days 365 \
+          -extensions v3_req -extfile san.ext
+
+        # Generate client key and CA-signed cert
+        openssl req -newkey rsa:4096 -nodes \
+          -keyout client.key -out client.csr \
+          -subj "/CN=AES-Test-Client"
+        openssl x509 -req -in client.csr \
+          -CA ca.crt -CAkey ca.key -CAcreateserial \
+          -out client.crt -days 365
+
+        # Clean up CSR and serial files
+        rm -f *.csr *.srl san.ext
+
+        echo "Generated TLS certificates in $cert_dir"
+        ls -la "$cert_dir"
+        echo "tls-cert-dir=$cert_dir" >> "$GITHUB_OUTPUT"
+
+    - name: Prepare config files
+      id: prepare-config
+      shell: bash
+      env:
+        FEATURES_CONTENT: ${{ inputs.features-content }}
+        CONFIG_CONTENT: ${{ inputs.config-content }}
+      run: |
+        features_path="${{ inputs.features-file }}"
+        config_path="${{ inputs.config-file }}"
+
+        # Write features-content to temp file if no file path was given
+        if [[ -z "$features_path" && -n "${FEATURES_CONTENT}" ]]; then
+          features_path="$(mktemp)"
+          printf '%s' "${FEATURES_CONTENT}" > "$features_path"
+          echo "Wrote features-content to $features_path"
+        fi
+
+        # Write config-content to temp file if no file path was given
+        if [[ -z "$config_path" && -n "${CONFIG_CONTENT}" ]]; then
+          config_path="$(mktemp)"
+          printf '%s' "${CONFIG_CONTENT}" > "$config_path"
+          echo "Wrote config-content to $config_path"
+        fi
+
+        # Generate default TLS-enabled config if TLS is on and no custom config
+        if [[ "${{ inputs.enable-tls }}" == "true" && -z "$config_path" ]]; then
+          config_path="$(mktemp)"
+          cat > "$config_path" << 'AESCONF'
+        service {
+            proto-fd-max 15000
+        }
+
+        tls aerospike-tls {
+            cert-file /etc/aerospike/tls/server.crt
+            key-file  /etc/aerospike/tls/server.key
+            ca-file   /etc/aerospike/tls/ca.crt
+        }
+
+        network {
+            service {
+                address any
+                port 3000
+                tls-port 4333
+                tls-authenticate-client false
+                tls-name aerospike-tls
+            }
+            heartbeat {
+                mode mesh
+                port 3002
+            }
+            fabric {
+                port 3001
+            }
+        }
+
+        namespace test {
+            replication-factor 1
+            storage-engine memory {
+                data-size 1G
+            }
+        }
+        AESCONF
+          echo "Generated default TLS-enabled aerospike.conf at $config_path"
+        fi
+
+        echo "features-path=$features_path" >> "$GITHUB_OUTPUT"
+        echo "config-path=$config_path" >> "$GITHUB_OUTPUT"
+
+    - name: Create Docker network
+      id: create-network
+      shell: bash
+      run: |
+        network="${{ inputs.network-name }}"
+        if ! docker network inspect "$network" >/dev/null 2>&1; then
+          docker network create "$network"
+          echo "Created Docker network: $network"
+        else
+          echo "Docker network already exists: $network"
+        fi
+        echo "network-name=$network" >> "$GITHUB_OUTPUT"
+
+    - name: Start AES containers
+      id: start-containers
+      shell: bash
+      env:
+        ENV_VARS: ${{ inputs.env-vars }}
+      run: |
+        num_nodes=${{ inputs.num-nodes }}
+        base_port=${{ inputs.base-port }}
+        prefix="${{ inputs.container-name-prefix }}"
+        image="${{ inputs.container-repo-url }}/${{ inputs.server-type }}:${{ inputs.server-tag }}"
+        network="${{ inputs.network-name }}"
+        features_path="${{ steps.prepare-config.outputs.features-path }}"
+        config_path="${{ steps.prepare-config.outputs.config-path }}"
+        enable_tls="${{ inputs.enable-tls }}"
+        tls_base_port=${{ inputs.tls-base-port }}
+        tls_cert_dir="${{ steps.generate-tls-certs.outputs.tls-cert-dir }}"
+
+        container_names=""
+        service_ports=""
+        tls_service_ports=""
+
+        # Parse env-vars using escape-aware semicolon delimiter
+        env_flags=()
+        if [[ -n "${ENV_VARS:-}" ]]; then
+          current=""
+          escape="false"
+          pairs=()
+          for (( i=0; i<${#ENV_VARS}; i++ )); do
+            char="${ENV_VARS:i:1}"
+            if [[ "$escape" == "true" ]]; then
+              current+="$char"
+              escape="false"
+              continue
+            fi
+            if [[ "$char" == "\\" ]]; then
+              escape="true"
+              continue
+            fi
+            if [[ "$char" == ";" ]]; then
+              pairs+=("$current")
+              current=""
+              continue
+            fi
+            current+="$char"
+          done
+          pairs+=("$current")
+
+          for pair in "${pairs[@]}"; do
+            [[ -z "$pair" ]] && continue
+            if [[ "$pair" != *=* ]]; then
+              echo "Error: env-vars entries must be KEY=VALUE (got: $pair)" >&2
+              exit 1
+            fi
+            key="${pair%%=*}"
+            value="${pair#*=}"
+            if [[ -z "$key" || ! "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+              echo "Error: invalid env var name '$key' in env-vars" >&2
+              exit 1
+            fi
+            env_flags+=("-e" "$key=$value")
+          done
+        fi
+
+        for (( i=1; i<=num_nodes; i++ )); do
+          name="${prefix}-${i}"
+          host_port=$(( base_port + i - 1 ))
+
+          tls_host_port=$(( tls_base_port + i - 1 ))
+
+          run_args=(
+            "--name" "$name"
+            "--detach"
+            "--network" "$network"
+            "-p" "${host_port}:3000"
+          )
+
+          # TLS port mapping and cert mounting
+          if [[ "$enable_tls" == "true" ]]; then
+            run_args+=("-p" "${tls_host_port}:4333")
+            run_args+=("-v" "${tls_cert_dir}:/etc/aerospike/tls:ro")
+          fi
+
+          # Mount features.conf if provided
+          if [[ -n "$features_path" ]]; then
+            run_args+=("-v" "$(realpath "$features_path"):/etc/aerospike/features.conf:ro")
+          fi
+
+          # Mount aerospike.conf if provided
+          if [[ -n "$config_path" ]]; then
+            run_args+=("-v" "$(realpath "$config_path"):/etc/aerospike/aerospike.conf:ro")
+          fi
+
+          # User-supplied env vars
+          run_args+=("${env_flags[@]}")
+
+          # Mesh seed for cluster nodes (anchor on node-1)
+          if (( num_nodes > 1 && i > 1 )); then
+            run_args+=("-e" "MESH_SEED_ADDRESS_PORT=${prefix}-1:3002")
+          fi
+
+          run_args+=("$image")
+
+          echo "Starting container: $name (host port: $host_port)"
+          docker run "${run_args[@]}"
+
+          # Build CSV outputs
+          if [[ -n "$container_names" ]]; then
+            container_names+=","
+            service_ports+=","
+          fi
+          container_names+="$name"
+          service_ports+="$host_port"
+          if [[ "$enable_tls" == "true" ]]; then
+            if [[ -n "$tls_service_ports" ]]; then
+              tls_service_ports+=","
+            fi
+            tls_service_ports+="$tls_host_port"
+          fi
+        done
+
+        echo "container-names=$container_names" >> "$GITHUB_OUTPUT"
+        echo "service-ports=$service_ports" >> "$GITHUB_OUTPUT"
+        echo "tls-service-ports=$tls_service_ports" >> "$GITHUB_OUTPUT"
+
+    - name: Wait for AES readiness
+      shell: bash
+      run: |
+        chmod +x "${{ github.action_path }}/wait-for-aes.sh"
+        "${{ github.action_path }}/wait-for-aes.sh" \
+          --container-names "${{ steps.start-containers.outputs.container-names }}" \
+          --num-nodes "${{ inputs.num-nodes }}" \
+          --timeout "${{ inputs.startup-timeout }}"
