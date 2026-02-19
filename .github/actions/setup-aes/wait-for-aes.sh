@@ -95,10 +95,15 @@ if ((NUM_NODES > 1)); then
 
     if [[ $cluster_size != "$NUM_NODES" ]]; then
         echo "Error: Cluster did not form within ${TIMEOUT}s (expected $NUM_NODES nodes)" >&2
-        echo "Per-node cluster-size for debugging:" >&2
         for container in "${containers[@]}"; do
+            echo "=== $container ===" >&2
             size=$(docker logs "$container" 2>&1 | grep -oP 'CLUSTER-SIZE \K\d+' | tail -1 || echo "N/A")
-            echo "  $container: cluster-size=$size" >&2
+            echo "  cluster-size: $size" >&2
+            echo "  heartbeat log lines:" >&2
+            docker logs "$container" 2>&1 | grep -i 'heartbeat\|mesh\|seed\|fabric' | tail -10 >&2 || true
+            echo "  last 10 log lines:" >&2
+            docker logs --tail 10 "$container" >&2 || true
+            echo "" >&2
         done
         exit 1
     fi
