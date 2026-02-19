@@ -71,10 +71,6 @@ inputs:
     description: Seconds to wait for each node and cluster formation
     required: false
     default: "30"
-  namespace:
-    description: Aerospike namespace name used in generated configs and strong-consistency roster setup
-    required: false
-    default: test
   enable-strong-consistency:
     description: Enable strong consistency on the namespace (requires a features file with asdb-strong-consistency)
     required: false
@@ -250,7 +246,7 @@ runs:
             }
         }
 
-        namespace ${{ inputs.namespace }} {
+        namespace test {
             replication-factor 1
             storage-engine memory {
                 data-size 1G
@@ -339,7 +335,6 @@ runs:
           done
         fi
 
-        namespace="${{ inputs.namespace }}"
         enable_sc="${{ inputs.enable-strong-consistency }}"
         sc_directive=""
         if [[ "$enable_sc" == "true" ]]; then
@@ -387,7 +382,7 @@ runs:
             }
         }
 
-        namespace ${namespace} {
+        namespace test {
             replication-factor 2${sc_directive}
             storage-engine memory {
                 data-size 1G
@@ -489,7 +484,6 @@ runs:
       if: inputs.enable-strong-consistency == 'true'
       shell: bash
       run: |
-        namespace="${{ inputs.namespace }}"
         IFS=',' read -ra containers <<< "${{ steps.start-containers.outputs.container-names }}"
         first="${containers[0]}"
 
@@ -506,8 +500,8 @@ runs:
           nodes+="$node_id"
         done
 
-        echo "Setting roster for namespace '$namespace' with nodes: $nodes"
-        docker exec "$first" bash -c "asadm --enable -e \"asinfo -v 'roster-set:namespace=${namespace};nodes=${nodes}'\""
+        echo "Setting roster for namespace 'test' with nodes: $nodes"
+        docker exec "$first" bash -c "asadm --enable -e \"asinfo -v 'roster-set:namespace=test;nodes=${nodes}'\""
         docker exec "$first" bash -c "asadm --enable -e \"asinfo -v 'revive:'\""
         docker exec "$first" bash -c "asadm --enable -e \"asinfo -v 'recluster:'\""
         echo "Strong consistency roster configured."

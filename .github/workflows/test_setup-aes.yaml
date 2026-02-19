@@ -159,7 +159,6 @@ jobs:
         uses: ./.github/actions/setup-aes
         with:
           num-nodes: "3"
-          namespace: testsc
           enable-strong-consistency: "true"
           features-content: ${{ secrets.AES_FEATURES_CONF }}
           startup-timeout: "60"
@@ -174,7 +173,7 @@ jobs:
 
       - name: Verify strong consistency roster
         run: |
-          roster=$(docker exec aerospike-1 asadm --enable -e 'asinfo -v "roster:namespace=testsc"' 2>/dev/null | tr -d '[:space:]')
+          roster=$(docker exec aerospike-1 asadm --enable -e 'asinfo -v "roster:namespace=test"' 2>/dev/null | tr -d '[:space:]')
           echo "Roster: $roster"
           [[ -n "$roster" ]] || { echo "Roster is empty"; exit 1; }
           # Roster should contain node IDs (not be the default empty/null value)

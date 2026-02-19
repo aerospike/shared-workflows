@@ -40,7 +40,6 @@ Requires a features file with `asdb-strong-consistency true`.
 - uses: ./.github/actions/setup-aes
   with:
     num-nodes: "3"
-    namespace: myns
     enable-strong-consistency: "true"
     features-content: ${{ secrets.AES_FEATURES_CONF }}
     startup-timeout: "60"
@@ -75,8 +74,7 @@ Requires a features file with `asdb-strong-consistency true`.
 | `network-name`              | No       | `aerospike-net`                                            | Docker network name                                                                         |
 | `base-port`                 | No       | `3000`                                                     | Base host port (node N maps to `base-port + N - 1`)                                         |
 | `service-port`              | No       | `3000`                                                     | Aerospike service port inside the container (must match `aerospike.conf`)                   |
-| `namespace`                 | No       | `test`                                                     | Aerospike namespace name used in generated configs and SC roster setup                      |
-| `enable-strong-consistency` | No       | `false`                                                    | Enable strong consistency on the namespace (sets roster after cluster formation)            |
+| `enable-strong-consistency` | No       | `false`                                                    | Enable strong consistency on the `test` namespace (sets roster after cluster formation)     |
 | `startup-timeout`           | No       | `30`                                                       | Seconds to wait for node readiness and cluster formation                                    |
 | `enable-tls`                | No       | `false`                                                    | Enable TLS on AES containers                                                                |
 | `tls-base-port`             | No       | `4333`                                                     | Base host TLS port (node N maps to `tls-base-port + N - 1`)                                 |
@@ -108,11 +106,11 @@ If you provide a custom config via `config-file` or `config-content`, it must in
 
 When `enable-strong-consistency: "true"`, the action:
 
-- Adds `strong-consistency true` to the namespace in the generated config
+- Adds `strong-consistency true` to the `test` namespace in the generated config
 - After cluster formation, collects node IDs from all containers
 - Sets the roster via `asadm` (`roster-set`), then runs `revive` and `recluster`
 
-The features file must include `asdb-strong-consistency true`. Use the `namespace` input to specify a custom namespace name (defaults to `test`).
+The features file must include `asdb-strong-consistency true`.
 
 If you provide a custom config, you are responsible for including `strong-consistency true` in your namespace block -- the action will still handle the roster setup.
 
