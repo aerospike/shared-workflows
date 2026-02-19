@@ -398,7 +398,7 @@ runs:
 
           # Mount aerospike.conf if provided
           if [[ -n "$config_path" ]]; then
-            run_args+=("-v" "$(realpath "$config_path"):/etc/aerospike/aerospike.conf:ro")
+            run_args+=("-v" "$(realpath "$config_path"):/etc/aerospike/aerospike.conf")
           fi
 
           # User-supplied env vars
