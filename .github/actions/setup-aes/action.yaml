@@ -331,6 +331,66 @@ runs:
           done
         fi
 
+        # For multi-node clusters, generate a config with mesh seed addresses
+        # The entrypoint overwrites mounted configs, so we bypass it and run asd directly
+        if (( num_nodes > 1 )); then
+          mesh_seeds=""
+          for (( j=1; j<=num_nodes; j++ )); do
+            mesh_seeds+="        mesh-seed-address-port ${prefix}-${j} 3002"$'\n'
+          done
+
+          if [[ -z "$config_path" ]]; then
+            config_path="$(mktemp)"
+            cat > "$config_path" << AESCONF
+        service {
+            feature-key-file /etc/aerospike/features.conf
+            cluster-name docker
+        }
+
+        logging {
+            console {
+                context any info
+            }
+        }
+
+        network {
+            service {
+                address any
+                port 3000
+            }
+            heartbeat {
+                mode mesh
+                address local
+                port 3002
+                interval 150
+                timeout 10
+        ${mesh_seeds}
+            }
+            fabric {
+                address local
+                port 3001
+            }
+        }
+
+        namespace test {
+            replication-factor 2
+            storage-engine memory {
+                data-size 1G
+            }
+        }
+        AESCONF
+          else
+            # Inject mesh seeds into the user-provided config
+            cluster_config="$(mktemp)"
+            cp "$config_path" "$cluster_config"
+            sed -i "/mode mesh/a\\
+        ${mesh_seeds}" "$cluster_config"
+            config_path="$cluster_config"
+          fi
+          echo "Multi-node config with mesh seeds:"
+          cat "$config_path"
+        fi
+
         for (( i=1; i<=num_nodes; i++ )); do
           name="${prefix}-${i}"
           host_port=$(( base_port + i - 1 ))
@@ -355,30 +415,27 @@ runs:
             run_args+=("-v" "$(realpath "$features_path"):/etc/aerospike/features.conf:ro")
           fi
 
-          # Mount aerospike.conf if provided
+          # Mount aerospike.conf (read-only since we bypass entrypoint for multi-node)
           if [[ -n "$config_path" ]]; then
-            run_args+=("-v" "$(realpath "$config_path"):/etc/aerospike/aerospike.conf")
+            run_args+=("-v" "$(realpath "$config_path"):/etc/aerospike/aerospike.conf:ro")
           fi
 
           # User-supplied env vars
           run_args+=("${env_flags[@]}")
 
-          # Mesh seeds: each node points to all other nodes
+          # Bypass entrypoint for multi-node to prevent config overwrite
           if (( num_nodes > 1 )); then
-            seeds=""
-            for (( j=1; j<=num_nodes; j++ )); do
-              if (( j != i )); then
-                [[ -n "$seeds" ]] && seeds+=","
-                seeds+="${prefix}-${j}:3002"
-              fi
-            done
-            run_args+=("-e" "MESH_SEED_ADDRESS_PORT=${seeds}")
+            run_args+=("--entrypoint" "asd")
           fi
 
           run_args+=("$image")
 
+          # For multi-node, pass --foreground since we bypassed the entrypoint
+          if (( num_nodes > 1 )); then
+            run_args+=("--foreground")
+          fi
+
           echo "Starting container: $name (host port: $host_port)"
-          echo "  MESH_SEED_ADDRESS_PORT=${seeds:-<not set>}"
           docker run "${run_args[@]}"
 
           # Build CSV outputs
