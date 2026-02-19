@@ -493,17 +493,21 @@ runs:
         IFS=',' read -ra containers <<< "${{ steps.start-containers.outputs.container-names }}"
         first="${containers[0]}"
 
-        # Collect node IDs from all containers
+        # Collect node IDs from container logs
         nodes=""
         for container in "${containers[@]}"; do
-          node_id=$(docker exec "$container" asadm --enable -e 'asinfo -v node' 2>/dev/null | tr -d '[:space:]')
+          node_id=$(docker logs "$container" 2>&1 | grep -oP 'NODE-ID \K[a-f0-9]+' | head -1)
           echo "  $container node-id: $node_id"
+          if [[ -z "$node_id" ]]; then
+            echo "Error: could not determine node ID for $container" >&2
+            exit 1
+          fi
           [[ -n "$nodes" ]] && nodes+=","
           nodes+="$node_id"
         done
 
         echo "Setting roster for namespace '$namespace' with nodes: $nodes"
-        docker exec "$first" asadm --enable -e "asinfo -v \"roster-set:namespace=${namespace};nodes=${nodes}\""
-        docker exec "$first" asadm --enable -e 'asinfo -v revive:'
-        docker exec "$first" asadm --enable -e 'asinfo -v recluster:'
+        docker exec "$first" bash -c "asadm --enable -e \"asinfo -v 'roster-set:namespace=${namespace};nodes=${nodes}'\""
+        docker exec "$first" bash -c "asadm --enable -e \"asinfo -v 'revive:'\""
+        docker exec "$first" bash -c "asadm --enable -e \"asinfo -v 'recluster:'\""
         echo "Strong consistency roster configured."
