@@ -40,6 +40,7 @@ Requires a features file with `asdb-strong-consistency true`.
 - uses: ./.github/actions/setup-aes
   with:
     num-nodes: "3"
+    namespace: myns
     enable-strong-consistency: "true"
     features-content: ${{ secrets.AES_FEATURES_CONF }}
     startup-timeout: "60"
@@ -59,28 +60,29 @@ Requires a features file with `asdb-strong-consistency true`.
 
 ## Inputs
 
-| Input                       | Required | Default                                                    | Description                                                                                 |
-| --------------------------- | -------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `oidc-provider`             | Yes      |                                                            | JFrog OIDC provider name                                                                    |
-| `oidc-audience`             | Yes      |                                                            | JFrog OIDC audience                                                                         |
-| `server-tag`                | No       | `latest`                                                   | AES Docker image tag                                                                        |
-| `num-nodes`                 | No       | `1`                                                        | Number of cluster nodes                                                                     |
-| `container-name-prefix`     | No       | `aerospike`                                                | Container name prefix (nodes: `prefix-1`, `prefix-2`, ...)                                  |
-| `features-file`             | No       |                                                            | Path to `features.conf` on the runner                                                       |
-| `features-content`          | No       |                                                            | Raw `features.conf` content (e.g., from a secret). Ignored if `features-file` is set        |
-| `config-file`               | No       |                                                            | Path to `aerospike.conf` on the runner                                                      |
-| `config-content`            | No       |                                                            | Raw `aerospike.conf` content. Ignored if `config-file` is set                               |
-| `env-vars`                  | No       |                                                            | Semicolon-delimited `KEY=VALUE` pairs passed as `-e` flags. Use `\;` for literal semicolons |
-| `network-name`              | No       | `aerospike-net`                                            | Docker network name                                                                         |
-| `base-port`                 | No       | `3000`                                                     | Base host port (node N maps to `base-port + N - 1`)                                         |
-| `service-port`              | No       | `3000`                                                     | Aerospike service port inside the container (must match `aerospike.conf`)                   |
-| `enable-strong-consistency` | No       | `false`                                                    | Enable strong consistency on the `test` namespace (sets roster after cluster formation)     |
-| `startup-timeout`           | No       | `30`                                                       | Seconds to wait for node readiness and cluster formation                                    |
-| `enable-tls`                | No       | `false`                                                    | Enable TLS on AES containers                                                                |
-| `tls-base-port`             | No       | `4333`                                                     | Base host TLS port (node N maps to `tls-base-port + N - 1`)                                 |
-| `container-repo-url`        | No       | `aerospike.jfrog.io`                                       | Docker registry hostname                                                                    |
-| `server-type`               | No       | `database-container-dev-local/aerospike-server-enterprise` | Image repository path                                                                       |
-| `jfrog-platform-url`        | No       | `https://aerospike.jfrog.io`                               | JFrog platform URL                                                                          |
+| Input                       | Required | Default                                                 | Description                                                                                 |
+| --------------------------- | -------- | ------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `oidc-provider`             | Yes      |                                                         | JFrog OIDC provider name                                                                    |
+| `oidc-audience`             | Yes      |                                                         | JFrog OIDC audience                                                                         |
+| `server-tag`                | No       | `latest`                                                | AES Docker image tag                                                                        |
+| `num-nodes`                 | No       | `1`                                                     | Number of cluster nodes                                                                     |
+| `container-name-prefix`     | No       | `aerospike`                                             | Container name prefix (nodes: `prefix-1`, `prefix-2`, ...)                                  |
+| `features-file`             | No       |                                                         | Path to `features.conf` on the runner                                                       |
+| `features-content`          | No       |                                                         | Raw `features.conf` content (e.g., from a secret). Ignored if `features-file` is set        |
+| `config-file`               | No       |                                                         | Path to `aerospike.conf` on the runner                                                      |
+| `config-content`            | No       |                                                         | Raw `aerospike.conf` content. Ignored if `config-file` is set                               |
+| `env-vars`                  | No       |                                                         | Semicolon-delimited `KEY=VALUE` pairs passed as `-e` flags. Use `\;` for literal semicolons |
+| `network-name`              | No       | `aerospike-net`                                         | Docker network name                                                                         |
+| `base-port`                 | No       | `3000`                                                  | Base host port (node N maps to `base-port + N - 1`)                                         |
+| `service-port`              | No       | `3000`                                                  | Aerospike service port inside the container (must match `aerospike.conf`)                   |
+| `namespace`                 | No       | `test`                                                  | Aerospike namespace name used in generated configs and SC roster setup                      |
+| `enable-strong-consistency` | No       | `false`                                                 | Enable strong consistency on the namespace (sets roster after cluster formation)            |
+| `startup-timeout`           | No       | `30`                                                    | Seconds to wait for node readiness and cluster formation                                    |
+| `enable-tls`                | No       | `false`                                                 | Enable TLS on AES containers                                                                |
+| `tls-base-port`             | No       | `4333`                                                  | Base host TLS port (node N maps to `tls-base-port + N - 1`)                                 |
+| `container-repo-url`        | No       | `aerospike.jfrog.io`                                    | Docker registry hostname                                                                    |
+| `server-type`               | No       | `database-docker-dev-local/aerospike-server-enterprise` | Image repository path                                                                       |
+| `jfrog-platform-url`        | No       | `https://aerospike.jfrog.io`                            | JFrog platform URL                                                                          |
 
 ## Outputs
 
@@ -106,11 +108,11 @@ If you provide a custom config via `config-file` or `config-content`, it must in
 
 When `enable-strong-consistency: "true"`, the action:
 
-- Adds `strong-consistency true` to the `test` namespace in the generated config
+- Adds `strong-consistency true` to the namespace in the generated config
 - After cluster formation, collects node IDs from all containers
 - Sets the roster via `asadm` (`roster-set`), then runs `revive` and `recluster`
 
-The features file must include `asdb-strong-consistency true`.
+The features file must include `asdb-strong-consistency true`. Use the `namespace` input to specify a custom namespace name (defaults to `test`).
 
 If you provide a custom config, you are responsible for including `strong-consistency true` in your namespace block -- the action will still handle the roster setup.
 
