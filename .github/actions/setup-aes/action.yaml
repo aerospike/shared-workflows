@@ -63,6 +63,10 @@ inputs:
     description: Base host port (node N maps to base-port + N - 1)
     required: false
     default: "3000"
+  service-port:
+    description: Aerospike service port inside the container (must match aerospike.conf)
+    required: false
+    default: "3000"
   startup-timeout:
     description: Seconds to wait for each node and cluster formation
     required: false
@@ -395,4 +399,5 @@ runs:
         "${{ github.action_path }}/wait-for-aes.sh" \
           --container-names "${{ steps.start-containers.outputs.container-names }}" \
           --num-nodes "${{ inputs.num-nodes }}" \
-          --timeout "${{ inputs.startup-timeout }}"
+          --timeout "${{ inputs.startup-timeout }}" \
+          --service-port "${{ inputs.service-port }}"

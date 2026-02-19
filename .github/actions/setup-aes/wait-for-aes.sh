@@ -16,6 +16,7 @@ handle_error() {
 CONTAINER_NAMES=""
 NUM_NODES=1
 TIMEOUT=30
+SERVICE_PORT=3000
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -30,6 +31,10 @@ while [[ $# -gt 0 ]]; do
         ;;
     --timeout)
         TIMEOUT="$2"
+        shift 2
+        ;;
+    --service-port)
+        SERVICE_PORT="$2"
         shift 2
         ;;
     *)
@@ -47,22 +52,23 @@ fi
 # Convert CSV to array
 IFS=',' read -ra containers <<<"$CONTAINER_NAMES"
 
-# Phase 1: Wait for each node to report status ok
+# Phase 1: Wait for each node's service port to accept connections
 echo "Phase 1: Waiting for individual node readiness..."
 for container in "${containers[@]}"; do
     echo "  Waiting for $container..."
     elapsed=0
+    ready="false"
     while ((elapsed < TIMEOUT)); do
-        status=$(docker exec "$container" asinfo -v status 2>/dev/null || true)
-        if [[ $status == "ok" ]]; then
+        if docker exec "$container" bash -c "</dev/tcp/localhost/${SERVICE_PORT}" 2>/dev/null; then
             echo "  $container is ready (${elapsed}s)"
+            ready="true"
             break
         fi
         sleep 2
         elapsed=$((elapsed + 2))
     done
 
-    if [[ $status != "ok" ]]; then
+    if [[ $ready != "true" ]]; then
         echo "Error: $container did not become ready within ${TIMEOUT}s" >&2
         echo "Last 20 lines of container logs:" >&2
         docker logs --tail 20 "$container" >&2
@@ -78,7 +84,7 @@ if ((NUM_NODES > 1)); then
     elapsed=0
     cluster_size=0
     while ((elapsed < TIMEOUT)); do
-        cluster_size=$(docker exec "$first_container" asinfo -v cluster-size 2>/dev/null || echo "0")
+        cluster_size=$(docker logs "$first_container" 2>&1 | grep -oP 'CLUSTER-SIZE \K\d+' | tail -1 || echo "0")
         if [[ $cluster_size == "$NUM_NODES" ]]; then
             echo "Cluster formed: $cluster_size nodes (${elapsed}s)"
             break
@@ -91,25 +97,22 @@ if ((NUM_NODES > 1)); then
         echo "Error: Cluster did not form within ${TIMEOUT}s (expected $NUM_NODES nodes)" >&2
         echo "Per-node cluster-size for debugging:" >&2
         for container in "${containers[@]}"; do
-            size=$(docker exec "$container" asinfo -v cluster-size 2>/dev/null || echo "N/A")
+            size=$(docker logs "$container" 2>&1 | grep -oP 'CLUSTER-SIZE \K\d+' | tail -1 || echo "N/A")
             echo "  $container: cluster-size=$size" >&2
         done
         exit 1
     fi
 fi
 
-# Phase 3: Wait for cluster stability on every node
-# cluster-stable returns a cluster key when stable, or ERROR when not.
-# ignore-migrations=true avoids false negatives during partition rebalancing.
+# Phase 3: Wait for cluster stability (migrations complete on every node)
 echo "Phase 3: Waiting for cluster stability..."
 for container in "${containers[@]}"; do
     echo "  Waiting for $container to stabilize..."
     elapsed=0
     stable="false"
     while ((elapsed < TIMEOUT)); do
-        result=$(docker exec "$container" asinfo -v "cluster-stable:ignore-migrations=true" 2>&1 || true)
-        if [[ $result != ERROR* ]]; then
-            echo "  $container is stable: cluster key $result (${elapsed}s)"
+        if docker logs "$container" 2>&1 | grep -q 'migrations: complete'; then
+            echo "  $container is stable (${elapsed}s)"
             stable="true"
             break
         fi
@@ -119,7 +122,6 @@ for container in "${containers[@]}"; do
 
     if [[ $stable != "true" ]]; then
         echo "Error: $container did not stabilize within ${TIMEOUT}s" >&2
-        echo "Last response: $result" >&2
         echo "Last 20 lines of container logs:" >&2
         docker logs --tail 20 "$container" >&2
         exit 1
