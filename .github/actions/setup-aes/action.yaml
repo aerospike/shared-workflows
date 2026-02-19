@@ -360,14 +360,14 @@ runs:
             }
             heartbeat {
                 mode mesh
-                address local
+                address any
                 port 3002
                 interval 150
                 timeout 10
         ${mesh_seeds}
             }
             fabric {
-                address local
+                address any
                 port 3001
             }
         }
