@@ -331,47 +331,6 @@ runs:
           done
         fi
 
-        # For multi-node clusters, ensure config has mesh heartbeat with seed address
-        if (( num_nodes > 1 )); then
-          if [[ -z "$config_path" ]]; then
-            # Generate a default config with mesh heartbeat
-            config_path="$(mktemp)"
-            cat > "$config_path" << AESCONF
-        service {
-            proto-fd-max 15000
-        }
-
-        network {
-            service {
-                address any
-                port 3000
-            }
-            heartbeat {
-                mode mesh
-                port 3002
-                mesh-seed-address-port ${prefix}-1 3002
-            }
-            fabric {
-                port 3001
-            }
-        }
-
-        namespace test {
-            replication-factor 2
-            storage-engine memory {
-                data-size 1G
-            }
-        }
-        AESCONF
-          else
-            # Inject mesh seed into the provided/generated config
-            mesh_config="$(mktemp)"
-            cp "$config_path" "$mesh_config"
-            sed -i "/mode mesh/a\\        mesh-seed-address-port ${prefix}-1 3002" "$mesh_config"
-            config_path="$mesh_config"
-          fi
-        fi
-
         for (( i=1; i<=num_nodes; i++ )); do
           name="${prefix}-${i}"
           host_port=$(( base_port + i - 1 ))
@@ -403,6 +362,18 @@ runs:
 
           # User-supplied env vars
           run_args+=("${env_flags[@]}")
+
+          # Mesh seeds: each node points to all other nodes
+          if (( num_nodes > 1 )); then
+            seeds=""
+            for (( j=1; j<=num_nodes; j++ )); do
+              if (( j != i )); then
+                [[ -n "$seeds" ]] && seeds+=","
+                seeds+="${prefix}-${j}:3002"
+              fi
+            done
+            run_args+=("-e" "MESH_SEED_ADDRESS_PORT=${seeds}")
+          fi
 
           run_args+=("$image")
 
