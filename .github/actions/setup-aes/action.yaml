@@ -71,6 +71,14 @@ inputs:
     description: Seconds to wait for each node and cluster formation
     required: false
     default: "30"
+  namespace:
+    description: Aerospike namespace name used in generated configs and strong-consistency roster setup
+    required: false
+    default: test
+  enable-strong-consistency:
+    description: Enable strong consistency on the namespace (requires a features file with asdb-strong-consistency)
+    required: false
+    default: "false"
   enable-tls:
     description: Enable TLS on AES containers
     required: false
@@ -242,7 +250,7 @@ runs:
             }
         }
 
-        namespace test {
+        namespace ${{ inputs.namespace }} {
             replication-factor 1
             storage-engine memory {
                 data-size 1G
@@ -331,6 +339,13 @@ runs:
           done
         fi
 
+        namespace="${{ inputs.namespace }}"
+        enable_sc="${{ inputs.enable-strong-consistency }}"
+        sc_directive=""
+        if [[ "$enable_sc" == "true" ]]; then
+          sc_directive=$'\n            strong-consistency true'
+        fi
+
         # For multi-node clusters, generate a config with mesh seed addresses
         # The entrypoint overwrites mounted configs, so we bypass it and run asd directly
         if (( num_nodes > 1 )); then
@@ -372,8 +387,8 @@ runs:
             }
         }
 
-        namespace test {
-            replication-factor 2
+        namespace ${namespace} {
+            replication-factor 2${sc_directive}
             storage-engine memory {
                 data-size 1G
             }
@@ -469,3 +484,26 @@ runs:
           --num-nodes "${{ inputs.num-nodes }}" \
           --timeout "${{ inputs.startup-timeout }}" \
           --service-port "${{ inputs.service-port }}"
+
+    - name: Configure strong consistency roster
+      if: inputs.enable-strong-consistency == 'true'
+      shell: bash
+      run: |
+        namespace="${{ inputs.namespace }}"
+        IFS=',' read -ra containers <<< "${{ steps.start-containers.outputs.container-names }}"
+        first="${containers[0]}"
+
+        # Collect node IDs from all containers
+        nodes=""
+        for container in "${containers[@]}"; do
+          node_id=$(docker exec "$container" asadm --enable -e 'asinfo -v node' 2>/dev/null | tr -d '[:space:]')
+          echo "  $container node-id: $node_id"
+          [[ -n "$nodes" ]] && nodes+=","
+          nodes+="$node_id"
+        done
+
+        echo "Setting roster for namespace '$namespace' with nodes: $nodes"
+        docker exec "$first" asadm --enable -e "asinfo -v \"roster-set:namespace=${namespace};nodes=${nodes}\""
+        docker exec "$first" asadm --enable -e 'asinfo -v revive:'
+        docker exec "$first" asadm --enable -e 'asinfo -v recluster:'
+        echo "Strong consistency roster configured."
