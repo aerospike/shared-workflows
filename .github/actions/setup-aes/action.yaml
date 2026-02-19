@@ -387,8 +387,6 @@ runs:
         ${mesh_seeds}" "$cluster_config"
             config_path="$cluster_config"
           fi
-          echo "Multi-node config with mesh seeds:"
-          cat "$config_path"
         fi
 
         for (( i=1; i<=num_nodes; i++ )); do
@@ -415,9 +413,14 @@ runs:
             run_args+=("-v" "$(realpath "$features_path"):/etc/aerospike/features.conf:ro")
           fi
 
-          # Mount aerospike.conf (read-only since we bypass entrypoint for multi-node)
+          # Mount aerospike.conf (read-only for multi-node since we bypass entrypoint,
+          # read-write for single-node since the entrypoint modifies the config)
           if [[ -n "$config_path" ]]; then
-            run_args+=("-v" "$(realpath "$config_path"):/etc/aerospike/aerospike.conf:ro")
+            if (( num_nodes > 1 )); then
+              run_args+=("-v" "$(realpath "$config_path"):/etc/aerospike/aerospike.conf:ro")
+            else
+              run_args+=("-v" "$(realpath "$config_path"):/etc/aerospike/aerospike.conf")
+            fi
           fi
 
           # User-supplied env vars
@@ -456,31 +459,6 @@ runs:
         echo "container-names=$container_names" >> "$GITHUB_OUTPUT"
         echo "service-ports=$service_ports" >> "$GITHUB_OUTPUT"
         echo "tls-service-ports=$tls_service_ports" >> "$GITHUB_OUTPUT"
-
-    - name: Debug container config
-      if: inputs.num-nodes != '1'
-      shell: bash
-      run: |
-        IFS=',' read -ra containers <<< "${{ steps.start-containers.outputs.container-names }}"
-        for container in "${containers[@]}"; do
-          echo "=== $container: effective aerospike.conf ==="
-          docker exec "$container" cat /etc/aerospike/aerospike.conf 2>/dev/null || echo "(no config found)"
-          echo ""
-          echo "=== $container: env vars ==="
-          docker exec "$container" env 2>/dev/null | grep -i mesh || echo "(no MESH env vars)"
-          echo ""
-          echo "=== $container: network connectivity to other nodes on port 3002 ==="
-          for other in "${containers[@]}"; do
-            if [[ "$other" != "$container" ]]; then
-              if docker exec "$container" bash -c "</dev/tcp/${other}/3002" 2>/dev/null; then
-                echo "  $container -> $other:3002 OK"
-              else
-                echo "  $container -> $other:3002 FAILED"
-              fi
-            fi
-          done
-          echo ""
-        done
 
     - name: Wait for AES readiness
       shell: bash

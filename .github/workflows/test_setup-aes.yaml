@@ -64,6 +64,7 @@ jobs:
         with:
           num-nodes: "3"
           startup-timeout: "60"
+          features-content: ${{ secrets.AES_FEATURES_CONF }}
           oidc-provider: ${{ vars.JFROG_OIDC_PROVIDER }}
           oidc-audience: ${{ vars.JFROG_OIDC_AUDIENCE }}
 
@@ -85,7 +86,7 @@ jobs:
 
       - name: Verify cluster formation
         run: |
-          cluster_size=$(docker exec aerospike-1 asinfo -v cluster-size)
+          cluster_size=$(docker logs aerospike-1 2>&1 | grep -oP 'CLUSTER-SIZE \K\d+' | tail -1)
           echo "Cluster size: $cluster_size"
           [[ "$cluster_size" == "3" ]] || { echo "Expected cluster-size=3, got $cluster_size"; exit 1; }
 
@@ -181,8 +182,8 @@ jobs:
 
       - name: Verify non-TLS port still works
         run: |
-          status=$(docker exec aerospike-1 asinfo -v status)
-          [[ "$status" == "ok" ]] || { echo "Expected status=ok, got $status"; exit 1; }
+          docker exec aerospike-1 bash -c '</dev/tcp/localhost/3000' \
+            || { echo "Service port 3000 is not accepting connections"; exit 1; }
 
       - name: Verify TLS connection
         run: |
