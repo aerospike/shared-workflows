@@ -111,6 +111,13 @@ runs:
           || error "base-port must be a positive integer (got: '${{ inputs.base-port }}')"
         [[ "${{ inputs.startup-timeout }}" =~ ^[1-9][0-9]*$ ]] \
           || error "startup-timeout must be a positive integer (got: '${{ inputs.startup-timeout }}')"
+        [[ "${{ inputs.service-port }}" =~ ^[1-9][0-9]*$ ]] \
+          || error "service-port must be a positive integer (got: '${{ inputs.service-port }}')"
+
+        if [[ "${{ inputs.num-nodes }}" -gt 1 ]]; then
+          [[ -n "${{ inputs.features-file }}" || -n "${{ inputs.features-content }}" ]] \
+            || error "features-file or features-content is required for multi-node clusters (asdb-cluster-nodes-limit 0 must be set)"
+        fi
 
         if [[ "${{ inputs.enable-tls }}" == "true" ]]; then
           [[ "${{ inputs.tls-base-port }}" =~ ^[1-9][0-9]*$ ]] \
@@ -277,6 +284,7 @@ runs:
         num_nodes=${{ inputs.num-nodes }}
         base_port=${{ inputs.base-port }}
         prefix="${{ inputs.container-name-prefix }}"
+        service_port=${{ inputs.service-port }}
         image="${{ inputs.container-repo-url }}/${{ inputs.server-type }}:${{ inputs.server-tag }}"
         network="${{ inputs.network-name }}"
         features_path="${{ steps.prepare-config.outputs.features-path }}"
@@ -382,9 +390,7 @@ runs:
           else
             # Inject mesh seeds into the user-provided config
             cluster_config="$(mktemp)"
-            cp "$config_path" "$cluster_config"
-            sed -i "/mode mesh/a\\
-        ${mesh_seeds}" "$cluster_config"
+            awk -v seeds="$mesh_seeds" '/mode mesh/{print; printf "%s", seeds; next}1' "$config_path" > "$cluster_config"
             config_path="$cluster_config"
           fi
         fi
@@ -399,7 +405,7 @@ runs:
             "--name" "$name"
             "--detach"
             "--network" "$network"
-            "-p" "${host_port}:3000"
+            "-p" "${host_port}:${service_port}"
           )
 
           # TLS port mapping and cert mounting
