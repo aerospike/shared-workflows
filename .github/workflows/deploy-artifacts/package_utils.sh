@@ -195,18 +195,6 @@ process_pypi() {
     package_name=$(basename "$package")
     echo "Copying PyPI package to: $target" >&2
     cp -v "$package" "$target/$package_name" >&2
-
-    # Copy any associated signature files
-    local package_dir package_base
-    package_dir=$(dirname "$package")
-    package_base=$(basename "$package")
-    
-    if [[ -f "$package_dir/$package_base.asc" ]]; then
-        cp -v "$package_dir/$package_base.asc" "$target/" >&2
-    fi
-    if [[ -f "$package_dir/$package_base.sig" ]]; then
-        cp -v "$package_dir/$package_base.sig" "$target/" >&2
-    fi
 }
 
 process_jar() {

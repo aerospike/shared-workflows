@@ -482,21 +482,6 @@ upload_pypi_packages() {
             --build-number="$ARTIFACT_BUILD_NUMBER" \
             --project="$PROJECT" \
             --target-props "package_name=$pkgname;version=$pkgversion"
-
-        # Upload signature files if they exist
-        local package_dir package_base
-        package_dir=$(dirname "$package")
-        package_base=$(basename "$package")
-        
-        for sig_ext in asc sig; do
-            if [[ -f "$package_dir/$package_base.$sig_ext" ]]; then
-                echo "  Uploading signature: $package_base.$sig_ext" >&2
-                run jf rt upload "$package_dir/$package_base.$sig_ext" "$PROJECT-pypi-dev-local/${pkgname}/${pkgversion}/${package_base}.${sig_ext}" \
-                    --build-name="$BUILD_NAME" \
-                    --build-number="$ARTIFACT_BUILD_NUMBER" \
-                    --project="$PROJECT"
-            fi
-        done
     done < <(find . \( -name "*.whl" -o -name "*.tar.gz" \) -print0)
 }
 
