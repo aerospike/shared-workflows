@@ -105,6 +105,110 @@ process_rpm() {
     cp -v "$rpm" "$target/$rpm_name" >&2
 }
 
+# Function to extract PyPI package metadata from wheels and source distributions
+get_pypi_metadata() {
+    local package="$1"
+    local filename="${package##*/}"
+    local pkgname version
+
+    if [[ $filename == *.whl ]]; then
+        # Wheel filename format: {distribution}-{version}(-{build tag})?-{python tag}-{abi tag}-{platform tag}.whl
+        # Extract package name and version from wheel filename
+        local base="${filename%.whl}"
+        
+        # Split on dashes, but handle cases where package names contain dashes
+        # Standard approach: find version pattern and work backwards
+        if [[ $base =~ ^(.+)-([0-9]+.*)-[^-]+-[^-]+-[^-]+$ ]]; then
+            pkgname="${BASH_REMATCH[1]}"
+            version="${BASH_REMATCH[2]}"
+        else
+            # Fallback: try to extract from METADATA file inside wheel
+            if command -v unzip >/dev/null 2>&1; then
+                local metadata_file
+                metadata_file=$(unzip -Z1 "$package" 2>/dev/null | grep -E '\.dist-info/METADATA$' | head -n1)
+                if [[ -n $metadata_file ]]; then
+                    pkgname=$(unzip -p "$package" "$metadata_file" 2>/dev/null | grep -i '^Name:' | cut -d' ' -f2- | tr -d '\r')
+                    version=$(unzip -p "$package" "$metadata_file" 2>/dev/null | grep -i '^Version:' | cut -d' ' -f2- | tr -d '\r')
+                fi
+            fi
+            
+            # Ultimate fallback for wheels
+            if [[ -z $pkgname ]] || [[ -z $version ]]; then
+                pkgname="${filename%%-*}"
+                version="unknown"
+            fi
+        fi
+    elif [[ $filename == *.tar.gz ]]; then
+        # Source distribution filename format: {name}-{version}.tar.gz
+        local base="${filename%.tar.gz}"
+        
+        # Try to split on last dash followed by version pattern
+        if [[ $base =~ ^(.+)-([0-9]+.*)$ ]]; then
+            pkgname="${BASH_REMATCH[1]}"
+            version="${BASH_REMATCH[2]}"
+        else
+            # Try to extract from PKG-INFO or setup.py inside the archive
+            if command -v tar >/dev/null 2>&1; then
+                local pkg_info
+                pkg_info=$(tar -tzf "$package" 2>/dev/null | grep -E '(PKG-INFO|setup\.cfg|pyproject\.toml)$' | head -n1)
+                if [[ -n $pkg_info && $pkg_info == *PKG-INFO ]]; then
+                    pkgname=$(tar -Ozxf "$package" "$pkg_info" 2>/dev/null | grep -i '^Name:' | cut -d' ' -f2- | tr -d '\r')
+                    version=$(tar -Ozxf "$package" "$pkg_info" 2>/dev/null | grep -i '^Version:' | cut -d' ' -f2- | tr -d '\r')
+                fi
+            fi
+            
+            # Ultimate fallback for source distributions
+            if [[ -z $pkgname ]] || [[ -z $version ]]; then
+                pkgname="${base%%-*}"
+                version="unknown"
+            fi
+        fi
+    else
+        # Unknown PyPI package format
+        pkgname="${filename%%.*}"
+        version="unknown"
+    fi
+
+    echo "$pkgname $version"
+}
+
+process_pypi() {
+    local package="$1"
+    local dest_dir="$2"
+    local -a metadata
+    local pkgname version
+
+    # Get metadata using the new function
+    read -r -a metadata < <(get_pypi_metadata "$package")
+    pkgname="${metadata[0]}"
+    version="${metadata[1]}"
+
+    # Create target directory: <pkgname>/<version>/
+    local target="$dest_dir/$pkgname/$version"
+    echo "DEBUG: Creating PyPI directory structure:" >&2
+    echo "  Package name: $pkgname" >&2
+    echo "  Version: $version" >&2
+    echo "  Target path: $target" >&2
+    mkdir -p "$target"
+    
+    local package_name
+    package_name=$(basename "$package")
+    echo "Copying PyPI package to: $target" >&2
+    cp -v "$package" "$target/$package_name" >&2
+
+    # Copy any associated signature files
+    local package_dir package_base
+    package_dir=$(dirname "$package")
+    package_base=$(basename "$package")
+    
+    if [[ -f "$package_dir/$package_base.asc" ]]; then
+        cp -v "$package_dir/$package_base.asc" "$target/" >&2
+    fi
+    if [[ -f "$package_dir/$package_base.sig" ]]; then
+        cp -v "$package_dir/$package_base.sig" "$target/" >&2
+    fi
+}
+
 process_jar() {
     local jar="$1"
     local dest_dir="$2"

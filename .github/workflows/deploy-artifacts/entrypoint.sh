@@ -38,6 +38,7 @@ while [[ $# -gt 0 ]]; do
         echo "Usage: $0 <project> <build-name> <version> <build-number> [OPTIONS]" >&2
         echo "" >&2
         echo "Uploads artifacts to JFrog Artifactory" >&2
+        echo "Supports: DEB, RPM, JAR/Maven, NuGet, PyPI (wheels and source distributions), and generic files" >&2
         echo "" >&2
         echo "Options:" >&2
         echo "  --metadata-build-number <prefix> Build ID prefix used to discover related metadata builds (searches for <prefix>*.json)" >&2
@@ -132,14 +133,28 @@ structure_build_artifacts() {
     mkdir -p structured_build_artifacts/jar
     mkdir -p structured_build_artifacts/nupkg
     mkdir -p structured_build_artifacts/generic
-    while IFS= read -r -d '' deb; do
-        if [[ ! -f $deb ]]; then
+    mkdir -p structured_build_artifacts/pypi
+    while IFS= read -r -d '' wheel; do
+        if [[ ! -f $wheel ]]; then
             continue
         fi
 
-        echo "Processing DEB: $deb" >&2
-        process_deb "$deb" "./structured_build_artifacts/deb"
-    done < <(find build-artifacts -name "*.deb" -print0)
+        echo "Processing Python wheel: $wheel" >&2
+        process_pypi "$wheel" "./structured_build_artifacts/pypi"
+    done < <(find build-artifacts -name "*.whl" -print0)
+
+    while IFS= read -r -d '' sdist; do
+        if [[ ! -f $sdist ]]; then
+            continue
+        fi
+
+        # Only process .tar.gz files that are likely Python packages
+        # Check if the file contains typical Python package structure
+        if tar -tzf "$sdist" 2>/dev/null | grep -qE "(setup\.py|pyproject\.toml|\.egg-info/|PKG-INFO)"; then
+            echo "Processing Python source distribution: $sdist" >&2
+            process_pypi "$sdist" "./structured_build_artifacts/pypi"
+        fi
+    done < <(find build-artifacts -name "*.tar.gz" -print0)
 
     while IFS= read -r -d '' rpm; do
         if [[ ! -f $rpm ]]; then
@@ -209,7 +224,7 @@ structure_build_artifacts() {
         fi
         echo "Processing generic file: $generic" >&2
         process_generic "$generic" "./structured_build_artifacts/generic"
-    done < <(find build-artifacts \( -not -name "*.deb" -not -name "*.rpm" -not -name "*.asc" -not -name "*.jar" -not -name "*.pom" -not -name "*.nupkg" -not -name "*.snupkg" -not -name "*.csproj" \) -type f -print0)
+    done < <(find build-artifacts \( -not -name "*.deb" -not -name "*.rpm" -not -name "*.asc" -not -name "*.jar" -not -name "*.pom" -not -name "*.nupkg" -not -name "*.snupkg" -not -name "*.csproj" -not -name "*.whl" \) -type f -print0)
 }
 
 upload_deb_packages() {
@@ -433,6 +448,58 @@ upload_nupkg_packages() {
     done < <(find . -name "*.snupkg" -print0)
 }
 
+upload_pypi_packages() {
+    if [[ $DRY_RUN == "true" ]]; then
+        echo "Would upload PyPI packages to JFrog..." >&2
+    else
+        echo "Uploading PyPI packages to JFrog..." >&2
+    fi
+
+    while IFS= read -r -d '' package; do
+        if [[ ! -f $package ]]; then
+            continue
+        fi
+
+        local -a metadata
+        read -r -a metadata < <(get_pypi_metadata "$package")
+        local pkgname="${metadata[0]}"
+        local pkgversion="${metadata[1]}"
+        local package_filename
+        package_filename=$(basename "$package")
+
+        if [[ -z $pkgname ]] || [[ -z $pkgversion ]]; then
+            echo "Warning: Failed to extract metadata from $package, using filename-based path" >&2
+            pkgname="${package_filename%%-*}"
+            pkgversion="unknown"
+        fi
+
+        echo "  Uploading PyPI package: $package" >&2
+        echo "    Package: $pkgname, Version: $pkgversion" >&2
+        
+        # Upload to PyPI repository with proper path structure
+        run jf rt upload "$package" "$PROJECT-pypi-dev-local/${pkgname}/${pkgversion}/${package_filename}" \
+            --build-name="$BUILD_NAME" \
+            --build-number="$ARTIFACT_BUILD_NUMBER" \
+            --project="$PROJECT" \
+            --target-props "package_name=$pkgname;version=$pkgversion"
+
+        # Upload signature files if they exist
+        local package_dir package_base
+        package_dir=$(dirname "$package")
+        package_base=$(basename "$package")
+        
+        for sig_ext in asc sig; do
+            if [[ -f "$package_dir/$package_base.$sig_ext" ]]; then
+                echo "  Uploading signature: $package_base.$sig_ext" >&2
+                run jf rt upload "$package_dir/$package_base.$sig_ext" "$PROJECT-pypi-dev-local/${pkgname}/${pkgversion}/${package_base}.${sig_ext}" \
+                    --build-name="$BUILD_NAME" \
+                    --build-number="$ARTIFACT_BUILD_NUMBER" \
+                    --project="$PROJECT"
+            fi
+        done
+    done < <(find . \( -name "*.whl" -o -name "*.tar.gz" \) -print0)
+}
+
 upload_generic_files() {
     if [[ $DRY_RUN == "true" ]]; then
         echo "Would upload generic files..." >&2
@@ -450,7 +517,7 @@ upload_generic_files() {
                 --build-number="$ARTIFACT_BUILD_NUMBER" \
                 --project="$PROJECT"
         fi
-    done < <(find . \( -not -name "*.deb" -not -name "*.rpm" -not -name "*.asc" -not -name "*.jar" -not -name "*.pom" -not -name "*.nupkg" -not -name "*.snupkg" -not -name "*.csproj" \) -type f -print0)
+    done < <(find . \( -not -name "*.deb" -not -name "*.rpm" -not -name "*.asc" -not -name "*.jar" -not -name "*.pom" -not -name "*.nupkg" -not -name "*.snupkg" -not -name "*.csproj" -not -name "*.whl" \) -type f -print0)
 }
 
 # Collects build-info metadata by querying Artifactory for JSON files.
@@ -559,6 +626,9 @@ main() {
     cd ..
     cd nupkg
     upload_nupkg_packages
+    cd ..
+    cd pypi
+    upload_pypi_packages
     cd ..
     cd generic
     upload_generic_files

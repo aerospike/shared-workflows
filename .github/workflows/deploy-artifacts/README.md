@@ -8,6 +8,7 @@ This workflow uploads build artifacts to JFrog Artifactory. It automatically cat
 
 - **DEB packages** → `{project}-deb-dev-local`
 - **RPM packages** → `{project}-rpm-dev-local`
+- **PyPI packages** → `{project}-pypi-dev-local`
 - **Generic files** → `{project}-generic-dev-local`
 
 The workflow processes artifacts from a `build-artifacts` directory and creates structured build artifacts before uploading.
