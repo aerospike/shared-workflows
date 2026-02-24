@@ -222,7 +222,7 @@ structure_build_artifacts() {
             echo "Skipping non-file: $generic" >&2
             continue
         fi
-        
+
         # Skip .tar.gz files that are Python packages (already processed in PyPI)
         if [[ $generic == *.tar.gz ]]; then
             if tar -tzf "$generic" 2>/dev/null | grep -qE "(setup\.py|pyproject\.toml|\.egg-info/|PKG-INFO)"; then
@@ -230,7 +230,7 @@ structure_build_artifacts() {
                 continue
             fi
         fi
-        
+
         echo "Processing generic file: $generic" >&2
         process_generic "$generic" "./structured_build_artifacts/generic"
     done < <(find build-artifacts \( -not -name "*.deb" -not -name "*.rpm" -not -name "*.asc" -not -name "*.jar" -not -name "*.pom" -not -name "*.nupkg" -not -name "*.snupkg" -not -name "*.csproj" -not -name "*.whl" \) -type f -print0)
@@ -484,13 +484,13 @@ upload_pypi_packages() {
 
         echo "  Uploading PyPI package: $package" >&2
         echo "    Package: $pkgname, Version: $pkgversion" >&2
-        
+
         # Upload to PyPI repository with proper path structure
         local dry_run_flag=""
         if [[ $DRY_RUN == "true" ]]; then
             dry_run_flag="--dry-run"
         fi
-        
+
         jf rt upload "$package" "$PROJECT-pypi-dev-local/${pkgname}/${pkgversion}/${package_filename}" \
             --build-name="$BUILD_NAME" \
             --build-number="$ARTIFACT_BUILD_NUMBER" \

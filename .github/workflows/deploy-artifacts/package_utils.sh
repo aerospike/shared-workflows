@@ -115,7 +115,7 @@ get_pypi_metadata() {
         # Wheel filename format: {distribution}-{version}(-{build tag})?-{python tag}-{abi tag}-{platform tag}.whl
         # Extract package name and version from wheel filename
         local base="${filename%.whl}"
-        
+
         # Split on dashes, but handle cases where package names contain dashes
         # Standard approach: find version pattern and work backwards
         if [[ $base =~ ^(.+)-([0-9]+.*)-[^-]+-[^-]+-[^-]+$ ]]; then
@@ -131,7 +131,7 @@ get_pypi_metadata() {
                     version=$(unzip -p "$package" "$metadata_file" 2>/dev/null | grep -i '^Version:' | cut -d' ' -f2- | tr -d '\r')
                 fi
             fi
-            
+
             # Ultimate fallback for wheels
             if [[ -z $pkgname ]] || [[ -z $version ]]; then
                 pkgname="${filename%%-*}"
@@ -141,7 +141,7 @@ get_pypi_metadata() {
     elif [[ $filename == *.tar.gz ]]; then
         # Source distribution filename format: {name}-{version}.tar.gz
         local base="${filename%.tar.gz}"
-        
+
         # Try to split on last dash followed by version pattern
         if [[ $base =~ ^(.+)-([0-9]+.*)$ ]]; then
             pkgname="${BASH_REMATCH[1]}"
@@ -156,7 +156,7 @@ get_pypi_metadata() {
                     version=$(tar -Ozxf "$package" "$pkg_info" 2>/dev/null | grep -i '^Version:' | cut -d' ' -f2- | tr -d '\r')
                 fi
             fi
-            
+
             # Ultimate fallback for source distributions
             if [[ -z $pkgname ]] || [[ -z $version ]]; then
                 pkgname="${base%%-*}"
@@ -190,7 +190,7 @@ process_pypi() {
     echo "  Version: $version" >&2
     echo "  Target path: $target" >&2
     mkdir -p "$target"
-    
+
     local package_name
     package_name=$(basename "$package")
     echo "Copying PyPI package to: $target" >&2
