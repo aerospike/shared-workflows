@@ -486,11 +486,17 @@ upload_pypi_packages() {
         echo "    Package: $pkgname, Version: $pkgversion" >&2
         
         # Upload to PyPI repository with proper path structure
-        run jf rt upload "$package" "$PROJECT-pypi-dev-local/${pkgname}/${pkgversion}/${package_filename}" \
+        local dry_run_flag=""
+        if [[ $DRY_RUN == "true" ]]; then
+            dry_run_flag="--dry-run"
+        fi
+        
+        jf rt upload "$package" "$PROJECT-pypi-dev-local/${pkgname}/${pkgversion}/${package_filename}" \
             --build-name="$BUILD_NAME" \
             --build-number="$ARTIFACT_BUILD_NUMBER" \
             --project="$PROJECT" \
-            --target-props "package_name=$pkgname;version=$pkgversion"
+            --target-props "package_name=$pkgname;version=$pkgversion" \
+            $dry_run_flag
     done < <(find . \( -name "*.whl" -o -name "*.tar.gz" \) -print0)
 }
 
