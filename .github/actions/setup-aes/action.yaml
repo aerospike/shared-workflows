@@ -44,7 +44,7 @@ inputs:
   server-container-repo:
     description: Image repository path within the registry
     required: false
-    default: database-docker-virtual
+    default: database-docker-virtual/aerospike-server-enterprise
   jfrog-platform-url:
     description: JFrog platform URL
     required: false
