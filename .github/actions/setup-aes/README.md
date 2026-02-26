@@ -63,7 +63,7 @@ A features file with `asdb-cluster-nodes-limit 0` is required for clustering.
 | `enable-tls`            | No       | `false`                                                 | Enable TLS on AES containers                                                                |
 | `tls-base-port`         | No       | `4333`                                                  | Base host TLS port (node N maps to `tls-base-port + N - 1`)                                 |
 | `container-repo-url`    | No       | `aerospike.jfrog.io`                                    | Docker registry hostname                                                                    |
-| `server-type`           | No       | `database-docker-dev-local/aerospike-server-enterprise` | Image repository path                                                                       |
+| `server-container-repo` | No       | `database-docker-dev-local/aerospike-server-enterprise` | Image repository path                                                                       |
 | `jfrog-platform-url`    | No       | `https://aerospike.jfrog.io`                            | JFrog platform URL                                                                          |
 
 ## Outputs
@@ -93,3 +93,86 @@ When `enable-tls: "true"`, the action generates a self-signed CA and server/clie
 - `ca.crt` / `ca.key` -- CA certificate and key
 - `server.crt` / `server.key` -- server certificate and key
 - `client.crt` / `client.key` -- client certificate and key
+
+### Connecting from the runner host
+
+Use the `tls-cert-dir` and `tls-service-ports` outputs to pass the certificates to any client running directly in a workflow step:
+
+```yaml
+- uses: ./.github/actions/setup-aes
+  id: aes
+  with:
+    enable-tls: "true"
+    oidc-provider: ${{ vars.JFROG_OIDC_PROVIDER }}
+    oidc-audience: ${{ vars.JFROG_OIDC_AUDIENCE }}
+
+- name: Connect with TLS
+  run: |
+    aql --host 127.0.0.1 \
+        --port ${{ steps.aes.outputs.tls-service-ports }} \
+        --tls-enable \
+        --tls-cafile ${{ steps.aes.outputs.tls-cert-dir }}/ca.crt \
+        --tls-certfile ${{ steps.aes.outputs.tls-cert-dir }}/client.crt \
+        --tls-keyfile ${{ steps.aes.outputs.tls-cert-dir }}/client.key \
+        --tls-name aerospike-tls
+```
+
+### Example: Go client tests
+
+Go clients accept PEM certificate files directly via command-line flags:
+
+```yaml
+- uses: ./.github/actions/setup-aes
+  id: aes
+  with:
+    enable-tls: "true"
+    oidc-provider: ${{ vars.JFROG_OIDC_PROVIDER }}
+    oidc-audience: ${{ vars.JFROG_OIDC_AUDIENCE }}
+
+- name: Run tests with TLS
+  run: |
+    CERT_DIR="${{ steps.aes.outputs.tls-cert-dir }}"
+
+    ginkgo -race -keep-going -- \
+      -h 127.0.0.1 \
+      -p ${{ steps.aes.outputs.tls-service-ports }} \
+      -root_ca "$CERT_DIR/ca.crt" \
+      -cert_file "$CERT_DIR/client.crt" \
+      -key_file "$CERT_DIR/client.key" \
+      -node_tls_name aerospike-tls
+```
+
+### Example: Java client tests with a trust store
+
+Java clients require a JKS trust store rather than raw PEM files. Import the generated CA certificate into a trust store, then pass it to the test runner:
+
+```yaml
+- uses: ./.github/actions/setup-aes
+  id: aes
+  with:
+    enable-tls: "true"
+    oidc-provider: ${{ vars.JFROG_OIDC_PROVIDER }}
+    oidc-audience: ${{ vars.JFROG_OIDC_AUDIENCE }}
+
+- name: Build client
+  run: mvn clean install -DskipTests
+
+- name: Create trust store and run tests
+  working-directory: test
+  run: |
+    CERT_DIR="${{ steps.aes.outputs.tls-cert-dir }}"
+    TRUSTSTORE="$CERT_DIR/truststore.jks"
+    STOREPASS="changeit"
+
+    keytool -import -noprompt \
+      -alias aes-ca \
+      -file "$CERT_DIR/ca.crt" \
+      -keystore "$TRUSTSTORE" \
+      -storepass "$STOREPASS"
+
+    ./run_tests \
+      -Djavax.net.ssl.trustStore="$TRUSTSTORE" \
+      -Djavax.net.ssl.trustStorePassword="$STOREPASS" \
+      -h "127.0.0.1:aerospike-tls:${{ steps.aes.outputs.tls-service-ports }}" \
+      -tls
+```

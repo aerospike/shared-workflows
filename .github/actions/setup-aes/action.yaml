@@ -1,12 +1,12 @@
-name: Setup Aerospike Enterprise Server
+name: Setup Aerospike Server Enterprise
 description: >
-  Starts one or more Aerospike Enterprise Server containers, optionally forming
+  Starts one or more Aerospike Server Enterprise containers, optionally forming
   a cluster, with support for custom config, feature files, and environment
   variable passthrough.
 
 inputs:
   server-tag:
-    description: AES Docker image tag (version)
+    description: Aerospike Docker image tag (version)
     required: false
     default: latest
   num-nodes:
@@ -41,10 +41,10 @@ inputs:
     description: Docker registry hostname
     required: false
     default: aerospike.jfrog.io
-  server-type:
+  server-container-repo:
     description: Image repository path within the registry
     required: false
-    default: database-docker-dev-local/aerospike-server-enterprise
+    default: database-docker-virtual
   jfrog-platform-url:
     description: JFrog platform URL
     required: false
@@ -285,7 +285,7 @@ runs:
         base_port=${{ inputs.base-port }}
         prefix="${{ inputs.container-name-prefix }}"
         service_port=${{ inputs.service-port }}
-        image="${{ inputs.container-repo-url }}/${{ inputs.server-type }}:${{ inputs.server-tag }}"
+        image="${{ inputs.container-repo-url }}/${{ inputs.server-container-repo }}:${{ inputs.server-tag }}"
         network="${{ inputs.network-name }}"
         features_path="${{ steps.prepare-config.outputs.features-path }}"
         config_path="${{ steps.prepare-config.outputs.config-path }}"
