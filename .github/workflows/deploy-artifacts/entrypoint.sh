@@ -234,7 +234,7 @@ structure_build_artifacts() {
 
         # Skip .tar.gz files that are Python packages (already processed in PyPI)
         if [[ $generic == *.tar.gz ]]; then
-            if is_tar_gz_pypi_sdist "$sdist"; then
+            if is_tar_gz_pypi_sdist "$generic"; then
                 echo "Skipping PyPI source distribution (already processed): $generic" >&2
                 continue
             fi
