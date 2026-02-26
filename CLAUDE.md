@@ -52,6 +52,39 @@ All reusable workflows require a `gh-workflows-ref` input that **must match** th
 
 See: `.github/workflows/docs/CICD-with-shared-actions.md#why-gh-workflows-ref-is-required`
 
+## Artifact Pipeline Detail
+
+The `reusable_artifacts-cicd.yaml` orchestrator runs 5 jobs. Understanding the artifact transforms at each stage is critical for debugging.
+
+### Jobs: resolve -> build -> collect-matrix-artifacts -> sign -> deploy-signed
+
+### Build stage (`reusable_execute-build.yaml`)
+
+- Each matrix variant uploads its own GH artifact: `build-artifacts-{distro}-{arch}`
+- Upload path: `{working-directory}/{gh-artifact-directory}` — contents are flattened (upload-artifact strips the path prefix)
+- Build scripts run as temp subprocess files — `build-env` vars (including `MATRIX_JSON`) are exported, but vars set inside the script with plain `VAR=val` are local. **Must `export` them** for child processes (make, docker) to see them.
+
+### Collect stage (`collect-matrix-artifacts` job)
+
+- `download-artifact` with `pattern: build-artifacts-*` and `merge-multiple: true`
+- All files from all matrix artifacts merge flat into `build-artifacts/`
+- **Collision risk**: if two matrix builds produce files with the same name, one silently overwrites the other
+- Re-uploads as single `build-artifacts` artifact
+
+### Sign stage (`reusable_sign-artifacts.yaml`)
+
+- Downloads `build-artifacts` into `unsigned-artifacts/`
+- **NuGet separation**: `.nupkg` files are **moved** out to `unsigned-nuget-packages/` before GPG signing, signed separately via SSL.com eSigner -> output to `signed-artifacts/nuget/`
+- **GPG signing**: entrypoint copies `unsigned-artifacts/**/*` with `cp --parents` to `signed-artifacts/` (preserves `unsigned-artifacts/` prefix), then signs deb (`dpkg-sig`), rpm (`rpm --addsign`), and creates `.asc` for all files
+- Result structure: `signed-artifacts/unsigned-artifacts/{files}` + `signed-artifacts/nuget/{nupkg}`
+
+### Deploy stage (`reusable_deploy-artifacts.yaml`)
+
+- Downloads `signed-artifacts` into `./build-artifacts`
+- `structure_build_artifacts()` uses recursive `find build-artifacts -name "*.{ext}"` to discover files
+- Routes by extension: deb/rpm/jar/nupkg/snupkg each to their JFrog repo, everything else to generic
+- Build-info aggregation: discovers child build-infos via AQL (`{metadata-build-id}*.json`), appends to parent build
+
 ## Running Tests
 
 ### Bats tests (shell script validation)
@@ -104,7 +137,9 @@ uses: aerospike/shared-workflows/.github/workflows/reusable_artifacts-cicd.yaml@
 ## Internal vs External Workflow References
 
 - **Internal** (test/example workflows in this repo): Use relative paths with `gh-checkout-path: .`
-  ```yaml
-  uses: ./.github/workflows/reusable_execute-build.yaml
-  ```
+
+```yaml
+uses: ./.github/workflows/reusable_execute-build.yaml
+```
+
 - **External** (consumer repos): Use tagged versions with matching `gh-workflows-ref`
