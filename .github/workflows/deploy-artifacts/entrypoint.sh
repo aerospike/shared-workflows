@@ -126,6 +126,13 @@ run_optional() {
     run "$@" || echo "Warning: $*" >&2
 }
 
+is_tar_gz_pypi_sdist() {
+    tar -tzf "$1" 2>/dev/null | grep -qE "(setup\.py|pyproject\.toml|\.egg-info/|PKG-INFO)"
+    # tar will return error code 141 if grep returns a match and exits early
+    # We only care if grep found a match or not
+    return "${PIPESTATUS[1]}"
+}
+
 structure_build_artifacts() {
     echo "Structuring build artifacts..." >&2
     mkdir -p structured_build_artifacts/deb
@@ -150,9 +157,11 @@ structure_build_artifacts() {
 
         # Only process .tar.gz files that are likely Python packages
         # Check if the file contains typical Python package structure
-        if tar -tzf "$sdist" 2>/dev/null | grep -qE "(setup\.py|pyproject\.toml|\.egg-info/|PKG-INFO)"; then
+        if is_tar_gz_pypi_sdist "$sdist"; then
             echo "Processing Python source distribution: $sdist" >&2
             process_pypi "$sdist" "./structured_build_artifacts/pypi"
+        else
+            echo "Found .tar.gz that is not a source distribution"
         fi
     done < <(find build-artifacts -name "*.tar.gz" -print0)
 
@@ -225,7 +234,7 @@ structure_build_artifacts() {
 
         # Skip .tar.gz files that are Python packages (already processed in PyPI)
         if [[ $generic == *.tar.gz ]]; then
-            if tar -tzf "$generic" 2>/dev/null | grep -qE "(setup\.py|pyproject\.toml|\.egg-info/|PKG-INFO)"; then
+            if is_tar_gz_pypi_sdist "$sdist"; then
                 echo "Skipping PyPI source distribution (already processed): $generic" >&2
                 continue
             fi
