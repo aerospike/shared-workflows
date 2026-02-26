@@ -1,0 +1,214 @@
+name: Test Artifacts CI/CD Workflow
+
+on:
+  workflow_call:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/reusable_artifacts-cicd.yaml
+      - .github/workflows/reusable_execute-build.yaml
+      - .github/workflows/reusable_sign-artifacts.yaml
+      - .github/workflows/reusable_deploy-artifacts.yaml
+      - .github/workflows/test_artifacts-cicd-workflow.yaml
+      - .github/workflows/artifacts-cicd/**
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  # Test 1: Multi-distro matrix build
+  # Validates that artifacts from multiple matrix builds are correctly collected
+  multi-distro-test:
+    name: Multi-Distro Matrix Test
+    uses: ./.github/workflows/reusable_artifacts-cicd.yaml
+    with:
+      jf-project: test-artifacts-cicd
+      jf-build-name: multi-distro-test
+      version: 1.0.0-test
+      gh-workflows-ref: ${{ github.ref }}
+      gh-artifact-directory: packaged
+      build-script: |
+        cd .github/workflows/execute-build/test_apps/hi
+        make docker-build
+        ./package.sh --version 1.0.0-test --packages-dir build --output-dir packaged
+      matrix-json: |
+        {
+          "include": [
+            {"distro": "el9", "arch": "x86_64", "runs-on": "ubuntu-latest"},
+            {"distro": "jammy", "arch": "x86_64", "runs-on": "ubuntu-latest"},
+            {"distro": "noble", "arch": "x86_64", "runs-on": "ubuntu-latest"}
+          ]
+        }
+      dry-run: true
+    secrets: inherit
+
+  # Verify multi-distro artifacts
+  verify-multi-distro:
+    name: Verify Multi-Distro Artifacts
+    runs-on: ubuntu-latest
+    needs: multi-distro-test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Download collected artifacts
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
+        with:
+          name: build-artifacts
+          path: verification/multi-distro
+
+      - name: Install bats
+        run: |
+          git clone https://github.com/bats-core/bats-core.git
+          cd bats-core
+          sudo ./install.sh /usr/local
+          cd ..
+          rm -rf bats-core
+
+      - name: Run artifact verification tests
+        working-directory: .github/workflows/artifacts-cicd
+        run: |
+          bats tests/test_multi_distro_collection.bats
+        env:
+          ARTIFACTS_DIR: ${{ github.workspace }}/verification/multi-distro
+
+  # Test 2: Mixed matrix (native + dotnet)
+  # Validates that different artifact types can coexist in the same workflow
+  mixed-matrix-test:
+    name: Mixed Matrix Test (Native + DotNet)
+    uses: ./.github/workflows/reusable_artifacts-cicd.yaml
+    with:
+      jf-project: test-artifacts-cicd
+      jf-build-name: mixed-matrix-test
+      version: 1.0.1-test
+      gh-workflows-ref: ${{ github.ref }}
+      gh-artifact-directory: packaged
+      build-script: echo "Will be overridden by matrix"
+      matrix-json: |
+        {
+          "include": [
+            {
+              "distro": "jammy",
+              "arch": "x86_64",
+              "runs-on": "ubuntu-latest",
+              "build-script": "cd .github/workflows/execute-build/test_apps/hi && make docker-build && ./package.sh --version 1.0.1-test --packages-dir build --output-dir packaged"
+            },
+            {
+              "distro": "dotnet",
+              "arch": "any",
+              "runs-on": "ubuntu-latest",
+              "setup-dotnet": true,
+              "build-script": "cd .github/workflows/execute-build/test_apps/DotnetHelloWorld/AerospikeHelloWorld && dotnet pack -c Release -p:Version=1.0.1-test -o packaged"
+            }
+          ]
+        }
+      dry-run: true
+    secrets: inherit
+
+  # Verify mixed artifacts
+  verify-mixed-matrix:
+    name: Verify Mixed Matrix Artifacts
+    runs-on: ubuntu-latest
+    needs: mixed-matrix-test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Download collected artifacts
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
+        with:
+          name: build-artifacts
+          path: verification/mixed-matrix
+
+      - name: Install bats
+        run: |
+          git clone https://github.com/bats-core/bats-core.git
+          cd bats-core
+          sudo ./install.sh /usr/local
+          cd ..
+          rm -rf bats-core
+
+      - name: Run mixed artifact verification tests
+        working-directory: .github/workflows/artifacts-cicd
+        run: |
+          bats tests/test_mixed_artifacts.bats
+        env:
+          ARTIFACTS_DIR: ${{ github.workspace }}/verification/mixed-matrix
+
+  # Test 3: Full workflow with signing
+  # Validates the complete end-to-end workflow including signing
+  full-workflow-test:
+    name: Full Workflow Test (Build + Sign)
+    uses: ./.github/workflows/reusable_artifacts-cicd.yaml
+    with:
+      jf-project: test-artifacts-cicd
+      jf-build-name: full-workflow-test
+      version: 1.0.0-test
+      gh-workflows-ref: ${{ github.ref }}
+      gh-artifact-directory: packaged
+      build-script: |
+        cd .github/workflows/execute-build/test_apps/hi
+        make docker-build
+        ./package.sh --version 1.0.0-test --packages-dir build --output-dir packaged
+      matrix-json: |
+        {
+          "include": [
+            {"distro": "jammy", "arch": "x86_64", "runs-on": "ubuntu-latest"},
+            {"distro": "el9", "arch": "x86_64", "runs-on": "ubuntu-latest"}
+          ]
+        }
+      dry-run: true
+    secrets: inherit
+
+  # Verify signed artifacts
+  verify-signed-artifacts:
+    name: Verify Signed Artifacts
+    runs-on: ubuntu-latest
+    needs: full-workflow-test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Download signed artifacts
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
+        with:
+          name: signed-artifacts
+          path: verification/signed
+
+      - name: Install bats
+        run: |
+          git clone https://github.com/bats-core/bats-core.git
+          cd bats-core
+          sudo ./install.sh /usr/local
+          cd ..
+          rm -rf bats-core
+
+      - name: Run signing verification tests
+        working-directory: .github/workflows/artifacts-cicd
+        run: |
+          bats tests/test_artifact_signing.bats
+        env:
+          ARTIFACTS_DIR: ${{ github.workspace }}/verification/signed
+
+  # Summary job
+  test-summary:
+    name: Test Summary
+    runs-on: ubuntu-latest
+    needs: [verify-multi-distro, verify-mixed-matrix, verify-signed-artifacts]
+    if: always()
+    steps:
+      - name: Check test results
+        run: |
+          echo "Multi-Distro Test: ${{ needs.verify-multi-distro.result }}"
+          echo "Mixed Matrix Test: ${{ needs.verify-mixed-matrix.result }}"
+          echo "Signed Artifacts Test: ${{ needs.verify-signed-artifacts.result }}"
+
+          if [ "${{ needs.verify-multi-distro.result }}" != "success" ] || \
+             [ "${{ needs.verify-mixed-matrix.result }}" != "success" ] || \
+             [ "${{ needs.verify-signed-artifacts.result }}" != "success" ]; then
+            echo "❌ Some tests failed"
+            exit 1
+          fi
+
+          echo "✅ All tests passed"
