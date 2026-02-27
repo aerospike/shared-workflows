@@ -91,12 +91,16 @@ MACROS
 teardown_file() {
   if [ "${LOCAL_SIGNING:-}" = "true" ]; then
     gpgconf --kill gpg-agent 2>/dev/null || true
-    [ -d "${SIGN_TMPDIR:-}" ] && rm -rf "$SIGN_TMPDIR"
+    if [ -d "${SIGN_TMPDIR:-}" ]; then
+      rm -rf "$SIGN_TMPDIR"
+    fi
   fi
   # Clean up generated fixtures
   local fixtures_dir
   fixtures_dir="$(git rev-parse --show-toplevel)/.github/workflows/artifacts-cicd/tests/test-artifacts"
-  [ -d "$fixtures_dir" ] && rm -rf "$fixtures_dir"
+  if [ -d "$fixtures_dir" ]; then
+    rm -rf "$fixtures_dir"
+  fi
 }
 
 setup() {

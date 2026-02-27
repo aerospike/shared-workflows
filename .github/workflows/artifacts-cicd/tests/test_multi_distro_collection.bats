@@ -17,7 +17,9 @@ teardown_file() {
   # Clean up local fixtures (not CI artifacts)
   local fixtures_dir
   fixtures_dir="$(git rev-parse --show-toplevel)/.github/workflows/artifacts-cicd/tests/test-artifacts"
-  [ -d "$fixtures_dir" ] && rm -rf "$fixtures_dir"
+  if [ -d "$fixtures_dir" ]; then
+    rm -rf "$fixtures_dir"
+  fi
 }
 
 setup() {
