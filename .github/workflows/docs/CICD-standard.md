@@ -22,15 +22,17 @@ The architecture follows an ecosystem-specific build & sign pattern, where artif
 
 ## Standard Workflows for your project
 
-For most repositories, start with:
+These orchestrated workflows are the expected entry points for all repositories:
 
-- `reusable_artifacts-cicd.yaml`: **Artifacts pipeline** (build → sign → deploy) with a small, opinionated input surface. [README](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/artifacts-cicd/README.md)
-- `reusable_docker-build-deploy.yaml`: **Docker pipeline** (container images). This stays separate to avoid parameter explosion. [README](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/docker-build-deploy/README.md)
-- For release-level artifacts create a promotable release bundle with `reusable_create-release-bundle.yaml`. [README](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/create-release-bundle/README.md)
+- `reusable_artifacts-cicd.yaml`: **Artifacts pipeline** (build → sign → deploy). [README](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/artifacts-cicd/README.md)
+- `reusable_docker-build-deploy.yaml`: **Docker pipeline** (container images with SLSA attestations). [README](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/docker-build-deploy/README.md)
+- `reusable_create-release-bundle.yaml`: **Release bundles** (combines artifact + docker outputs). [README](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/create-release-bundle/README.md)
+
+The lower-level workflows (`reusable_execute-build.yaml`, `reusable_sign-artifacts.yaml`, `reusable_deploy-artifacts.yaml`) are internal implementation details. If you find yourself calling them directly, that's usually a sign the orchestrator needs a new capability or the build process should be restructured to fit the standard path.
 
 ### Artifacts CI/CD
 
-This wraps the low level `reusable_execute-build.yaml`, `reusable_sign-artifacts.yaml`, and `reusable_deploy-artifacts.yaml` for the common case cicd cases.
+This orchestrates the full build → sign → deploy lifecycle internally.
 
 ```yaml
 jobs:

@@ -6,13 +6,9 @@ provides a small, opinionated input surface.
 
 ## Design Philosophy
 
-The CI reusable workflows in this repo follow two tiers:
+This orchestrator is the expected entry point for all artifact CI/CD. It handles the full build → sign → deploy lifecycle with good defaults and minimal configuration.
 
-- **Composable workflows** (`reusable_execute-build.yaml`, `reusable_sign-artifacts.yaml`, `reusable_deploy-artifacts.yaml`) — flexible building blocks with good defaults and escape hatches. Callers can mix and match these to build custom pipelines.
-
-- **Orchestrator** (`reusable_artifacts-cicd.yaml`) — an opinionated wrapper that ties the composable workflows together into a standard build → sign → deploy pipeline. It intentionally limits flexibility in favor of simplicity. In most cases, the end state is artifacts uploaded to JFrog.
-
-Use the orchestrator when the standard pipeline fits your needs. Use the composable workflows directly when you need more control.
+The lower-level workflows it wraps (`reusable_execute-build.yaml`, `reusable_sign-artifacts.yaml`, `reusable_deploy-artifacts.yaml`) are internal implementation details. If a consumer needs to call them directly, that's a smell — either this orchestrator is missing a needed capability, or the consumer's build process should be restructured to fit the standard path. Prefer extending the orchestrator over bypassing it.
 
 ## Usage
 

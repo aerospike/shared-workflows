@@ -1,5 +1,7 @@
 # Sign Artifacts Workflow
 
+> **Note:** This workflow is used internally by [`reusable_artifacts-cicd.yaml`](../artifacts-cicd/README.md). Most consumers should use the orchestrator rather than calling this directly.
+
 This is a reusable GitHub Actions workflow that signs binary artifacts using GPG. It supports `.deb`, `.rpm`, `.nupkg` (NuGet via SSL.com), and any other file type passed via a glob pattern. It produces:
 
 - GPG detached signature (`.asc`) for any file

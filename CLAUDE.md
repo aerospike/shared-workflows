@@ -26,16 +26,18 @@ This is `aerospike/shared-workflows`, a centralized collection of reusable GitHu
 
 ## Core Workflows
 
-Most CI reusable workflows are **composable** — flexible building blocks with good defaults and escape hatches. `reusable_artifacts-cicd.yaml` is an **opinionated orchestrator** that ties the composable workflows together, trading flexibility for simplicity. Avoid adding escape hatches to the orchestrator unless there is a clear production need.
+Consumers should use the **orchestrated workflows** (`reusable_artifacts-cicd.yaml`, `reusable_docker-build-deploy.yaml`) as their entry points. These are opinionated pipelines with good defaults that handle the full lifecycle (build -> sign -> deploy). They trade flexibility for simplicity and correctness.
 
-| Workflow                              | Purpose                                                           |
-| ------------------------------------- | ----------------------------------------------------------------- |
-| `reusable_artifacts-cicd.yaml`        | **Recommended entry point.** Orchestrates build -> sign -> deploy |
-| `reusable_execute-build.yaml`         | Run arbitrary build script, upload artifacts                      |
-| `reusable_sign-artifacts.yaml`        | GPG sign deb/rpm/generic, SSL.com sign nupkg                      |
-| `reusable_deploy-artifacts.yaml`      | Upload to JFrog Artifactory (auto-routes by package type)         |
-| `reusable_docker-build-deploy.yaml`   | Multi-arch OCI images with SLSA attestations                      |
-| `reusable_create-release-bundle.yaml` | JFrog release bundles                                             |
+The lower-level composable workflows (`reusable_execute-build.yaml`, `reusable_sign-artifacts.yaml`, `reusable_deploy-artifacts.yaml`) exist primarily as implementation details of the orchestrators. Direct use of these should be rare — if a consumer needs to call them directly, that's a smell indicating either the orchestrator is missing a needed capability or the consumer's build process needs to be restructured. Avoid adding escape hatches to the orchestrators unless there is a clear production need; instead, prefer making the standard path work.
+
+| Workflow                              | Purpose                                                          |
+| ------------------------------------- | ---------------------------------------------------------------- |
+| `reusable_artifacts-cicd.yaml`        | **Primary entry point.** Orchestrates build -> sign -> deploy    |
+| `reusable_docker-build-deploy.yaml`   | **Primary entry point.** Multi-arch OCI images with attestations |
+| `reusable_create-release-bundle.yaml` | JFrog release bundles (combines artifact + docker outputs)       |
+| `reusable_execute-build.yaml`         | _Internal._ Run arbitrary build script, upload artifacts         |
+| `reusable_sign-artifacts.yaml`        | _Internal._ GPG sign deb/rpm/generic, SSL.com sign nupkg         |
+| `reusable_deploy-artifacts.yaml`      | _Internal._ Upload to JFrog Artifactory (auto-routes by type)    |
 
 ## Naming Convention (v2.0.0+)
 
@@ -119,7 +121,7 @@ trunk git-hooks sync # Set up pre-commit hooks
 
 ## Coding Conventions
 
-- **Entrypoint scripts**: 4-space indentation, consistent error handling (`handle_error()`/`error()`), `run()` for dry-run support, standard arg parsing with `--help`
+- **Entrypoint scripts**: consistent error handling (`handle_error()`/`error()`), `run()` for dry-run support, standard arg parsing with `--help`
 - **Makefiles**: Tabs for recipe lines (never spaces)
 - **YAML**: Avoid unnecessary quotes. Quotes required for JSON objects (`"{}"`), special chars, empty strings
 - **Actions**: SHA-pin all dependencies with semver comment (e.g., `actions/checkout@abc123 # v4.2.0`)
