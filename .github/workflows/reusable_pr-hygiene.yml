@@ -1,4 +1,4 @@
-name: Check for Jira Ticket in PR Title
+name: PR Hygiene
 
 on:
   workflow_call:
@@ -6,7 +6,7 @@ on:
       pr_title:
         required: true
         type: string
-        description: PR title to check for JIRA ticket
+        description: PR title to validate
 
 permissions:
   contents: read
@@ -20,19 +20,30 @@ jobs:
         with:
           egress-policy: audit
 
-      - name: Check for JIRA ticket in PR title
+      # PR title must follow: type(scope): [JIRA-123] description
+      #   type:  feat|fix|refactor|docs|test|ci|chore|build|perf (validated by commitlint)
+      #   scope: optional, lowercase (e.g., workflows, deploy, actions)
+      #   JIRA:  uppercase project key in brackets, before the description
+      # Example: feat(workflows): [INFRA-370] add artifacts-cicd integration tests
+      - name: Validate PR title is conventional commit
+        env:
+          PR_TITLE: ${{ inputs.pr_title }}
         run: |
-          # Extract PR title
-          PR_TITLE="${{ inputs.pr_title }}"
+          npm install --save-dev @commitlint/cli @commitlint/config-conventional
+          echo '{"extends":["@commitlint/config-conventional"]}' > .commitlintrc.json
+          echo "$PR_TITLE" | npx commitlint
+
+      - name: Check for JIRA ticket in PR title
+        env:
+          PR_TITLE: ${{ inputs.pr_title }}
+        run: |
           echo "PR Title: $PR_TITLE"
-          # Extract JIRA ticket from PR title (ABC-123 format)
-          JIRA_TICKET=$(echo "$PR_TITLE" | grep -oE '([A-Za-z0-9]+-[0-9]+)' | head -1)
+          JIRA_TICKET=$(echo "$PR_TITLE" | grep -oP '^[a-z]+(\([a-z0-9-]+\))?: \[\K[A-Z]{2,10}-[0-9]+(?=\] )' | head -1)
           if [ -z "$JIRA_TICKET" ]; then
             echo "❌ ERROR: No JIRA ticket found in PR title!"
-            echo "Please include a JIRA ticket in the format ABC-123 in your PR title."
-            echo "Examples: ABC-123: Add new feature for database management'"
+            echo "PR title must follow: type(scope): [JIRA-123] description"
+            echo "Example: feat(workflows): [INFRA-370] add artifacts-cicd integration tests"
             exit 1
           else
             echo "✅ JIRA ticket found: $JIRA_TICKET"
-            echo "PR hygiene check passed!"
           fi
