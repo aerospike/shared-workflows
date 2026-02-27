@@ -22,6 +22,8 @@ jobs:
       version: 1.0.0-test
       gh-workflows-ref: ${{ github.ref }}
       gh-artifact-directory: packaged
+      oidc-provider-name: gh-dev-test
+      oidc-audience: aerospike/testing
       build-script: |
         cd .github/workflows/execute-build/test_apps/hi
         make docker-build
@@ -85,6 +87,8 @@ jobs:
       version: 1.0.1-test
       gh-workflows-ref: ${{ github.ref }}
       gh-artifact-directory: packaged
+      oidc-provider-name: gh-dev-test
+      oidc-audience: aerospike/testing
       build-script: echo "Will be overridden by matrix"
       matrix-json: |
         {
@@ -155,6 +159,8 @@ jobs:
       version: 1.0.0-test
       gh-workflows-ref: ${{ github.ref }}
       gh-artifact-directory: packaged
+      oidc-provider-name: gh-dev-test
+      oidc-audience: aerospike/testing
       build-script: |
         cd .github/workflows/execute-build/test_apps/hi
         make docker-build
