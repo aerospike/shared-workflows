@@ -40,8 +40,13 @@ mkdir -p "$MIXED"
 cp "$SRC_DEB" "$MIXED/hi_1.0.0-test_ubuntu22.04_x86_64.deb"
 cp "$SRC_NUPKG" "$MIXED/Aerospike.HelloWorld.1.0.0-test.nupkg"
 
-# Note: signing test fixtures are not generated here — those tests
-# validate real pipeline-signed artifacts and only run in CI.
+# --- signing: unsigned artifacts for entrypoint testing ---
+# Uses only .rpm files  The entrypoint handles missing rpm --addsign
+# gracefully and still produces .asc detached signatures.
+SIGNING="$FIXTURES_DIR/signing"
+mkdir -p "$SIGNING"
+cp "$SRC_RPM" "$SIGNING/hi-1.0.0-test-1.el9.x86_64.rpm"
+cp "$SRC_RPM" "$SIGNING/hi-1.0.0-test-1.amzn2023.x86_64.rpm"
 
 echo "Fixtures created:"
 find "$FIXTURES_DIR" -type f | sort
