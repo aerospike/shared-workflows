@@ -2,13 +2,25 @@
 # Test mixed artifact types (native + dotnet)
 # Validates that different artifact types can coexist and are properly handled
 
-setup() {
-  # ARTIFACTS_DIR is set by the workflow
-  if [ -z "$ARTIFACTS_DIR" ]; then
-    echo "ERROR: ARTIFACTS_DIR environment variable not set" >&2
-    exit 1
+setup_file() {
+  GIT_ROOT="$(git rev-parse --show-toplevel)"
+  TESTS_DIR="$GIT_ROOT/.github/workflows/artifacts-cicd/tests"
+
+  # Default to local fixtures when not running in CI
+  if [ -z "${ARTIFACTS_DIR:-}" ]; then
+    "$TESTS_DIR/create-test-fixtures.sh"
+    export ARTIFACTS_DIR="$TESTS_DIR/test-artifacts/mixed-matrix"
   fi
-  
+}
+
+teardown_file() {
+  # Clean up local fixtures (not CI artifacts)
+  local fixtures_dir
+  fixtures_dir="$(git rev-parse --show-toplevel)/.github/workflows/artifacts-cicd/tests/test-artifacts"
+  [ -d "$fixtures_dir" ] && rm -rf "$fixtures_dir"
+}
+
+setup() {
   if [ ! -d "$ARTIFACTS_DIR" ]; then
     echo "ERROR: Artifacts directory does not exist: $ARTIFACTS_DIR" >&2
     exit 1
