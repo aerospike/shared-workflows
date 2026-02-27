@@ -17,7 +17,7 @@ jobs:
     name: Multi-Distro Matrix Test
     uses: ./.github/workflows/reusable_artifacts-cicd.yaml
     with:
-      jf-project: test-artifacts-cicd
+      jf-project: test
       jf-build-name: multi-distro-test
       version: 1.0.0-test
       gh-workflows-ref: ${{ github.ref }}
@@ -82,7 +82,7 @@ jobs:
     name: Mixed Matrix Test (Native + DotNet)
     uses: ./.github/workflows/reusable_artifacts-cicd.yaml
     with:
-      jf-project: test-artifacts-cicd
+      jf-project: test
       jf-build-name: mixed-matrix-test
       version: 1.0.1-test
       gh-workflows-ref: ${{ github.ref }}
@@ -154,7 +154,7 @@ jobs:
     name: Full Workflow Test (Build + Sign)
     uses: ./.github/workflows/reusable_artifacts-cicd.yaml
     with:
-      jf-project: test-artifacts-cicd
+      jf-project: test
       jf-build-name: full-workflow-test
       version: 1.0.0-test
       gh-workflows-ref: ${{ github.ref }}
