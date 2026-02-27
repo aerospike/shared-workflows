@@ -40,8 +40,29 @@ Draft a pull request for the current branch.
 <How to verify these changes — mention any tests added/run>
 ```
 
-7. Present the draft to the user for review before creating the PR.
-8. Create using `gh pr create`.
+7. Generate a **Changes Breakdown** table by file type. Categorize each changed file and sum additions/deletions:
+
+   ```bash
+   gh api repos/{owner}/{repo}/pulls/{number}/files --paginate \
+     --jq '.[] | "\(.filename)\t\(.additions)\t\(.deletions)"'
+   ```
+
+   Categorize by extension: `.yaml`/`.yml` → YAML (workflows), `.bats` → Bats (tests), `.sh` → Shell scripts, `.md` → Markdown/Docs, etc. Present as a table:
+
+   ```markdown
+   ## Changes Breakdown
+
+   | Category     | +add     | -del    | net       | files  |
+   | ------------ | -------- | ------- | --------- | ------ |
+   | Bats (tests) | 698      | 0       | +698      | 3      |
+   | ...          | ...      | ...     | ...       | ...    |
+   | **Total**    | **1512** | **286** | **+1226** | **22** |
+   ```
+
+   Add a brief note explaining the largest categories (e.g., "Shell script churn is mostly linter reformatting").
+
+8. Present the draft to the user for review before creating the PR.
+9. Create using `gh pr create`.
 
 ## Jira URL
 
