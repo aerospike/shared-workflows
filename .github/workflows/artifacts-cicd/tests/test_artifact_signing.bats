@@ -53,22 +53,22 @@ setup() {
   return 0
 }
 
-@test "Signature files are valid PGP signatures" {
+@test "Signature files are valid GPG signatures" {
   local invalid_sigs=""
-  
+
   while IFS= read -r sig; do
-    # Check if file contains PGP signature markers
-    if ! grep -q "BEGIN PGP SIGNATURE" "$sig"; then
+    # gpg --list-packets validates both binary and ASCII-armored signatures
+    if ! gpg --list-packets "$sig" 2>/dev/null | grep -q "signature packet"; then
       invalid_sigs="$invalid_sigs\n  Invalid signature: $(basename "$sig")"
     fi
   done < <(find "$ARTIFACTS_DIR" -name "*.asc")
-  
+
   if [ -n "$invalid_sigs" ]; then
     echo "Found invalid signature files:"
     echo -e "$invalid_sigs"
     return 1
   fi
-  
+
   return 0
 }
 

@@ -23,9 +23,11 @@ jobs:
       oidc-provider-name: gh-dev-test
       oidc-audience: aerospike/testing
       build-script: |
+        DISTRO=$(echo "$MATRIX_JSON" | jq -r '.distro')
+        ARCH=$(echo "$MATRIX_JSON" | jq -r '.arch')
         OUTPUT_DIR="$(pwd)/packaged"
         cd .github/workflows/execute-build/test_apps/hi
-        make docker-build
+        make docker-build DISTRO="$DISTRO" ARCH="$ARCH"
         ./package.sh --version 1.0.0-test --packages-dir build --output-dir "$OUTPUT_DIR"
       matrix-json: |
         {

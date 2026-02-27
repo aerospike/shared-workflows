@@ -30,7 +30,7 @@ jobs:
               "distro": "jammy",
               "arch": "x86_64",
               "runs-on": "ubuntu-latest",
-              "build-script": "OUTPUT_DIR=$(pwd)/packaged && cd .github/workflows/execute-build/test_apps/hi && make docker-build && ./package.sh --version 1.0.1-test --packages-dir build --output-dir $OUTPUT_DIR"
+              "build-script": "DISTRO=$(echo $MATRIX_JSON | jq -r .distro) && ARCH=$(echo $MATRIX_JSON | jq -r .arch) && OUTPUT_DIR=$(pwd)/packaged && cd .github/workflows/execute-build/test_apps/hi && make docker-build DISTRO=$DISTRO ARCH=$ARCH && ./package.sh --version 1.0.1-test --packages-dir build --output-dir $OUTPUT_DIR"
             },
             {
               "distro": "dotnet",
