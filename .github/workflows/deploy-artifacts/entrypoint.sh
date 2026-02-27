@@ -485,12 +485,6 @@ upload_pypi_packages() {
         local package_filename
         package_filename=$(basename "$package")
 
-        if [[ -z $pkgname ]] || [[ -z $pkgversion ]]; then
-            echo "Warning: Failed to extract metadata from $package, using filename-based path" >&2
-            pkgname="${package_filename%%-*}"
-            pkgversion="unknown"
-        fi
-
         echo "  Uploading PyPI package: $package" >&2
         echo "    Package: $pkgname, Version: $pkgversion" >&2
 
