@@ -4,6 +4,16 @@ This workflow orchestrates the standard artifacts pipeline:
 build → sign → deploy. It wraps the lower-level reusable workflows and
 provides a small, opinionated input surface.
 
+## Design Philosophy
+
+The CI reusable workflows in this repo follow two tiers:
+
+- **Composable workflows** (`reusable_execute-build.yaml`, `reusable_sign-artifacts.yaml`, `reusable_deploy-artifacts.yaml`) — flexible building blocks with good defaults and escape hatches. Callers can mix and match these to build custom pipelines.
+
+- **Orchestrator** (`reusable_artifacts-cicd.yaml`) — an opinionated wrapper that ties the composable workflows together into a standard build → sign → deploy pipeline. It intentionally limits flexibility in favor of simplicity. In most cases, the end state is artifacts uploaded to JFrog.
+
+Use the orchestrator when the standard pipeline fits your needs. Use the composable workflows directly when you need more control.
+
 ## Usage
 
 ```yaml
@@ -27,32 +37,21 @@ jobs:
 
 ## Testing
 
-Comprehensive integration tests are located in `tests/` and run via `.github/workflows/test_artifacts-cicd-workflow.yaml`.
+Integration tests are split into three independent workflow files, each calling the orchestrator once and verifying the results with bats:
 
-### Test Coverage
+| Workflow                                 | Bats test                           | What it validates                                      |
+| ---------------------------------------- | ----------------------------------- | ------------------------------------------------------ |
+| `test_artifacts-cicd-multi-distro.yaml`  | `test_multi_distro_collection.bats` | Artifact collection from el9/jammy/noble matrix builds |
+| `test_artifacts-cicd-mixed-matrix.yaml`  | `test_mixed_artifacts.bats`         | Native (deb/rpm) + dotnet (nupkg) coexistence          |
+| `test_artifacts-cicd-full-workflow.yaml` | `test_artifact_signing.bats`        | End-to-end build + sign, signature file verification   |
 
-1. **Multi-Distro Matrix** (`test_multi_distro_collection.bats`)
-   - Validates artifact collection from multiple matrix builds (el9, jammy, noble)
-   - Ensures no artifacts are lost during merge
-   - Checks for correct artifact counts per distro
-
-2. **Mixed Artifact Types** (`test_mixed_artifacts.bats`)
-   - Tests native (deb/rpm) + dotnet (nupkg) builds in same workflow
-   - Validates different artifact types coexist properly
-   - Checks naming conventions and type-specific handling
-
-3. **Signing Verification** (`test_artifact_signing.bats`)
-   - Ensures all artifacts have corresponding signature files (.asc)
-   - Validates signature file format and presence
+Tests are split into separate workflows so each gets its own artifact namespace (avoiding name collisions from the orchestrator's hardcoded artifact names).
 
 ### Running Tests
 
 ```bash
-# Run all tests
-act workflow_dispatch -W .github/workflows/test_artifacts-cicd-workflow.yaml
-
-# Run specific verification job
-act workflow_dispatch -j verify-multi-distro
+# Run bats tests locally (unit-level, no workflow execution)
+bats .github/workflows/artifacts-cicd/tests/
 ```
 
-Tests run automatically in PR checks when artifacts-cicd related files change.
+Tests run automatically as PR checks.

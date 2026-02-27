@@ -26,6 +26,8 @@ This is `aerospike/shared-workflows`, a centralized collection of reusable GitHu
 
 ## Core Workflows
 
+Most CI reusable workflows are **composable** — flexible building blocks with good defaults and escape hatches. `reusable_artifacts-cicd.yaml` is an **opinionated orchestrator** that ties the composable workflows together, trading flexibility for simplicity. Avoid adding escape hatches to the orchestrator unless there is a clear production need.
+
 | Workflow                              | Purpose                                                           |
 | ------------------------------------- | ----------------------------------------------------------------- |
 | `reusable_artifacts-cicd.yaml`        | **Recommended entry point.** Orchestrates build -> sign -> deploy |
