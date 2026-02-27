@@ -4,13 +4,7 @@ on:
   workflow_call:
   workflow_dispatch:
   pull_request:
-    paths:
-      - .github/workflows/reusable_artifacts-cicd.yaml
-      - .github/workflows/reusable_execute-build.yaml
-      - .github/workflows/reusable_sign-artifacts.yaml
-      - .github/workflows/reusable_deploy-artifacts.yaml
-      - .github/workflows/test_artifacts-cicd-workflow.yaml
-      - .github/workflows/artifacts-cicd/**
+    branches: [main]
 
 permissions:
   contents: read
@@ -41,7 +35,14 @@ jobs:
           ]
         }
       dry-run: true
-    secrets: inherit
+    secrets:
+      gpg-private-key: ${{ secrets.GPG_SECRET_KEY }}
+      gpg-public-key: ${{ secrets.GPG_PUBLIC_KEY }}
+      gpg-key-pass: ${{ secrets.GPG_PASS }}
+      es-username: ${{ secrets.ES_USERNAME }}
+      es-password: ${{ secrets.ES_PASSWORD }}
+      credential_id: ${{ secrets.CREDENTIAL_ID }}
+      es-totp_secret: ${{ secrets.ES_TOTP_SECRET }}
 
   # Verify multi-distro artifacts
   verify-multi-distro:
@@ -104,7 +105,14 @@ jobs:
           ]
         }
       dry-run: true
-    secrets: inherit
+    secrets:
+      gpg-private-key: ${{ secrets.GPG_SECRET_KEY }}
+      gpg-public-key: ${{ secrets.GPG_PUBLIC_KEY }}
+      gpg-key-pass: ${{ secrets.GPG_PASS }}
+      es-username: ${{ secrets.ES_USERNAME }}
+      es-password: ${{ secrets.ES_PASSWORD }}
+      credential_id: ${{ secrets.CREDENTIAL_ID }}
+      es-totp_secret: ${{ secrets.ES_TOTP_SECRET }}
 
   # Verify mixed artifacts
   verify-mixed-matrix:
@@ -159,7 +167,14 @@ jobs:
           ]
         }
       dry-run: true
-    secrets: inherit
+    secrets:
+      gpg-private-key: ${{ secrets.GPG_SECRET_KEY }}
+      gpg-public-key: ${{ secrets.GPG_PUBLIC_KEY }}
+      gpg-key-pass: ${{ secrets.GPG_PASS }}
+      es-username: ${{ secrets.ES_USERNAME }}
+      es-password: ${{ secrets.ES_PASSWORD }}
+      credential_id: ${{ secrets.CREDENTIAL_ID }}
+      es-totp_secret: ${{ secrets.ES_TOTP_SECRET }}
 
   # Verify signed artifacts
   verify-signed-artifacts:
