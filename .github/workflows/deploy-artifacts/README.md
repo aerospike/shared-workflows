@@ -1,5 +1,7 @@
 # Upload to JFrog Artifactory Workflow
 
+> **Note:** This workflow is used internally by [`reusable_artifacts-cicd.yaml`](../artifacts-cicd/README.md). Most consumers should use the orchestrator rather than calling this directly.
+
 A reusable GitHub Actions workflow for uploading artifacts to JFrog Artifactory following best practices for repository naming and organization.
 
 ## Overview

@@ -1,8 +1,18 @@
 # Shared Workflows – CI/CD Walkthrough
 
-This guide explains how Aerospike’s **shared, composable GitHub workflows** snap together into an end‑to‑end CI/CD pipeline.
+This guide explains how Aerospike’s shared GitHub workflows provide end‑to‑end CI/CD pipelines.
 
 ---
+
+## Start with orchestrated workflows
+
+Most repositories should use the orchestrated workflows as their entry point. These handle the full lifecycle with good defaults:
+
+- **`reusable_artifacts-cicd.yaml`** — build → sign → deploy for DEB, RPM, NuGet, and generic files ([README](../artifacts-cicd/README.md))
+- **`reusable_docker-build-deploy.yaml`** — multi-arch OCI images with SLSA attestations ([README](../docker-build-deploy/README.md))
+- **`reusable_create-release-bundle.yaml`** — combine artifact + docker outputs into a distributable release bundle ([README](../create-release-bundle/README.md))
+
+If you find yourself needing to call the lower-level workflows directly (execute-build, sign-artifacts, deploy-artifacts), that’s usually a sign that either the orchestrator needs a new capability or the build process should be restructured.
 
 ## High‑level flow
 
@@ -10,9 +20,11 @@ The architecture follows an ecosystem-specific build & sign pattern, where artif
 
 ### Artifact Pipeline (DEB, RPM, Generic files)
 
-1. **Execute Build** → compile/build your project and produce artifacts
-2. **Sign Artifacts** → apply GPG signatures (DEB/RPM ecosystem standard)
-3. **Deploy Artifacts** → push signed artifacts to Artifactory with build metadata
+`reusable_artifacts-cicd.yaml` orchestrates the full pipeline internally:
+
+1. **Build** → compile/build your project and produce artifacts
+2. **Sign** → apply GPG signatures (DEB/RPM ecosystem standard)
+3. **Deploy** → push signed artifacts to Artifactory with build metadata
 
 ### Docker Pipeline (Container images)
 
@@ -22,7 +34,7 @@ The architecture follows an ecosystem-specific build & sign pattern, where artif
 
 **Create Release Bundle** → combine artifacts and/or docker builds into a single distributable release bundle
 
-Each workflow is independent and composable. Internally actions artifacts are used for _in‑runner handoff_; deployments are used for _durable discovery and consumption_ beyond the workflow. Build and sign according to ecosystem requirements, then bundle everything together for release.
+Internally, GitHub Actions artifacts are used for _in‑runner handoff_; JFrog deployments are used for _durable discovery and consumption_ beyond the workflow.
 
 ```mermaid
 sequenceDiagram
@@ -57,33 +69,25 @@ sequenceDiagram
 
 ## Example Usage
 
-The typical pattern combines both pipelines: build and sign according to ecosystem, then unify in a release bundle.
+The typical pattern uses the orchestrated workflows for each ecosystem, then bundles everything together for release.
 
 ```yaml
 jobs:
-  # Artifact pipeline: build → sign (GPG) → deploy
-  build-artifacts:
-    uses: aerospike/shared-workflows/.github/workflows/reusable_execute-build.yaml@v2.0.3
-    with:
-      gh-workflows-ref: v2.0.3 # Required: must match @v2.0.3 above
-      # ... build deb/rpm/generic files ...
-
-  sign-artifacts:
-    needs: build-artifacts
-    uses: aerospike/shared-workflows/.github/workflows/reusable_sign-artifacts.yaml@v2.0.3
+  # Artifact pipeline: build → sign → deploy (all handled by the orchestrator)
+  artifacts:
+    uses: aerospike/shared-workflows/.github/workflows/reusable_artifacts-cicd.yaml@v2.0.3
     with:
       gh-workflows-ref: v2.0.3
-      # ... GPG sign packages ...
-
-  deploy-artifacts:
-    needs: sign-artifacts
-    uses: aerospike/shared-workflows/.github/workflows/reusable_deploy-artifacts.yaml@v2.0.3
-    with:
-      gh-workflows-ref: v2.0.3
-      # ... deploy signed artifacts to JFrog ...
+      jf-project: my-project
+      jf-build-name: my-app
+      version: 1.2.3
+      gh-artifact-directory: dist
+      build-script: |
+        make build
+    secrets: inherit
 
   # Docker pipeline: build with attestations → deploy
-  build-docker:
+  docker:
     uses: aerospike/shared-workflows/.github/workflows/reusable_docker-build-deploy.yaml@v2.0.3
     with:
       attest: true # SLSA attestation (container ecosystem standard)
@@ -92,7 +96,7 @@ jobs:
 
   # Unified release: bundle all builds together
   release-bundle:
-    needs: [deploy-artifacts, build-docker]
+    needs: [artifacts, docker]
     uses: aerospike/shared-workflows/.github/workflows/reusable_create-release-bundle.yaml@v2.0.3
     with:
       gh-workflows-ref: v2.0.3
@@ -100,7 +104,7 @@ jobs:
       # Single bundle containing both artifact and container builds
 ```
 
-For a complete working example see [example_reusable-integration.yaml](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/example_reusable-integration.yaml).
+For a complete working example see [example_artifacts-cicd.yaml](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/example_artifacts-cicd.yaml).
 
 ---
 

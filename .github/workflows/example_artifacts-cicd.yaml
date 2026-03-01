@@ -60,10 +60,10 @@ jobs:
       build-script: |
         # matrix-json is injected into the environment as MATRIX_JSON
         # we can use jq to extract the values we need
-        DISTRO=$(jq -r '.distro' <<<"$MATRIX_JSON")
-        ARCH=$(jq -r '.arch' <<<"$MATRIX_JSON")
+        export DISTRO=$(jq -r '.distro' <<<"$MATRIX_JSON")
+        export ARCH=$(jq -r '.arch' <<<"$MATRIX_JSON")
         # emulated is set in the environment by the reusable_artifacts-cicd.yaml workflow
-        EMULATED=$EMULATED
+        export EMULATED=$EMULATED
         echo "DISTRO: $DISTRO"
         echo "ARCH: $ARCH"
         echo "EMULATED: $EMULATED"

@@ -296,7 +296,6 @@ jobs:
             ${{ inputs.publish-build-info && '--publish-build-info' || '' }} \
             ${{ inputs.dry-run && '--dry-run' || '' }}
       - name: Upload Artifacts
-        if: inputs.dry-run != true
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: ${{ inputs.gh-artifact-name }}
