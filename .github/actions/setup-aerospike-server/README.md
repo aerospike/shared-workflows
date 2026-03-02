@@ -79,30 +79,30 @@ A features file with `asdb-cluster-nodes-limit 0` is required for clustering.
 
 ## Inputs
 
-| Input                       | Required | Default                                                 | Description                                                                                   |
-| --------------------------- | -------- | ------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `oidc-provider`             | Yes      |                                                         | JFrog OIDC provider name                                                                      |
-| `oidc-audience`             | Yes      |                                                         | JFrog OIDC audience                                                                           |
-| `server-tag`                | No       | `latest`                                                | AES Docker image tag                                                                          |
-| `num-nodes`                 | No       | `1`                                                     | Number of cluster nodes                                                                       |
-| `container-name-prefix`     | No       | `aerospike`                                             | Container name prefix (nodes: `prefix-1`, `prefix-2`, ...)                                    |
-| `features-file`             | No       |                                                         | Path to `features.conf` on the runner                                                         |
-| `features-content`          | No       |                                                         | Raw `features.conf` content (e.g., from a secret). Ignored if `features-file` is set          |
-| `config-file`               | No       |                                                         | Path to `aerospike.conf` on the runner                                                        |
-| `config-content`            | No       |                                                         | Raw `aerospike.conf` content. Ignored if `config-file` is set                                 |
-| `env-vars`                  | No       |                                                         | Semicolon-delimited `KEY=VALUE` pairs passed as `-e` flags. Use `\;` for literal semicolons   |
-| `network-name`              | No       | `aerospike-net`                                         | Docker network name                                                                           |
-| `base-port`                 | No       | `3000`                                                  | Base host port (node N maps to `base-port + N - 1`)                                           |
-| `service-port`              | No       | `3000`                                                  | Aerospike service port inside the container (must match `aerospike.conf`)                     |
-| `startup-timeout`           | No       | `30`                                                    | Seconds to wait for node readiness and cluster formation                                      |
-| `enable-tls`                | No       | `false`                                                 | Enable TLS on AES containers                                                                  |
-| `tls-base-port`             | No       | `4333`                                                  | Base host TLS port (node N maps to `tls-base-port + N - 1`)                                   |
-| `enable-security`           | No       | `false`                                                 | Enable Aerospike security (authentication with default admin/admin credentials)               |
-| `enable-strong-consistency` | No       | `false`                                                 | Enable strong consistency on the `test` namespace. Implies security. Requires a features file |
-| `tools-tag`                 | No       | `12.1.1_2`                                              | Aerospike tools Docker image tag                                                              |
-| `container-repo-url`        | No       | `aerospike.jfrog.io`                                    | Docker registry hostname                                                                      |
-| `server-container-repo`     | No       | `database-docker-dev-local/aerospike-server-enterprise` | Image repository path                                                                         |
-| `jfrog-platform-url`        | No       | `https://aerospike.jfrog.io`                            | JFrog platform URL                                                                            |
+| Input                       | Required | Default                                                 | Description                                                                                 |
+| --------------------------- | -------- | ------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `oidc-provider`             | Yes      |                                                         | JFrog OIDC provider name                                                                    |
+| `oidc-audience`             | Yes      |                                                         | JFrog OIDC audience                                                                         |
+| `server-tag`                | No       | `latest`                                                | AES Docker image tag                                                                        |
+| `num-nodes`                 | No       | `1`                                                     | Number of cluster nodes                                                                     |
+| `container-name-prefix`     | No       | `aerospike`                                             | Container name prefix (nodes: `prefix-1`, `prefix-2`, ...)                                  |
+| `features-file`             | No       |                                                         | Path to `features.conf` on the runner                                                       |
+| `features-content`          | No       |                                                         | Raw `features.conf` content (e.g., from a secret). Ignored if `features-file` is set        |
+| `config-file`               | No       |                                                         | Path to `aerospike.conf` on the runner                                                      |
+| `config-content`            | No       |                                                         | Raw `aerospike.conf` content. Ignored if `config-file` is set                               |
+| `env-vars`                  | No       |                                                         | Semicolon-delimited `KEY=VALUE` pairs passed as `-e` flags. Use `\;` for literal semicolons |
+| `network-name`              | No       | `aerospike-net`                                         | Docker network name                                                                         |
+| `base-port`                 | No       | `3000`                                                  | Base host port (node N maps to `base-port + N - 1`)                                         |
+| `service-port`              | No       | `3000`                                                  | Aerospike service port inside the container (must match `aerospike.conf`)                   |
+| `startup-timeout`           | No       | `30`                                                    | Seconds to wait for node readiness and cluster formation                                    |
+| `enable-tls`                | No       | `false`                                                 | Enable TLS on AES containers                                                                |
+| `tls-base-port`             | No       | `4333`                                                  | Base host TLS port (node N maps to `tls-base-port + N - 1`)                                 |
+| `enable-security`           | No       | `false`                                                 | Enable Aerospike security (authentication with default admin/admin credentials)             |
+| `enable-strong-consistency` | No       | `false`                                                 | Enable strong consistency on the `test` namespace. Requires a features file                 |
+| `tools-tag`                 | No       | `12.1.1_2`                                              | Aerospike tools Docker image tag                                                            |
+| `container-repo-url`        | No       | `aerospike.jfrog.io`                                    | Docker registry hostname                                                                    |
+| `server-container-repo`     | No       | `database-docker-dev-local/aerospike-server-enterprise` | Image repository path                                                                       |
+| `jfrog-platform-url`        | No       | `https://aerospike.jfrog.io`                            | JFrog platform URL                                                                          |
 
 ## Outputs
 
@@ -227,7 +227,6 @@ When `enable-security: "true"`, the action enables Aerospike's built-in authenti
 
 When `enable-strong-consistency: "true"`, the action configures the `test` namespace for strong consistency mode:
 
-- **Implies security**: Authentication is auto-enabled (with a warning) if `enable-security` is not explicitly set
 - **Requires a features file**: You must provide `features-file` or `features-content`
 - **File-backed storage**: The namespace uses device storage (`/opt/aerospike/data/test.dat`, 4G) instead of memory storage, as required by SC
 - **Replication factor**: Set to `min(num_nodes, 2)` -- RF=1 for single-node, RF=2 for multi-node

@@ -84,7 +84,7 @@ inputs:
     required: false
     default: "false"
   enable-strong-consistency:
-    description: Enable strong consistency on the test namespace. Implies security. Requires a features file.
+    description: Enable strong consistency on the test namespace. Requires a features file.
     required: false
     default: "false"
   tools-tag:
@@ -137,13 +137,9 @@ runs:
             || error "tls-base-port must be a positive integer (got: '${{ inputs.tls-base-port }}')"
         fi
 
-        # Determine effective security setting (SC implies security)
         effective_security="${{ inputs.enable-security }}"
+
         if [[ "${{ inputs.enable-strong-consistency }}" == "true" ]]; then
-          if [[ "${{ inputs.enable-security }}" != "true" ]]; then
-            echo "::warning::enable-strong-consistency implies security; auto-enabling security"
-            effective_security="true"
-          fi
           [[ -n "${{ inputs.features-file }}" || -n "${{ inputs.features-content }}" ]] \
             || error "features-file or features-content is required for strong consistency"
         fi
@@ -440,10 +436,19 @@ runs:
             run_args+=("-v" "$(realpath "$features_path"):/etc/aerospike/features.conf:ro")
           fi
 
-          # Mount aerospike.conf (read-only for multi-node since we bypass entrypoint,
-          # read-write for single-node since the entrypoint modifies the config)
+          # Decide whether to bypass the entrypoint. The Aerospike Docker entrypoint
+          # regenerates aerospike.conf, overwriting any mounted config. Bypass it
+          # whenever we need a custom config that must not be overwritten.
+          bypass_entrypoint="false"
+          if (( num_nodes > 1 )); then
+            bypass_entrypoint="true"
+          elif [[ "$effective_security" == "true" || "$enable_sc" == "true" ]]; then
+            bypass_entrypoint="true"
+          fi
+
+          # Mount aerospike.conf (read-only when bypassing entrypoint)
           if [[ -n "$config_path" ]]; then
-            if (( num_nodes > 1 )); then
+            if [[ "$bypass_entrypoint" == "true" ]]; then
               run_args+=("-v" "$(realpath "$config_path"):/etc/aerospike/aerospike.conf:ro")
             else
               run_args+=("-v" "$(realpath "$config_path"):/etc/aerospike/aerospike.conf")
@@ -453,15 +458,15 @@ runs:
           # User-supplied env vars
           run_args+=("${env_flags[@]}")
 
-          # Bypass entrypoint for multi-node to prevent config overwrite
-          if (( num_nodes > 1 )); then
+          # Bypass entrypoint to prevent config overwrite
+          if [[ "$bypass_entrypoint" == "true" ]]; then
             run_args+=("--entrypoint" "asd")
           fi
 
           run_args+=("$image")
 
-          # For multi-node, pass --foreground since we bypassed the entrypoint
-          if (( num_nodes > 1 )); then
+          # Pass --foreground since we bypassed the entrypoint
+          if [[ "$bypass_entrypoint" == "true" ]]; then
             run_args+=("--foreground")
           fi
 

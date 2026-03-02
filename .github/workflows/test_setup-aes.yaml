@@ -51,9 +51,9 @@ jobs:
           tools_image="aerospike.jfrog.io/database-docker-virtual/aerospike-tools:12.1.1_2"
           network="${{ steps.setup-aerospike-server.outputs.network-name }}"
           echo "Running: docker run --rm --network $network $tools_image asinfo -h aerospike-1 -p 3000 -v status"
+          rc=0
           result=$(docker run --rm --network "$network" "$tools_image" \
-            asinfo -h aerospike-1 -p 3000 -v status 2>&1)
-          rc=$?
+            asinfo -h aerospike-1 -p 3000 -v status 2>&1) || rc=$?
           echo "Exit code: $rc"
           echo "asinfo status: $result"
           [[ $rc -eq 0 && "$result" == *"ok"* ]] || { echo "Expected status=ok"; exit 1; }
@@ -102,9 +102,9 @@ jobs:
           network="${{ steps.setup-aerospike-server.outputs.network-name }}"
           for container in aerospike-1 aerospike-2 aerospike-3; do
             echo "Running: docker run --rm --network $network $tools_image asinfo -h $container -p 3000 -v cluster-size"
+            rc=0
             cluster_size=$(docker run --rm --network "$network" "$tools_image" \
-              asinfo -h "$container" -p 3000 -v "cluster-size" 2>&1)
-            rc=$?
+              asinfo -h "$container" -p 3000 -v "cluster-size" 2>&1) || rc=$?
             echo "$container cluster-size: $cluster_size (exit code: $rc)"
             [[ $rc -eq 0 && "$cluster_size" == "3" ]] \
               || { echo "Expected cluster-size=3 on $container, got $cluster_size"; exit 1; }
@@ -135,9 +135,9 @@ jobs:
           tools_image="aerospike.jfrog.io/database-docker-virtual/aerospike-tools:12.1.1_2"
           network="${{ steps.setup-aerospike-server.outputs.network-name }}"
           echo "Running: docker run --rm --network $network $tools_image asinfo -h aerospike-1 -p 3000 -v status"
+          rc=0
           result=$(docker run --rm --network "$network" "$tools_image" \
-            asinfo -h aerospike-1 -p 3000 -v status 2>&1)
-          rc=$?
+            asinfo -h aerospike-1 -p 3000 -v status 2>&1) || rc=$?
           echo "Exit code: $rc"
           echo "asinfo status: $result"
           [[ $rc -eq 0 && "$result" == *"ok"* ]] || { echo "Expected status=ok"; exit 1; }
@@ -213,9 +213,9 @@ jobs:
           tools_image="aerospike.jfrog.io/database-docker-virtual/aerospike-tools:12.1.1_2"
           network="${{ steps.setup-aerospike-server.outputs.network-name }}"
           echo "Running: docker run --rm --network $network $tools_image asinfo -h aerospike-1 -p 3000 -v status"
+          rc=0
           result=$(docker run --rm --network "$network" "$tools_image" \
-            asinfo -h aerospike-1 -p 3000 -v status 2>&1)
-          rc=$?
+            asinfo -h aerospike-1 -p 3000 -v status 2>&1) || rc=$?
           echo "Exit code: $rc"
           echo "asinfo status (non-TLS): $result"
           [[ $rc -eq 0 && "$result" == *"ok"* ]] || { echo "Service port 3000 is not responding"; exit 1; }
@@ -252,9 +252,9 @@ jobs:
           tools_image="aerospike.jfrog.io/database-docker-virtual/aerospike-tools:12.1.1_2"
           network="${{ steps.setup-aerospike-server.outputs.network-name }}"
           echo "Running: docker run --rm --network $network $tools_image asinfo -h aerospike-1 -p 3000 -U admin -P admin -v status"
+          rc=0
           result=$(docker run --rm --network "$network" "$tools_image" \
-            asinfo -h aerospike-1 -p 3000 -U admin -P admin -v status 2>&1)
-          rc=$?
+            asinfo -h aerospike-1 -p 3000 -U admin -P admin -v status 2>&1) || rc=$?
           echo "Exit code: $rc"
           echo "asinfo status: $result"
           [[ $rc -eq 0 && "$result" == *"ok"* ]] || { echo "Expected status=ok"; exit 1; }
@@ -264,9 +264,9 @@ jobs:
           tools_image="aerospike.jfrog.io/database-docker-virtual/aerospike-tools:12.1.1_2"
           network="${{ steps.setup-aerospike-server.outputs.network-name }}"
           echo "Running: docker run --rm --network $network $tools_image asinfo -h aerospike-1 -p 3000 -v status (no auth)"
+          rc=0
           result=$(docker run --rm --network "$network" "$tools_image" \
-            asinfo -h aerospike-1 -p 3000 -v status 2>&1) || true
-          rc=$?
+            asinfo -h aerospike-1 -p 3000 -v status 2>&1) || rc=$?
           echo "Exit code: $rc"
           echo "Unauthenticated result: $result"
           [[ "$result" == *"ERROR"* || "$result" == *"not authenticated"* || "$result" == *"error"* ]] \
@@ -298,11 +298,60 @@ jobs:
         run: |
           tools_image="aerospike.jfrog.io/database-docker-virtual/aerospike-tools:12.1.1_2"
           network="${{ steps.setup-aerospike-server.outputs.network-name }}"
-          echo "Running: docker run --rm --network $network $tools_image asinfo -h aerospike-1 -p 3000 -U admin -P admin -v namespace/test"
+          echo "Running: docker run --rm --network $network $tools_image asinfo -h aerospike-1 -p 3000 -v namespace/test"
+          rc=0
           result=$(docker run --rm --network "$network" "$tools_image" \
-            asinfo -h aerospike-1 -p 3000 -U admin -P admin -v "namespace/test" 2>&1)
-          rc=$?
+            asinfo -h aerospike-1 -p 3000 -v "namespace/test" 2>&1) || rc=$?
           echo "Exit code: $rc"
           echo "Namespace info: $result"
           [[ $rc -eq 0 && "$result" == *"strong-consistency=true"* ]] \
             || { echo "Expected strong-consistency=true in namespace info"; exit 1; }
+
+  test-strong-consistency-with-security:
+    name: Single node with strong consistency and security
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@20cf305ff2072d973412fa9b1e3a4f227bda3c76
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8
+
+      - name: Setup AES with strong consistency and security
+        id: setup-aerospike-server
+        uses: ./.github/actions/setup-aerospike-server
+        with:
+          enable-strong-consistency: "true"
+          enable-security: "true"
+          features-content: ${{ secrets.AES_FEATURES_CONF }}
+          startup-timeout: "60"
+          oidc-provider: ${{ vars.JFROG_OIDC_PROVIDER }}
+          oidc-audience: ${{ vars.JFROG_OIDC_AUDIENCE }}
+
+      - name: Verify SC namespace with auth
+        run: |
+          tools_image="aerospike.jfrog.io/database-docker-virtual/aerospike-tools:12.1.1_2"
+          network="${{ steps.setup-aerospike-server.outputs.network-name }}"
+          echo "Running: docker run --rm --network $network $tools_image asinfo -h aerospike-1 -p 3000 -U admin -P admin -v namespace/test"
+          rc=0
+          result=$(docker run --rm --network "$network" "$tools_image" \
+            asinfo -h aerospike-1 -p 3000 -U admin -P admin -v "namespace/test" 2>&1) || rc=$?
+          echo "Exit code: $rc"
+          echo "Namespace info: $result"
+          [[ $rc -eq 0 && "$result" == *"strong-consistency=true"* ]] \
+            || { echo "Expected strong-consistency=true in namespace info"; exit 1; }
+
+      - name: Verify unauthenticated access is rejected
+        run: |
+          tools_image="aerospike.jfrog.io/database-docker-virtual/aerospike-tools:12.1.1_2"
+          network="${{ steps.setup-aerospike-server.outputs.network-name }}"
+          echo "Running: docker run --rm --network $network $tools_image asinfo -h aerospike-1 -p 3000 -v status (no auth)"
+          rc=0
+          result=$(docker run --rm --network "$network" "$tools_image" \
+            asinfo -h aerospike-1 -p 3000 -v status 2>&1) || rc=$?
+          echo "Exit code: $rc"
+          echo "Unauthenticated result: $result"
+          [[ "$result" == *"ERROR"* || "$result" == *"not authenticated"* || "$result" == *"error"* ]] \
+            || { echo "Expected unauthenticated access to be rejected"; exit 1; }
