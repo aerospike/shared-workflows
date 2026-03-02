@@ -4,3 +4,18 @@ updates:
     directory: /
     schedule:
       interval: daily
+
+  - package-ecosystem: nuget
+    directory: /.github/workflows/execute-build/test_apps/DotnetHelloWorld/AerospikeHelloWorld/AerospikeHelloWorld
+    schedule:
+      interval: daily
+
+  - package-ecosystem: docker
+    directory: /.github/workflows/execute-build/test_apps/hi
+    schedule:
+      interval: daily
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: daily
