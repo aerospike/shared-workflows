@@ -17,6 +17,10 @@ CONTAINER_NAMES=""
 NUM_NODES=1
 TIMEOUT=30
 SERVICE_PORT=3000
+SECURITY="false"
+ENABLE_SC="false"
+TOOLS_IMAGE=""
+NETWORK=""
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -35,6 +39,22 @@ while [[ $# -gt 0 ]]; do
         ;;
     --service-port)
         SERVICE_PORT="$2"
+        shift 2
+        ;;
+    --security)
+        SECURITY="$2"
+        shift 2
+        ;;
+    --enable-sc)
+        ENABLE_SC="$2"
+        shift 2
+        ;;
+    --tools-image)
+        TOOLS_IMAGE="$2"
+        shift 2
+        ;;
+    --network)
+        NETWORK="$2"
         shift 2
         ;;
     *)
@@ -104,29 +124,68 @@ if ((NUM_NODES > 1)); then
     fi
 fi
 
-# Phase 3: Wait for cluster stability (migrations complete on every node)
+# Phase 3: Wait for cluster stability
 echo "Phase 3: Waiting for cluster stability..."
-for container in "${containers[@]}"; do
-    echo "  Waiting for $container to stabilize..."
-    elapsed=0
-    stable="false"
-    while ((elapsed < TIMEOUT)); do
-        if docker logs "$container" 2>&1 | grep -q 'migrations: complete'; then
-            echo "  $container is stable (${elapsed}s)"
-            stable="true"
-            break
-        fi
-        sleep 2
-        elapsed=$((elapsed + 2))
-    done
 
-    if [[ $stable != "true" ]]; then
-        echo "Error: $container did not stabilize within ${TIMEOUT}s" >&2
-        echo "Last 20 lines of container logs:" >&2
-        docker logs --tail 20 "$container" >&2
-        exit 1
+if [[ $ENABLE_SC == "true" ]]; then
+    # SC mode: use tools container with asinfo to check cluster-stable
+    # SC partitions won't complete migrations until roster is set up,
+    # so we use ignore-migrations=true
+    auth_flags=""
+    if [[ $SECURITY == "true" ]]; then
+        auth_flags="-U admin -P admin"
     fi
-done
+
+    # shellcheck disable=SC2086
+    for container in "${containers[@]}"; do
+        echo "  Waiting for $container to stabilize (SC mode)..."
+        elapsed=0
+        stable="false"
+        while ((elapsed < TIMEOUT)); do
+            result=$(docker run --rm --network "$NETWORK" "$TOOLS_IMAGE" \
+                asinfo -h "$container" -p "$SERVICE_PORT" $auth_flags \
+                -v "cluster-stable:ignore-migrations=true" 2>&1) || true
+            # A non-ERROR response containing a cluster key means stable
+            if [[ -n $result && $result != *"ERROR"* ]]; then
+                echo "  $container is stable (SC mode, ${elapsed}s): $result"
+                stable="true"
+                break
+            fi
+            sleep 2
+            elapsed=$((elapsed + 2))
+        done
+
+        if [[ $stable != "true" ]]; then
+            echo "Error: $container did not stabilize within ${TIMEOUT}s (SC mode)" >&2
+            echo "Last 20 lines of container logs:" >&2
+            docker logs --tail 20 "$container" >&2
+            exit 1
+        fi
+    done
+else
+    # Standard mode: check logs for migrations complete
+    for container in "${containers[@]}"; do
+        echo "  Waiting for $container to stabilize..."
+        elapsed=0
+        stable="false"
+        while ((elapsed < TIMEOUT)); do
+            if docker logs "$container" 2>&1 | grep -q 'migrations: complete'; then
+                echo "  $container is stable (${elapsed}s)"
+                stable="true"
+                break
+            fi
+            sleep 2
+            elapsed=$((elapsed + 2))
+        done
+
+        if [[ $stable != "true" ]]; then
+            echo "Error: $container did not stabilize within ${TIMEOUT}s" >&2
+            echo "Last 20 lines of container logs:" >&2
+            docker logs --tail 20 "$container" >&2
+            exit 1
+        fi
+    done
+fi
 echo "All nodes are stable."
 
 echo "Aerospike Enterprise Server is ready."

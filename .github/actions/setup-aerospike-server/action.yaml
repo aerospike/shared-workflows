@@ -79,6 +79,18 @@ inputs:
     description: Base host port for TLS (node N maps to tls-base-port + N - 1)
     required: false
     default: "4333"
+  enable-security:
+    description: Enable Aerospike security (authentication with default admin/admin credentials)
+    required: false
+    default: "false"
+  enable-strong-consistency:
+    description: Enable strong consistency on the test namespace. Implies security. Requires a features file.
+    required: false
+    default: "false"
+  tools-tag:
+    description: Aerospike tools Docker image tag
+    required: false
+    default: 12.1.1_2
 
 outputs:
   container-names:
@@ -101,6 +113,7 @@ runs:
   using: composite
   steps:
     - name: Validate inputs
+      id: validate
       shell: bash
       run: |
         error() { echo "Error: $1" >&2; exit 1; }
@@ -123,6 +136,19 @@ runs:
           [[ "${{ inputs.tls-base-port }}" =~ ^[1-9][0-9]*$ ]] \
             || error "tls-base-port must be a positive integer (got: '${{ inputs.tls-base-port }}')"
         fi
+
+        # Determine effective security setting (SC implies security)
+        effective_security="${{ inputs.enable-security }}"
+        if [[ "${{ inputs.enable-strong-consistency }}" == "true" ]]; then
+          if [[ "${{ inputs.enable-security }}" != "true" ]]; then
+            echo "::warning::enable-strong-consistency implies security; auto-enabling security"
+            effective_security="true"
+          fi
+          [[ -n "${{ inputs.features-file }}" || -n "${{ inputs.features-content }}" ]] \
+            || error "features-file or features-content is required for strong consistency"
+        fi
+
+        echo "effective-security=$effective_security" >> "$GITHUB_OUTPUT"
 
     - name: Set up JFrog CLI
       id: jf
@@ -203,6 +229,26 @@ runs:
       run: |
         features_path="${{ inputs.features-file }}"
         config_path="${{ inputs.config-file }}"
+        effective_security="${{ steps.validate.outputs.effective-security }}"
+        enable_sc="${{ inputs.enable-strong-consistency }}"
+        num_nodes=${{ inputs.num-nodes }}
+        tpl_dir="${{ github.action_path }}/templates"
+
+        # Build security stanza from template
+        security_stanza=""
+        if [[ "$effective_security" == "true" ]]; then
+          security_stanza=$(cat "$tpl_dir/security.conf")
+        fi
+
+        # Build namespace block from template
+        if [[ "$enable_sc" == "true" ]]; then
+          rf=$(( num_nodes < 2 ? num_nodes : 2 ))
+          namespace_block=$(sed "s/__REPLICATION_FACTOR__/${rf}/" "$tpl_dir/namespace-sc.conf")
+        else
+          namespace_block=$(sed 's/__REPLICATION_FACTOR__/1/' "$tpl_dir/namespace-memory.conf")
+        fi
+
+        render_tpl="${{ github.action_path }}/render-template.sh"
 
         # Write features-content to temp file if no file path was given
         if [[ -z "$features_path" && -n "${FEATURES_CONTENT}" ]]; then
@@ -218,45 +264,36 @@ runs:
           echo "Wrote config-content to $config_path"
         fi
 
+        # If user provided a custom config, handle security/SC injection
+        if [[ -n "$config_path" ]]; then
+          if [[ "$effective_security" == "true" ]]; then
+            # Append security stanza if not already present
+            if ! grep -q 'security {' "$config_path" 2>/dev/null; then
+              echo "" >> "$config_path"
+              echo "$security_stanza" >> "$config_path"
+              echo "Appended security stanza to user-provided config"
+            fi
+          fi
+          if [[ "$enable_sc" == "true" ]]; then
+            echo "::warning::Strong consistency directives must be present in your custom config; the action does not inject namespace SC settings into user-provided configs"
+          fi
+        fi
+
         # Generate default TLS-enabled config if TLS is on and no custom config
         if [[ "${{ inputs.enable-tls }}" == "true" && -z "$config_path" ]]; then
           config_path="$(mktemp)"
-          cat > "$config_path" << 'AESCONF'
-        service {
-            proto-fd-max 15000
-        }
-
-        tls aerospike-tls {
-            cert-file /etc/aerospike/tls/server.crt
-            key-file  /etc/aerospike/tls/server.key
-            ca-file   /etc/aerospike/tls/ca.crt
-        }
-
-        network {
-            service {
-                address any
-                port 3000
-                tls-port 4333
-                tls-authenticate-client false
-                tls-name aerospike-tls
-            }
-            heartbeat {
-                mode mesh
-                port 3002
-            }
-            fabric {
-                port 3001
-            }
-        }
-
-        namespace test {
-            replication-factor 1
-            storage-engine memory {
-                data-size 1G
-            }
-        }
-        AESCONF
+          TPL_SECURITY="$security_stanza" TPL_NAMESPACE="$namespace_block" \
+            "$render_tpl" "$tpl_dir/tls.conf" > "$config_path"
           echo "Generated default TLS-enabled aerospike.conf at $config_path"
+        fi
+
+        # Generate default config when security or SC is enabled but no TLS and no custom config
+        if [[ "${{ inputs.enable-tls }}" != "true" && -z "$config_path" \
+              && ( "$effective_security" == "true" || "$enable_sc" == "true" ) ]]; then
+          config_path="$(mktemp)"
+          TPL_SECURITY="$security_stanza" TPL_NAMESPACE="$namespace_block" \
+            "$render_tpl" "$tpl_dir/default.conf" > "$config_path"
+          echo "Generated default security/SC-enabled aerospike.conf at $config_path"
         fi
 
         echo "features-path=$features_path" >> "$GITHUB_OUTPUT"
@@ -292,6 +329,8 @@ runs:
         enable_tls="${{ inputs.enable-tls }}"
         tls_base_port=${{ inputs.tls-base-port }}
         tls_cert_dir="${{ steps.generate-tls-certs.outputs.tls-cert-dir }}"
+        effective_security="${{ steps.validate.outputs.effective-security }}"
+        enable_sc="${{ inputs.enable-strong-consistency }}"
 
         container_names=""
         service_ports=""
@@ -348,45 +387,27 @@ runs:
           done
 
           if [[ -z "$config_path" ]]; then
+            tpl_dir="${{ github.action_path }}/templates"
+            render_tpl="${{ github.action_path }}/render-template.sh"
+
+            # Build security stanza from template
+            mn_security_stanza=""
+            if [[ "$effective_security" == "true" ]]; then
+              mn_security_stanza=$(cat "$tpl_dir/security.conf")
+            fi
+
+            # Build namespace block from template
+            if [[ "$enable_sc" == "true" ]]; then
+              mn_rf=$(( num_nodes < 2 ? num_nodes : 2 ))
+              mn_namespace_block=$(sed "s/__REPLICATION_FACTOR__/${mn_rf}/" "$tpl_dir/namespace-sc.conf")
+            else
+              mn_namespace_block=$(sed 's/__REPLICATION_FACTOR__/2/' "$tpl_dir/namespace-memory.conf")
+            fi
+
+            # Render multi-node template
             config_path="$(mktemp)"
-            cat > "$config_path" << AESCONF
-        service {
-            feature-key-file /etc/aerospike/features.conf
-            cluster-name docker
-        }
-
-        logging {
-            console {
-                context any info
-            }
-        }
-
-        network {
-            service {
-                address any
-                port 3000
-            }
-            heartbeat {
-                mode mesh
-                address any
-                port 3002
-                interval 150
-                timeout 10
-        ${mesh_seeds}
-            }
-            fabric {
-                address any
-                port 3001
-            }
-        }
-
-        namespace test {
-            replication-factor 2
-            storage-engine memory {
-                data-size 1G
-            }
-        }
-        AESCONF
+            TPL_SECURITY="$mn_security_stanza" TPL_NAMESPACE="$mn_namespace_block" TPL_MESH_SEEDS="$mesh_seeds" \
+              "$render_tpl" "$tpl_dir/multi-node.conf" > "$config_path"
           else
             # Inject mesh seeds into the user-provided config
             cluster_config="$(mktemp)"
@@ -474,4 +495,36 @@ runs:
           --container-names "${{ steps.start-containers.outputs.container-names }}" \
           --num-nodes "${{ inputs.num-nodes }}" \
           --timeout "${{ inputs.startup-timeout }}" \
-          --service-port "${{ inputs.service-port }}"
+          --service-port "${{ inputs.service-port }}" \
+          --security "${{ steps.validate.outputs.effective-security }}" \
+          --enable-sc "${{ inputs.enable-strong-consistency }}" \
+          --tools-image "${{ inputs.container-repo-url }}/database-docker-virtual/aerospike-tools:${{ inputs.tools-tag }}" \
+          --network "${{ inputs.network-name }}"
+
+    - name: Setup strong consistency
+      if: inputs.enable-strong-consistency == 'true'
+      shell: bash
+      run: |
+        tools_image="${{ inputs.container-repo-url }}/database-docker-virtual/aerospike-tools:${{ inputs.tools-tag }}"
+        network="${{ inputs.network-name }}"
+        first_container="${{ inputs.container-name-prefix }}-1"
+        service_port=${{ inputs.service-port }}
+
+        auth_flags=""
+        if [[ "${{ steps.validate.outputs.effective-security }}" == "true" ]]; then
+          auth_flags="-U admin -P admin"
+        fi
+
+        echo "Setting up strong consistency roster..."
+        # shellcheck disable=SC2086 -- auth_flags contains multiple arguments that must be word split
+        docker run --rm --network "$network" "$tools_image" \
+          asadm -h "$first_container" -p "$service_port" $auth_flags \
+          --enable --execute "manage roster stage observed ns test"
+
+        echo "Triggering recluster..."
+        # shellcheck disable=SC2086 -- auth_flags contains multiple arguments that must be word split
+        docker run --rm --network "$network" "$tools_image" \
+          asadm -h "$first_container" -p "$service_port" $auth_flags \
+          --enable --execute "manage recluster"
+
+        echo "Strong consistency roster setup complete."
