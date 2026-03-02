@@ -22,23 +22,23 @@ jobs:
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8
 
       - name: Setup AES
-        id: setup-aes
-        uses: ./.github/actions/setup-aes
+        id: setup-aerospike-server
+        uses: ./.github/actions/setup-aerospike-server
         with:
           oidc-provider: ${{ vars.JFROG_OIDC_PROVIDER }}
           oidc-audience: ${{ vars.JFROG_OIDC_AUDIENCE }}
 
       - name: Verify outputs
         run: |
-          echo "container-names: ${{ steps.setup-aes.outputs.container-names }}"
-          echo "service-ports: ${{ steps.setup-aes.outputs.service-ports }}"
-          echo "network-name: ${{ steps.setup-aes.outputs.network-name }}"
+          echo "container-names: ${{ steps.setup-aerospike-server.outputs.container-names }}"
+          echo "service-ports: ${{ steps.setup-aerospike-server.outputs.service-ports }}"
+          echo "network-name: ${{ steps.setup-aerospike-server.outputs.network-name }}"
 
-          [[ "${{ steps.setup-aes.outputs.container-names }}" == "aerospike-1" ]] \
+          [[ "${{ steps.setup-aerospike-server.outputs.container-names }}" == "aerospike-1" ]] \
             || { echo "Unexpected container-names"; exit 1; }
-          [[ "${{ steps.setup-aes.outputs.service-ports }}" == "3000" ]] \
+          [[ "${{ steps.setup-aerospike-server.outputs.service-ports }}" == "3000" ]] \
             || { echo "Unexpected service-ports"; exit 1; }
-          [[ "${{ steps.setup-aes.outputs.network-name }}" == "aerospike-net" ]] \
+          [[ "${{ steps.setup-aerospike-server.outputs.network-name }}" == "aerospike-net" ]] \
             || { echo "Unexpected network-name"; exit 1; }
 
       - name: Verify container is running
@@ -59,8 +59,8 @@ jobs:
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8
 
       - name: Setup AES (3 nodes)
-        id: setup-aes
-        uses: ./.github/actions/setup-aes
+        id: setup-aerospike-server
+        uses: ./.github/actions/setup-aerospike-server
         with:
           num-nodes: "3"
           startup-timeout: "60"
@@ -70,12 +70,12 @@ jobs:
 
       - name: Verify outputs
         run: |
-          echo "container-names: ${{ steps.setup-aes.outputs.container-names }}"
-          echo "service-ports: ${{ steps.setup-aes.outputs.service-ports }}"
+          echo "container-names: ${{ steps.setup-aerospike-server.outputs.container-names }}"
+          echo "service-ports: ${{ steps.setup-aerospike-server.outputs.service-ports }}"
 
-          [[ "${{ steps.setup-aes.outputs.container-names }}" == "aerospike-1,aerospike-2,aerospike-3" ]] \
+          [[ "${{ steps.setup-aerospike-server.outputs.container-names }}" == "aerospike-1,aerospike-2,aerospike-3" ]] \
             || { echo "Unexpected container-names"; exit 1; }
-          [[ "${{ steps.setup-aes.outputs.service-ports }}" == "3000,3001,3002" ]] \
+          [[ "${{ steps.setup-aerospike-server.outputs.service-ports }}" == "3000,3001,3002" ]] \
             || { echo "Unexpected service-ports"; exit 1; }
 
       - name: Verify all containers are running
@@ -103,8 +103,8 @@ jobs:
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8
 
       - name: Setup AES with features-content
-        id: setup-aes
-        uses: ./.github/actions/setup-aes
+        id: setup-aerospike-server
+        uses: ./.github/actions/setup-aerospike-server
         with:
           features-content: ${{ secrets.AES_FEATURES_CONF }}
           oidc-provider: ${{ vars.JFROG_OIDC_PROVIDER }}
@@ -127,8 +127,8 @@ jobs:
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8
 
       - name: Setup AES with env-vars
-        id: setup-aes
-        uses: ./.github/actions/setup-aes
+        id: setup-aerospike-server
+        uses: ./.github/actions/setup-aerospike-server
         with:
           env-vars: NAMESPACE=test;SERVICE_THREADS=4
           oidc-provider: ${{ vars.JFROG_OIDC_PROVIDER }}
@@ -155,8 +155,8 @@ jobs:
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8
 
       - name: Setup AES with TLS
-        id: setup-aes
-        uses: ./.github/actions/setup-aes
+        id: setup-aerospike-server
+        uses: ./.github/actions/setup-aerospike-server
         with:
           enable-tls: "true"
           oidc-provider: ${{ vars.JFROG_OIDC_PROVIDER }}
@@ -164,17 +164,17 @@ jobs:
 
       - name: Verify TLS outputs
         run: |
-          echo "tls-service-ports: ${{ steps.setup-aes.outputs.tls-service-ports }}"
-          echo "tls-cert-dir: ${{ steps.setup-aes.outputs.tls-cert-dir }}"
+          echo "tls-service-ports: ${{ steps.setup-aerospike-server.outputs.tls-service-ports }}"
+          echo "tls-cert-dir: ${{ steps.setup-aerospike-server.outputs.tls-cert-dir }}"
 
-          [[ "${{ steps.setup-aes.outputs.tls-service-ports }}" == "4333" ]] \
+          [[ "${{ steps.setup-aerospike-server.outputs.tls-service-ports }}" == "4333" ]] \
             || { echo "Unexpected tls-service-ports"; exit 1; }
-          [[ -n "${{ steps.setup-aes.outputs.tls-cert-dir }}" ]] \
+          [[ -n "${{ steps.setup-aerospike-server.outputs.tls-cert-dir }}" ]] \
             || { echo "tls-cert-dir is empty"; exit 1; }
 
       - name: Verify cert files exist
         run: |
-          cert_dir="${{ steps.setup-aes.outputs.tls-cert-dir }}"
+          cert_dir="${{ steps.setup-aerospike-server.outputs.tls-cert-dir }}"
           for f in ca.crt ca.key server.crt server.key client.crt client.key; do
             [[ -f "$cert_dir/$f" ]] || { echo "Missing cert file: $f"; exit 1; }
           done
@@ -187,6 +187,6 @@ jobs:
 
       - name: Verify TLS connection
         run: |
-          cert_dir="${{ steps.setup-aes.outputs.tls-cert-dir }}"
+          cert_dir="${{ steps.setup-aerospike-server.outputs.tls-cert-dir }}"
           echo | openssl s_client -connect 127.0.0.1:4333 -CAfile "$cert_dir/ca.crt" 2>&1 | grep -q "Verify return code: 0"
           echo "TLS connection verified"

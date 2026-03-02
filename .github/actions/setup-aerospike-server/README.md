@@ -12,7 +12,7 @@ GitHub Action that starts one or more Aerospike Enterprise Server containers wit
 ### Single node
 
 ```yaml
-- uses: ./.github/actions/setup-aes
+- uses: ./.github/actions/setup-aerospike-server
   with:
     oidc-provider: ${{ vars.JFROG_OIDC_PROVIDER }}
     oidc-audience: ${{ vars.JFROG_OIDC_AUDIENCE }}
@@ -23,7 +23,7 @@ GitHub Action that starts one or more Aerospike Enterprise Server containers wit
 A features file with `asdb-cluster-nodes-limit 0` is required for clustering.
 
 ```yaml
-- uses: ./.github/actions/setup-aes
+- uses: ./.github/actions/setup-aerospike-server
   with:
     num-nodes: "3"
     features-content: ${{ secrets.AES_FEATURES_CONF }}
@@ -35,7 +35,7 @@ A features file with `asdb-cluster-nodes-limit 0` is required for clustering.
 ### Single node with TLS
 
 ```yaml
-- uses: ./.github/actions/setup-aes
+- uses: ./.github/actions/setup-aerospike-server
   with:
     enable-tls: "true"
     oidc-provider: ${{ vars.JFROG_OIDC_PROVIDER }}
@@ -99,7 +99,7 @@ When `enable-tls: "true"`, the action generates a self-signed CA and server/clie
 Use the `tls-cert-dir` and `tls-service-ports` outputs to pass the certificates to any client running directly in a workflow step:
 
 ```yaml
-- uses: ./.github/actions/setup-aes
+- uses: ./.github/actions/setup-aerospike-server
   id: aes
   with:
     enable-tls: "true"
@@ -122,7 +122,7 @@ Use the `tls-cert-dir` and `tls-service-ports` outputs to pass the certificates 
 Go clients accept PEM certificate files directly via command-line flags:
 
 ```yaml
-- uses: ./.github/actions/setup-aes
+- uses: ./.github/actions/setup-aerospike-server
   id: aes
   with:
     enable-tls: "true"
@@ -147,7 +147,7 @@ Go clients accept PEM certificate files directly via command-line flags:
 Java clients require a JKS trust store rather than raw PEM files. Import the generated CA certificate into a trust store, then pass it to the test runner:
 
 ```yaml
-- uses: ./.github/actions/setup-aes
+- uses: ./.github/actions/setup-aerospike-server
   id: aes
   with:
     enable-tls: "true"
