@@ -147,10 +147,10 @@ if [[ $ENABLE_SC == "true" ]]; then
         stable="false"
         while ((elapsed < TIMEOUT)); do
             echo "    [${elapsed}s] Running: docker run --rm --network $NETWORK $TOOLS_IMAGE asinfo -h $container -p $SERVICE_PORT $auth_flags -v cluster-stable:ignore-migrations=true"
+            rc=0
             result=$(docker run --rm --network "$NETWORK" "$TOOLS_IMAGE" \
                 asinfo -h "$container" -p "$SERVICE_PORT" $auth_flags \
-                -v "cluster-stable:ignore-migrations=true" 2>&1)
-            rc=$?
+                -v "cluster-stable:ignore-migrations=true" 2>&1) || rc=$?
             echo "    [${elapsed}s] Exit code: $rc, Output: $result"
             # A non-ERROR response containing a cluster key means stable
             if [[ $rc -eq 0 && -n $result && $result != *"ERROR"* ]]; then
