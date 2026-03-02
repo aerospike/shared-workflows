@@ -87,6 +87,10 @@ inputs:
     description: Enable strong consistency on the test namespace. Requires a features file.
     required: false
     default: "false"
+  sc-stability-timeout-seconds:
+    description: Seconds to wait for SC cluster stability after roster setup
+    required: false
+    default: "30"
   tools-tag:
     description: Aerospike tools Docker image tag
     required: false
@@ -564,5 +568,31 @@ runs:
           docker logs --tail 30 "$first_container" >&2
           exit 1
         }
+
+        # Wait for SC partitions to become active after recluster
+        num_nodes=${{ inputs.num-nodes }}
+        timeout=${{ inputs.sc-stability-timeout-seconds }}
+        echo "  Waiting for cluster stability (size=$num_nodes, ignore-migrations=false)..."
+        elapsed=0
+        while (( elapsed < timeout )); do
+          rc=0
+          # shellcheck disable=SC2086
+          result=$(docker run --rm --network "$network" "$tools_image" \
+            asinfo -h "$first_container" -p "$service_port" $auth_flags \
+            -v "cluster-stable:size=$num_nodes;ignore-migrations=false" 2>&1) || rc=$?
+          if [[ $rc -eq 0 && -n "$result" && "$result" != *"ERROR"* ]]; then
+            echo "  Cluster is stable after recluster (${elapsed}s): $result"
+            break
+          fi
+          sleep 1
+          elapsed=$((elapsed + 1))
+        done
+
+        if (( elapsed >= timeout )); then
+          echo "Error: Cluster did not stabilize within ${timeout}s after recluster" >&2
+          echo "Last result: $result" >&2
+          docker logs --tail 30 "$first_container" >&2
+          exit 1
+        fi
 
         echo "Strong consistency roster setup complete."
