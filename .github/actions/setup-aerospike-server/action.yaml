@@ -531,6 +531,18 @@ runs:
         echo "  Target: $first_container:$service_port"
         echo "  Auth flags: ${auth_flags:-(none)}"
 
+        # Grant sys-admin role so admin has service-ctrl permission for roster commands
+        if [[ -n "$auth_flags" ]]; then
+          echo "  Granting sys-admin role to admin user..."
+          # shellcheck disable=SC2086
+          docker run --rm --network "$network" "$tools_image" \
+            asadm -h "$first_container" -p "$service_port" $auth_flags \
+            --enable --execute "manage acl grant user admin roles sys-admin" 2>&1 || {
+            echo "Error: failed to grant sys-admin role (exit code $?)" >&2
+            exit 1
+          }
+        fi
+
         echo "  Running: asadm manage roster stage observed ns test"
         # shellcheck disable=SC2086 -- auth_flags contains multiple arguments that must be word split
         docker run --rm --network "$network" "$tools_image" \
