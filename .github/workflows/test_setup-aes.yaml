@@ -101,13 +101,14 @@ jobs:
           tools_image="aerospike.jfrog.io/database-docker-virtual/aerospike-tools:12.1.1_2"
           network="${{ steps.setup-aerospike-server.outputs.network-name }}"
           for container in aerospike-1 aerospike-2 aerospike-3; do
-            echo "Running: docker run --rm --network $network $tools_image asinfo -h $container -p 3000 -v cluster-size"
+            echo "Checking cluster_size on $container..."
             rc=0
-            cluster_size=$(docker run --rm --network "$network" "$tools_image" \
-              asinfo -h "$container" -p 3000 -v "cluster-size" 2>&1) || rc=$?
-            echo "$container cluster-size: $cluster_size (exit code: $rc)"
+            stats=$(docker run --rm --network "$network" "$tools_image" \
+              asinfo -h "$container" -p 3000 -v "statistics" 2>&1) || rc=$?
+            cluster_size=$(echo "$stats" | tr ';' '\n' | grep -oP 'cluster_size=\K\d+' || echo "N/A")
+            echo "$container cluster_size: $cluster_size (exit code: $rc)"
             [[ $rc -eq 0 && "$cluster_size" == "3" ]] \
-              || { echo "Expected cluster-size=3 on $container, got $cluster_size"; exit 1; }
+              || { echo "Expected cluster_size=3 on $container, got $cluster_size"; exit 1; }
           done
 
   test-features-content:
