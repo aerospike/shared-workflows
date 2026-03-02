@@ -11,7 +11,9 @@ permissions:
 
 jobs:
   # Validates that different artifact types (native + dotnet) can coexist
+  # Skipped for Dependabot: SSL.com NuGet signing requires real credentials
   mixed-matrix-test:
+    if: github.actor != 'dependabot[bot]'
     name: Mixed Matrix Test (Native + DotNet)
     uses: ./.github/workflows/reusable_artifacts-cicd.yaml
     with:
@@ -52,6 +54,7 @@ jobs:
       es-totp_secret: ${{ secrets.ES_TOTP_SECRET }}
 
   verify:
+    if: github.actor != 'dependabot[bot]'
     name: Verify Mixed Matrix Artifacts
     runs-on: ubuntu-latest
     needs: mixed-matrix-test
