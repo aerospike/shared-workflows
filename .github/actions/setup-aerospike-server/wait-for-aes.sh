@@ -136,17 +136,24 @@ if [[ $ENABLE_SC == "true" ]]; then
         auth_flags="-U admin -P admin"
     fi
 
+    echo "  Tools image: $TOOLS_IMAGE"
+    echo "  Network: $NETWORK"
+    echo "  Auth flags: ${auth_flags:-(none)}"
+
     # shellcheck disable=SC2086
     for container in "${containers[@]}"; do
         echo "  Waiting for $container to stabilize (SC mode)..."
         elapsed=0
         stable="false"
         while ((elapsed < TIMEOUT)); do
+            echo "    [${elapsed}s] Running: docker run --rm --network $NETWORK $TOOLS_IMAGE asinfo -h $container -p $SERVICE_PORT $auth_flags -v cluster-stable:ignore-migrations=true"
             result=$(docker run --rm --network "$NETWORK" "$TOOLS_IMAGE" \
                 asinfo -h "$container" -p "$SERVICE_PORT" $auth_flags \
-                -v "cluster-stable:ignore-migrations=true" 2>&1) || true
+                -v "cluster-stable:ignore-migrations=true" 2>&1)
+            rc=$?
+            echo "    [${elapsed}s] Exit code: $rc, Output: $result"
             # A non-ERROR response containing a cluster key means stable
-            if [[ -n $result && $result != *"ERROR"* ]]; then
+            if [[ $rc -eq 0 && -n $result && $result != *"ERROR"* ]]; then
                 echo "  $container is stable (SC mode, ${elapsed}s): $result"
                 stable="true"
                 break

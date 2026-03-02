@@ -516,15 +516,31 @@ runs:
         fi
 
         echo "Setting up strong consistency roster..."
-        # shellcheck disable=SC2086 -- auth_flags contains multiple arguments that must be word split
-        docker run --rm --network "$network" "$tools_image" \
-          asadm -h "$first_container" -p "$service_port" $auth_flags \
-          --enable --execute "manage roster stage observed ns test"
+        echo "  Tools image: $tools_image"
+        echo "  Network: $network"
+        echo "  Target: $first_container:$service_port"
+        echo "  Auth flags: ${auth_flags:-(none)}"
 
-        echo "Triggering recluster..."
+        echo "  Running: asadm manage roster stage observed ns test"
         # shellcheck disable=SC2086 -- auth_flags contains multiple arguments that must be word split
         docker run --rm --network "$network" "$tools_image" \
           asadm -h "$first_container" -p "$service_port" $auth_flags \
-          --enable --execute "manage recluster"
+          --enable --execute "manage roster stage observed ns test" 2>&1 || {
+          echo "Error: roster stage command failed (exit code $?)" >&2
+          echo "Server logs:" >&2
+          docker logs --tail 30 "$first_container" >&2
+          exit 1
+        }
+
+        echo "  Running: asadm manage recluster"
+        # shellcheck disable=SC2086 -- auth_flags contains multiple arguments that must be word split
+        docker run --rm --network "$network" "$tools_image" \
+          asadm -h "$first_container" -p "$service_port" $auth_flags \
+          --enable --execute "manage recluster" 2>&1 || {
+          echo "Error: recluster command failed (exit code $?)" >&2
+          echo "Server logs:" >&2
+          docker logs --tail 30 "$first_container" >&2
+          exit 1
+        }
 
         echo "Strong consistency roster setup complete."
