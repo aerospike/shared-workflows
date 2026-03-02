@@ -72,7 +72,7 @@ inputs:
     required: false
     default: "30"
   enable-tls:
-    description: Enable TLS on AES containers
+    description: Enable TLS on Aerospike Server containers
     required: false
     default: "false"
   tls-base-port:
@@ -312,7 +312,7 @@ runs:
         fi
         echo "network-name=$network" >> "$GITHUB_OUTPUT"
 
-    - name: Start AES containers
+    - name: Start Aerospike Server containers
       id: start-containers
       shell: bash
       env:
@@ -501,7 +501,7 @@ runs:
         echo "service-ports=$service_ports" >> "$GITHUB_OUTPUT"
         echo "tls-service-ports=$tls_service_ports" >> "$GITHUB_OUTPUT"
 
-    - name: Wait for AES readiness
+    - name: Wait for Aerospike Server readiness
       shell: bash
       run: |
         chmod +x "${{ github.action_path }}/wait-for-aes.sh"

@@ -4,7 +4,7 @@ GitHub Action that starts one or more Aerospike Enterprise Server containers wit
 
 ## Prerequisites
 
-- JFrog OIDC credentials (`oidc-provider` and `oidc-audience`) for pulling the AES Docker image
+- JFrog OIDC credentials (`oidc-provider` and `oidc-audience`) for pulling the Aerospike Server Docker image
 - A valid `features.conf` for enterprise features (e.g., multi-node clustering requires `asdb-cluster-nodes-limit 0`)
 
 ## Quick Start
@@ -83,7 +83,7 @@ A features file with `asdb-cluster-nodes-limit 0` is required for clustering.
 | ------------------------------ | -------- | ------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
 | `oidc-provider`                | Yes      |                                                         | JFrog OIDC provider name                                                                    |
 | `oidc-audience`                | Yes      |                                                         | JFrog OIDC audience                                                                         |
-| `server-tag`                   | No       | `latest`                                                | AES Docker image tag                                                                        |
+| `server-tag`                   | No       | `latest`                                                | Aerospike Server Docker image tag                                                           |
 | `num-nodes`                    | No       | `1`                                                     | Number of cluster nodes                                                                     |
 | `container-name-prefix`        | No       | `aerospike`                                             | Container name prefix (nodes: `prefix-1`, `prefix-2`, ...)                                  |
 | `features-file`                | No       |                                                         | Path to `features.conf` on the runner                                                       |
@@ -95,7 +95,7 @@ A features file with `asdb-cluster-nodes-limit 0` is required for clustering.
 | `base-port`                    | No       | `3000`                                                  | Base host port (node N maps to `base-port + N - 1`)                                         |
 | `service-port`                 | No       | `3000`                                                  | Aerospike service port inside the container (must match `aerospike.conf`)                   |
 | `startup-timeout`              | No       | `30`                                                    | Seconds to wait for node readiness and cluster formation                                    |
-| `enable-tls`                   | No       | `false`                                                 | Enable TLS on AES containers                                                                |
+| `enable-tls`                   | No       | `false`                                                 | Enable TLS on Aerospike Server containers                                                   |
 | `tls-base-port`                | No       | `4333`                                                  | Base host TLS port (node N maps to `tls-base-port + N - 1`)                                 |
 | `enable-security`              | No       | `false`                                                 | Enable Aerospike security (authentication with default admin/admin credentials)             |
 | `enable-strong-consistency`    | No       | `false`                                                 | Enable strong consistency on the `test` namespace. Requires a features file                 |
