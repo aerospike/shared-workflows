@@ -1,47 +1,33 @@
 #!/usr/bin/env bash
-# render-template.sh — Render an Aerospike config template by replacing placeholders.
+# render-template.sh — Render an Aerospike config template using bash variable expansion.
 #
-# Usage: render-template.sh <template-file>
+# Usage: render-template.sh <template-file> [<output-file>]
 #
-# Replaces __PLACEHOLDER__ markers in the template with values from
-# environment variables named TPL_PLACEHOLDER. For example, TPL_SECURITY
-# replaces __SECURITY__. Outputs the rendered config to stdout.
+# Evaluates ${VARIABLE} references in the template using the current environment.
+# Lines containing variable references that expand to empty are omitted.
+# If no output file is given, writes to stdout.
 #
 # Example:
-#   TPL_SECURITY="security { ... }" TPL_NAMESPACE="namespace test { ... }" \
-#     ./render-template.sh templates/default.conf
+#   export SECURITY="security { ... }" NAMESPACE="namespace test { ... }"
+#   ./render-template.sh templates/default.conf /tmp/aerospike.conf
 
 set -euo pipefail
 
 template="$1"
+target="${2:-/dev/stdout}"
 
 if [[ ! -f $template ]]; then
     echo "Error: template file not found: $template" >&2
     exit 1
 fi
 
-rendered=$(mktemp)
-cp "$template" "$rendered"
+: >"$target"
 
-# Find all TPL_* environment variables and replace corresponding placeholders
-while IFS='=' read -r name _; do
-    if [[ $name == TPL_* ]]; then
-        placeholder="__${name#TPL_}__"
-        value="${!name}"
-
-        content_file=$(mktemp)
-        printf '%s\n' "$value" >"$content_file"
-
-        next=$(mktemp)
-        sed "/${placeholder}/{
-      r $content_file
-      d
-    }" "$rendered" >"$next"
-        mv "$next" "$rendered"
-
-        rm -f "$content_file"
+while IFS= read -r line; do
+    if grep -qE '[$][(]|[$][{]' <<<"${line}"; then
+        update=$(eval echo "\"${line}\"") || exit 1
+        grep -qE '[^[:space:]]' <<<"${update}" && echo "${update}" >>"$target"
+    else
+        echo "${line}" >>"$target"
     fi
-done < <(env)
-
-cat "$rendered"
-rm -f "$rendered"
+done <"$template"

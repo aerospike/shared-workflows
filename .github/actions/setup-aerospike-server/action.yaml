@@ -234,21 +234,22 @@ runs:
         num_nodes=${{ inputs.num-nodes }}
         tpl_dir="${{ github.action_path }}/templates"
 
+        render_tpl="${{ github.action_path }}/render-template.sh"
+
         # Build security stanza from template
-        security_stanza=""
+        export SECURITY=""
         if [[ "$effective_security" == "true" ]]; then
-          security_stanza=$(cat "$tpl_dir/security.conf")
+          SECURITY=$(cat "$tpl_dir/security.conf")
         fi
 
         # Build namespace block from template
         if [[ "$enable_sc" == "true" ]]; then
-          rf=$(( num_nodes < 2 ? num_nodes : 2 ))
-          namespace_block=$(sed "s/__REPLICATION_FACTOR__/${rf}/" "$tpl_dir/namespace-sc.conf")
+          export REPLICATION_FACTOR=$(( num_nodes < 2 ? num_nodes : 2 ))
+          export NAMESPACE=$("$render_tpl" "$tpl_dir/namespace-sc.conf")
         else
-          namespace_block=$(sed 's/__REPLICATION_FACTOR__/1/' "$tpl_dir/namespace-memory.conf")
+          export REPLICATION_FACTOR=1
+          export NAMESPACE=$("$render_tpl" "$tpl_dir/namespace-memory.conf")
         fi
-
-        render_tpl="${{ github.action_path }}/render-template.sh"
 
         # Write features-content to temp file if no file path was given
         if [[ -z "$features_path" && -n "${FEATURES_CONTENT}" ]]; then
@@ -270,7 +271,7 @@ runs:
             # Append security stanza if not already present
             if ! grep -q 'security {' "$config_path" 2>/dev/null; then
               echo "" >> "$config_path"
-              echo "$security_stanza" >> "$config_path"
+              echo "$SECURITY" >> "$config_path"
               echo "Appended security stanza to user-provided config"
             fi
           fi
@@ -282,8 +283,7 @@ runs:
         # Generate default TLS-enabled config if TLS is on and no custom config
         if [[ "${{ inputs.enable-tls }}" == "true" && -z "$config_path" ]]; then
           config_path="$(mktemp)"
-          TPL_SECURITY="$security_stanza" TPL_NAMESPACE="$namespace_block" \
-            "$render_tpl" "$tpl_dir/tls.conf" > "$config_path"
+          "$render_tpl" "$tpl_dir/tls.conf" "$config_path"
           echo "Generated default TLS-enabled aerospike.conf at $config_path"
         fi
 
@@ -291,8 +291,7 @@ runs:
         if [[ "${{ inputs.enable-tls }}" != "true" && -z "$config_path" \
               && ( "$effective_security" == "true" || "$enable_sc" == "true" ) ]]; then
           config_path="$(mktemp)"
-          TPL_SECURITY="$security_stanza" TPL_NAMESPACE="$namespace_block" \
-            "$render_tpl" "$tpl_dir/default.conf" > "$config_path"
+          "$render_tpl" "$tpl_dir/default.conf" "$config_path"
           echo "Generated default security/SC-enabled aerospike.conf at $config_path"
         fi
 
@@ -391,23 +390,25 @@ runs:
             render_tpl="${{ github.action_path }}/render-template.sh"
 
             # Build security stanza from template
-            mn_security_stanza=""
+            export SECURITY=""
             if [[ "$effective_security" == "true" ]]; then
-              mn_security_stanza=$(cat "$tpl_dir/security.conf")
+              SECURITY=$(cat "$tpl_dir/security.conf")
             fi
 
             # Build namespace block from template
             if [[ "$enable_sc" == "true" ]]; then
-              mn_rf=$(( num_nodes < 2 ? num_nodes : 2 ))
-              mn_namespace_block=$(sed "s/__REPLICATION_FACTOR__/${mn_rf}/" "$tpl_dir/namespace-sc.conf")
+              export REPLICATION_FACTOR=$(( num_nodes < 2 ? num_nodes : 2 ))
+              export NAMESPACE=$("$render_tpl" "$tpl_dir/namespace-sc.conf")
             else
-              mn_namespace_block=$(sed 's/__REPLICATION_FACTOR__/2/' "$tpl_dir/namespace-memory.conf")
+              export REPLICATION_FACTOR=2
+              export NAMESPACE=$("$render_tpl" "$tpl_dir/namespace-memory.conf")
             fi
+
+            export MESH_SEEDS="$mesh_seeds"
 
             # Render multi-node template
             config_path="$(mktemp)"
-            TPL_SECURITY="$mn_security_stanza" TPL_NAMESPACE="$mn_namespace_block" TPL_MESH_SEEDS="$mesh_seeds" \
-              "$render_tpl" "$tpl_dir/multi-node.conf" > "$config_path"
+            "$render_tpl" "$tpl_dir/multi-node.conf" "$config_path"
           else
             # Inject mesh seeds into the user-provided config
             cluster_config="$(mktemp)"
