@@ -26,7 +26,7 @@ A features file with `asdb-cluster-nodes-limit 0` is required for clustering.
 - uses: ./.github/actions/setup-aerospike-server
   with:
     num-nodes: "3"
-    features-content: ${{ secrets.AES_FEATURES_CONF }}
+    features-content: ${{ secrets.AEROSPIKE_SERVER_FEATURES_CONF }}
     startup-timeout: "60"
     oidc-provider: ${{ vars.JFROG_OIDC_PROVIDER }}
     oidc-audience: ${{ vars.JFROG_OIDC_AUDIENCE }}
@@ -48,7 +48,7 @@ A features file with `asdb-cluster-nodes-limit 0` is required for clustering.
 - uses: ./.github/actions/setup-aerospike-server
   with:
     enable-security: "true"
-    features-content: ${{ secrets.AES_FEATURES_CONF }}
+    features-content: ${{ secrets.AEROSPIKE_SERVER_FEATURES_CONF }}
     oidc-provider: ${{ vars.JFROG_OIDC_PROVIDER }}
     oidc-audience: ${{ vars.JFROG_OIDC_AUDIENCE }}
 ```
@@ -59,7 +59,7 @@ A features file with `asdb-cluster-nodes-limit 0` is required for clustering.
 - uses: ./.github/actions/setup-aerospike-server
   with:
     enable-strong-consistency: "true"
-    features-content: ${{ secrets.AES_FEATURES_CONF }}
+    features-content: ${{ secrets.AEROSPIKE_SERVER_FEATURES_CONF }}
     oidc-provider: ${{ vars.JFROG_OIDC_PROVIDER }}
     oidc-audience: ${{ vars.JFROG_OIDC_AUDIENCE }}
 ```
@@ -71,7 +71,7 @@ A features file with `asdb-cluster-nodes-limit 0` is required for clustering.
   with:
     num-nodes: "3"
     enable-strong-consistency: "true"
-    features-content: ${{ secrets.AES_FEATURES_CONF }}
+    features-content: ${{ secrets.AEROSPIKE_SERVER_FEATURES_CONF }}
     startup-timeout: "60"
     oidc-provider: ${{ vars.JFROG_OIDC_PROVIDER }}
     oidc-audience: ${{ vars.JFROG_OIDC_AUDIENCE }}
@@ -139,7 +139,7 @@ Use the `tls-cert-dir` and `tls-service-ports` outputs to pass the certificates 
 
 ```yaml
 - uses: ./.github/actions/setup-aerospike-server
-  id: aes
+  id: aerospike-server
   with:
     enable-tls: "true"
     oidc-provider: ${{ vars.JFROG_OIDC_PROVIDER }}
@@ -148,11 +148,11 @@ Use the `tls-cert-dir` and `tls-service-ports` outputs to pass the certificates 
 - name: Connect with TLS
   run: |
     aql --host 127.0.0.1 \
-        --port ${{ steps.aes.outputs.tls-service-ports }} \
+        --port ${{ steps.aerospike-server.outputs.tls-service-ports }} \
         --tls-enable \
-        --tls-cafile ${{ steps.aes.outputs.tls-cert-dir }}/ca.crt \
-        --tls-certfile ${{ steps.aes.outputs.tls-cert-dir }}/client.crt \
-        --tls-keyfile ${{ steps.aes.outputs.tls-cert-dir }}/client.key \
+        --tls-cafile ${{ steps.aerospike-server.outputs.tls-cert-dir }}/ca.crt \
+        --tls-certfile ${{ steps.aerospike-server.outputs.tls-cert-dir }}/client.crt \
+        --tls-keyfile ${{ steps.aerospike-server.outputs.tls-cert-dir }}/client.key \
         --tls-name aerospike-tls
 ```
 
@@ -162,7 +162,7 @@ Go clients accept PEM certificate files directly via command-line flags:
 
 ```yaml
 - uses: ./.github/actions/setup-aerospike-server
-  id: aes
+  id: aerospike-server
   with:
     enable-tls: "true"
     oidc-provider: ${{ vars.JFROG_OIDC_PROVIDER }}
@@ -170,11 +170,11 @@ Go clients accept PEM certificate files directly via command-line flags:
 
 - name: Run tests with TLS
   run: |
-    CERT_DIR="${{ steps.aes.outputs.tls-cert-dir }}"
+    CERT_DIR="${{ steps.aerospike-server.outputs.tls-cert-dir }}"
 
     ginkgo -race -keep-going -- \
       -h 127.0.0.1 \
-      -p ${{ steps.aes.outputs.tls-service-ports }} \
+      -p ${{ steps.aerospike-server.outputs.tls-service-ports }} \
       -root_ca "$CERT_DIR/ca.crt" \
       -cert_file "$CERT_DIR/client.crt" \
       -key_file "$CERT_DIR/client.key" \
@@ -187,7 +187,7 @@ Java clients require a JKS trust store rather than raw PEM files. Import the gen
 
 ```yaml
 - uses: ./.github/actions/setup-aerospike-server
-  id: aes
+  id: aerospike-server
   with:
     enable-tls: "true"
     oidc-provider: ${{ vars.JFROG_OIDC_PROVIDER }}
@@ -199,12 +199,12 @@ Java clients require a JKS trust store rather than raw PEM files. Import the gen
 - name: Create trust store and run tests
   working-directory: test
   run: |
-    CERT_DIR="${{ steps.aes.outputs.tls-cert-dir }}"
+    CERT_DIR="${{ steps.aerospike-server.outputs.tls-cert-dir }}"
     TRUSTSTORE="$CERT_DIR/truststore.jks"
     STOREPASS="changeit"
 
     keytool -import -noprompt \
-      -alias aes-ca \
+      -alias aerospike-server-ca \
       -file "$CERT_DIR/ca.crt" \
       -keystore "$TRUSTSTORE" \
       -storepass "$STOREPASS"
@@ -212,7 +212,7 @@ Java clients require a JKS trust store rather than raw PEM files. Import the gen
     ./run_tests \
       -Djavax.net.ssl.trustStore="$TRUSTSTORE" \
       -Djavax.net.ssl.trustStorePassword="$STOREPASS" \
-      -h "127.0.0.1:aerospike-tls:${{ steps.aes.outputs.tls-service-ports }}" \
+      -h "127.0.0.1:aerospike-tls:${{ steps.aerospike-server.outputs.tls-service-ports }}" \
       -tls
 ```
 

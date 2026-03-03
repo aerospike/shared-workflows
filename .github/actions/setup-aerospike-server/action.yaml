@@ -180,7 +180,7 @@ runs:
         # Generate CA key and self-signed cert
         openssl req -x509 -newkey rsa:4096 -nodes \
           -keyout ca.key -out ca.crt -days 365 \
-          -subj "/CN=AES-Test-CA"
+          -subj "/CN=Aerospike-Server-Test-CA"
 
         # Build SAN extension file covering all container names
         {
@@ -208,7 +208,7 @@ runs:
         # Generate client key and CA-signed cert
         openssl req -newkey rsa:4096 -nodes \
           -keyout client.key -out client.csr \
-          -subj "/CN=AES-Test-Client"
+          -subj "/CN=Aerospike-Server-Test-Client"
         openssl x509 -req -in client.csr \
           -CA ca.crt -CAkey ca.key -CAcreateserial \
           -out client.crt -days 365
