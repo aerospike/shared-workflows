@@ -45,7 +45,7 @@ on:
       jf-registry:
         type: string
         required: false
-        description: Full Docker registry URL including repository path (e.g., artifact.aerospike.io/test-container-dev-local) # should be full uri for Artifactory registry eg artifact.aerospike.io/test-container-dev-local
+        description: Full Docker registry URL including repository path (e.g., artifact.aerospike.io/test-docker-dev-local) # should be full uri for Artifactory registry eg artifact.aerospike.io/test-docker-dev-local
       jf-registry-base:
         type: string
         default: artifact.aerospike.io
@@ -80,8 +80,8 @@ on:
         description: Whether to push the image
       repo-scope:
         type: string
-        default: -container-dev-local
-        description: Repository suffix appended to jf-project (e.g., -container-preview-public-local) # e.g. "-container-preview-public-local"
+        default: -docker-dev-local
+        description: Repository suffix appended to jf-project (e.g., -docker-preview-public-local) # e.g. "-docker-preview-public-local"
       sbom:
         type: boolean
         default: true
