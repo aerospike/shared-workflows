@@ -4,18 +4,50 @@ updates:
     directory: /
     schedule:
       interval: daily
+    groups:
+      minor-and-patch:
+        applies-to: version-updates
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
 
   - package-ecosystem: nuget
     directory: /.github/workflows/execute-build/test_apps/DotnetHelloWorld/AerospikeHelloWorld/AerospikeHelloWorld
     schedule:
       interval: daily
+    groups:
+      minor-and-patch:
+        applies-to: version-updates
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
 
   - package-ecosystem: docker
     directory: /.github/workflows/execute-build/test_apps/hi
     schedule:
       interval: daily
+    groups:
+      minor-and-patch:
+        applies-to: version-updates
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
 
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: daily
+    groups:
+      minor-and-patch:
+        applies-to: version-updates
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
