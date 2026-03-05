@@ -7,6 +7,21 @@ on:
         required: true
         type: string
         description: PR title to validate
+      allowed-patterns:
+        required: false
+        type: string
+        default: ""
+        description: |
+          Newline-delimited list of regex patterns (ERE syntax). PR titles matching
+          any pattern bypass both commitlint and JIRA validation. These are appended
+          to the built-in defaults unless use-default-patterns is false.
+      use-default-patterns:
+        required: false
+        type: boolean
+        default: true
+        description: >
+          Include built-in default patterns for Dependabot, StepSecurity, and
+          revert commits. Set to false to use only your custom patterns.
 
 permissions:
   contents: read
@@ -20,12 +35,54 @@ jobs:
         with:
           egress-policy: audit
 
+      - name: Check allowlist patterns
+        id: allowlist
+        env:
+          PR_TITLE: ${{ inputs.pr_title }}
+          ALLOWED_PATTERNS: ${{ inputs.allowed-patterns }}
+          USE_DEFAULTS: ${{ inputs.use-default-patterns }}
+        run: |
+          PATTERNS=""
+
+          # Built-in defaults
+          if [ "$USE_DEFAULTS" = "true" ]; then
+            PATTERNS="^Build\(deps.*\):
+          ^\[StepSecurity\]
+          ^[Rr]evert \"
+          ^revert:"
+          fi
+
+          # Append consumer patterns
+          if [ -n "$ALLOWED_PATTERNS" ]; then
+            if [ -n "$PATTERNS" ]; then
+              PATTERNS="$PATTERNS
+          $ALLOWED_PATTERNS"
+            else
+              PATTERNS="$ALLOWED_PATTERNS"
+            fi
+          fi
+
+          # Test each pattern
+          if [ -n "$PATTERNS" ]; then
+            while IFS= read -r pattern; do
+              [ -z "$pattern" ] && continue
+              if echo "$PR_TITLE" | grep -qE "$pattern"; then
+                echo "✅ PR title matches allowed pattern: $pattern"
+                echo "allowed=true" >> "$GITHUB_OUTPUT"
+                exit 0
+              fi
+            done <<< "$PATTERNS"
+          fi
+
+          echo "allowed=false" >> "$GITHUB_OUTPUT"
+
       # PR title must follow: type(scope): [JIRA-123] description
       #   type:  feat|fix|refactor|docs|test|ci|chore|build|perf (validated by commitlint)
       #   scope: optional, lowercase (e.g., workflows, deploy, actions)
       #   JIRA:  uppercase project key in brackets, before the description
       # Example: feat(workflows): [INFRA-370] add artifacts-cicd integration tests
       - name: Validate PR title is conventional commit
+        if: steps.allowlist.outputs.allowed != 'true'
         env:
           PR_TITLE: ${{ inputs.pr_title }}
         run: |
@@ -34,6 +91,7 @@ jobs:
           echo "$PR_TITLE" | npx commitlint
 
       - name: Check for JIRA ticket in PR title
+        if: steps.allowlist.outputs.allowed != 'true'
         env:
           PR_TITLE: ${{ inputs.pr_title }}
         run: |

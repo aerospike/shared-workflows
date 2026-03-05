@@ -14,49 +14,44 @@ jobs:
     with:
       pr_title: "feat(workflows): [INFRA-378] add pr hygiene checks"
 
-  # Unit tests for failure cases (can't test expected failures via reusable workflow)
-  test-failure-cases:
-    runs-on: ubuntu-latest
+  # End-to-end test: Dependabot title should be allowed by defaults
+  test-dependabot-allowed:
+    uses: ./.github/workflows/reusable_pr-hygiene.yml
+    with:
+      pr_title: "Build(deps): bump step-security/harden-runner from 2.14.0 to 2.14.2"
+
+  # End-to-end test: StepSecurity title should be allowed by defaults
+  test-stepsecurity-allowed:
+    uses: ./.github/workflows/reusable_pr-hygiene.yml
+    with:
+      pr_title: "[StepSecurity] Apply security best practices"
+
+  # End-to-end test: revert title should be allowed by defaults
+  test-revert-allowed:
+    uses: ./.github/workflows/reusable_pr-hygiene.yml
+    with:
+      pr_title: 'Revert "feat(workflows): [INFRA-370] add integration tests"'
+
+  # Unit tests via bats
+  run-tests:
+    runs-on: ubuntu-22.04
     steps:
-      - name: Install commitlint
-        run: |
-          npm install --save-dev @commitlint/cli @commitlint/config-conventional
-          echo '{"extends":["@commitlint/config-conventional"]}' > .commitlintrc.json
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@a90bcbc6539c36a85cdfeb73f7e2f433735f215b # v2.15.0
+        with:
+          egress-policy: audit
 
-      - name: "Test: non-conventional title is rejected"
-        run: |
-          if echo "bad title no format" | npx commitlint 2>&1; then
-            echo "❌ Should have failed for non-conventional title"
-            exit 1
-          fi
-          echo "✅ Correctly rejected non-conventional title"
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - name: "Test: missing JIRA ticket is detected"
+      - name: Install bats
         run: |
-          PR_TITLE="feat: missing jira ticket"
-          JIRA_TICKET=$(echo "$PR_TITLE" | grep -oP '^[a-z]+(\([a-z0-9-]+\))?: \[\K[A-Z]{2,10}-[0-9]+(?=\] )' | head -1)
-          if [ -n "$JIRA_TICKET" ]; then
-            echo "❌ Should not have found JIRA ticket"
-            exit 1
-          fi
-          echo "✅ Correctly detected missing JIRA ticket"
+          git clone https://github.com/bats-core/bats-core.git
+          cd bats-core
+          sudo ./install.sh /usr/local
+          cd ..
+          rm -rf bats-core
 
-      - name: "Test: JIRA without brackets is rejected"
+      - name: Run bats tests
         run: |
-          PR_TITLE="feat(scope): INFRA-123 missing brackets"
-          JIRA_TICKET=$(echo "$PR_TITLE" | grep -oP '^[a-z]+(\([a-z0-9-]+\))?: \[\K[A-Z]{2,10}-[0-9]+(?=\] )' | head -1)
-          if [ -n "$JIRA_TICKET" ]; then
-            echo "❌ Should not have found JIRA ticket without brackets"
-            exit 1
-          fi
-          echo "✅ Correctly rejected JIRA ticket without brackets"
-
-      - name: "Test: valid title extracts JIRA ticket"
-        run: |
-          PR_TITLE="feat(workflows): [INFRA-378] add pr hygiene checks"
-          JIRA_TICKET=$(echo "$PR_TITLE" | grep -oP '^[a-z]+(\([a-z0-9-]+\))?: \[\K[A-Z]{2,10}-[0-9]+(?=\] )' | head -1)
-          if [ -z "$JIRA_TICKET" ]; then
-            echo "❌ Should have found JIRA ticket"
-            exit 1
-          fi
-          echo "✅ Correctly found JIRA ticket: $JIRA_TICKET"
+          bats .github/workflows/pr-hygiene/tests/

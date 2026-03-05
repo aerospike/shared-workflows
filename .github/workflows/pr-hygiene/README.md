@@ -24,6 +24,46 @@ Examples:
 - `fix(deploy): [ENG-123] correct artifact routing logic`
 - `chore: [INFRA-400] update dependencies`
 
+## Allowlist for Automated PRs
+
+The hygiene workflow includes an allowlist that lets certain PR titles bypass both commitlint and JIRA validation. This is useful for automated PRs from bots and standard git operations.
+
+### Built-in Default Patterns
+
+These patterns are enabled by default (`use-default-patterns: true`):
+
+| Pattern             | Matches                     |
+| ------------------- | --------------------------- |
+| `^Build\(deps.*\):` | Dependabot dependency bumps |
+| `^\[StepSecurity\]` | StepSecurity bot PRs        |
+| `^[Rr]evert "`      | Git revert commits          |
+| `^revert:`          | Conventional commit reverts |
+
+### Adding Custom Patterns
+
+Pass additional regex patterns (ERE syntax) via `allowed-patterns`, one per line:
+
+```yaml
+jobs:
+  validate:
+    uses: aerospike/shared-workflows/.github/workflows/reusable_pr-hygiene.yml@<sha>
+    with:
+      pr_title: ${{ github.event.pull_request.title }}
+      allowed-patterns: |
+        ^chore\(release\):
+        ^Bump version to
+```
+
+Custom patterns are appended to the defaults. To use only your own patterns, set `use-default-patterns: false`:
+
+```yaml
+with:
+  pr_title: ${{ github.event.pull_request.title }}
+  use-default-patterns: false
+  allowed-patterns: |
+    ^my-custom-pattern
+```
+
 ## Example Usage
 
 These are examples of actions that use the included workflows. Both are recommended.
@@ -80,11 +120,21 @@ jobs:
       passed_github_token: ${{ secrets.GITHUB_TOKEN }}
 ```
 
-## Local Testing with act
+## Testing
 
-A test workflow is included at [`test_pr-hygiene.yaml`](test_pr-hygiene.yaml). It tests both the happy path (via the reusable workflow) and failure cases (commitlint rejection, missing JIRA, JIRA without brackets).
+### Bats tests (local)
 
-To run it locally using [`gh act`](https://github.com/nektos/gh-act):
+Unit tests for allowlist pattern matching and JIRA extraction:
+
+```bash
+bats .github/workflows/pr-hygiene/tests/test_allowlist.bats
+```
+
+### End-to-end tests (CI)
+
+A test workflow at [`test_pr-hygiene.yaml`](test_pr-hygiene.yaml) runs end-to-end tests via the reusable workflow (valid title, Dependabot, StepSecurity, revert titles).
+
+To run locally using [`gh act`](https://github.com/nektos/gh-act):
 
 ```bash
 # Copy the test workflow into place (act requires workflows in .github/workflows/)
@@ -93,11 +143,8 @@ cp .github/workflows/pr-hygiene/test_pr-hygiene.yaml .github/workflows/test_pr-h
 # Run the full test workflow
 gh act pull_request -W .github/workflows/test_pr-hygiene.yaml
 
-# Run just the failure case tests (faster, no reusable workflow call)
-gh act pull_request -W .github/workflows/test_pr-hygiene.yaml -j test-failure-cases
-
 # Clean up
 rm .github/workflows/test_pr-hygiene.yaml
 ```
 
-Note: `act` has limited support for `workflow_call` (reusable workflows), so the `test-valid-title` job may not work locally. The `test-failure-cases` job runs the validation logic directly and works reliably with `act`. To run the full end-to-end test, use `workflow_dispatch` from the GitHub Actions UI after copying the test workflow into `.github/workflows/`.
+Note: `act` has limited support for `workflow_call` (reusable workflows), so the end-to-end jobs may not work locally. Use `workflow_dispatch` from the GitHub Actions UI for full end-to-end testing.
