@@ -1,6 +1,11 @@
 name: Example Reusable Integration
 on:
   workflow_dispatch:
+    inputs:
+      version:
+        description: Version override (leave empty for auto-detection)
+        required: false
+        default: ""
   push:
     branches: [main]
 
@@ -47,6 +52,7 @@ jobs:
         id: extract
         uses: ./.github/actions/extract-version-from-tag
         with:
+          version: ${{ inputs.version }}
           version-file: .github/workflows/VERSION.example
     outputs:
       version: ${{ steps.extract.outputs.version }}

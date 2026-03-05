@@ -1,6 +1,10 @@
 name: Extract Version
-description: Extracts version from VERSION file, Git tag, or manual input
+description: Extracts version from explicit input, VERSION file, Git tag, or fallback
 inputs:
+  version:
+    description: Explicit version override (highest priority, bypasses all auto-detection)
+    required: false
+    default: ""
   tag-prefix:
     description: "Prefix to remove from tag (default: 'v')"
     required: false
@@ -17,7 +21,7 @@ outputs:
     description: Full git tag or source
     value: ${{ steps.extract.outputs.git_tag }}
   source:
-    description: Where version came from (file, tag, or fallback)
+    description: Where version came from (input, file, tag, or fallback)
     value: ${{ steps.extract.outputs.source }}
 runs:
   using: composite
@@ -26,27 +30,7 @@ runs:
       id: extract
       shell: bash
       run: |
-        # Priority order: VERSION file -> Git tag
-        if [[ -f "${{ inputs.version-file }}" ]]; then
-          # Use VERSION file
-          TAG=$(cat "${{ inputs.version-file }}" | tr -d '\n\r' | xargs)
-          SOURCE="file"
-        elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
-          # Triggered by tag push
-          TAG=${GITHUB_REF##*/}
-          SOURCE="tag"
-        else
-          echo "No version sources found. Using fallback generated from latest tag."
-          TAG=$(git describe --tags)
-          SOURCE="fallback"
-        fi
-        VERSION=$TAG
-        # Strip the prefix if it exists
-        if [[ "$VERSION" == "${{ inputs.tag-prefix }}"* ]]; then
-            VERSION=${VERSION#${{ inputs.tag-prefix }}}
-        fi
-
-        echo "version=$VERSION" >> $GITHUB_OUTPUT
-        echo "git_tag=$TAG" >> $GITHUB_OUTPUT
-        echo "source=$SOURCE" >> $GITHUB_OUTPUT
-        echo "Final version: $VERSION (from: $SOURCE)"
+        ${{ github.action_path }}/entrypoint.sh \
+          --version "${{ inputs.version }}" \
+          --version-file "${{ inputs.version-file }}" \
+          --tag-prefix "${{ inputs.tag-prefix }}"
