@@ -14,11 +14,17 @@ jobs:
     with:
       pr_title: "feat(workflows): [INFRA-378] add pr hygiene checks"
 
-  # End-to-end test: Dependabot title should be allowed by defaults
+  # End-to-end test: Dependabot title should be allowed by defaults (any type with deps scope)
   test-dependabot-allowed:
     uses: ./.github/workflows/reusable_pr-hygiene.yml
     with:
       pr_title: "Build(deps): bump step-security/harden-runner from 2.14.0 to 2.14.2"
+
+  # End-to-end test: lowercase dependabot title should also be allowed
+  test-lowercase-dependabot:
+    uses: ./.github/workflows/reusable_pr-hygiene.yml
+    with:
+      pr_title: "build(deps): bump foo from 1.0.0 to 2.0.0"
 
   # End-to-end test: StepSecurity title should be allowed by defaults
   test-stepsecurity-allowed:
@@ -31,6 +37,12 @@ jobs:
     uses: ./.github/workflows/reusable_pr-hygiene.yml
     with:
       pr_title: 'Revert "feat(workflows): [INFRA-370] add integration tests"'
+
+  # End-to-end test: chore without JIRA should pass (not a required type)
+  test-chore-no-jira:
+    uses: ./.github/workflows/reusable_pr-hygiene.yml
+    with:
+      pr_title: "chore: update readme"
 
   # Unit tests via bats
   run-tests:

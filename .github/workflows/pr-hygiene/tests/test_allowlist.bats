@@ -62,12 +62,12 @@ load "$HELPERS_DIR/setup.bash"
     [ "$status" -ne 0 ]
 }
 
-@test "only custom patterns when defaults disabled" {
+@test "custom-only patterns match when defaults are overridden" {
     local patterns=('^my-bot:')
     title_matches_patterns 'my-bot: automated update' "${patterns[@]}"
 }
 
-@test "defaults-only titles rejected when defaults disabled" {
+@test "default titles rejected when patterns are overridden" {
     local patterns=('^my-bot:')
     run title_matches_patterns 'Build(deps): bump something' "${patterns[@]}"
     [ "$status" -ne 0 ]
@@ -105,8 +105,82 @@ load "$HELPERS_DIR/setup.bash"
     [ "$status" -ne 0 ]
 }
 
+@test "lowercase build(deps) matches default pattern" {
+    title_matches_patterns 'build(deps): bump foo from 1.0.0 to 2.0.0' "${DEFAULT_PATTERNS[@]}"
+}
+
+@test "chore(deps) matches default pattern" {
+    title_matches_patterns 'chore(deps): bump bar from 1.0 to 2.0' "${DEFAULT_PATTERNS[@]}"
+}
+
+@test "fix(deps-dev) matches default pattern" {
+    title_matches_patterns 'fix(deps-dev): bump eslint from 8.0 to 9.0' "${DEFAULT_PATTERNS[@]}"
+}
+
 @test "empty patterns array matches nothing" {
     local patterns=()
     run title_matches_patterns 'Build(deps): bump something' "${patterns[@]}"
+    [ "$status" -ne 0 ]
+}
+
+# --- Commit type extraction tests ---
+
+@test "extract_commit_type returns feat from conventional commit" {
+    local ctype
+    ctype=$(extract_commit_type "feat(workflows): [INFRA-378] add pr hygiene checks")
+    [ "$ctype" = "feat" ]
+}
+
+@test "extract_commit_type returns chore from scopeless commit" {
+    local ctype
+    ctype=$(extract_commit_type "chore: update readme")
+    [ "$ctype" = "chore" ]
+}
+
+# --- JIRA required types tests ---
+
+@test "feat type requires JIRA with default types" {
+    type_requires_jira "feat" "$DEFAULT_JIRA_REQUIRED_TYPES"
+}
+
+@test "fix type requires JIRA with default types" {
+    type_requires_jira "fix" "$DEFAULT_JIRA_REQUIRED_TYPES"
+}
+
+@test "refactor type requires JIRA with default types" {
+    type_requires_jira "refactor" "$DEFAULT_JIRA_REQUIRED_TYPES"
+}
+
+@test "chore type does not require JIRA with default types" {
+    run type_requires_jira "chore" "$DEFAULT_JIRA_REQUIRED_TYPES"
+    [ "$status" -ne 0 ]
+}
+
+@test "build type does not require JIRA with default types" {
+    run type_requires_jira "build" "$DEFAULT_JIRA_REQUIRED_TYPES"
+    [ "$status" -ne 0 ]
+}
+
+@test "perf type does not require JIRA with default types" {
+    run type_requires_jira "perf" "$DEFAULT_JIRA_REQUIRED_TYPES"
+    [ "$status" -ne 0 ]
+}
+
+@test "test type does not require JIRA with default types" {
+    run type_requires_jira "test" "$DEFAULT_JIRA_REQUIRED_TYPES"
+    [ "$status" -ne 0 ]
+}
+
+@test "empty jira-required-types means JIRA never required" {
+    run type_requires_jira "feat" ""
+    [ "$status" -ne 0 ]
+}
+
+@test "custom jira-required-types list is respected" {
+    type_requires_jira "chore" "chore, test"
+}
+
+@test "type not in custom list does not require JIRA" {
+    run type_requires_jira "feat" "chore, test"
     [ "$status" -ne 0 ]
 }

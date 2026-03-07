@@ -10,18 +10,36 @@ on:
       allowed-patterns:
         required: false
         type: string
-        default: ""
+        default: |
+          ^[a-zA-Z]+\(deps[^)]*\):
+          ^\[StepSecurity\]
+          ^[Rr]evert "
+          ^revert:
         description: |
           Newline-delimited list of regex patterns (ERE syntax). PR titles matching
-          any pattern bypass both commitlint and JIRA validation. These are appended
-          to the built-in defaults unless use-default-patterns is false.
-      use-default-patterns:
+          any pattern bypass both commitlint and JIRA validation. Defaults cover
+          Dependabot, StepSecurity, and revert commits. Override to replace entirely.
+      types-requiring-jira:
         required: false
-        type: boolean
-        default: true
+        type: string
+        default: feat, fix, docs, ci, refactor
         description: >
-          Include built-in default patterns for Dependabot, StepSecurity, and
-          revert commits. Set to false to use only your custom patterns.
+          Comma-separated list of conventional commit types that require a JIRA
+          ticket in the PR title. Types not in this list skip JIRA validation.
+          Set to empty string to never require JIRA.
+      skip-jira-label:
+        required: false
+        type: string
+        default: skip-jira
+        description: >
+          PR label name that bypasses JIRA validation. Commitlint still runs.
+      pr-labels:
+        required: false
+        type: string
+        default: ""
+        description: >
+          JSON array of PR label names (e.g. from toJSON(github.event.pull_request.labels.*.name)).
+          Used to check for the skip-jira-label.
 
 permissions:
   contents: read
@@ -40,30 +58,8 @@ jobs:
         env:
           PR_TITLE: ${{ inputs.pr_title }}
           ALLOWED_PATTERNS: ${{ inputs.allowed-patterns }}
-          USE_DEFAULTS: ${{ inputs.use-default-patterns }}
         run: |
-          PATTERNS=""
-
-          # Built-in defaults
-          if [ "$USE_DEFAULTS" = "true" ]; then
-            PATTERNS="^Build\(deps.*\):
-          ^\[StepSecurity\]
-          ^[Rr]evert \"
-          ^revert:"
-          fi
-
-          # Append consumer patterns
           if [ -n "$ALLOWED_PATTERNS" ]; then
-            if [ -n "$PATTERNS" ]; then
-              PATTERNS="$PATTERNS
-          $ALLOWED_PATTERNS"
-            else
-              PATTERNS="$ALLOWED_PATTERNS"
-            fi
-          fi
-
-          # Test each pattern
-          if [ -n "$PATTERNS" ]; then
             while IFS= read -r pattern; do
               [ -z "$pattern" ] && continue
               if echo "$PR_TITLE" | grep -qE "$pattern"; then
@@ -71,7 +67,7 @@ jobs:
                 echo "allowed=true" >> "$GITHUB_OUTPUT"
                 exit 0
               fi
-            done <<< "$PATTERNS"
+            done <<< "$ALLOWED_PATTERNS"
           fi
 
           echo "allowed=false" >> "$GITHUB_OUTPUT"
@@ -94,8 +90,42 @@ jobs:
         if: steps.allowlist.outputs.allowed != 'true'
         env:
           PR_TITLE: ${{ inputs.pr_title }}
+          JIRA_REQUIRED_TYPES: ${{ inputs.types-requiring-jira }}
+          SKIP_JIRA_LABEL: ${{ inputs.skip-jira-label }}
+          PR_LABELS: ${{ inputs.pr-labels }}
         run: |
           echo "PR Title: $PR_TITLE"
+
+          # Check if skip-jira label is present
+          if [ -n "$PR_LABELS" ] && [ -n "$SKIP_JIRA_LABEL" ]; then
+            if echo "$PR_LABELS" | jq -e --arg label "$SKIP_JIRA_LABEL" 'map(select(. == $label)) | length > 0' > /dev/null 2>&1; then
+              echo "✅ JIRA validation skipped — '$SKIP_JIRA_LABEL' label is present"
+              exit 0
+            fi
+          fi
+
+          # Check if this commit type requires JIRA
+          if [ -z "$JIRA_REQUIRED_TYPES" ]; then
+            echo "✅ JIRA validation skipped — no types require JIRA"
+            exit 0
+          fi
+
+          COMMIT_TYPE=$(echo "$PR_TITLE" | grep -oP '^[a-z]+' | head -1)
+          TYPE_REQUIRED=false
+          IFS=',' read -ra TYPES <<< "$JIRA_REQUIRED_TYPES"
+          for t in "${TYPES[@]}"; do
+            t=$(echo "$t" | xargs)
+            if [ "$t" = "$COMMIT_TYPE" ]; then
+              TYPE_REQUIRED=true
+              break
+            fi
+          done
+
+          if [ "$TYPE_REQUIRED" = "false" ]; then
+            echo "✅ JIRA validation skipped — type '$COMMIT_TYPE' does not require a JIRA ticket"
+            exit 0
+          fi
+
           JIRA_TICKET=$(echo "$PR_TITLE" | grep -oP '^[a-z]+(\([a-z0-9-]+\))?: \[\K[A-Z]{2,10}-[0-9]+(?=\] )' | head -1)
           if [ -z "$JIRA_TICKET" ]; then
             echo "❌ ERROR: No JIRA ticket found in PR title!"

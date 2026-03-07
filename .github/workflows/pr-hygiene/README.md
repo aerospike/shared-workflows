@@ -28,20 +28,20 @@ Examples:
 
 The hygiene workflow includes an allowlist that lets certain PR titles bypass both commitlint and JIRA validation. This is useful for automated PRs from bots and standard git operations.
 
-### Built-in Default Patterns
+### Default Patterns
 
-These patterns are enabled by default (`use-default-patterns: true`):
+The `allowed-patterns` input ships with these defaults:
 
-| Pattern             | Matches                     |
-| ------------------- | --------------------------- |
-| `^Build\(deps.*\):` | Dependabot dependency bumps |
-| `^\[StepSecurity\]` | StepSecurity bot PRs        |
-| `^[Rr]evert "`      | Git revert commits          |
-| `^revert:`          | Conventional commit reverts |
+| Pattern                    | Matches                                |
+| -------------------------- | -------------------------------------- |
+| `^[a-zA-Z]+\(deps[^)]*\):` | Dependabot dependency bumps (any type) |
+| `^\[StepSecurity\]`        | StepSecurity bot PRs                   |
+| `^[Rr]evert "`             | Git revert commits                     |
+| `^revert:`                 | Conventional commit reverts            |
 
 ### Adding Custom Patterns
 
-Pass additional regex patterns (ERE syntax) via `allowed-patterns`, one per line:
+To add patterns while keeping the defaults, include them alongside the built-in ones:
 
 ```yaml
 jobs:
@@ -50,16 +50,19 @@ jobs:
     with:
       pr_title: ${{ github.event.pull_request.title }}
       allowed-patterns: |
+        ^[a-zA-Z]+\(deps[^)]*\):
+        ^\[StepSecurity\]
+        ^[Rr]evert "
+        ^revert:
         ^chore\(release\):
         ^Bump version to
 ```
 
-Custom patterns are appended to the defaults. To use only your own patterns, set `use-default-patterns: false`:
+To use only your own patterns, override `allowed-patterns` entirely:
 
 ```yaml
 with:
   pr_title: ${{ github.event.pull_request.title }}
-  use-default-patterns: false
   allowed-patterns: |
     ^my-custom-pattern
 ```

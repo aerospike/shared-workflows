@@ -12,3 +12,4 @@ jobs:
     uses: ./.github/workflows/reusable_pr-hygiene.yml
     with:
       pr_title: ${{ github.event.pull_request.title }}
+      pr-labels: ${{ toJSON(github.event.pull_request.labels.*.name) }}
