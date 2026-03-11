@@ -85,19 +85,36 @@ uses: aerospike/shared-workflows/actions/setup-gpg@main
 
 If you need to introduce a major/breaking change in a specific action or workflow, that may indicate that we should move it to a different repo.
 
+## Workflows & Actions
+
+### CI/CD Workflows
+
+For CI/CD pipelines, see the [CI/CD standard](.github/workflows/docs/CICD-standard.md) for quickstart guidance.
+
+| Workflow                              | Purpose                                                               | Docs                                                        |
+| ------------------------------------- | --------------------------------------------------------------------- | ----------------------------------------------------------- |
+| `reusable_artifacts-cicd.yaml`        | Artifacts pipeline — build → sign → deploy (DEB, RPM, NuGet, generic) | [README](.github/workflows/artifacts-cicd/README.md)        |
+| `reusable_docker-build-deploy.yaml`   | Docker pipeline — multi-arch OCI images with SLSA attestations        | [README](.github/workflows/docker-build-deploy/README.md)   |
+| `reusable_create-release-bundle.yaml` | Release bundles — combine artifact + docker outputs                   | [README](.github/workflows/create-release-bundle/README.md) |
+| `reusable_execute-build.yaml`         | Run arbitrary build script, upload artifacts                          | [README](.github/workflows/execute-build/README.md)         |
+| `reusable_sign-artifacts.yaml`        | GPG sign deb/rpm/generic, SSL.com sign nupkg                          | [README](.github/workflows/sign-artifacts/README.md)        |
+| `reusable_deploy-artifacts.yaml`      | Upload to JFrog Artifactory (auto-routes by type)                     | [README](.github/workflows/deploy-artifacts/README.md)      |
+
+### Other Workflows & Actions
+
+| Workflow / Action            | Purpose                                         | Docs                                               |
+| ---------------------------- | ----------------------------------------------- | -------------------------------------------------- |
+| `reusable_pr-hygiene.yml`    | PR title Jira check + commit message prepend    | [README](.github/workflows/pr-hygeine/README.md)   |
+| `reusable_anchore-scan.yaml` | Security scanning with GitHub Advanced Security | [README](.github/workflows/anchore-scan/README.md) |
+| `actions/setup-gpg`          | Composite action to configure GPG signing       | [README](.github/actions/setup-gpg/README.md)      |
+
 ## Usage
 
-To use a workflow or action from this repository, reference it in your GitHub repository's workflow file. For example:
+Reference workflows in your GitHub Actions workflow file:
 
 ```yaml
-uses: aerospike/shared-workflows/workflows/workflow-1@ed780e9928d56ef074532dbc6877166d5460587a # v0.1.0
+uses: aerospike/shared-workflows/.github/workflows/reusable_artifacts-cicd.yaml@<sha> # v2.0.3
 ```
-
-### CI/CD quick start
-
-- **Artifacts pipeline (recommended)**: `reusable_artifacts-cicd.yaml` (build → optional sign → optional deploy)
-- **Docker pipeline**: `reusable_docker-build-deploy.yaml`
-- **Docs**: see `.github/workflows/docs/CICD-with-shared-actions.md`
 
 ## Contributing
 

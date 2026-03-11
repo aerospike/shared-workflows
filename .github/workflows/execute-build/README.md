@@ -1,5 +1,7 @@
 # Execute Build Workflow
 
+> **Note:** This workflow is used internally by [`reusable_artifacts-cicd.yaml`](../artifacts-cicd/README.md). Most consumers should use the orchestrator rather than calling this directly.
+
 Set up and build using an arbitrary build script and upload the results to be used later by other actions.
 
 ## Overview

@@ -1,0 +1,599 @@
+name: Setup Aerospike Server Enterprise
+description: >
+  Starts one or more Aerospike Server Enterprise containers, optionally forming
+  a cluster, with support for custom config, feature files, and environment
+  variable passthrough.
+
+inputs:
+  server-tag:
+    description: Aerospike Docker image tag (version)
+    required: false
+    default: latest
+  num-nodes:
+    description: Number of cluster nodes (1+)
+    required: false
+    default: "1"
+  container-name-prefix:
+    description: "Container name prefix (nodes: prefix-1, prefix-2, ...)"
+    required: false
+    default: aerospike
+  features-file:
+    description: Path to a features.conf on the runner
+    required: false
+    default: ""
+  features-content:
+    description: Raw features.conf content (e.g. from a GitHub secret). Ignored if features-file is set.
+    required: false
+    default: ""
+  config-file:
+    description: Path to an aerospike.conf on the runner
+    required: false
+    default: ""
+  config-content:
+    description: Raw aerospike.conf content. Ignored if config-file is set.
+    required: false
+    default: ""
+  env-vars:
+    description: Semicolon-delimited KEY=VALUE pairs passed as -e flags to each container. Use \\; for literal semicolons, \\\\ for literal backslashes.
+    required: false
+    default: ""
+  container-repo-url:
+    description: Docker registry hostname
+    required: false
+    default: aerospike.jfrog.io
+  server-container-repo:
+    description: Image repository path within the registry
+    required: false
+    default: database-docker-virtual/aerospike-server-enterprise
+  jfrog-platform-url:
+    description: JFrog platform URL
+    required: false
+    default: https://aerospike.jfrog.io
+  oidc-provider:
+    description: JFrog OIDC provider name
+    required: true
+  oidc-audience:
+    description: JFrog OIDC audience
+    required: true
+  network-name:
+    description: Docker network name
+    required: false
+    default: aerospike-net
+  base-port:
+    description: Base host port (node N maps to base-port + N - 1)
+    required: false
+    default: "3000"
+  service-port:
+    description: Aerospike service port inside the container (must match aerospike.conf)
+    required: false
+    default: "3000"
+  startup-timeout:
+    description: Seconds to wait for each node and cluster formation
+    required: false
+    default: "30"
+  enable-tls:
+    description: Enable TLS on Aerospike Server containers
+    required: false
+    default: "false"
+  tls-base-port:
+    description: Base host port for TLS (node N maps to tls-base-port + N - 1)
+    required: false
+    default: "4333"
+  enable-security:
+    description: Enable Aerospike security (authentication with default admin/admin credentials)
+    required: false
+    default: "false"
+  enable-strong-consistency:
+    description: Enable strong consistency on the test namespace. Requires a features file.
+    required: false
+    default: "false"
+  sc-stability-timeout-seconds:
+    description: Seconds to wait for SC cluster stability after roster setup
+    required: false
+    default: "30"
+  tools-tag:
+    description: Aerospike tools Docker image tag
+    required: false
+    default: 12.1.1_2
+
+outputs:
+  container-names:
+    description: Comma-separated container names
+    value: ${{ steps.start-containers.outputs.container-names }}
+  network-name:
+    description: Docker network name created
+    value: ${{ steps.create-network.outputs.network-name }}
+  service-ports:
+    description: Comma-separated host ports
+    value: ${{ steps.start-containers.outputs.service-ports }}
+  tls-service-ports:
+    description: Comma-separated TLS host ports (empty if TLS disabled)
+    value: ${{ steps.start-containers.outputs.tls-service-ports }}
+  tls-cert-dir:
+    description: Directory containing generated TLS certs (empty if TLS disabled)
+    value: ${{ steps.generate-tls-certs.outputs.tls-cert-dir }}
+
+runs:
+  using: composite
+  steps:
+    - name: Validate inputs
+      id: validate
+      shell: bash
+      run: |
+        error() { echo "Error: $1" >&2; exit 1; }
+
+        [[ "${{ inputs.num-nodes }}" =~ ^[1-9][0-9]*$ ]] \
+          || error "num-nodes must be a positive integer (got: '${{ inputs.num-nodes }}')"
+        [[ "${{ inputs.base-port }}" =~ ^[1-9][0-9]*$ ]] \
+          || error "base-port must be a positive integer (got: '${{ inputs.base-port }}')"
+        [[ "${{ inputs.startup-timeout }}" =~ ^[1-9][0-9]*$ ]] \
+          || error "startup-timeout must be a positive integer (got: '${{ inputs.startup-timeout }}')"
+        [[ "${{ inputs.service-port }}" =~ ^[1-9][0-9]*$ ]] \
+          || error "service-port must be a positive integer (got: '${{ inputs.service-port }}')"
+
+        if [[ "${{ inputs.num-nodes }}" -gt 1 ]]; then
+          [[ -n "${{ inputs.features-file }}" || -n "${{ inputs.features-content }}" ]] \
+            || error "features-file or features-content is required for multi-node clusters (asdb-cluster-nodes-limit 0 must be set)"
+        fi
+
+        if [[ "${{ inputs.enable-tls }}" == "true" ]]; then
+          [[ "${{ inputs.tls-base-port }}" =~ ^[1-9][0-9]*$ ]] \
+            || error "tls-base-port must be a positive integer (got: '${{ inputs.tls-base-port }}')"
+        fi
+
+        effective_security="${{ inputs.enable-security }}"
+
+        if [[ "${{ inputs.enable-strong-consistency }}" == "true" ]]; then
+          [[ -n "${{ inputs.features-file }}" || -n "${{ inputs.features-content }}" ]] \
+            || error "features-file or features-content is required for strong consistency"
+        fi
+
+        echo "effective-security=$effective_security" >> "$GITHUB_OUTPUT"
+
+    - name: Set up JFrog CLI
+      id: jf
+      uses: step-security/setup-jfrog-cli@a6b41f8338bea0983ddff6bd4ede7d2dcd81e1fa # v4.8.1
+      env:
+        JF_URL: ${{ inputs.jfrog-platform-url }}
+      with:
+        oidc-provider-name: ${{ inputs.oidc-provider }}
+        oidc-audience: ${{ inputs.oidc-audience }}
+
+    - name: Docker login
+      uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+      with:
+        registry: ${{ inputs.container-repo-url }}
+        username: ${{ steps.jf.outputs.oidc-user }}
+        password: ${{ steps.jf.outputs.oidc-token }}
+
+    - name: Generate TLS certificates
+      id: generate-tls-certs
+      if: inputs.enable-tls == 'true'
+      shell: bash
+      run: |
+        cert_dir="$(mktemp -d)"
+        cd "$cert_dir"
+
+        num_nodes=${{ inputs.num-nodes }}
+        prefix="${{ inputs.container-name-prefix }}"
+
+        # Generate CA key and self-signed cert
+        openssl req -x509 -newkey rsa:4096 -nodes \
+          -keyout ca.key -out ca.crt -days 365 \
+          -subj "/CN=Aerospike-Server-Test-CA"
+
+        # Build SAN extension file covering all container names
+        {
+          echo "[v3_req]"
+          echo "subjectAltName = @alt_names"
+          echo "[alt_names]"
+          dns_idx=1
+          for (( i=1; i<=num_nodes; i++ )); do
+            echo "DNS.${dns_idx} = ${prefix}-${i}"
+            dns_idx=$(( dns_idx + 1 ))
+          done
+          echo "DNS.${dns_idx} = localhost"
+          echo "IP.1 = 127.0.0.1"
+        } > san.ext
+
+        # Generate server key, CSR, and CA-signed cert with SANs
+        openssl req -newkey rsa:4096 -nodes \
+          -keyout server.key -out server.csr \
+          -subj "/CN=aerospike-tls"
+        openssl x509 -req -in server.csr \
+          -CA ca.crt -CAkey ca.key -CAcreateserial \
+          -out server.crt -days 365 \
+          -extensions v3_req -extfile san.ext
+
+        # Generate client key and CA-signed cert
+        openssl req -newkey rsa:4096 -nodes \
+          -keyout client.key -out client.csr \
+          -subj "/CN=Aerospike-Server-Test-Client"
+        openssl x509 -req -in client.csr \
+          -CA ca.crt -CAkey ca.key -CAcreateserial \
+          -out client.crt -days 365
+
+        # Clean up CSR and serial files
+        rm -f *.csr *.srl san.ext
+
+        echo "Generated TLS certificates in $cert_dir"
+        ls -la "$cert_dir"
+        echo "tls-cert-dir=$cert_dir" >> "$GITHUB_OUTPUT"
+
+    - name: Prepare config files
+      id: prepare-config
+      shell: bash
+      env:
+        FEATURES_CONTENT: ${{ inputs.features-content }}
+        CONFIG_CONTENT: ${{ inputs.config-content }}
+      run: |
+        features_path="${{ inputs.features-file }}"
+        config_path="${{ inputs.config-file }}"
+        effective_security="${{ steps.validate.outputs.effective-security }}"
+        enable_sc="${{ inputs.enable-strong-consistency }}"
+        num_nodes=${{ inputs.num-nodes }}
+        tpl_dir="${{ github.action_path }}/templates"
+
+        render_tpl="${{ github.action_path }}/render-template.sh"
+
+        # Build security stanza from template
+        export SECURITY=""
+        if [[ "$effective_security" == "true" ]]; then
+          SECURITY=$(cat "$tpl_dir/security.conf")
+        fi
+
+        # Build namespace block from template
+        if [[ "$enable_sc" == "true" ]]; then
+          export REPLICATION_FACTOR=$(( num_nodes < 2 ? num_nodes : 2 ))
+          export NAMESPACE=$("$render_tpl" "$tpl_dir/namespace-sc.conf")
+        else
+          export REPLICATION_FACTOR=1
+          export NAMESPACE=$("$render_tpl" "$tpl_dir/namespace-memory.conf")
+        fi
+
+        # Write features-content to temp file if no file path was given
+        if [[ -z "$features_path" && -n "${FEATURES_CONTENT}" ]]; then
+          features_path="$(mktemp)"
+          printf '%s' "${FEATURES_CONTENT}" > "$features_path"
+          echo "Wrote features-content to $features_path"
+        fi
+
+        # Write config-content to temp file if no file path was given
+        if [[ -z "$config_path" && -n "${CONFIG_CONTENT}" ]]; then
+          config_path="$(mktemp)"
+          printf '%s' "${CONFIG_CONTENT}" > "$config_path"
+          echo "Wrote config-content to $config_path"
+        fi
+
+        # If user provided a custom config, handle security/SC injection
+        if [[ -n "$config_path" ]]; then
+          if [[ "$effective_security" == "true" ]]; then
+            # Append security stanza if not already present
+            if ! grep -q 'security {' "$config_path" 2>/dev/null; then
+              echo "" >> "$config_path"
+              echo "$SECURITY" >> "$config_path"
+              echo "Appended security stanza to user-provided config"
+            fi
+          fi
+          if [[ "$enable_sc" == "true" ]]; then
+            echo "::warning::Strong consistency directives must be present in your custom config; the action does not inject namespace SC settings into user-provided configs"
+          fi
+        fi
+
+        # Generate default TLS-enabled config if TLS is on and no custom config
+        if [[ "${{ inputs.enable-tls }}" == "true" && -z "$config_path" ]]; then
+          config_path="$(mktemp)"
+          "$render_tpl" "$tpl_dir/tls.conf" "$config_path"
+          echo "Generated default TLS-enabled aerospike.conf at $config_path"
+        fi
+
+        # Generate default config when security or SC is enabled but no TLS and no custom config
+        if [[ "${{ inputs.enable-tls }}" != "true" && -z "$config_path" \
+              && ( "$effective_security" == "true" || "$enable_sc" == "true" ) ]]; then
+          config_path="$(mktemp)"
+          "$render_tpl" "$tpl_dir/default.conf" "$config_path"
+          echo "Generated default security/SC-enabled aerospike.conf at $config_path"
+        fi
+
+        echo "features-path=$features_path" >> "$GITHUB_OUTPUT"
+        echo "config-path=$config_path" >> "$GITHUB_OUTPUT"
+
+    - name: Create Docker network
+      id: create-network
+      shell: bash
+      run: |
+        network="${{ inputs.network-name }}"
+        if ! docker network inspect "$network" >/dev/null 2>&1; then
+          docker network create "$network"
+          echo "Created Docker network: $network"
+        else
+          echo "Docker network already exists: $network"
+        fi
+        echo "network-name=$network" >> "$GITHUB_OUTPUT"
+
+    - name: Start Aerospike Server containers
+      id: start-containers
+      shell: bash
+      env:
+        ENV_VARS: ${{ inputs.env-vars }}
+      run: |
+        num_nodes=${{ inputs.num-nodes }}
+        base_port=${{ inputs.base-port }}
+        prefix="${{ inputs.container-name-prefix }}"
+        service_port=${{ inputs.service-port }}
+        image="${{ inputs.container-repo-url }}/${{ inputs.server-container-repo }}:${{ inputs.server-tag }}"
+        network="${{ inputs.network-name }}"
+        features_path="${{ steps.prepare-config.outputs.features-path }}"
+        config_path="${{ steps.prepare-config.outputs.config-path }}"
+        enable_tls="${{ inputs.enable-tls }}"
+        tls_base_port=${{ inputs.tls-base-port }}
+        tls_cert_dir="${{ steps.generate-tls-certs.outputs.tls-cert-dir }}"
+        effective_security="${{ steps.validate.outputs.effective-security }}"
+        enable_sc="${{ inputs.enable-strong-consistency }}"
+
+        container_names=""
+        service_ports=""
+        tls_service_ports=""
+
+        # Parse env-vars using escape-aware semicolon delimiter
+        env_flags=()
+        if [[ -n "${ENV_VARS:-}" ]]; then
+          current=""
+          escape="false"
+          pairs=()
+          for (( i=0; i<${#ENV_VARS}; i++ )); do
+            char="${ENV_VARS:i:1}"
+            if [[ "$escape" == "true" ]]; then
+              current+="$char"
+              escape="false"
+              continue
+            fi
+            if [[ "$char" == "\\" ]]; then
+              escape="true"
+              continue
+            fi
+            if [[ "$char" == ";" ]]; then
+              pairs+=("$current")
+              current=""
+              continue
+            fi
+            current+="$char"
+          done
+          pairs+=("$current")
+
+          for pair in "${pairs[@]}"; do
+            [[ -z "$pair" ]] && continue
+            if [[ "$pair" != *=* ]]; then
+              echo "Error: env-vars entries must be KEY=VALUE (got: $pair)" >&2
+              exit 1
+            fi
+            key="${pair%%=*}"
+            value="${pair#*=}"
+            if [[ -z "$key" || ! "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+              echo "Error: invalid env var name '$key' in env-vars" >&2
+              exit 1
+            fi
+            env_flags+=("-e" "$key=$value")
+          done
+        fi
+
+        # For multi-node clusters, generate a config with mesh seed addresses
+        # The entrypoint overwrites mounted configs, so we bypass it and run asd directly
+        if (( num_nodes > 1 )); then
+          mesh_seeds=""
+          for (( j=1; j<=num_nodes; j++ )); do
+            mesh_seeds+="        mesh-seed-address-port ${prefix}-${j} 3002"$'\n'
+          done
+
+          if [[ -z "$config_path" ]]; then
+            tpl_dir="${{ github.action_path }}/templates"
+            render_tpl="${{ github.action_path }}/render-template.sh"
+
+            # Build security stanza from template
+            export SECURITY=""
+            if [[ "$effective_security" == "true" ]]; then
+              SECURITY=$(cat "$tpl_dir/security.conf")
+            fi
+
+            # Build namespace block from template
+            if [[ "$enable_sc" == "true" ]]; then
+              export REPLICATION_FACTOR=$(( num_nodes < 2 ? num_nodes : 2 ))
+              export NAMESPACE=$("$render_tpl" "$tpl_dir/namespace-sc.conf")
+            else
+              export REPLICATION_FACTOR=2
+              export NAMESPACE=$("$render_tpl" "$tpl_dir/namespace-memory.conf")
+            fi
+
+            export MESH_SEEDS="$mesh_seeds"
+
+            # Render multi-node template
+            config_path="$(mktemp)"
+            "$render_tpl" "$tpl_dir/multi-node.conf" "$config_path"
+          else
+            # Inject mesh seeds into the user-provided config
+            cluster_config="$(mktemp)"
+            awk -v seeds="$mesh_seeds" '/mode mesh/{print; printf "%s", seeds; next}1' "$config_path" > "$cluster_config"
+            config_path="$cluster_config"
+          fi
+        fi
+
+        for (( i=1; i<=num_nodes; i++ )); do
+          name="${prefix}-${i}"
+          host_port=$(( base_port + i - 1 ))
+
+          tls_host_port=$(( tls_base_port + i - 1 ))
+
+          run_args=(
+            "--name" "$name"
+            "--detach"
+            "--network" "$network"
+            "-p" "${host_port}:${service_port}"
+          )
+
+          # TLS port mapping and cert mounting
+          if [[ "$enable_tls" == "true" ]]; then
+            run_args+=("-p" "${tls_host_port}:4333")
+            run_args+=("-v" "${tls_cert_dir}:/etc/aerospike/tls:ro")
+          fi
+
+          # Mount features.conf if provided
+          if [[ -n "$features_path" ]]; then
+            run_args+=("-v" "$(realpath "$features_path"):/etc/aerospike/features.conf:ro")
+          fi
+
+          # Decide whether to bypass the entrypoint. The Aerospike Docker entrypoint
+          # regenerates aerospike.conf, overwriting any mounted config. Bypass it
+          # whenever we need a custom config that must not be overwritten.
+          # SC always requires a features file (enterprise), so bypass is safe.
+          # Security alone can work without features, so only bypass when a
+          # features file is available (entrypoint would overwrite our config).
+          bypass_entrypoint="false"
+          if (( num_nodes > 1 )); then
+            bypass_entrypoint="true"
+          elif [[ "$enable_sc" == "true" ]]; then
+            bypass_entrypoint="true"
+          elif [[ "$effective_security" == "true" && -n "$features_path" ]]; then
+            bypass_entrypoint="true"
+          fi
+
+          # Mount aerospike.conf (read-only when bypassing entrypoint)
+          if [[ -n "$config_path" ]]; then
+            if [[ "$bypass_entrypoint" == "true" ]]; then
+              run_args+=("-v" "$(realpath "$config_path"):/etc/aerospike/aerospike.conf:ro")
+            else
+              run_args+=("-v" "$(realpath "$config_path"):/etc/aerospike/aerospike.conf")
+            fi
+          fi
+
+          # User-supplied env vars
+          run_args+=("${env_flags[@]}")
+
+          # Bypass entrypoint to prevent config overwrite
+          if [[ "$bypass_entrypoint" == "true" ]]; then
+            run_args+=("--entrypoint" "asd")
+          fi
+
+          run_args+=("$image")
+
+          # Pass --foreground since we bypassed the entrypoint
+          if [[ "$bypass_entrypoint" == "true" ]]; then
+            run_args+=("--foreground")
+          fi
+
+          echo "Starting container: $name (host port: $host_port)"
+          docker run "${run_args[@]}"
+
+          # Build CSV outputs
+          if [[ -n "$container_names" ]]; then
+            container_names+=","
+            service_ports+=","
+          fi
+          container_names+="$name"
+          service_ports+="$host_port"
+          if [[ "$enable_tls" == "true" ]]; then
+            if [[ -n "$tls_service_ports" ]]; then
+              tls_service_ports+=","
+            fi
+            tls_service_ports+="$tls_host_port"
+          fi
+        done
+
+        echo "container-names=$container_names" >> "$GITHUB_OUTPUT"
+        echo "service-ports=$service_ports" >> "$GITHUB_OUTPUT"
+        echo "tls-service-ports=$tls_service_ports" >> "$GITHUB_OUTPUT"
+
+    - name: Wait for Aerospike Server readiness
+      shell: bash
+      run: |
+        chmod +x "${{ github.action_path }}/wait-for-aerospike-server.sh"
+        "${{ github.action_path }}/wait-for-aerospike-server.sh" \
+          --container-names "${{ steps.start-containers.outputs.container-names }}" \
+          --num-nodes "${{ inputs.num-nodes }}" \
+          --timeout "${{ inputs.startup-timeout }}" \
+          --service-port "${{ inputs.service-port }}" \
+          --security "${{ steps.validate.outputs.effective-security }}" \
+          --enable-sc "${{ inputs.enable-strong-consistency }}" \
+          --tools-image "${{ inputs.container-repo-url }}/database-docker-virtual/aerospike-tools:${{ inputs.tools-tag }}" \
+          --network "${{ inputs.network-name }}"
+
+    - name: Setup strong consistency
+      if: inputs.enable-strong-consistency == 'true'
+      shell: bash
+      run: |
+        tools_image="${{ inputs.container-repo-url }}/database-docker-virtual/aerospike-tools:${{ inputs.tools-tag }}"
+        network="${{ inputs.network-name }}"
+        first_container="${{ inputs.container-name-prefix }}-1"
+        service_port=${{ inputs.service-port }}
+
+        auth_flags=""
+        if [[ "${{ steps.validate.outputs.effective-security }}" == "true" ]]; then
+          auth_flags="-U admin -P admin"
+        fi
+
+        echo "Setting up strong consistency roster..."
+        echo "  Tools image: $tools_image"
+        echo "  Network: $network"
+        echo "  Target: $first_container:$service_port"
+        echo "  Auth flags: ${auth_flags:-(none)}"
+
+        # Grant sys-admin role so admin has service-ctrl permission for roster commands
+        if [[ -n "$auth_flags" ]]; then
+          echo "  Granting sys-admin role to admin user..."
+          # shellcheck disable=SC2086
+          docker run --rm --network "$network" "$tools_image" \
+            asadm -h "$first_container" -p "$service_port" $auth_flags \
+            --enable --execute "manage acl grant user admin roles sys-admin" 2>&1 || {
+            echo "Error: failed to grant sys-admin role (exit code $?)" >&2
+            exit 1
+          }
+        fi
+
+        echo "  Running: asadm manage roster stage observed ns test"
+        # shellcheck disable=SC2086 -- auth_flags contains multiple arguments that must be word split
+        docker run --rm --network "$network" "$tools_image" \
+          asadm -h "$first_container" -p "$service_port" $auth_flags \
+          --enable --execute "manage roster stage observed ns test" 2>&1 || {
+          echo "Error: roster stage command failed (exit code $?)" >&2
+          echo "Server logs:" >&2
+          docker logs --tail 30 "$first_container" >&2
+          exit 1
+        }
+
+        echo "  Running: asadm manage recluster"
+        # shellcheck disable=SC2086 -- auth_flags contains multiple arguments that must be word split
+        docker run --rm --network "$network" "$tools_image" \
+          asadm -h "$first_container" -p "$service_port" $auth_flags \
+          --enable --execute "manage recluster" 2>&1 || {
+          echo "Error: recluster command failed (exit code $?)" >&2
+          echo "Server logs:" >&2
+          docker logs --tail 30 "$first_container" >&2
+          exit 1
+        }
+
+        # Wait for SC partitions to become active after recluster
+        num_nodes=${{ inputs.num-nodes }}
+        timeout=${{ inputs.sc-stability-timeout-seconds }}
+        echo "  Waiting for cluster stability (size=$num_nodes, ignore-migrations=false)..."
+        elapsed=0
+        while (( elapsed < timeout )); do
+          rc=0
+          # shellcheck disable=SC2086
+          result=$(docker run --rm --network "$network" "$tools_image" \
+            asinfo -h "$first_container" -p "$service_port" $auth_flags \
+            -v "cluster-stable:size=$num_nodes;ignore-migrations=false" 2>&1) || rc=$?
+          if [[ $rc -eq 0 && -n "$result" && "$result" != *"ERROR"* ]]; then
+            echo "  Cluster is stable after recluster (${elapsed}s): $result"
+            break
+          fi
+          sleep 1
+          elapsed=$((elapsed + 1))
+        done
+
+        if (( elapsed >= timeout )); then
+          echo "Error: Cluster did not stabilize within ${timeout}s after recluster" >&2
+          echo "Last result: $result" >&2
+          docker logs --tail 30 "$first_container" >&2
+          exit 1
+        fi
+
+        echo "Strong consistency roster setup complete."

@@ -1,0 +1,15 @@
+name: PR Hygiene - Jira Ticket in Title
+
+permissions:
+  contents: read
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+jobs:
+  validate:
+    uses: ./.github/workflows/reusable_pr-hygiene.yml
+    with:
+      pr_title: ${{ github.event.pull_request.title }}
+      pr-labels: ${{ toJSON(github.event.pull_request.labels.*.name) }}

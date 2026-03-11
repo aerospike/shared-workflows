@@ -1,4 +1,4 @@
-name: Check for Jira Ticket in PR Title
+name: PR Hygiene
 
 on:
   workflow_call:
@@ -6,7 +6,40 @@ on:
       pr_title:
         required: true
         type: string
-        description: PR title to check for JIRA ticket
+        description: PR title to validate
+      allowed-patterns:
+        required: false
+        type: string
+        default: |
+          ^[a-zA-Z]+\(deps[^)]*\):
+          ^\[StepSecurity\]
+          ^[Rr]evert "
+          ^revert:
+        description: |
+          Newline-delimited list of regex patterns (ERE syntax). PR titles matching
+          any pattern bypass both commitlint and JIRA validation. Defaults cover
+          Dependabot, StepSecurity, and revert commits. Override to replace entirely.
+      types-requiring-jira:
+        required: false
+        type: string
+        default: feat, fix, docs, ci, refactor
+        description: >
+          Comma-separated list of conventional commit types that require a JIRA
+          ticket in the PR title. Types not in this list skip JIRA validation.
+          Set to empty string to never require JIRA.
+      skip-jira-label:
+        required: false
+        type: string
+        default: skip-jira
+        description: >
+          PR label name that bypasses JIRA validation. Commitlint still runs.
+      pr-labels:
+        required: false
+        type: string
+        default: ""
+        description: >
+          JSON array of PR label names (e.g. from toJSON(github.event.pull_request.labels.*.name)).
+          Used to check for the skip-jira-label.
 
 permissions:
   contents: read
@@ -16,23 +49,89 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@20cf305ff2072d973412fa9b1e3a4f227bda3c76 # v2.14.0
+        uses: step-security/harden-runner@58077d3c7e43986b6b15fba718e8ea69e387dfcc # v2.15.1
         with:
           egress-policy: audit
 
-      - name: Check for JIRA ticket in PR title
+      - name: Check allowlist patterns
+        id: allowlist
+        env:
+          PR_TITLE: ${{ inputs.pr_title }}
+          ALLOWED_PATTERNS: ${{ inputs.allowed-patterns }}
         run: |
-          # Extract PR title
-          PR_TITLE="${{ inputs.pr_title }}"
+          if [ -n "$ALLOWED_PATTERNS" ]; then
+            while IFS= read -r pattern; do
+              [ -z "$pattern" ] && continue
+              if echo "$PR_TITLE" | grep -qE "$pattern"; then
+                echo "✅ PR title matches allowed pattern: $pattern"
+                echo "allowed=true" >> "$GITHUB_OUTPUT"
+                exit 0
+              fi
+            done <<< "$ALLOWED_PATTERNS"
+          fi
+
+          echo "allowed=false" >> "$GITHUB_OUTPUT"
+
+      # PR title must follow: type(scope): [JIRA-123] description
+      #   type:  feat|fix|refactor|docs|test|ci|chore|build|perf (validated by commitlint)
+      #   scope: optional, lowercase (e.g., workflows, deploy, actions)
+      #   JIRA:  uppercase project key in brackets, before the description
+      # Example: feat(workflows): [INFRA-370] add artifacts-cicd integration tests
+      - name: Validate PR title is conventional commit
+        if: steps.allowlist.outputs.allowed != 'true'
+        env:
+          PR_TITLE: ${{ inputs.pr_title }}
+        run: |
+          npm install --save-dev @commitlint/cli @commitlint/config-conventional
+          echo '{"extends":["@commitlint/config-conventional"]}' > .commitlintrc.json
+          echo "$PR_TITLE" | npx commitlint
+
+      - name: Check for JIRA ticket in PR title
+        if: steps.allowlist.outputs.allowed != 'true'
+        env:
+          PR_TITLE: ${{ inputs.pr_title }}
+          JIRA_REQUIRED_TYPES: ${{ inputs.types-requiring-jira }}
+          SKIP_JIRA_LABEL: ${{ inputs.skip-jira-label }}
+          PR_LABELS: ${{ inputs.pr-labels }}
+        run: |
           echo "PR Title: $PR_TITLE"
-          # Extract JIRA ticket from PR title (ABC-123 format)
-          JIRA_TICKET=$(echo "$PR_TITLE" | grep -oE '([A-Za-z0-9]+-[0-9]+)' | head -1)
+
+          # Check if skip-jira label is present
+          if [ -n "$PR_LABELS" ] && [ -n "$SKIP_JIRA_LABEL" ]; then
+            if echo "$PR_LABELS" | jq -e --arg label "$SKIP_JIRA_LABEL" 'map(select(. == $label)) | length > 0' > /dev/null 2>&1; then
+              echo "✅ JIRA validation skipped — '$SKIP_JIRA_LABEL' label is present"
+              exit 0
+            fi
+          fi
+
+          # Check if this commit type requires JIRA
+          if [ -z "$JIRA_REQUIRED_TYPES" ]; then
+            echo "✅ JIRA validation skipped — no types require JIRA"
+            exit 0
+          fi
+
+          COMMIT_TYPE=$(echo "$PR_TITLE" | grep -oP '^[a-z]+' | head -1)
+          TYPE_REQUIRED=false
+          IFS=',' read -ra TYPES <<< "$JIRA_REQUIRED_TYPES"
+          for t in "${TYPES[@]}"; do
+            t=$(echo "$t" | xargs)
+            if [ "$t" = "$COMMIT_TYPE" ]; then
+              TYPE_REQUIRED=true
+              break
+            fi
+          done
+
+          if [ "$TYPE_REQUIRED" = "false" ]; then
+            echo "✅ JIRA validation skipped — type '$COMMIT_TYPE' does not require a JIRA ticket"
+            exit 0
+          fi
+
+          JIRA_TICKET=$(echo "$PR_TITLE" | grep -oP '^[a-z]+(\([a-z0-9-]+\))?: \[\K[A-Z]{2,10}-[0-9]+(?=\] )' | head -1)
           if [ -z "$JIRA_TICKET" ]; then
             echo "❌ ERROR: No JIRA ticket found in PR title!"
-            echo "Please include a JIRA ticket in the format ABC-123 in your PR title."
-            echo "Examples: ABC-123: Add new feature for database management'"
+            echo "PR title must follow: type(scope): [JIRA-123] description"
+            echo "Example: feat(workflows): [INFRA-370] add artifacts-cicd integration tests"
             exit 1
           else
             echo "✅ JIRA ticket found: $JIRA_TICKET"
-            echo "PR hygiene check passed!"
           fi

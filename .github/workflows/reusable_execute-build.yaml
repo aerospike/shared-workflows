@@ -167,11 +167,11 @@ jobs:
       jf-build-name: ${{ steps.build-info.outputs.jf-build-name }}
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@20cf305ff2072d973412fa9b1e3a4f227bda3c76 # v2.14.0
+        uses: step-security/harden-runner@58077d3c7e43986b6b15fba718e8ea69e387dfcc # v2.15.1
         with:
           egress-policy: audit
       - name: Checkout shared-workflows repository
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: aerospike/shared-workflows
           ref: ${{ inputs.gh-workflows-ref }}
@@ -180,7 +180,7 @@ jobs:
 
       - name: Checkout source repository
         if: inputs.gh-source-path != ''
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: ${{ inputs.gh-source-repository }}
           ref: ${{ inputs.gh-source-ref }}
@@ -199,12 +199,12 @@ jobs:
 
       - name: Set up Dotnet
         if: inputs.setup-dotnet
-        uses: actions/setup-dotnet@2016bd2012dba4e32de620c46fe006a3ac9f0602 # v5.0.1
+        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
         with:
           dotnet-version: ${{ inputs.dotnet-version }}
 
       - name: Set up JFrog CLI
-        uses: step-security/setup-jfrog-cli@a6b41f8338bea0983ddff6bd4ede7d2dcd81e1fa # v4.8.1
+        uses: step-security/setup-jfrog-cli@893a92f96c7727242adf0e603c77b1f2a22390e1 # v4.9.1
         env:
           JF_URL: ${{ inputs.jf-url }}
           JF_PROJECT: ${{ inputs.jf-project }}
@@ -296,8 +296,7 @@ jobs:
             ${{ inputs.publish-build-info && '--publish-build-info' || '' }} \
             ${{ inputs.dry-run && '--dry-run' || '' }}
       - name: Upload Artifacts
-        if: inputs.dry-run != true
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: ${{ inputs.gh-artifact-name }}
           path: ${{ inputs.working-directory != '' && format('{0}/{1}', inputs.working-directory, inputs.gh-artifact-directory) || inputs.gh-artifact-directory }}

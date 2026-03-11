@@ -1,0 +1,69 @@
+name: Test PR Hygiene Workflow
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  # End-to-end test: valid title should pass both checks
+  test-valid-title:
+    uses: ./.github/workflows/reusable_pr-hygiene.yml
+    with:
+      pr_title: "feat(workflows): [INFRA-378] add pr hygiene checks"
+
+  # End-to-end test: Dependabot title should be allowed by defaults (any type with deps scope)
+  test-dependabot-allowed:
+    uses: ./.github/workflows/reusable_pr-hygiene.yml
+    with:
+      pr_title: "Build(deps): bump step-security/harden-runner from 2.14.0 to 2.14.2"
+
+  # End-to-end test: lowercase dependabot title should also be allowed
+  test-lowercase-dependabot:
+    uses: ./.github/workflows/reusable_pr-hygiene.yml
+    with:
+      pr_title: "build(deps): bump foo from 1.0.0 to 2.0.0"
+
+  # End-to-end test: StepSecurity title should be allowed by defaults
+  test-stepsecurity-allowed:
+    uses: ./.github/workflows/reusable_pr-hygiene.yml
+    with:
+      pr_title: "[StepSecurity] Apply security best practices"
+
+  # End-to-end test: revert title should be allowed by defaults
+  test-revert-allowed:
+    uses: ./.github/workflows/reusable_pr-hygiene.yml
+    with:
+      pr_title: 'Revert "feat(workflows): [INFRA-370] add integration tests"'
+
+  # End-to-end test: chore without JIRA should pass (not a required type)
+  test-chore-no-jira:
+    uses: ./.github/workflows/reusable_pr-hygiene.yml
+    with:
+      pr_title: "chore: update readme"
+
+  # Unit tests via bats
+  run-tests:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@a90bcbc6539c36a85cdfeb73f7e2f433735f215b # v2.15.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install bats
+        run: |
+          git clone https://github.com/bats-core/bats-core.git
+          cd bats-core
+          sudo ./install.sh /usr/local
+          cd ..
+          rm -rf bats-core
+
+      - name: Run bats tests
+        run: |
+          bats .github/workflows/pr-hygiene/tests/

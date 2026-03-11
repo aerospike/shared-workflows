@@ -1,8 +1,11 @@
 name: Example Artifacts CI/CD
 on:
   workflow_dispatch:
-  pull_request:
-    branches: [main]
+    inputs:
+      version:
+        description: Version override (leave empty for auto-detection)
+        required: false
+        default: ""
   push:
     branches: [main]
 
@@ -19,14 +22,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@20cf305ff2072d973412fa9b1e3a4f227bda3c76 # v2.14.0
+        uses: step-security/harden-runner@58077d3c7e43986b6b15fba718e8ea69e387dfcc # v2.15.1
         with:
           egress-policy: audit
-      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - name: Extract Version
         id: extract
         uses: ./.github/actions/extract-version-from-tag
         with:
+          version: ${{ inputs.version }}
           version-file: .github/workflows/VERSION.example
     outputs:
       version: ${{ steps.extract.outputs.version }}
@@ -62,10 +66,10 @@ jobs:
       build-script: |
         # matrix-json is injected into the environment as MATRIX_JSON
         # we can use jq to extract the values we need
-        DISTRO=$(jq -r '.distro' <<<"$MATRIX_JSON")
-        ARCH=$(jq -r '.arch' <<<"$MATRIX_JSON")
+        export DISTRO=$(jq -r '.distro' <<<"$MATRIX_JSON")
+        export ARCH=$(jq -r '.arch' <<<"$MATRIX_JSON")
         # emulated is set in the environment by the reusable_artifacts-cicd.yaml workflow
-        EMULATED=$EMULATED
+        export EMULATED=$EMULATED
         echo "DISTRO: $DISTRO"
         echo "ARCH: $ARCH"
         echo "EMULATED: $EMULATED"
@@ -98,12 +102,12 @@ jobs:
     if: github.actor != 'dependabot[bot]'
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@20cf305ff2072d973412fa9b1e3a4f227bda3c76 # v2.14.0
+        uses: step-security/harden-runner@58077d3c7e43986b6b15fba718e8ea69e387dfcc # v2.15.1
         with:
           egress-policy: audit
       - name: Install JFrog CLI
         id: jf
-        uses: step-security/setup-jfrog-cli@a6b41f8338bea0983ddff6bd4ede7d2dcd81e1fa # v4.8.1
+        uses: step-security/setup-jfrog-cli@893a92f96c7727242adf0e603c77b1f2a22390e1 # v4.9.1
         env:
           JF_URL: https://artifact.aerospike.io
           JF_PROJECT: test
@@ -145,12 +149,12 @@ jobs:
     needs: [extract-version, artifacts-cicd]
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@20cf305ff2072d973412fa9b1e3a4f227bda3c76 # v2.14.0
+        uses: step-security/harden-runner@58077d3c7e43986b6b15fba718e8ea69e387dfcc # v2.15.1
         with:
           egress-policy: audit
       - name: Install JFrog CLI
         id: jf
-        uses: step-security/setup-jfrog-cli@a6b41f8338bea0983ddff6bd4ede7d2dcd81e1fa # v4.8.1
+        uses: step-security/setup-jfrog-cli@893a92f96c7727242adf0e603c77b1f2a22390e1 # v4.9.1
         env:
           JF_URL: https://artifact.aerospike.io
           JF_PROJECT: test

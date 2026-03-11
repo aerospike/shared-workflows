@@ -45,7 +45,7 @@ on:
       jf-registry:
         type: string
         required: false
-        description: Full Docker registry URL including repository path (e.g., artifact.aerospike.io/test-container-dev-local) # should be full uri for Artifactory registry eg artifact.aerospike.io/test-container-dev-local
+        description: Full Docker registry URL including repository path (e.g., artifact.aerospike.io/test-docker-dev-local) # should be full uri for Artifactory registry eg artifact.aerospike.io/test-docker-dev-local
       jf-registry-base:
         type: string
         default: artifact.aerospike.io
@@ -80,8 +80,8 @@ on:
         description: Whether to push the image
       repo-scope:
         type: string
-        default: -container-dev-local
-        description: Repository suffix appended to jf-project (e.g., -container-preview-public-local) # e.g. "-container-preview-public-local"
+        default: -docker-dev-local
+        description: Repository suffix appended to jf-project (e.g., -docker-preview-public-local) # e.g. "-docker-preview-public-local"
       sbom:
         type: boolean
         default: true
@@ -128,15 +128,15 @@ jobs:
 
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@20cf305ff2072d973412fa9b1e3a4f227bda3c76 # v2.14.0
+        uses: step-security/harden-runner@58077d3c7e43986b6b15fba718e8ea69e387dfcc # v2.15.1
         with:
           egress-policy: audit
 
-      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v5
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v5
 
       - name: Install JFrog CLI
         id: jf
-        uses: step-security/setup-jfrog-cli@a6b41f8338bea0983ddff6bd4ede7d2dcd81e1fa # v4.8.1
+        uses: step-security/setup-jfrog-cli@893a92f96c7727242adf0e603c77b1f2a22390e1 # v4.9.1
         env:
           JF_URL: ${{ inputs.jf-url }}
           JF_PROJECT: ${{ inputs.jf-project }}
@@ -158,14 +158,14 @@ jobs:
           echo "registry=$reg" >> "$GITHUB_OUTPUT"
 
       - name: Docker login to Artifactory
-        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3
+        uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4.0.0
         with:
           registry: ${{ steps.registry.outputs.registry }}
           username: ${{ steps.jf.outputs.oidc-user }}
           password: ${{ steps.jf.outputs.oidc-token }}
 
-      - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
-      - uses: step-security/setup-buildx-action@8c8aef2d414c0b66518fee2b7084e0986f82d7ac # v3.11.1
+      - uses: docker/setup-qemu-action@ce360397dd3f832beb865e1373c09c0e9f86d70a # v4.0.0
+      - uses: step-security/setup-buildx-action@c60a792b446ef83310733d5cd9d0c8d6870d043f # v3.12.0
       - name: Compute tags
         id: tags
         shell: bash
@@ -252,7 +252,7 @@ jobs:
 
       - name: Build and push
         id: build
-        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6
+        uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7.0.0
         with:
           context: ${{ inputs.context }}
           file: ${{ inputs.file }}
@@ -288,7 +288,7 @@ jobs:
 
       - name: Attest OCI Image
         if: ${{ inputs.attest }}
-        uses: actions/attest-build-provenance@00014ed6ed5efc5b1ab7f7f34a39eb55d41aa4f8 # v3.1.0
+        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
         with:
           subject-name: oci://${{ steps.tags.outputs.immutable-tag }}
           subject-digest: ${{ steps.build.outputs.digest }}

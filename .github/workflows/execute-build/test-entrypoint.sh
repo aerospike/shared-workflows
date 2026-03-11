@@ -26,7 +26,6 @@ handle_error() {
     exit 1
 }
 
-
 cp -r "$GIT_ROOT/.github/workflows/execute-build/test_apps" "$TEST_DIR"
 
 # Function to record test results
@@ -34,12 +33,12 @@ record_test_result() {
     local test_name="$1"
     local success="$2"
     TOTAL_TESTS=$((TOTAL_TESTS + 1))
-    if [[ "$success" == "true" ]]; then
+    if [[ $success == "true" ]]; then
         PASSED_TESTS=$((PASSED_TESTS + 1))
-        echo "✅ $test_name - PASSED" >> "$TEST_REPORT_FILE"
+        echo "✅ $test_name - PASSED" >>"$TEST_REPORT_FILE"
     else
         FAILED_TESTS=$((FAILED_TESTS + 1))
-        echo "❌ $test_name - FAILED" >> "$TEST_REPORT_FILE"
+        echo "❌ $test_name - FAILED" >>"$TEST_REPORT_FILE"
     fi
 }
 
@@ -60,7 +59,7 @@ cd "$GIT_ROOT" || exit 1
 # Create test directory
 
 # Create test build scripts
-cat > "$TEST_DIR/simple-build.sh" << 'EOF'
+cat >"$TEST_DIR/simple-build.sh" <<'EOF'
 #!/bin/bash
 # Simple test build script
 echo "Starting build..."
@@ -70,7 +69,7 @@ echo "Built artifact 2" > build-output/artifact2.txt
 echo "Build completed successfully"
 EOF
 
-cat > "$TEST_DIR/failing-build.sh" << 'EOF'
+cat >"$TEST_DIR/failing-build.sh" <<'EOF'
 #!/bin/bash
 # Build script that fails
 echo "Starting build..."
@@ -78,7 +77,7 @@ echo "Build failed!" >&2
 exit 1
 EOF
 
-cat > "$TEST_DIR/no-artifacts-build.sh" << 'EOF'
+cat >"$TEST_DIR/no-artifacts-build.sh" <<'EOF'
 #!/bin/bash
 # Build script that doesn't create artifacts
 echo "Starting build..."
@@ -103,14 +102,14 @@ fi
 
 record_test_result "Test 1: Basic successful build" "$test1_success"
 
-# Test 2: Dry-run mode
+# Test 2: Dry-run mode (build runs, only JFrog operations are skipped)
 echo ""
 echo " Test 2: Dry-run mode"
 test2_success=true
 
 cd "$TEST_DIR"
-rm -rf build-output-dry
-output=$("$SCRIPT_DIR/entrypoint.sh" --build-script-path simple-build.sh --artifact-directory build-output-dry --dry-run 2>&1)
+rm -rf build-output
+output=$("$SCRIPT_DIR/entrypoint.sh" --build-script-path simple-build.sh --artifact-directory build-output --dry-run 2>&1)
 
 # Check for dry-run indicator
 if ! echo "$output" | grep -q "Would execute build-artifacts workflow"; then
@@ -118,19 +117,11 @@ if ! echo "$output" | grep -q "Would execute build-artifacts workflow"; then
     test2_success=false
 fi
 
-# Check for the actual commands that would be executed (green output from run() function)
-if ! echo "$output" | grep -q "   .*simple-build.sh"; then
-    echo "Dry-run mode does not show the command that would be executed"
+# Build should still execute in dry-run mode (dry-run only skips JFrog operations)
+if [[ ! -f "build-output/artifact1.txt" ]] || [[ ! -f "build-output/artifact2.txt" ]]; then
+    echo "Build did not execute in dry-run mode (artifacts missing)"
     test2_success=false
 fi
-
-# Check for mkdir command that would be executed
-if ! echo "$output" | grep -q "   mkdir -p"; then
-    echo "Dry-run mode does not show mkdir command"
-    test2_success=false
-fi
-
-
 
 record_test_result "Test 2: Dry-run mode" "$test2_success"
 
@@ -183,9 +174,9 @@ if [[ ! -f $app_location ]]; then
 fi
 
 # Test that the program works
-if [[ "$test5_success" == "true" ]]; then
+if [[ $test5_success == "true" ]]; then
     output=$($app_location 2>&1)
-    if [[ "$output" != "Hello, world!" ]]; then
+    if [[ $output != "Hello, world!" ]]; then
         echo "Test app output was not 'Hello, world!'"
         test5_success=false
     fi
@@ -200,7 +191,7 @@ test6_success=true
 
 cd "$TEST_DIR"
 # Create a non-executable script
-cat > non-executable.sh << 'EOF'
+cat >non-executable.sh <<'EOF'
 #!/bin/bash
 echo "This script was made executable automatically"
 mkdir -p perm-test-output
@@ -257,4 +248,4 @@ if [[ $FAILED_TESTS -eq 0 ]]; then
 else
     echo "❌ Test suite completed with exit code 1"
     exit 1
-fi 
+fi
