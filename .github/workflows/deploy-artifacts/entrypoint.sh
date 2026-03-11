@@ -38,7 +38,6 @@ while [[ $# -gt 0 ]]; do
         echo "Usage: $0 <project> <build-name> <version> <build-number> [OPTIONS]" >&2
         echo "" >&2
         echo "Uploads artifacts to JFrog Artifactory" >&2
-        echo "Supports: DEB, RPM, JAR/Maven, NuGet, PyPI (wheels and source distributions), and generic files" >&2
         echo "" >&2
         echo "Options:" >&2
         echo "  --metadata-build-number <prefix> Build ID prefix used to discover related metadata builds (searches for <prefix>*.json)" >&2
