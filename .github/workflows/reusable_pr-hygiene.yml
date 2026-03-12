@@ -14,6 +14,7 @@ on:
           ^[a-zA-Z]+\(deps[^)]*\):
           ^\[StepSecurity\]
           ^[Rr]evert "
+          ^Bump
           ^revert:
         description: |
           Newline-delimited list of regex patterns (ERE syntax). PR titles matching
