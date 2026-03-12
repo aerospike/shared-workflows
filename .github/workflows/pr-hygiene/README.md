@@ -38,7 +38,7 @@ The `allowed-patterns` input ships with these defaults:
 | `^\[StepSecurity\]`        | StepSecurity bot PRs                   |
 | `^[Rr]evert "`             | Git revert commits                     |
 | `^revert:`                 | Conventional commit reverts            |
-| `Bump`                     | Dependency bump                        |
+| `^Bump`                    | Dependency bump                        |
 
 ### Adding Custom Patterns
 
