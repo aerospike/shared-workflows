@@ -24,12 +24,30 @@ jobs:
       gh-artifact-directory: dist
       build-script: |
         make build
+      # Optional:
+      build-type: release # Freeform label, applied as build.type target-prop
+      internal: false # Set true to mark artifacts as internal-only
     secrets: inherit
 ```
+
+## Supported artifact types
+
+The deploy stage automatically routes artifacts by file extension:
+
+| Type    | Repository suffix   | Properties                                                                         |
+| ------- | ------------------- | ---------------------------------------------------------------------------------- |
+| DEB     | `deb-dev-local`     | `version`, `package_name`, `deb.distribution`, `deb.component`, `deb.architecture` |
+| RPM     | `rpm-dev-local`     | `version`, `package_name`, `rpm.distribution`, `rpm.component`, `rpm.architecture` |
+| JAR     | `maven-dev-local`   | `version`, `group_id`, `package_name`                                              |
+| NuGet   | `nuget-dev-local`   | `version`, `package_name`                                                          |
+| Generic | `generic-dev-local` | `version`, `package_name`                                                          |
+
+Companion files (`.asc` signatures, `.pom` files) are automatically gathered alongside their parent artifacts.
 
 ## Notes
 
 - The workflow generates a parent build-id automatically.
+- All artifacts get `version` and `package_name` target-props. Use `build-type` and `internal` for additional categorization.
 
 ## Testing
 
