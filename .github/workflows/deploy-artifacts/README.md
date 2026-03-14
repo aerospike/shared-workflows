@@ -2,36 +2,53 @@
 
 > **Note:** This workflow is used internally by [`reusable_artifacts-cicd.yaml`](../artifacts-cicd/README.md). Most consumers should use the orchestrator rather than calling this directly.
 
-A reusable GitHub Actions workflow for uploading artifacts to JFrog Artifactory following best practices for repository naming and organization.
+A reusable GitHub Actions workflow for uploading build artifacts to JFrog Artifactory. It automatically categorizes files by type, gathers companion files (signatures, POMs), and uploads them to the appropriate repositories with metadata properties.
 
-## Overview
+## Supported artifact types
 
-This workflow uploads build artifacts to JFrog Artifactory. It automatically categorizes files by type and uploads them to the appropriate repositories:
+| Type                      | Repository                    | Companion files            | Properties                                                                         |
+| ------------------------- | ----------------------------- | -------------------------- | ---------------------------------------------------------------------------------- |
+| DEB                       | `{project}-deb-dev-local`     | `.asc`                     | `version`, `package_name`, `deb.distribution`, `deb.component`, `deb.architecture` |
+| RPM                       | `{project}-rpm-dev-local`     | `.asc`                     | `version`, `package_name`, `rpm.distribution`, `rpm.component`, `rpm.architecture` |
+| JAR                       | `{project}-maven-dev-local`   | `.pom`, `.asc`, `.pom.asc` | `version`, `group_id`, `package_name`                                              |
+| NuGet (.nupkg/.snupkg)    | `{project}-nuget-dev-local`   | `.asc`                     | `version`, `package_name`                                                          |
+| Generic (everything else) | `{project}-generic-dev-local` | `.asc`                     | `version`, `package_name`                                                          |
 
-- **DEB packages** → `{project}-deb-dev-local`
-- **RPM packages** → `{project}-rpm-dev-local`
-- **Generic files** → `{project}-generic-dev-local`
+All types also include `build.type` and `internal` properties when those inputs are set.
 
-The workflow processes artifacts from a `build-artifacts` directory and creates structured build artifacts before uploading.
+## Adding a new artifact type
+
+The deploy pipeline uses a centralized type registry (`type_registry.sh`). To add a new type:
+
+1. Add entries to the config arrays in `type_registry.sh` (`TYPE_EXTENSIONS`, `TYPE_REPO`, `TYPE_COMPANIONS`, `TYPE_STRUCT_DIR`)
+2. Add `type` to `UPLOAD_ORDER` (before `generic`)
+3. Add a `get_TYPE_props()` function in `type_registry.sh`
+4. Add a `process_TYPE()` function in `package_utils.sh` (or reuse `process_generic`)
+5. Add tests
+
+Simple types (like DEB/RPM) need no custom upload function -- the generic `upload_type()` dispatch handles them. Complex types that need special upload logic (like JAR's dedup or NuGet's path-based layout) define an `upload_TYPE_packages()` override in `entrypoint.sh`.
 
 ## Inputs
 
-| Input                  | Description                                                | Required | Default                         |
-| ---------------------- | ---------------------------------------------------------- | -------- | ------------------------------- |
-| `jf-project`           | JFrog Artifactory project name                             | Yes      | -                               |
-| `jf-build-name`        | JFrog build name                                           | Yes      | -                               |
-| `jf-build-id`          | JFrog build ID for the overall build info                  | Yes      | -                               |
-| `jf-metadata-build-id` | JFrog build ID for the build metadata                      | Yes      | -                               |
-| `version`              | Version string for build info                              | Yes      | -                               |
-| `jf-url`               | JFrog Artifactory URL                                      | No       | `https://artifact.aerospike.io` |
-| `oidc-provider-name`   | OIDC provider name for authentication                      | No       | `gh-citrusleaf`                 |
-| `oidc-audience`        | OIDC audience for authentication                           | No       | `citrusleaf`                    |
-| `gh-artifact-name`     | Name of the artifacts to download                          | No       | `signed-artifacts`              |
-| `gh-retention-days`    | Retention days for the artifacts                           | No       | `1`                             |
-| `runs-on`              | The runner to use for the build                            | No       | `ubuntu-22.04`                  |
-| `gh-checkout-path`     | Directory to checkout the shared-workflows repository into | No       | `shared-workflows`              |
-| `gh-workflows-ref`     | Git ref for shared-workflows (**should match `uses:`**)    | Yes      | -                               |
-| `dry-run`              | Whether to run in dry-run mode                             | No       | `false`                         |
+| Input                  | Description                                                                 | Required | Default                         |
+| ---------------------- | --------------------------------------------------------------------------- | -------- | ------------------------------- |
+| `jf-project`           | JFrog Artifactory project name                                              | Yes      | -                               |
+| `jf-build-name`        | JFrog build name                                                            | Yes      | -                               |
+| `jf-build-id`          | JFrog build ID for the overall build info                                   | Yes      | -                               |
+| `jf-metadata-build-id` | JFrog build ID for the build metadata                                       | Yes      | -                               |
+| `version`              | Version string for build info                                               | Yes      | -                               |
+| `gh-workflows-ref`     | Git ref for shared-workflows (**must match `uses:`**)                       | Yes      | -                               |
+| `build-type`           | Freeform label applied as `build.type` target-prop (e.g., release, nightly) | No       | `""`                            |
+| `internal`             | Mark artifacts as internal-only (`internal=true` target-prop)               | No       | `false`                         |
+| `dry-run`              | Show what would be uploaded without uploading                               | No       | `false`                         |
+| `jar-group-id`         | Maven group ID fallback for JAR artifacts                                   | No       | `""`                            |
+| `gh-artifact-name`     | Name of the artifacts to download                                           | No       | `signed-artifacts`              |
+| `gh-checkout-path`     | Directory to checkout shared-workflows into                                 | No       | `shared-workflows`              |
+| `gh-retention-days`    | Retention days for the artifacts                                            | No       | `1`                             |
+| `jf-url`               | JFrog Artifactory URL                                                       | No       | `https://artifact.aerospike.io` |
+| `oidc-provider-name`   | OIDC provider name for authentication                                       | No       | `gh-citrusleaf`                 |
+| `oidc-audience`        | OIDC audience for authentication                                            | No       | `citrusleaf`                    |
+| `runs-on`              | The runner to use                                                           | No       | `ubuntu-22.04`                  |
 
 ## Outputs
 
@@ -39,88 +56,87 @@ The workflow processes artifacts from a `build-artifacts` directory and creates 
 | ------------- | ----------------- |
 | `jf-build-id` | The build ID used |
 
-## Structure
+## How it works
 
-### Debian/Ubuntu
+### 1. Structuring phase
+
+Artifacts arrive in `build-artifacts/` as a flat collection from the sign stage. The structuring phase categorizes them by type and gathers companion files:
+
+- Each registered type's extension is matched
+- Companion files (defined per type in `TYPE_COMPANIONS`) are automatically copied alongside their primary artifact
+- Generic catches everything not claimed by a registered type
+
+### 2. Upload phase
+
+Each type directory is uploaded to its respective repository with appropriate properties. The upload functions are driven by the type registry:
+
+- Simple types (DEB, RPM) use the generic `upload_type()` dispatch which calls `get_TYPE_props()` and `get_TYPE_extra_flags()` by convention
+- Complex types (JAR, NuGet, generic) use custom upload functions
+- All uploads go through `jf_upload()` which adds standard flags (`--flat=false`, `--build-name`, `--build-number`, `--project`)
+
+### 3. Build info
+
+After uploads, build info is published with parent-child relationships linking metadata builds and artifact builds.
+
+## Directory structure after structuring
+
+### DEB
 
 ```text
-pool/
-├── bookworm/
-│   └── {package-name}/
-│       ├── {package-name}_version_debian12_arch.deb
-│       └── {package-name}_version_debian12_arch.deb.asc
-├── bullseye/
-│   └── {package-name}/
-│       └── {package-name}_version_debian11_arch.deb
-├── jammy/
-│   └── {package-name}/
-│       └── {package-name}_version_ubuntu22.04_arch.deb
-└── noble/
-    └── {package-name}/
-        └── {package-name}_version_ubuntu24.04_arch.deb
+deb/pool/
+  jammy/{package-name}/{file}.deb
+  jammy/{package-name}/{file}.deb.asc
+  bookworm/{package-name}/{file}.deb
+  bookworm/{package-name}/{file}.deb.asc
 ```
 
-### RPM/Yum
+### RPM
 
 ```text
-repo/
-├── el8/
-│   ├── x86_64/
-│   │   ├── *.rpm
-│   │   └── repodata/
-│   └── aarch64/
-│       ├── *.rpm
-│       └── repodata/
-├── el9/
-│   └── …
-└── amzn2023/
-    └── …
+rpm/
+  el9/x86_64/{file}.rpm
+  el9/x86_64/{file}.rpm.asc
+  amzn2023/aarch64/{file}.rpm
 ```
 
-## Example Usage
+### JAR/Maven
 
-**Note**: The example below shows the pattern for external consumers using tagged versions. Internal workflows in this repository use relative paths (e.g., `uses: ./.github/workflows/reusable_deploy-artifacts.yaml`) for development and testing.
+```text
+jar/
+  com/example/project/{artifact}/{version}/{artifact}.jar
+  com/example/project/{artifact}/{version}/{artifact}.pom
+  com/example/project/{artifact}/{version}/{artifact}.jar.asc
+```
 
-```yaml
-name: Upload to Artifactory
-on:
-  workflow_dispatch:
-  push:
-    tags: ["v*"]
+### NuGet
 
-jobs:
-  upload:
-    uses: aerospike/shared-workflows/.github/workflows/reusable_deploy-artifacts.yaml@v2.0.2
-    with:
-      jf-project: database
-      jf-build-name: database
-      jf-build-id: 1234567890
-      jf-metadata-build-id: 1234567890-metadata
-      version: ${{ github.ref_name }}
-      jf-url: https://artifact.aerospike.io
-      oidc-provider-name: gh-citrusleaf
-      oidc-audience: citrusleaf
-      gh-artifact-name: signed-artifacts
-      gh-retention-days: 1
-      gh-workflows-ref: v2.0.2 # Should match the version in your 'uses:' line
-      dry-run: false
+```text
+nupkg/
+  {PackageName}.{Version}.nupkg
+  {PackageName}.{Version}.nupkg.asc
+  {PackageName}.{Version}.snupkg
+```
+
+## File layout
+
+```text
+deploy-artifacts/
+  entrypoint.sh          # Main script: arg parsing, upload functions, orchestration
+  type_registry.sh       # Type config arrays + per-type props/flags functions
+  upload_utils.sh        # Shared helpers: jf_upload, upload_companions, discover_and_process, upload_type
+  package_utils.sh       # Metadata extraction + process_* functions for structuring
+  create-test-fixtures.sh
+  tests/
+    bats/                # Bats test files
+    helpers/             # Test setup, command parsers, assertions
 ```
 
 ## Required: gh-workflows-ref
 
 The `gh-workflows-ref` input is **required** and must match the version in your `uses:` line. See [Why gh-workflows-ref is required](../docs/CICD-with-shared-actions.md#why-gh-workflows-ref-is-required) for details.
 
-### Build Info Publishing
-
-After uploading artifacts, the workflow publishes comprehensive build information:
-
 ## Prerequisites
 
 - JFrog Artifactory instance with OIDC authentication configured
 - GitHub Actions with OIDC token access to Artifactory
 - Build artifacts available as downloadable artifacts
-
-## Notes
-
-- All uploads use the "DEV" environment level and "local" locator
-- The workflow processes DEB and RPM files and creates structured build artifacts before uploading
