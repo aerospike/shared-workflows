@@ -82,5 +82,22 @@ else
     exit 1
 fi
 
+# Create .asc companion files (simulated detached GPG signatures)
+# In production, the sign stage creates these alongside every artifact
+echo "Creating .asc companion files..."
+echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/test-ubuntu22.04.deb.asc"
+echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/test-1.0-2.noarch.rpm.asc"
+echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/Aerospike.Client.8.0.2.nupkg.asc"
+echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/nuget/Aerospike.HelloWorld.1.0.0.nupkg.asc"
+echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/nested/dir/test-debian12.deb.asc"
+echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/nested/dir/nested.rpm.asc"
+
+# Create unsigned-artifacts/ prefix to simulate sign stage output
+# The sign stage uses cp --parents which creates: signed-artifacts/unsigned-artifacts/...
+# Deploy receives this as: build-artifacts/unsigned-artifacts/...
+mkdir -p "$BUILD_ARTIFACTS_DIR/unsigned-artifacts/net8.0"
+echo "generic-content" >"$BUILD_ARTIFACTS_DIR/unsigned-artifacts/net8.0/app.dll"
+echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/unsigned-artifacts/net8.0/app.dll.asc"
+
 echo "Test files created:"
 find "$BUILD_ARTIFACTS_DIR" -type f | sort
