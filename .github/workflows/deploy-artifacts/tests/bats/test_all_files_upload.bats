@@ -38,7 +38,7 @@ teardown_file() {
   teardown_test_artifacts
 }
 
-@test "All file types are uploaded correctly" {
+@test "JAR routes to maven and generic files route to generic repo" {
   # Run entrypoint with dry-run
   local output
   output=$(run_entrypoint_dry_run "test-project" "test-build" "v1.0.0" "12345" "12345-metadata")
