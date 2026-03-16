@@ -21,6 +21,10 @@ error() {
 
 # Default values
 DRY_RUN="false"
+# shellcheck disable=SC2034  # Used by type_registry.sh get_base_props()
+BUILD_TYPE=""
+# shellcheck disable=SC2034  # Used by type_registry.sh get_base_props()
+INTERNAL="false"
 # print full command line
 echo "Command line: $0 $*" >&2
 # Parse command line arguments
@@ -34,6 +38,16 @@ while [[ $# -gt 0 ]]; do
         JAR_GROUP_ID="$2"
         shift 2
         ;;
+    --build-type)
+        # shellcheck disable=SC2034
+        BUILD_TYPE="$2"
+        shift 2
+        ;;
+    --internal)
+        # shellcheck disable=SC2034
+        INTERNAL="true"
+        shift
+        ;;
     --help | -h)
         echo "Usage: $0 <project> <build-name> <version> <build-number> [OPTIONS]" >&2
         echo "" >&2
@@ -42,6 +56,8 @@ while [[ $# -gt 0 ]]; do
         echo "Options:" >&2
         echo "  --metadata-build-number <prefix> Build ID prefix used to discover related metadata builds (searches for <prefix>*.json)" >&2
         echo "  --jar-group-id <group-id>        Maven group ID for JAR artifacts" >&2
+        echo "  --build-type <label>             Freeform build type label (e.g., release, nightly)" >&2
+        echo "  --internal                       Mark artifacts as internal-only (not for public promotion)" >&2
         echo "  --dry-run        Show what would be uploaded without actually uploading" >&2
         echo "  --help, -h       Show this help message" >&2
         echo "" >&2
@@ -103,10 +119,14 @@ Use --help for usage information"
 fi
 ARTIFACT_BUILD_NUMBER="$BUILD_NUMBER-artifacts"
 
-# Source the package utilities
+# Source utilities
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/package_utils.sh"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/type_registry.sh"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/upload_utils.sh"
 
 # Wrapper function that either executes or echoes commands
 run() {
@@ -127,44 +147,28 @@ run_optional() {
 
 structure_build_artifacts() {
     echo "Structuring build artifacts..." >&2
-    mkdir -p structured_build_artifacts/deb
-    mkdir -p structured_build_artifacts/rpm
-    mkdir -p structured_build_artifacts/jar
-    mkdir -p structured_build_artifacts/nupkg
-    mkdir -p structured_build_artifacts/generic
-    while IFS= read -r -d '' deb; do
-        if [[ ! -f $deb ]]; then
-            continue
-        fi
 
-        echo "Processing DEB: $deb" >&2
-        process_deb "$deb" "./structured_build_artifacts/deb"
-    done < <(find build-artifacts -name "*.deb" -print0)
+    # Create all type directories from registry
+    for dir in "${TYPE_STRUCT_DIR[@]}"; do
+        mkdir -p "structured_build_artifacts/$dir"
+    done
 
-    while IFS= read -r -d '' rpm; do
-        if [[ ! -f $rpm ]]; then
-            continue
-        fi
+    for type in "${!TYPE_EXTENSIONS[@]}"; do
+        local dest="./structured_build_artifacts/${TYPE_STRUCT_DIR[$type]}"
+        local label="${type^^}"
+        local processor="process_${type}"
+        # snupkg uses process_nupkg
+        [[ $type == "snupkg" ]] && processor="process_nupkg"
+        discover_and_process "${TYPE_EXTENSIONS[$type]}" "$label" "$processor" "$dest" "$type"
+    done
 
-        echo "Processing RPM: $rpm" >&2
-        process_rpm "$rpm" "./structured_build_artifacts/rpm"
-    done < <(find build-artifacts -name "*.rpm" -print0)
-
-    while IFS= read -r -d '' jar; do
-        if [[ ! -f $jar ]]; then
-            continue
-        fi
-
-        echo "Processing JAR: $jar" >&2
-        process_jar "$jar" "./structured_build_artifacts/jar"
-    done < <(find build-artifacts -name "*.jar" -print0)
-
+    # Standalone POM files (unique logic: check for corresponding JAR, inline metadata)
     while IFS= read -r -d '' pom; do
         [[ -f $pom ]] || continue
         base_name=$(basename "$pom" .pom)
         jar_file="$(dirname "$pom")/$base_name.jar"
 
-        # Skip if a corresponding JAR exists (already handled)
+        # Skip if a corresponding JAR exists (already handled by process_jar)
         [[ -f $jar_file ]] && continue
 
         echo "Processing standalone POM: $pom" >&2
@@ -184,23 +188,11 @@ structure_build_artifacts() {
         fi
     done < <(find build-artifacts -name "*.pom" -print0)
 
-    while IFS= read -r -d '' nupkg; do
-        if [[ ! -f $nupkg ]]; then
-            continue
-        fi
-
-        echo "Processing NUPKG: $nupkg" >&2
-        process_nupkg "$nupkg" "./structured_build_artifacts/nupkg"
-    done < <(find build-artifacts -name "*.nupkg" -print0)
-
-    while IFS= read -r -d '' snupkg; do
-        if [[ ! -f $snupkg ]]; then
-            continue
-        fi
-
-        echo "Processing SNUPKG: $snupkg" >&2
-        process_nupkg "$snupkg" "./structured_build_artifacts/nupkg"
-    done < <(find build-artifacts -name "*.snupkg" -print0)
+    # Generic: everything not claimed by a registered type
+    local -a exclude_args=()
+    while IFS= read -r ext; do
+        exclude_args+=(-not -name "$ext")
+    done < <(get_known_extensions)
 
     while IFS= read -r -d '' generic; do
         if [[ ! -f $generic ]]; then
@@ -208,144 +200,61 @@ structure_build_artifacts() {
             continue
         fi
         echo "Processing generic file: $generic" >&2
-        process_generic "$generic" "./structured_build_artifacts/generic"
-    done < <(find build-artifacts \( -not -name "*.deb" -not -name "*.rpm" -not -name "*.asc" -not -name "*.jar" -not -name "*.pom" -not -name "*.nupkg" -not -name "*.snupkg" -not -name "*.csproj" \) -type f -print0)
+        local target_path
+        target_path=$(process_generic "$generic" "./structured_build_artifacts/generic")
+
+        if [[ -n $target_path ]]; then
+            gather_companions "$generic" "$(dirname "$target_path")" "generic"
+        fi
+    done < <(find build-artifacts \( "${exclude_args[@]}" \) -type f -print0)
 }
 
-upload_deb_packages() {
-    if [[ $DRY_RUN == "true" ]]; then
-        echo "Would upload DEB packages to JFrog..." >&2
-    else
-        echo "Uploading DEB packages to JFrog..." >&2
-    fi
-    while IFS= read -r -d '' deb; do
-        if [[ ! -f $deb ]]; then
-            continue
-        fi
-        # Get package metadata
-        pkgname=$(dpkg-deb -f "$deb" Package)
-        arch=$(dpkg-deb -f "$deb" Architecture)
-        if ! codename=$(get_codename_for_deb "$deb"); then
-            error "Failed to get codename for $deb"
-        fi
-
-        echo "  Package: $pkgname, Arch: $arch, Codename: $codename" >&2
-        # Upload the DEB
-
-        run jf rt upload "$deb" "$PROJECT-deb-dev-local" --flat=false \
-            --build-name="$BUILD_NAME" \
-            --build-number="$ARTIFACT_BUILD_NUMBER" \
-            --project="$PROJECT" \
-            --target-props "version=$VERSION;deb.distribution=$codename;deb.component=main;deb.architecture=$arch" \
-            --deb "$codename/main/$arch"
-
-        # Upload signature and checksum if they exist
-        if [[ -f "$deb.asc" ]]; then
-            echo "  Uploading signature: $deb.asc" >&2
-            run jf rt upload "$deb.asc" "$PROJECT-deb-dev-local" --flat=false \
-                --build-name="$BUILD_NAME" \
-                --build-number="$ARTIFACT_BUILD_NUMBER" \
-                --project="$PROJECT"
-        fi
-    done < <(find . -name "*.deb" -print0)
-}
-
-upload_rpm_packages() {
-    if [[ $DRY_RUN == "true" ]]; then
-        echo "Would upload RPM packages to JFrog..." >&2
-    else
-        echo "Uploading RPM packages to JFrog..." >&2
-    fi
-    while IFS= read -r -d '' rpm; do
-        if [[ ! -f $rpm ]]; then
-            continue
-        fi
-
-        # Get metadata using the shared function
-        read -r -a metadata < <(get_rpm_metadata "$rpm")
-        pkgname="${metadata[0]}"
-        version="${metadata[1]}"
-        arch="${metadata[2]}"
-        dist="${metadata[3]}"
-
-        echo "  Package: $pkgname, Version: $version, Arch: $arch, Dist: $dist" >&2
-
-        # Upload the RPM
-        run jf rt upload "$rpm" "$PROJECT-rpm-dev-local" --flat=false \
-            --build-name="$BUILD_NAME" \
-            --build-number="$ARTIFACT_BUILD_NUMBER" \
-            --project="$PROJECT" \
-            --target-props "version=$VERSION;rpm.distribution=$dist;rpm.component=main;rpm.architecture=$arch"
-
-        # Upload signature and checksums if they exist
-        if [[ -f "$rpm.asc" ]]; then
-            echo "  Uploading signature: $rpm.asc" >&2
-            run jf rt upload "$rpm.asc" "$PROJECT-rpm-dev-local" --flat=false \
-                --build-name="$BUILD_NAME" \
-                --build-number="$ARTIFACT_BUILD_NUMBER" \
-                --project="$PROJECT"
-        fi
-    done < <(find . -name "*.rpm" -print0)
-}
+# DEB and RPM uploads are handled by upload_type() via the type registry.
+# No custom upload_deb_packages or upload_rpm_packages needed.
 
 upload_jar_packages() {
-    if [[ $DRY_RUN == "true" ]]; then
-        echo "Would upload JAR/POM files to JFrog..." >&2
-    else
-        echo "Uploading JAR/POM files to JFrog..." >&2
-    fi
+    echo "Uploading JAR/POM files to JFrog..." >&2
 
     # Find all JAR and POM files, then process unique base names
     declare -A processed_artifacts
 
     while IFS= read -r -d '' artifact; do
-        if [[ ! -f $artifact ]]; then
-            continue
-        fi
+        [[ -f $artifact ]] || continue
 
         # Get the directory and base name
+        local artifact_dir artifact_name base_name
         artifact_dir=$(dirname "$artifact")
         artifact_name=$(basename "$artifact")
         base_name="${artifact_name%.jar}"
         base_name="${base_name%.pom}"
 
         # Skip if we've already processed this base artifact
-        artifact_key="$artifact_dir/$base_name"
+        local artifact_key="$artifact_dir/$base_name"
         if [[ -n ${processed_artifacts[$artifact_key]-} ]]; then
             continue
         fi
         processed_artifacts[$artifact_key]=1
 
-        # Determine which file to use for metadata extraction (prefer POM as it's the source of truth)
         local pkgname version group_id
-
-        # Extract metadata from JAR (must exist since process_jar copies JAR+POM together)
         local jar_file="$artifact_dir/${base_name}.jar"
         local pom_file="$artifact_dir/${base_name}.pom"
 
         if [[ -f $jar_file ]]; then
-            # Standard case: extract from JAR
+            local -a metadata
             read -r -a metadata < <(get_jar_metadata "$jar_file")
             pkgname="${metadata[0]}"
             version="${metadata[1]}"
             group_id="${metadata[2]-${JAR_GROUP_ID-}}"
-
         elif [[ -f $pom_file ]]; then
-            # Standalone POM case
             pkgname=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='artifactId'])" "$pom_file" 2>/dev/null)
             version=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='version'])" "$pom_file" 2>/dev/null)
             group_id=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='groupId'])" "$pom_file" 2>/dev/null)
         fi
 
-        # Group ID priority:
-        # 1. group_id already extracted (either via POM or metadata)
-        # 2. fallback to JAR_GROUP_ID
-        if [[ -z $group_id ]]; then
-            group_id="${JAR_GROUP_ID-}"
-        fi
+        [[ -z ${group_id-} ]] && group_id="${JAR_GROUP_ID-}"
 
         # If no group_id is available, move to generic directory for generic upload
-        if [[ -z $group_id ]]; then
+        if [[ -z ${group_id-} ]]; then
             echo "  Moving JAR without group_id to generic directory: $artifact" >&2
             for ext in jar pom jar.asc pom.asc; do
                 local artifact_file="$artifact_dir/${base_name}.${ext}"
@@ -357,100 +266,83 @@ upload_jar_packages() {
         fi
 
         echo "  Package: $pkgname, Version: $version, Group ID: $group_id" >&2
+        local props
+        props=$(get_jar_props "$artifact" "$group_id" "$pkgname")
 
         # Upload all related Maven artifact files (jar, pom, signatures)
         for ext in jar pom jar.asc pom.asc; do
             local artifact_file="$artifact_dir/${base_name}.${ext}"
             if [[ -f $artifact_file ]]; then
                 echo "  Uploading $ext: $artifact_file" >&2
-                run jf rt upload "$artifact_file" "$PROJECT-maven-dev-local" --flat=false \
-                    --build-name="$BUILD_NAME" \
-                    --build-number="$ARTIFACT_BUILD_NUMBER" \
-                    --project="$PROJECT" \
-                    --target-props "group_id=$group_id;package_name=$pkgname;version=$version"
+                jf_upload "$artifact_file" "$PROJECT-maven-dev-local" \
+                    --target-props "$props"
             fi
         done
     done < <(find . \( -name "*.jar" -o -name "*.pom" \) -print0)
 }
 
 upload_nupkg_packages() {
-    if [[ $DRY_RUN == "true" ]]; then
-        echo "Would upload NuGet packages to JFrog..." >&2
-    else
-        echo "Uploading NuGet packages to JFrog..." >&2
-    fi
+    echo "Uploading NuGet packages to JFrog..." >&2
 
-    while IFS= read -r -d '' nupkg; do
-        if [[ ! -f $nupkg ]]; then
-            continue
-        fi
+    # loop for both .nupkg and .snupkg
+    while IFS= read -r -d '' pkg; do
+        [[ -f $pkg ]] || continue
 
         local -a metadata
-        read -r -a metadata < <(get_nupkg_metadata "$nupkg")
+        read -r -a metadata < <(get_nupkg_metadata "$pkg")
         local pkgname="${metadata[0]}"
         local pkgversion="${metadata[1]}"
-        local nupkg_filename
-        nupkg_filename=$(basename "$nupkg")
+        local pkg_filename
+        pkg_filename=$(basename "$pkg")
 
         if [[ -z $pkgname ]] || [[ -z $pkgversion ]]; then
-            echo "Warning: Failed to extract metadata from $nupkg, using filename-based path" >&2
-            pkgname="${nupkg_filename%.nupkg}"
+            echo "Warning: Failed to extract metadata from $pkg, using filename-based path" >&2
+            pkgname="${pkg_filename%.nupkg}"
+            pkgname="${pkgname%.snupkg}"
             pkgversion="unknown"
         fi
 
-        echo "  Uploading NuGet package: $nupkg" >&2
+        local props
+        props=$(get_nupkg_props "$pkg")
+
+        echo "  Uploading NuGet package: $pkg" >&2
         echo "    Package: $pkgname, Version: $pkgversion" >&2
-        run jf rt upload "$nupkg" "$PROJECT-nuget-dev-local/${pkgname}/${pkgversion}/${nupkg_filename}" \
+        # NuGet uses custom target path (not --flat=false), so we call run directly
+        run jf rt upload "$pkg" "$PROJECT-nuget-dev-local/${pkgname}/${pkgversion}/${pkg_filename}" \
             --build-name="$BUILD_NAME" \
             --build-number="$ARTIFACT_BUILD_NUMBER" \
-            --project="$PROJECT"
-    done < <(find . -name "*.nupkg" -print0)
+            --project="$PROJECT" \
+            --target-props "$props"
 
-    while IFS= read -r -d '' snupkg; do
-        if [[ ! -f $snupkg ]]; then
-            continue
-        fi
-
-        local -a metadata
-        read -r -a metadata < <(get_nupkg_metadata "$snupkg")
-        local pkgname="${metadata[0]}"
-        local pkgversion="${metadata[1]}"
-        local snupkg_filename
-        snupkg_filename=$(basename "$snupkg")
-
-        if [[ -z $pkgname ]] || [[ -z $pkgversion ]]; then
-            echo "Warning: Failed to extract metadata from $snupkg, using filename-based path" >&2
-            pkgname="${snupkg_filename%.snupkg}"
-            pkgversion="unknown"
-        fi
-
-        echo "  Uploading NuGet symbol package: $snupkg" >&2
-        echo "    Package: $pkgname, Version: $pkgversion" >&2
-        run jf rt upload "$snupkg" "$PROJECT-nuget-dev-local/${pkgname}/${pkgversion}/${snupkg_filename}" \
-            --build-name="$BUILD_NAME" \
-            --build-number="$ARTIFACT_BUILD_NUMBER" \
-            --project="$PROJECT"
-    done < <(find . -name "*.snupkg" -print0)
+        # Upload companion files (.asc signatures)
+        # Determine type from extension for companion lookup
+        local pkg_type="nupkg"
+        [[ $pkg == *.snupkg ]] && pkg_type="snupkg"
+        upload_companions "$pkg" "$PROJECT-nuget-dev-local" "$pkg_type"
+    done < <(find . \( -name "*.nupkg" -o -name "*.snupkg" \) -print0)
 }
 
 upload_generic_files() {
-    if [[ $DRY_RUN == "true" ]]; then
-        echo "Would upload generic files..." >&2
-    else
-        echo "Uploading generic files..." >&2
-    fi
-    echo "Finding files..." >&2
-    find . >&2
+    echo "Uploading generic files..." >&2
+
+    # Build exclusion args from the registry
+    local -a exclude_args=()
+    while IFS= read -r ext; do
+        exclude_args+=(-not -name "$ext")
+    done < <(get_known_extensions)
+
     while IFS= read -r -d '' file; do
-        echo "Processing generic file: $file" >&2
-        if [[ -f $file ]]; then
-            echo "Uploading generic file: $file" >&2
-            run jf rt upload "$file" "$PROJECT-generic-dev-local" --flat=false \
-                --build-name="$BUILD_NAME" \
-                --build-number="$ARTIFACT_BUILD_NUMBER" \
-                --project="$PROJECT"
-        fi
-    done < <(find . \( -not -name "*.deb" -not -name "*.rpm" -not -name "*.asc" -not -name "*.jar" -not -name "*.pom" -not -name "*.nupkg" -not -name "*.snupkg" -not -name "*.csproj" \) -type f -print0)
+        [[ -f $file ]] || continue
+        echo "Uploading generic file: $file" >&2
+
+        local props
+        props=$(get_generic_props "$file")
+
+        jf_upload "$file" "$PROJECT-generic-dev-local" \
+            --target-props "$props"
+
+        upload_companions "$file" "$PROJECT-generic-dev-local" "generic"
+    done < <(find . \( "${exclude_args[@]}" \) -type f -print0)
 }
 
 # Collects build-info metadata by querying Artifactory for JSON files.
@@ -547,22 +439,13 @@ main() {
 
     structure_build_artifacts
     cd structured_build_artifacts
-    # Upload all packages
-    cd rpm
-    upload_rpm_packages
-    cd ..
-    cd deb
-    upload_deb_packages
-    cd ..
-    cd jar
-    upload_jar_packages
-    cd ..
-    cd nupkg
-    upload_nupkg_packages
-    cd ..
-    cd generic
-    upload_generic_files
-    cd ..
+
+    # Upload all types in the order defined by the registry (e.g., deb before rpm, so debian upload commands run before rpm).
+    for type in "${UPLOAD_ORDER[@]}"; do
+        local dir="${TYPE_STRUCT_DIR[$type]:-$type}"
+        (cd "$dir" && upload_type "$type")
+    done
+
     # Publish build info once for the unified build
     publish_build_info
 

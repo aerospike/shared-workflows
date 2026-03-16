@@ -41,6 +41,9 @@ mkdir -p "$BUILD_ARTIFACTS_DIR/nuget"
 if [[ -f "tests/some/structure/Aerospike.Client.8.0.2.nupkg" ]]; then
     cp "tests/some/structure/Aerospike.Client.8.0.2.nupkg" "$BUILD_ARTIFACTS_DIR/nuget/Aerospike.HelloWorld.1.0.0.nupkg"
     echo "   Copied Aerospike.Client.8.0.2.nupkg as nuget/Aerospike.HelloWorld.1.0.0.nupkg"
+    # Create an snupkg (symbol package) alongside the nupkg
+    cp "tests/some/structure/Aerospike.Client.8.0.2.nupkg" "$BUILD_ARTIFACTS_DIR/nuget/Aerospike.HelloWorld.1.0.0.snupkg"
+    echo "   Copied Aerospike.Client.8.0.2.nupkg as nuget/Aerospike.HelloWorld.1.0.0.snupkg"
 else
     echo "Error: tests/some/structure/Aerospike.Client.8.0.2.nupkg not found. Cannot create nested NuGet package." >&2
     exit 1
@@ -57,6 +60,7 @@ rm -rf "$BUILD_ARTIFACTS_DIR/temp-jar"
 echo "test zip content" >"$BUILD_ARTIFACTS_DIR/temp-zip-content.txt"
 cd "$BUILD_ARTIFACTS_DIR" && zip -q "test.zip" "temp-zip-content.txt" && cd - >/dev/null
 rm -f "$BUILD_ARTIFACTS_DIR/temp-zip-content.txt"
+echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/test.zip.asc"
 
 # Create a valid TAR.GZ file
 echo "test tar content" >"$BUILD_ARTIFACTS_DIR/temp-tar-content.txt"
@@ -81,6 +85,25 @@ else
     echo "Error: tests/test-1.0-2.noarch.rpm not found. This file is required for nested test fixtures." >&2
     exit 1
 fi
+
+# Create .asc companion files (simulated detached GPG signatures)
+# In production, the sign stage creates these alongside every artifact
+echo "Creating .asc companion files..."
+echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/test.jar.asc"
+echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/test-ubuntu22.04.deb.asc"
+echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/test-1.0-2.noarch.rpm.asc"
+echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/Aerospike.Client.8.0.2.nupkg.asc"
+echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/nuget/Aerospike.HelloWorld.1.0.0.nupkg.asc"
+echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/nuget/Aerospike.HelloWorld.1.0.0.snupkg.asc"
+echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/nested/dir/test-debian12.deb.asc"
+echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/nested/dir/nested.rpm.asc"
+
+# Create unsigned-artifacts/ prefix to simulate sign stage output
+# The sign stage uses cp --parents which creates: signed-artifacts/unsigned-artifacts/...
+# Deploy receives this as: build-artifacts/unsigned-artifacts/...
+mkdir -p "$BUILD_ARTIFACTS_DIR/unsigned-artifacts/net8.0"
+echo "generic-content" >"$BUILD_ARTIFACTS_DIR/unsigned-artifacts/net8.0/app.dll"
+echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/unsigned-artifacts/net8.0/app.dll.asc"
 
 echo "Test files created:"
 find "$BUILD_ARTIFACTS_DIR" -type f | sort

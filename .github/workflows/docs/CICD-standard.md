@@ -48,6 +48,8 @@ jobs:
         make build
 
       # Optional:
+      build-type: release # Freeform label, applied as build.type target-prop on all artifacts
+      internal: false # Set true to mark artifacts as internal-only (promotion control)
     secrets: inherit
 ```
 
@@ -55,6 +57,7 @@ Notes:
 
 - `reusable_artifacts-cicd.yaml` generates a unique parent `jf-build-id` internally (millisecond timestamp) and uses a distinct metadata build-id for the build-info produced during the build.
 - Signing is always enabled; provide the required signing secrets (GPG, and SSL.com secrets if `.nupkg` files are present). Using `secrets: inherit` is simplest.
+- All artifacts get `version` and `package_name` target-props automatically. DEB/RPM also get distribution and architecture. Use `build-type` and `internal` for additional categorization.
 
 ### Simple matrix builds (optional)
 
