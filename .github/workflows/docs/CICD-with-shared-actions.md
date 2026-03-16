@@ -184,7 +184,7 @@ There is no `github.called_workflow_ref` or similar.
 
 ### Why this matters
 
-These workflows need to checkout their own repository to access entrypoint scripts (bash scripts that do the actual work). Without knowing which version was called, they can't checkout the matching scripts — leading to version mismatches where the workflow is v3.2.0 but the scripts are from a different version.
+These workflows need to checkout their own repository to access entrypoint scripts (bash scripts that do the actual work). Without knowing which version was called, they can't checkout the matching scripts which leads to a version mismatch where the workflow is v3.2.0 but the scripts are from a different version.
 
 ### Known issue
 
