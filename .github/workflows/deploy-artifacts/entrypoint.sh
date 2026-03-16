@@ -200,7 +200,12 @@ structure_build_artifacts() {
             continue
         fi
         echo "Processing generic file: $generic" >&2
-        process_generic "$generic" "./structured_build_artifacts/generic"
+        local target_path
+        target_path=$(process_generic "$generic" "./structured_build_artifacts/generic")
+
+        if [[ -n $target_path ]]; then
+            gather_companions "$generic" "$(dirname "$target_path")" "generic"
+        fi
     done < <(find build-artifacts \( "${exclude_args[@]}" \) -type f -print0)
 }
 
@@ -308,6 +313,12 @@ upload_nupkg_packages() {
             --build-number="$ARTIFACT_BUILD_NUMBER" \
             --project="$PROJECT" \
             --target-props "$props"
+
+        # Upload companion files (.asc signatures)
+        # Determine type from extension for companion lookup
+        local pkg_type="nupkg"
+        [[ $pkg == *.snupkg ]] && pkg_type="snupkg"
+        upload_companions "$pkg" "$PROJECT-nuget-dev-local" "$pkg_type"
     done < <(find . \( -name "*.nupkg" -o -name "*.snupkg" \) -print0)
 }
 
@@ -329,6 +340,8 @@ upload_generic_files() {
 
         jf_upload "$file" "$PROJECT-generic-dev-local" \
             --target-props "$props"
+
+        upload_companions "$file" "$PROJECT-generic-dev-local" "generic"
     done < <(find . \( "${exclude_args[@]}" \) -type f -print0)
 }
 

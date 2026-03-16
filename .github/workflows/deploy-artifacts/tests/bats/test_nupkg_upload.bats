@@ -64,27 +64,27 @@ teardown_file() {
   # Parse commands into array
   mapfile -t nuget_cmd_array < <(echo "$nuget_commands")
   
-  # Find NuGet package upload commands
+  # Find NuGet primary package upload commands (exclude .asc companions)
   local nupkg_found=false
   local nupkg_commands=()
   for cmd in "${nuget_cmd_array[@]}"; do
-    if [[ $cmd =~ \.nupkg ]]; then
+    if [[ $cmd =~ \.(nupkg|snupkg)[[:space:]] ]]; then
       nupkg_found=true
-      
+
       nupkg_commands+=("$cmd")
       # Verify command structure: jf rt upload <file> <repo>/<pkgname>/<version>/<filename> --build-name=... --build-number=... --project=...
-      [[ $cmd =~ jf\ +rt\ +upload\ +.*\.nupkg ]] || (echo "Invalid jf rt upload command: $cmd" >&2 && return 1)
+      [[ $cmd =~ jf\ +rt\ +upload\ +.*\.(nupkg|snupkg) ]] || (echo "Invalid jf rt upload command: $cmd" >&2 && return 1)
       [[ $cmd =~ test-project-nuget-dev-local ]] || (echo "Missing or incorrect repository name: $cmd" >&2 && return 1)
       [[ $cmd =~ --build-name=test-build ]] || (echo "Missing --build-name flag: $cmd" >&2 && return 1)
       [[ $cmd =~ --build-number=12345-artifacts ]] || (echo "Missing --build-number flag: $cmd" >&2 && return 1)
       [[ $cmd =~ --project=test-project ]] || (echo "Missing --project flag: $cmd" >&2 && return 1)
       # Verify NuGet layout structure: <pkgname>/<version>/<filename>
-      [[ $cmd =~ test-project-nuget-dev-local/[^/]+/[^/]+/.*\.nupkg ]] || (echo "Invalid NuGet layout path: $cmd" >&2 && return 1)
+      [[ $cmd =~ test-project-nuget-dev-local/[^/]+/[^/]+/.*\.(nupkg|snupkg) ]] || (echo "Invalid NuGet layout path: $cmd" >&2 && return 1)
     fi
   done
 
-  # Verify we found exactly 2 NuGet package commands (root and subdirectory)
-  [[ ${#nupkg_commands[@]} -eq 2 ]] || (echo "Expected 2 NuGet upload commands, found ${#nupkg_commands[@]}" >&2 && return 1)
+  # Verify we found exactly 3 NuGet package commands (2 nupkg + 1 snupkg)
+  [[ ${#nupkg_commands[@]} -eq 3 ]] || (echo "Expected 3 NuGet upload commands, found ${#nupkg_commands[@]}" >&2 && return 1)
 
   # Verify NuGet packages were found and processed
   [[ $nupkg_found == true ]] || (echo "NuGet package upload not found" >&2 && return 1)
@@ -98,10 +98,10 @@ teardown_file() {
   local nuget_commands
   nuget_commands=$(extract_nuget_commands "$output")
   
-  # Verify jf rt upload commands use correct flags and layout
+  # Verify jf rt upload commands for primary packages (not .asc companions) use correct flags and layout
   local upload_commands
-  upload_commands=$(echo "$nuget_commands" | grep "\.nupkg" || true)
-  
+  upload_commands=$(echo "$nuget_commands" | grep -E '\.(nupkg|snupkg)[[:space:]]' || true)
+
   if [[ -n "$upload_commands" ]]; then
     while IFS= read -r cmd; do
       [[ $cmd =~ jf\ +rt\ +upload ]] || (echo "Not a jf rt upload command: $cmd" >&2 && return 1)
@@ -110,7 +110,7 @@ teardown_file() {
       [[ $cmd =~ --build-number=12345-artifacts ]] || (echo "jf rt upload missing --build-number: $cmd" >&2 && return 1)
       [[ $cmd =~ --project=test-project ]] || (echo "jf rt upload missing --project: $cmd" >&2 && return 1)
       # Verify NuGet layout structure: <pkgname>/<version>/<filename>
-      [[ $cmd =~ test-project-nuget-dev-local/[^/]+/[^/]+/.*\.nupkg ]] || (echo "Invalid NuGet layout path: $cmd" >&2 && return 1)
+      [[ $cmd =~ test-project-nuget-dev-local/[^/]+/[^/]+/.*\.(nupkg|snupkg) ]] || (echo "Invalid NuGet layout path: $cmd" >&2 && return 1)
     done <<< "$upload_commands"
   fi
 }
@@ -127,13 +127,13 @@ teardown_file() {
   # Parse commands into array
   mapfile -t nuget_cmd_array < <(echo "$nuget_commands")
 
-  # Find ALL NuGet package upload commands
+  # Find ALL NuGet primary package upload commands (exclude .asc companions)
   local nupkg_count=0
   local nupkg_in_subdir_found=false
   local wrong_repo_found=false
 
   for cmd in "${nuget_cmd_array[@]}"; do
-    if [[ $cmd =~ \.nupkg ]]; then
+    if [[ $cmd =~ \.(nupkg|snupkg)[[:space:]] ]]; then
       nupkg_count=$((nupkg_count + 1))
 
       # Check if this is the subdirectory package (Aerospike.HelloWorld)
@@ -148,8 +148,8 @@ teardown_file() {
     fi
   done
 
-  # Verify we found both NuGet packages (root and subdirectory)
-  [[ $nupkg_count -eq 2 ]] || (echo "Expected 2 NuGet packages, found $nupkg_count" >&2 && return 1)
+  # Verify we found all NuGet packages (2 nupkg + 1 snupkg)
+  [[ $nupkg_count -eq 3 ]] || (echo "Expected 3 NuGet packages, found $nupkg_count" >&2 && return 1)
 
   # Verify we found the subdirectory package
   [[ $nupkg_in_subdir_found == true ]] || (echo "NuGet package in subdirectory not found" >&2 && return 1)

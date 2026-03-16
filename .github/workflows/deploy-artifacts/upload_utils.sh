@@ -41,6 +41,22 @@ upload_companions() {
 
 # --- Structuring helpers ---
 
+# Copy companion files from source location to the structured target directory.
+# Usage: gather_companions <source_file> <target_dir> <type>
+gather_companions() {
+    local source_file="$1"
+    local target_dir="$2"
+    local type="$3"
+    local companions="${TYPE_COMPANIONS[$type]-}"
+    [[ -z $companions ]] && return 0
+    for suffix in $companions; do
+        if [[ -f "$source_file$suffix" ]]; then
+            echo "  Gathering companion: $source_file$suffix" >&2
+            cp -v "$source_file$suffix" "$target_dir/" >&2
+        fi
+    done
+}
+
 # Discover primary files by extension and gather them WITH their companions into structured dirs.
 # This is the key function that treats artifacts as groups, not individual files.
 # Usage: discover_and_process <pattern> <label> <processor> <dest> [type]
@@ -66,15 +82,7 @@ discover_and_process() {
 
         # Copy companion files to the same directory as the primary
         if [[ -n $type && -n $target_path ]]; then
-            local target_dir
-            target_dir=$(dirname "$target_path")
-            local companions="${TYPE_COMPANIONS[$type]-}"
-            for suffix in $companions; do
-                if [[ -f "$file$suffix" ]]; then
-                    echo "  Gathering companion: $file$suffix" >&2
-                    cp -v "$file$suffix" "$target_dir/" >&2
-                fi
-            done
+            gather_companions "$file" "$(dirname "$target_path")" "$type"
         fi
     done < <(find build-artifacts -name "$pattern" -print0)
 }

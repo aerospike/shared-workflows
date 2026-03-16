@@ -13,36 +13,54 @@ teardown() {
     teardown_test_artifacts
 }
 
-# --- Bug 1: .asc signatures silently dropped ---
-# The sign stage creates .asc files but they were never uploaded to Artifactory.
+# --- Bug 1 & 4: .asc companion signatures must be uploaded for ALL types ---
+# The sign stage creates .asc files alongside every artifact. These must appear in
+# actual jf rt upload commands, not just structuring logs. This test is comprehensive:
+# if a new type is added with .asc fixtures but no upload handling, it will fail.
 
-@test "Bug 1: DEB .asc signature appears in upload commands" {
+@test "Every .asc fixture appears in a jf rt upload command" {
     local output
     output=$(run_entrypoint_dry_run)
-    # The dry-run output should contain an upload command for the .asc file
-    [[ "$output" == *"test-ubuntu22.04.deb.asc"* ]]
+
+    # Extract only actual upload commands (strip ANSI codes)
+    local upload_cmds
+    upload_cmds=$(echo "$output" | sed 's/\x1b\[[0-9;]*m//g' | grep -E "^\s*jf rt upload" || true)
+
+    # Find all .asc files in the fixture directory
+    local missing=()
+    while IFS= read -r -d '' asc_file; do
+        local basename
+        basename=$(basename "$asc_file")
+        if ! echo "$upload_cmds" | grep -qF "$basename"; then
+            missing+=("$basename")
+        fi
+    done < <(find "$BUILD_ARTIFACTS_DIR" -name "*.asc" -print0)
+
+    if [[ ${#missing[@]} -gt 0 ]]; then
+        echo "FAIL: .asc files not found in any upload command:" >&2
+        printf '  %s\n' "${missing[@]}" >&2
+        return 1
+    fi
 }
 
-@test "Bug 1: RPM .asc signature appears in upload commands" {
-    local output
-    output=$(run_entrypoint_dry_run)
-    [[ "$output" == *"test-1.0-2.noarch.rpm.asc"* ]]
-}
-
-@test "Bug 1: DEB .asc is structured alongside its parent" {
+@test "Every .asc fixture is structured alongside its primary file" {
     run_entrypoint_dry_run >/dev/null 2>&1 || true
-    local deb_dir
-    deb_dir=$(find structured_build_artifacts/deb -name "test-ubuntu22.04.deb" -printf '%h\n' 2>/dev/null | head -1)
-    [[ -n "$deb_dir" ]]
-    [[ -f "$deb_dir/test-ubuntu22.04.deb.asc" ]]
-}
 
-@test "Bug 1: RPM .asc is structured alongside its parent" {
-    run_entrypoint_dry_run >/dev/null 2>&1 || true
-    local rpm_dir
-    rpm_dir=$(find structured_build_artifacts/rpm -name "test-1.0-2.noarch.rpm" -printf '%h\n' 2>/dev/null | head -1)
-    [[ -n "$rpm_dir" ]]
-    [[ -f "$rpm_dir/test-1.0-2.noarch.rpm.asc" ]]
+    local missing=()
+    while IFS= read -r -d '' asc_file; do
+        local basename
+        basename=$(basename "$asc_file")
+        # Search for the .asc in structured_build_artifacts
+        if ! find structured_build_artifacts -name "$basename" -print -quit 2>/dev/null | grep -q .; then
+            missing+=("$basename")
+        fi
+    done < <(find "$BUILD_ARTIFACTS_DIR" -name "*.asc" -print0)
+
+    if [[ ${#missing[@]} -gt 0 ]]; then
+        echo "FAIL: .asc files not found in structured_build_artifacts:" >&2
+        printf '  %s\n' "${missing[@]}" >&2
+        return 1
+    fi
 }
 
 # --- Bug 2: Generic paths leak unsigned-artifacts/ prefix ---
@@ -78,4 +96,14 @@ teardown() {
     if [[ -n "$generic_cmds" ]]; then
         [[ "$generic_cmds" == *"version="* ]]
     fi
+}
+
+# --- Bug 4: snupkg must be uploaded to nuget repo ---
+
+@test "Bug 4: snupkg is uploaded to nuget repo" {
+    local output
+    output=$(run_entrypoint_dry_run)
+    local snupkg_cmds
+    snupkg_cmds=$(echo "$output" | sed 's/\x1b\[[0-9;]*m//g' | grep -E "jf rt upload.*\.snupkg[^.].*nuget-dev-local" || true)
+    [[ -n "$snupkg_cmds" ]]
 }
