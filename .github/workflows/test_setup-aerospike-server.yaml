@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@58077d3c7e43986b6b15fba718e8ea69e387dfcc
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594
         with:
           egress-policy: audit
 
@@ -63,7 +63,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@58077d3c7e43986b6b15fba718e8ea69e387dfcc
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594
         with:
           egress-policy: audit
 
@@ -116,7 +116,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@58077d3c7e43986b6b15fba718e8ea69e387dfcc
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594
         with:
           egress-policy: audit
 
@@ -148,7 +148,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@58077d3c7e43986b6b15fba718e8ea69e387dfcc
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594
         with:
           egress-policy: audit
 
@@ -176,7 +176,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@58077d3c7e43986b6b15fba718e8ea69e387dfcc
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594
         with:
           egress-policy: audit
 
@@ -232,7 +232,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@58077d3c7e43986b6b15fba718e8ea69e387dfcc
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594
         with:
           egress-policy: audit
 
@@ -278,7 +278,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@58077d3c7e43986b6b15fba718e8ea69e387dfcc
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594
         with:
           egress-policy: audit
 
@@ -313,7 +313,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@58077d3c7e43986b6b15fba718e8ea69e387dfcc
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594
         with:
           egress-policy: audit
 
