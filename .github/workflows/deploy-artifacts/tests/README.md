@@ -26,9 +26,7 @@ From the repository root:
 bats .github/workflows/deploy-artifacts/tests/bats/
 
 # Run a specific test file
-bats .github/workflows/deploy-artifacts/tests/bats/test_deb_rpm_upload.bats
-bats .github/workflows/deploy-artifacts/tests/bats/test_error_handling.bats
-bats .github/workflows/deploy-artifacts/tests/bats/test_nupkg_upload.bats
+bats .github/workflows/deploy-artifacts/tests/bats/test_metadata.bats
 ```
 
 ## Test Structure
@@ -37,25 +35,27 @@ bats .github/workflows/deploy-artifacts/tests/bats/test_nupkg_upload.bats
 - `tests/helpers/` - Helper functions:
   - `setup.bash` - Setup/teardown functions
   - `command_parsers.bash` - Command parsing utilities
-  - `assertions.bash` - validation assertions
+  - `assertions.bash` - Validation assertions
 
 ## Test Files
 
-- `test_deb_rpm_upload.bats` - Validates DEB and RPM upload commands
-- `test_all_files_upload.bats` - Validates generic file uploads (JAR, ZIP, TAR.GZ)
-- `test_error_handling.bats` - Tests error handling for missing arguments
-- `test_structured_artifacts.bats` - Tests processing messages and directory structure
-- `test_nupkg_upload.bats` - Validates NuGet package uploads
-- `test_java_upload.bats` - Validates Java artifact uploads
+### Unit tests (source functions directly, no entrypoint execution)
 
-## What Gets Tested
+- `test_metadata.bats` - Metadata extraction: codename mapping, nupkg/rpm parsing
+- `test_type_registry.bats` - Registry config, base/per-type props, known extensions
 
-The tests perform **validation** of commands, not just counting:
+### Structuring tests (verify file routing and companion co-location)
 
-- File paths match expected test fixtures
-- Repository names are correct (`test-project-{deb|rpm|generic|nupkg}-dev-local`)
-- Build metadata (build-name, build-number, project) is correct
-- Target-props format and values are validated
-- `--flat=false` is present
-- For DEB: `--deb` path format is validated
-- For RPM: `rpm.distribution` and `rpm.architecture` props are validated
+- `test_structuring.bats` - Artifact routing to correct dirs, companion gathering, prefix stripping
+
+### Integration tests (dry-run entrypoint, parse upload commands)
+
+- `test_deb_rpm_upload.bats` - DEB and RPM upload commands and target-props
+- `test_java_upload.bats` - JAR/Maven artifact uploads
+- `test_nupkg_upload.bats` - NuGet package uploads and metadata parsing
+- `test_all_files_upload.bats` - JAR/generic routing and NuGet-not-in-generic safety check
+- `test_error_handling.bats` - Missing arguments and invalid options
+
+### Regression tests (codify production bugs so they never regress)
+
+- `test_bug_regressions.bats` - .asc signatures uploaded, no unsigned-artifacts prefix leak, generic gets version props

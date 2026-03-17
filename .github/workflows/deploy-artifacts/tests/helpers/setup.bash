@@ -24,12 +24,26 @@ setup_test_artifacts() {
         # Verify test files exist
         declare -a TEST_FILES=(
                 "$BUILD_ARTIFACTS_DIR/test-ubuntu22.04.deb"
+                "$BUILD_ARTIFACTS_DIR/test-ubuntu22.04.deb.asc"
                 "$BUILD_ARTIFACTS_DIR/test-1.0-2.noarch.rpm"
+                "$BUILD_ARTIFACTS_DIR/test-1.0-2.noarch.rpm.asc"
                 "$BUILD_ARTIFACTS_DIR/test.jar"
+                "$BUILD_ARTIFACTS_DIR/test.jar.asc"
                 "$BUILD_ARTIFACTS_DIR/test.zip"
+                "$BUILD_ARTIFACTS_DIR/test.zip.asc"
                 "$BUILD_ARTIFACTS_DIR/test.tar.gz"
                 "$BUILD_ARTIFACTS_DIR/nested/dir/test-debian12.deb"
+                "$BUILD_ARTIFACTS_DIR/nested/dir/test-debian12.deb.asc"
                 "$BUILD_ARTIFACTS_DIR/nested/dir/nested.rpm"
+                "$BUILD_ARTIFACTS_DIR/nested/dir/nested.rpm.asc"
+                "$BUILD_ARTIFACTS_DIR/Aerospike.Client.8.0.2.nupkg"
+                "$BUILD_ARTIFACTS_DIR/Aerospike.Client.8.0.2.nupkg.asc"
+                "$BUILD_ARTIFACTS_DIR/nuget/Aerospike.HelloWorld.1.0.0.nupkg"
+                "$BUILD_ARTIFACTS_DIR/nuget/Aerospike.HelloWorld.1.0.0.nupkg.asc"
+                "$BUILD_ARTIFACTS_DIR/nuget/Aerospike.HelloWorld.1.0.0.snupkg"
+                "$BUILD_ARTIFACTS_DIR/nuget/Aerospike.HelloWorld.1.0.0.snupkg.asc"
+                "$BUILD_ARTIFACTS_DIR/unsigned-artifacts/net8.0/app.dll"
+                "$BUILD_ARTIFACTS_DIR/unsigned-artifacts/net8.0/app.dll.asc"
         )
 
         for file in "${TEST_FILES[@]}"; do

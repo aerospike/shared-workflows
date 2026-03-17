@@ -80,29 +80,26 @@ get_rpm_metadata() {
 }
 
 process_rpm() {
-    local rpm="$1"
+    local file="$1"
     local dest_dir="$2"
     local -a metadata
     local pkgname version arch dist
 
-    # Get metadata using the new function
-    read -r -a metadata < <(get_rpm_metadata "$rpm")
+    read -r -a metadata < <(get_rpm_metadata "$file")
     pkgname="${metadata[0]}"
     version="${metadata[1]}"
     arch="${metadata[2]}"
     dist="${metadata[3]}"
 
-    # Create target directory: <dist>/<arch>/
-    # Example: el8/x86_64/
     local target="$dest_dir/$dist/$arch"
-    echo "DEBUG: Creating directory structure:" >&2
-    echo "  Distribution: $dist" >&2
-    echo "  Architecture: $arch" >&2
-    echo "  Target path: $target" >&2
+    echo "  Distribution: $dist, Architecture: $arch" >&2
     mkdir -p "$target"
     echo "Copying RPM to: $target" >&2
-    rpm_name=$(basename "$rpm")
-    cp -v "$rpm" "$target/$rpm_name" >&2
+    local rpm_name
+    rpm_name=$(basename "$file")
+    cp -v "$file" "$target/$rpm_name" >&2
+    # Return target path for companion placement
+    echo "$target/$rpm_name"
 }
 
 # Function to extract PyPI package metadata from wheels and source distributions
@@ -218,23 +215,13 @@ process_jar() {
     echo "  Version: $version" >&2
     mkdir -p "$target"
 
-    # Get the directory and base name of the jar file
-    local jar_dir
     local jar_name
-    local base_name
-    jar_dir=$(dirname "$jar")
     jar_name=$(basename "$jar")
-    base_name="${jar_name%.jar}" # Remove .jar extension
 
-    echo "Copying Maven artifacts to: $target" >&2
-
-    # Copy jar, pom, and asc files
-    for ext in jar pom jar.asc pom.asc; do
-        local file="$jar_dir/${base_name}.${ext}"
-        if [[ -f $file ]]; then
-            cp -v "$file" "$target/" >&2
-        fi
-    done
+    echo "Copying JAR to: $target" >&2
+    cp -v "$jar" "$target/" >&2
+    # Return target path
+    echo "$target/$jar_name"
 }
 
 get_codename_for_deb() {
@@ -253,20 +240,19 @@ get_codename_for_deb() {
 }
 
 process_deb() {
-    local deb="$1"
+    local file="$1"
     local dest_dir="$2"
-    local codename pkgname arch deb_name
-    codename=$(get_codename_for_deb "$deb")
+    local codename pkgname
 
-    # Get package metadata directly from the DEB file
-    pkgname=$(dpkg-deb -f "$deb" Package)
-    arch=$(dpkg-deb -f "$deb" Architecture)
+    codename=$(get_codename_for_deb "$file")
+    pkgname=$(dpkg-deb -f "$file" Package)
 
     local target="$dest_dir/pool/$codename/$pkgname"
     mkdir -p "$target"
     echo "Copying DEB to: $target" >&2
-    deb_name=$(basename "$deb")
-    cp -v "$deb" "$target/$deb_name" >&2
+    local deb_name
+    deb_name=$(basename "$file")
+    cp -v "$file" "$target/$deb_name" >&2
     echo "$target/$deb_name"
 }
 
@@ -314,14 +300,24 @@ get_nupkg_metadata() {
 }
 
 process_nupkg() {
-    local nupkg="$1"
+    local file="$1"
     local dest_dir="$2"
-    local nupkg_basename
-    nupkg_basename=$(basename "$nupkg")
-    local base_name="${nupkg_basename%.nupkg}"
-    base_name="${base_name%.snupkg}"
 
-    process_generic "$nupkg" "$dest_dir"
+    local dir
+    dir=$(dirname "$file")
+    dir="${dir#build-artifacts/}"
+    dir="${dir#build-artifacts}"
+
+    local target_file
+    if [[ -n $dir && $dir != "." ]]; then
+        mkdir -p "$dest_dir/$dir"
+        cp -v "$file" "$dest_dir/$dir" >&2
+        target_file="$dest_dir/$dir/$(basename "$file")"
+    else
+        cp -v "$file" "$dest_dir/" >&2
+        target_file="$dest_dir/$(basename "$file")"
+    fi
+    echo "$target_file"
 }
 
 process_generic() {
@@ -331,14 +327,20 @@ process_generic() {
     local dir
     dir=$(dirname "$file")
     # Strip "build-artifacts" prefix to preserve only relative path within build-artifacts
+    dir="${dir#build-artifacts/}"
+    dir="${dir#build-artifacts}"
+    # Strip "unsigned-artifacts/" prefix leaked from the sign stage's cp --parents
+    dir="${dir#unsigned-artifacts/}"
+    dir="${dir#unsigned-artifacts}"
 
-    if [[ $dir == "build-artifacts" ]]; then
-        # File is at root of build-artifacts, no subdirectory
+    local target_file
+    if [[ -z $dir || $dir == "." ]]; then
         cp -v "$file" "$dest_dir/" >&2
+        target_file="$dest_dir/$(basename "$file")"
     else
-        # Strip "build-artifacts/" prefix for subdirectories if present
-        dir="${dir#build-artifacts/}"
         mkdir -p "$dest_dir/$dir"
         cp -v "$file" "$dest_dir/$dir" >&2
+        target_file="$dest_dir/$dir/$(basename "$file")"
     fi
+    echo "$target_file"
 }

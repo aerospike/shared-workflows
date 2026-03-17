@@ -74,6 +74,16 @@ on:
         description: OIDC provider name
         type: string
         default: gh-citrusleaf
+      build-type:
+        description: Freeform build type label applied as a target-prop on all artifacts (e.g., release, nightly, snapshot)
+        required: false
+        type: string
+        default: ""
+      internal:
+        description: Mark artifacts as internal-only (sets internal=true target-prop, used for promotion control)
+        required: false
+        type: boolean
+        default: false
       runs-on:
         description: The runner to use for the build
         required: false
@@ -90,7 +100,7 @@ jobs:
       jf-build-id: ${{ steps.deploy.outputs.jf-build-id }}
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@58077d3c7e43986b6b15fba718e8ea69e387dfcc # v2.15.1
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
         with:
           egress-policy: audit
 
@@ -133,7 +143,7 @@ jobs:
           jf rt ping
 
       - name: Download artifacts
-        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: ${{ inputs.gh-artifact-name }}
           path: ./build-artifacts
@@ -159,6 +169,16 @@ jobs:
             jar_group_id_arg="--jar-group-id ${{ inputs.jar-group-id }}"
           fi
 
+          build_type_arg=""
+          if [ -n "${{ inputs.build-type }}" ]; then
+            build_type_arg="--build-type ${{ inputs.build-type }}"
+          fi
+
+          internal_arg=""
+          if [ "${{ inputs.internal }}" = "true" ]; then
+            internal_arg="--internal"
+          fi
+
           "$entrypoint" \
             "${{ inputs.jf-project }}" \
             "${{ inputs.jf-build-name }}" \
@@ -166,5 +186,7 @@ jobs:
             "${{ inputs.jf-build-id }}" \
             "${{ inputs.jf-metadata-build-id }}" \
             $dry_run_arg \
-            $jar_group_id_arg
+            $jar_group_id_arg \
+            $build_type_arg \
+            $internal_arg
           echo "jf-build-id=${{ inputs.jf-build-id }}" >> $GITHUB_OUTPUT

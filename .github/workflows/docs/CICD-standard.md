@@ -1,10 +1,35 @@
-# Shared Workflows – CI/CD Walkthrough
+# Shared Workflows – Standard CI/CD
 
-This guide explains how Aerospike's cicd workflow is a central part of an end‑to‑end CI/CD pipeline.
+This is the recommended starting point for all repositories. These orchestrated workflows handle the full lifecycle with good defaults — you provide a build script and configuration, they handle the rest.
+
+If you hit a wall and need more control, see [CICD-with-shared-actions.md](CICD-with-shared-actions.md) for the composable approach.
 
 ---
 
-## High‑level flow
+## High-level flow
+
+```mermaid
+sequenceDiagram
+  participant WF as Caller Workflow
+  participant CICD as Artifacts CICD
+  participant DBD as Docker Build & Deploy
+  participant GA as GitHub Artifacts
+  participant JF as JFrog Artifactory
+  participant RB as Create Release Bundle
+
+  Note over WF,RB: Artifact Pipeline (DEB/RPM/Generic)
+  WF->>CICD: uses reusable_artifacts-cicd
+  CICD-->>GA: build artifacts (internal handoff)
+  CICD-->>JF: sign & deploy with build-info
+
+  Note over WF,RB: Docker Pipeline (Containers)
+  WF->>DBD: uses reusable_docker-build-deploy
+  DBD-->>JF: build, attest & publish image + build-info
+
+  Note over WF,RB: Release Bundle (Both Pipelines)
+  WF->>RB: uses reusable_create-release-bundle
+  RB-->>JF: create bundle from artifacts and/or docker builds
+```
 
 The architecture follows an ecosystem-specific build & sign pattern, where artifacts are built and secured according to their type (DEB/RPM with GPG, Docker with attestations), then unified at the release bundle step.
 
@@ -37,9 +62,9 @@ This orchestrates the full build → sign → deploy lifecycle internally.
 ```yaml
 jobs:
   ci:
-    uses: aerospike/shared-workflows/.github/workflows/reusable_artifacts-cicd.yaml@v2.0.3
+    uses: aerospike/shared-workflows/.github/workflows/reusable_artifacts-cicd.yaml@v3.2.0
     with:
-      gh-workflows-ref: v2.0.3 # Must match @v2.0.3 above
+      gh-workflows-ref: v3.2.0 # Must match @v3.2.0 above
       jf-project: my-project
       jf-build-name: my-app
       version: 1.2.3
@@ -48,6 +73,8 @@ jobs:
         make build
 
       # Optional:
+      build-type: release # Freeform label, applied as build.type target-prop on all artifacts
+      internal: false # Set true to mark artifacts as internal-only (promotion control)
     secrets: inherit
 ```
 
@@ -55,6 +82,7 @@ Notes:
 
 - `reusable_artifacts-cicd.yaml` generates a unique parent `jf-build-id` internally (millisecond timestamp) and uses a distinct metadata build-id for the build-info produced during the build.
 - Signing is always enabled; provide the required signing secrets (GPG, and SSL.com secrets if `.nupkg` files are present). Using `secrets: inherit` is simplest.
+- All artifacts get `version` and `package_name` target-props automatically. DEB/RPM also get distribution and architecture. Use `build-type` and `internal` for additional categorization.
 
 ### Simple matrix builds (optional)
 
@@ -79,9 +107,9 @@ Precedence is always: **matrix entry override → workflow input defaults**.
 ```yaml
 jobs:
   ci:
-    uses: aerospike/shared-workflows/.github/workflows/reusable_artifacts-cicd.yaml@v2.0.3
+    uses: aerospike/shared-workflows/.github/workflows/reusable_artifacts-cicd.yaml@v3.2.0
     with:
-      gh-workflows-ref: v2.0.3
+      gh-workflows-ref: v3.2.0
       jf-project: my-project
       jf-build-name: my-app
       version: 1.2.3
@@ -117,6 +145,39 @@ matrix-json: >-
 
 The typical pattern combines both pipelines: Build and sign according to ecosystem, then unify in a release bundle.
 
+```yaml
+jobs:
+  # Artifact pipeline: build → sign → deploy (all handled by the orchestrator)
+  artifacts:
+    uses: aerospike/shared-workflows/.github/workflows/reusable_artifacts-cicd.yaml@v3.2.0
+    with:
+      gh-workflows-ref: v3.2.0
+      jf-project: my-project
+      jf-build-name: my-app
+      version: 1.2.3
+      gh-artifact-directory: dist
+      build-script: |
+        make build
+    secrets: inherit
+
+  # Docker pipeline: build with attestations → deploy
+  docker:
+    uses: aerospike/shared-workflows/.github/workflows/reusable_docker-build-deploy.yaml@v3.2.0
+    with:
+      attest: true # SLSA attestation (container ecosystem standard)
+      sbom: true # Software Bill of Materials
+      # ... docker config ...
+
+  # Unified release: bundle all builds together
+  release-bundle:
+    needs: [artifacts, docker]
+    uses: aerospike/shared-workflows/.github/workflows/reusable_create-release-bundle.yaml@v3.2.0
+    with:
+      gh-workflows-ref: v3.2.0
+      jf-build-names: "my-app:1.2.3,my-app-container:1.2.3"
+      # Single bundle containing both artifact and container builds
+```
+
 For a drop-in artifacts-cicd example see [example_artifacts-cicd.yaml](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/example_artifacts-cicd.yaml).
 
 ---
@@ -128,15 +189,15 @@ All shared workflows require the `gh-workflows-ref` input, which **should match*
 ```yaml
 jobs:
   build:
-    uses: aerospike/shared-workflows/.github/workflows/reusable_execute-build.yaml@v2.0.3
+    uses: aerospike/shared-workflows/.github/workflows/reusable_artifacts-cicd.yaml@v3.2.0
     with:
-      gh-workflows-ref: v2.0.3 # Should match @v2.0.3 above
+      gh-workflows-ref: v3.2.0 # Should match @v3.2.0 above
       # ... other inputs ...
 ```
 
 ### The problem
 
-GitHub Actions has a fundamental limitation: **reusable workflows cannot access their own ref**. When you call `uses: org/repo/.github/workflows/workflow.yaml@v2.0.3`, the workflow itself has no way to know it was called with `@v2.0.3`.
+GitHub Actions has a fundamental limitation: **reusable workflows cannot access their own ref**. When you call `uses: org/repo/.github/workflows/workflow.yaml@v3.2.0`, the workflow itself has no way to know it was called with `@v3.2.0`.
 
 The available context variables don't help:
 
@@ -148,7 +209,7 @@ There is no `github.called_workflow_ref` or similar.
 
 ### Why this matters
 
-These workflows need to checkout their own repository to access entrypoint scripts (bash scripts that do the actual work). Without knowing which version was called, they can't checkout the matching scripts—leading to version mismatches where the workflow is v2.0.3 but the scripts are from a different version.
+These workflows need to checkout their own repository to access entrypoint scripts (bash scripts that do the actual work). Without knowing which version was called, they can't checkout the matching scripts — leading to version mismatches where the workflow is v3.2.0 but the scripts are from a different version.
 
 ### Known issue
 
@@ -165,6 +226,6 @@ Third-party workarounds exist but don't pass security review. Until GitHub adds 
 
 - **Deploy fails (auth)** → confirm GitHub→JFrog **OIDC** trust/policy is configured and that the workflow's identity has deploy permission to the target project/repo. (example mistakes often around wrong audience or incorrect token permissions)
 - **Docker push fails** → ensure `tag` includes the full registry path (e.g., `artifact.aerospike.io/project-docker-dev-local/image:tag`). Verify JFrog registry permissions and OIDC authentication.
-- **Bundle creation issues** → confirm the `jf-build-names` input is a comma‑separated list of `name:build_id` pairs that exist for the specified `version`, and that your JFrog project/repo permissions allow bundle creation. This permission is higher than upload/download so often a source of error.
+- **Bundle creation issues** → confirm the `jf-build-names` input is a comma-separated list of `name:version` pairs that exist for the specified build, and that your JFrog project/repo permissions allow bundle creation. This permission is higher than upload/download so often a source of error.
 
 ---

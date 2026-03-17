@@ -75,7 +75,7 @@ teardown_file() {
       
       # Validate command structure with Maven target-props
       assert_upload_command_valid "$cmd" "$filename" "$expected_repo" \
-        "group_id=com.example.test;package_name=test;version=test" \
+        "version=v1.0.0;group_id=com.example.test;package_name=test" \
         "test-build" "12345-artifacts" "test-project"
     fi
   done
