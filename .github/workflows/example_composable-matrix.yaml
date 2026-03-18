@@ -1,0 +1,155 @@
+name: Example Composable Matrix CI/CD
+
+on:
+  workflow_dispatch: # checkov:skip=CKV_GHA_7:version input is an optional override, not required for reproducibility
+    inputs:
+      version:
+        description: Version override (leave empty for auto-detection)
+        required: false
+        default: ""
+  push:
+    branches: [main]
+
+permissions:
+  id-token: write
+  contents: read
+
+# This workflow demonstrates the composable artifact pipeline pattern.
+# Unlike reusable_artifacts-cicd.yaml (which is all-in-one), this calls the
+# underlying workflows individually so you can insert custom steps between them.
+#
+# WORKFLOW FLOW:
+# 1. extract-version  - read version from file or input
+# 2. build            - matrix build across multiple distros (reusable_execute-build.yaml)
+# 3. collect          - merge per-matrix artifacts into one (inline download + upload)
+# 4. test             - INSERT YOUR TESTS HERE - runs against the merged build artifacts
+# 5. sign             - GPG sign the artifacts (reusable_sign-artifacts.yaml)
+# 6. deploy           - upload to JFrog Artifactory (reusable_deploy-artifacts.yaml)
+#
+# BUILD ID SCHEME (no resolve job needed):
+# - Per-matrix build:  ${{ github.run_id }}-${{ github.run_attempt }}-buildinfo-{distro}-{arch}
+# - Deploy parent:     ${{ github.run_id }}-${{ github.run_attempt }}
+# - Deploy metadata:   ${{ github.run_id }}-${{ github.run_attempt }}-buildinfo
+
+jobs:
+  extract-version:
+    runs-on: ubuntu-22.04
+    outputs:
+      version: ${{ steps.extract.outputs.version }}
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Extract Version
+        id: extract
+        uses: ./.github/actions/extract-version-from-tag
+        with:
+          version: ${{ inputs.version }}
+          version-file: .github/workflows/VERSION.example
+
+  build:
+    needs: extract-version
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - distro: el9
+            arch: x86_64
+            runs-on: ubuntu-22.04
+            emulated: false
+          - distro: jammy
+            arch: x86_64
+            runs-on: ubuntu-22.04
+            emulated: false
+    uses: ./.github/workflows/reusable_execute-build.yaml
+    with:
+      gh-workflows-ref: ${{ github.sha }}
+      jf-project: test
+      jf-build-name: test-build
+      jf-build-id: ${{ github.run_id }}-${{ github.run_attempt }}-buildinfo-${{ matrix.distro }}-${{ matrix.arch }}
+      gh-source-path: repo-source
+      working-directory: repo-source/.github/workflows/execute-build/test_apps/hi
+      build-script: |
+        DISTRO=${{ matrix.distro }} \
+        ARCH=${{ matrix.arch }} \
+        EMULATED=${{ matrix.emulated }} \
+        make docker-build
+      gh-artifact-directory: build
+      gh-artifact-name: build-artifacts-${{ matrix.distro }}-${{ matrix.arch }}
+      oidc-provider-name: gh-dev-test
+      oidc-audience: aerospike/testing
+    secrets: inherit
+
+  # Merge all per-matrix artifacts into a single github artifact for downstream jobs.
+  # This is intentionally inline (not a reusable workflow) since it is only download + upload.
+  collect:
+    needs: build
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+        with:
+          egress-policy: audit
+      - name: Download matrix artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: build-artifacts-*
+          path: build-artifacts
+          merge-multiple: true
+      - name: Upload merged artifacts
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: build-artifacts
+          path: build-artifacts
+          retention-days: 1
+
+  # ============================================================
+  # INSERT YOUR CUSTOM STEPS HERE
+  # This job runs after the build artifacts are collected and
+  # before signing and deployment. Use it for integration tests,
+  # smoke tests, security scans, or any other validation.
+  # ============================================================
+  test:
+    needs: collect
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+        with:
+          egress-policy: audit
+      - name: Download build artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: build-artifacts
+          path: build-artifacts
+      - name: Run tests
+        run: |
+          echo "Build artifacts available for testing:"
+          find build-artifacts
+          # Replace this step with your actual test commands, e.g.:
+          # ./scripts/run-integration-tests.sh build-artifacts/
+
+  sign:
+    needs: test
+    uses: ./.github/workflows/reusable_sign-artifacts.yaml
+    with:
+      gh-workflows-ref: ${{ github.sha }}
+      # gh-unsigned-artifacts defaults to build-artifacts (matches collect job output)
+      # gh-artifact-name defaults to signed-artifacts (matches deploy job input)
+    secrets: inherit
+
+  deploy:
+    needs: [extract-version, sign]
+    uses: ./.github/workflows/reusable_deploy-artifacts.yaml
+    with:
+      gh-workflows-ref: ${{ github.sha }}
+      jf-project: test
+      jf-build-name: test-build
+      version: ${{ needs.extract-version.outputs.version }}
+      jf-build-id: ${{ github.run_id }}-${{ github.run_attempt }}
+      jf-metadata-build-id: ${{ github.run_id }}-${{ github.run_attempt }}-buildinfo
+      oidc-provider-name: gh-dev-test
+      oidc-audience: aerospike/testing
+    secrets: inherit

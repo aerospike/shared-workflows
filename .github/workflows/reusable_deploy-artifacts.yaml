@@ -15,9 +15,12 @@ on:
         required: true
         type: string
       jf-metadata-build-id:
-        description: JFrog build ID for the build metadata
-        required: true
+        description: |
+          JFrog build ID prefix used to discover child build-infos for aggregation (searches for <prefix>*.json).
+          When empty, child build-info aggregation is skipped and only the parent build-info is published.
+        required: false
         type: string
+        default: ""
       jf-project:
         description: JFrog Artifactory project name
         required: true
@@ -68,12 +71,12 @@ on:
         required: false
         description: OIDC audience
         type: string
-        default: citrusleaf
+        default: aerospike/testing
       oidc-provider-name:
         required: false
         description: OIDC provider name
         type: string
-        default: gh-citrusleaf
+        default: gh-dev-test
       build-type:
         description: Freeform build type label applied as a target-prop on all artifacts (e.g., release, nightly, snapshot)
         required: false
