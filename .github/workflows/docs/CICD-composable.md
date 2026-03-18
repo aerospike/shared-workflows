@@ -1,12 +1,12 @@
 # Shared Workflows – Composable CI/CD
 
-> **Start with the [standard CI/CD guide](CICD-standard.md) first.** The orchestrated workflows handle the full lifecycle and work for most repositories. This guide is the "eject" path — use it when you need fine-grained control over individual pipeline stages that the orchestrator doesn't support.
+> If the standard orchestrated workflows fit your needs, see [CICD-standard.md](CICD-standard.md) for the simpler approach. This guide covers the composable path, where you call the lower-level workflows directly and wire the stages together yourself.
 
 ---
 
 ## When to use composable workflows
 
-The orchestrated `reusable_artifacts-cicd.yaml` handles build → sign → deploy as a single call. If that doesn't fit your needs — for example, you need custom steps between build and sign, or you need to deploy to multiple targets with different configurations — you can call the lower-level workflows directly:
+The orchestrated `reusable_artifacts-cicd.yaml` handles build → sign → deploy as a single call. The composable approach gives you the same building blocks but wired together in your own workflow, so you can insert custom steps between stages, run parallel deploys to multiple targets, or otherwise shape the pipeline to your needs:
 
 | Workflow                         | Purpose                                                                                |
 | -------------------------------- | -------------------------------------------------------------------------------------- |
@@ -51,54 +51,19 @@ Internally, GitHub Actions artifacts are used for _in-runner handoff_ between st
 
 ## Composable artifact pipeline example
 
-This is equivalent to what `reusable_artifacts-cicd.yaml` does internally, but gives you full control over each stage.
+See [example_composable-matrix.yaml](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/example_composable-matrix.yaml) for a complete working example. It demonstrates a matrix build across multiple distros with a custom test step inserted between build and sign:
 
-```yaml
-jobs:
-  build:
-    uses: aerospike/shared-workflows/.github/workflows/reusable_execute-build.yaml@v3.2.0
-    with:
-      gh-workflows-ref: v3.2.0
-      jf-project: my-project
-      jf-build-name: my-app
-      jf-build-id: "123456789" # Unique build ID (the orchestrator generates this automatically)
-      gh-artifact-directory: dist
-      build-script: |
-        make build
-    secrets: inherit
-
-  # Optional: insert custom steps between build and sign
-  # custom-step:
-  #   needs: [build]
-  #   ...
-
-  sign:
-    needs: [build]
-    uses: aerospike/shared-workflows/.github/workflows/reusable_sign-artifacts.yaml@v3.2.0
-    with:
-      gh-workflows-ref: v3.2.0
-      gh-unsigned-artifacts: build-artifacts # Must match gh-artifact-name from build (default)
-    secrets: inherit
-
-  deploy:
-    needs: [sign]
-    uses: aerospike/shared-workflows/.github/workflows/reusable_deploy-artifacts.yaml@v3.2.0
-    with:
-      gh-workflows-ref: v3.2.0
-      jf-project: my-project
-      jf-build-name: my-app
-      jf-build-id: "123456789" # Same build ID as the build step
-      jf-metadata-build-id: "123456789-buildinfo" # Distinct ID for build metadata
-      version: 1.2.3
-    secrets: inherit
+```text
+extract-version  →  build (matrix)  →  collect  →  [your tests here]  →  sign  →  deploy
 ```
 
 Key things to note when composing manually:
 
-- **`jf-build-id`** must be the same across build and deploy — it ties the build-info together
-- **`jf-metadata-build-id`** is a separate ID used for the build metadata record (the orchestrator appends `-buildinfo` to the build ID)
-- **`gh-artifact-name`** / **`gh-unsigned-artifacts`** must match between stages — this is how artifacts flow via GitHub Artifacts
-- **Signing secrets** (GPG keys, and SSL.com credentials if nupkg files are present) must be available via `secrets: inherit`
+- **`jf-build-id`** must be the same in the build and deploy jobs; it ties the build-info together. Use `${{ github.run_id }}-${{ github.run_attempt }}` as the base, which is unique per run and safe for re-runs.
+- **`jf-metadata-build-id`** is the prefix used to discover per-matrix child build-infos for aggregation (e.g., `${{ github.run_id }}-${{ github.run_attempt }}-buildinfo`). It is optional; when omitted, aggregation is skipped and only the parent build-info is published.
+- **`gh-artifact-name`** / **`gh-unsigned-artifacts`** must match between stages; this is how artifacts flow via GitHub Artifacts.
+- **Matrix builds** require a collect step to merge per-matrix artifacts into a single artifact before sign and deploy can consume them. See the example for the inline download + upload pattern.
+- **Signing secrets** (GPG keys, and SSL.com credentials if nupkg files are present) must be available via `secrets: inherit`.
 
 ## Full composable example with docker and release bundle
 
@@ -111,7 +76,7 @@ jobs:
       gh-workflows-ref: v3.2.0
       jf-project: my-project
       jf-build-name: my-app
-      jf-build-id: "123456789"
+      jf-build-id: ${{ github.run_id }}-${{ github.run_attempt }}-buildinfo
       gh-artifact-directory: dist
       build-script: |
         make build
@@ -131,8 +96,8 @@ jobs:
       gh-workflows-ref: v3.2.0
       jf-project: my-project
       jf-build-name: my-app
-      jf-build-id: "123456789"
-      jf-metadata-build-id: "123456789-buildinfo"
+      jf-build-id: ${{ github.run_id }}-${{ github.run_attempt }}
+      jf-metadata-build-id: ${{ github.run_id }}-${{ github.run_attempt }}-buildinfo
       version: 1.2.3
     secrets: inherit
 
@@ -153,7 +118,7 @@ jobs:
       jf-build-names: "my-app:1.2.3,my-app-container:1.2.3"
 ```
 
-For a complete working example see [example_artifacts-cicd.yaml](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/example_artifacts-cicd.yaml).
+For a complete working example that combines artifacts and docker pipelines see [example_reusable-integration.yaml](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/example_reusable-integration.yaml).
 
 ---
 
