@@ -68,7 +68,7 @@ jobs:
 
 ## Required: gh-workflows-ref
 
-The `gh-workflows-ref` input is **required** and must match the version in your `uses:` line. See [Why gh-workflows-ref is required](../docs/CICD-with-shared-actions.md#why-gh-workflows-ref-is-required) for details.
+The `gh-workflows-ref` input is **required** and must match the version in your `uses:` line. See [Why gh-workflows-ref is required](../docs/CICD-composable.md#why-gh-workflows-ref-is-required) for details.
 
 ## Outputs
 

@@ -27,7 +27,7 @@ on:
         description: |
           Git reference for shared-workflows checkout. Should match the version in your 'uses:' line.
           GitHub Actions doesn't expose the called workflow's ref, so this is required.
-          See: .github/workflows/docs/CICD-with-shared-actions.md#why-gh-workflows-ref-is-required
+          See: .github/workflows/docs/CICD-composable.md#why-gh-workflows-ref-is-required
         required: true
         type: string
 

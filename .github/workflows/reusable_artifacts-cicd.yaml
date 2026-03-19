@@ -12,7 +12,7 @@ on:
         description: |
           Git reference for shared-workflows checkout. Should match the version in your 'uses:' line.
           GitHub Actions doesn't expose the called workflow's ref, so this is required.
-          See: .github/workflows/docs/CICD-with-shared-actions.md#why-gh-workflows-ref-is-required
+          See: .github/workflows/docs/CICD-composable.md#why-gh-workflows-ref-is-required
         required: true
         type: string
       jf-build-name:
@@ -233,7 +233,7 @@ jobs:
           # Build IDs:
           # - jf_build_id: parent build id (overall pipeline)
           # - jf_metadata_build_id: build-info produced during build and later aggregated into the parent
-          build_id="$(date +%s%3N)"
+          build_id="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           metadata_build_id="${build_id}-buildinfo"
 
           resolved_working_directory="${{ inputs.working-directory }}"
