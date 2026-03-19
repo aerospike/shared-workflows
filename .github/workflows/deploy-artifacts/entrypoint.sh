@@ -25,6 +25,7 @@ DRY_RUN="false"
 BUILD_TYPE=""
 # shellcheck disable=SC2034  # Used by type_registry.sh get_base_props()
 INTERNAL="false"
+METADATA_BUILD_NUMBER=""
 # print full command line
 echo "Command line: $0 $*" >&2
 # Parse command line arguments
@@ -49,12 +50,14 @@ while [[ $# -gt 0 ]]; do
         shift
         ;;
     --help | -h)
-        echo "Usage: $0 <project> <build-name> <version> <build-number> [OPTIONS]" >&2
+        echo "Usage: $0 <project> <build-name> <version> <build-number> [metadata-build-number] [OPTIONS]" >&2
         echo "" >&2
         echo "Uploads artifacts to JFrog Artifactory" >&2
         echo "" >&2
+        echo "Arguments:" >&2
+        echo "  metadata-build-number  (optional) Build ID prefix used to discover child build-infos for aggregation (searches for <prefix>*.json)" >&2
+        echo "" >&2
         echo "Options:" >&2
-        echo "  --metadata-build-number <prefix> Build ID prefix used to discover related metadata builds (searches for <prefix>*.json)" >&2
         echo "  --jar-group-id <group-id>        Maven group ID for JAR artifacts" >&2
         echo "  --build-type <label>             Freeform build type label (e.g., release, nightly)" >&2
         echo "  --internal                       Mark artifacts as internal-only (not for public promotion)" >&2
@@ -113,10 +116,6 @@ if [[ -z ${BUILD_NUMBER-} ]]; then
 Use --help for usage information"
 fi
 
-if [[ -z ${METADATA_BUILD_NUMBER-} ]]; then
-    error "metadata-build-number is required
-Use --help for usage information"
-fi
 ARTIFACT_BUILD_NUMBER="$BUILD_NUMBER-artifacts"
 
 # Source utilities
@@ -400,16 +399,17 @@ AQL
 publish_build_info() {
     run jf rt build-publish "$BUILD_NAME" "$ARTIFACT_BUILD_NUMBER" --project="$PROJECT"
 
-    discover_build_infos "$PROJECT" "$BUILD_NAME" "$METADATA_BUILD_NUMBER*" "$PROJECT-build-info" || true
+    if [[ -n $METADATA_BUILD_NUMBER ]]; then
+        discover_build_infos "$PROJECT" "$BUILD_NAME" "$METADATA_BUILD_NUMBER*" "$PROJECT-build-info" || true
 
-    # Access the results
-    if [[ ${#CHILD_BUILD_IDS_RESULT[@]} -gt 0 ]]; then
-        echo "Found ${#CHILD_BUILD_IDS_RESULT[@]} child builds:" >&2
-        for build_id in "${CHILD_BUILD_IDS_RESULT[@]}"; do
-            echo "  $BUILD_NAME/$build_id"
-            run jf rt build-append "$BUILD_NAME" "$BUILD_NUMBER" \
-                "$BUILD_NAME" "$build_id" --project="$PROJECT"
-        done
+        if [[ ${#CHILD_BUILD_IDS_RESULT[@]} -gt 0 ]]; then
+            echo "Found ${#CHILD_BUILD_IDS_RESULT[@]} child builds:" >&2
+            for build_id in "${CHILD_BUILD_IDS_RESULT[@]}"; do
+                echo "  $BUILD_NAME/$build_id"
+                run jf rt build-append "$BUILD_NAME" "$BUILD_NUMBER" \
+                    "$BUILD_NAME" "$build_id" --project="$PROJECT"
+            done
+        fi
     fi
 
     run jf rt build-append "$BUILD_NAME" "$BUILD_NUMBER" \

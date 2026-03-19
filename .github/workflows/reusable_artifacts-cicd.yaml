@@ -12,7 +12,7 @@ on:
         description: |
           Git reference for shared-workflows checkout. Should match the version in your 'uses:' line.
           GitHub Actions doesn't expose the called workflow's ref, so this is required.
-          See: .github/workflows/docs/CICD-with-shared-actions.md#why-gh-workflows-ref-is-required
+          See: .github/workflows/docs/CICD-composable.md#why-gh-workflows-ref-is-required
         required: true
         type: string
       jf-build-name:
@@ -145,6 +145,27 @@ on:
         required: false
         type: boolean
         default: false
+      # Java/Maven setup (passed through to execute-build)
+      setup-java:
+        description: Whether to set up Java for builds
+        required: false
+        type: boolean
+        default: false
+      java-version:
+        description: Java version to set up (e.g., "8", "17", "21")
+        required: false
+        type: string
+        default: "21"
+      java-distribution:
+        description: Java distribution (temurin, zulu, adopt, corretto, etc.)
+        required: false
+        type: string
+        default: temurin
+      java-cache:
+        description: Package manager to cache (maven, gradle, sbt)
+        required: false
+        type: string
+        default: maven
       working-directory:
         description: |
           Working directory for build script execution. Defaults to gh-source-path (so builds run inside the checked out source repo).
@@ -212,7 +233,7 @@ jobs:
           # Build IDs:
           # - jf_build_id: parent build id (overall pipeline)
           # - jf_metadata_build_id: build-info produced during build and later aggregated into the parent
-          build_id="$(date +%s%3N)"
+          build_id="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           metadata_build_id="${build_id}-buildinfo"
 
           resolved_working_directory="${{ inputs.working-directory }}"
@@ -259,6 +280,10 @@ jobs:
       runs-on: ${{ matrix.runs-on }}
       setup-dotnet: ${{ matrix['setup-dotnet'] != null && matrix['setup-dotnet'] || matrix['setup-dotnet'] == null && needs.resolve.outputs.setup-dotnet == 'true' }}
       dotnet-version: ${{ matrix['dotnet-version'] || inputs.dotnet-version }}
+      setup-java: ${{ matrix['setup-java'] != null && matrix['setup-java'] || matrix['setup-java'] == null && inputs.setup-java }}
+      java-version: ${{ matrix['java-version'] || inputs.java-version }}
+      java-distribution: ${{ matrix['java-distribution'] || inputs.java-distribution }}
+      java-cache: ${{ matrix['java-cache'] || inputs.java-cache }}
       working-directory: ${{ matrix['working-directory'] || needs.resolve.outputs.resolved-working-directory }}
     secrets: inherit
 

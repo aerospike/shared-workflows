@@ -146,7 +146,7 @@ jobs:
       gh-workflows-ref: ${{ github.sha }}
       jf-project: test
       jf-build-name: test-build
-      jf-build-id: ${{ github.run_number }}-buildinfo-${{ matrix.distro }}-${{ matrix.arch }}
+      jf-build-id: ${{ github.run_id }}-${{ github.run_attempt }}-buildinfo-${{ matrix.distro }}-${{ matrix.arch }}
       # gh-checkout-path defaults to 'shared-workflows'
       gh-source-path: repo-source
       working-directory: repo-source/.github/workflows/execute-build/test_apps/hi
@@ -177,7 +177,7 @@ jobs:
     with:
       jf-project: test
       jf-build-name: test-build
-      jf-build-id: ${{ github.run_number }}-buildinfo-dotnet
+      jf-build-id: ${{ github.run_id }}-${{ github.run_attempt }}-buildinfo-dotnet
       working-directory: repo-source/.github/workflows/execute-build/test_apps/DotnetHelloWorld/AerospikeHelloWorld
       build-script: |
         echo "Building dotnet project in $(pwd)"
@@ -258,8 +258,8 @@ jobs:
       # gh-checkout-path defaults to 'shared-workflows'
       jf-project: test
       jf-build-name: test-build
-      jf-metadata-build-id: ${{ github.run_number }}-buildinfo
-      jf-build-id: ${{ github.run_number }}
+      jf-metadata-build-id: ${{ github.run_id }}-${{ github.run_attempt }}-buildinfo
+      jf-build-id: ${{ github.run_id }}-${{ github.run_attempt }}
       gh-artifact-name: ${{ needs.sign-artifacts.outputs.gh-artifact-name }}
       version: ${{ needs.extract-version.outputs.version }}
       gh-retention-days: 1
@@ -412,7 +412,7 @@ jobs:
       gh-workflows-ref: ${{ github.sha }}
       # gh-checkout-path defaults to 'shared-workflows'
       jf-project: test
-      jf-build-names: test-build:${{ github.run_number }},test-build-container:${{ github.run_number }}
+      jf-build-names: test-build:${{ github.run_id }}-${{ github.run_attempt }},test-build-container:${{ github.run_id }}-${{ github.run_attempt }}
       jf-bundle-name: test-release
       version: ${{ needs.extract-version.outputs.version }}
       oidc-provider-name: gh-dev-test

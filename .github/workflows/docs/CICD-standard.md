@@ -1,8 +1,6 @@
 # Shared Workflows – Standard CI/CD
 
-This is the recommended starting point for all repositories. These orchestrated workflows handle the full lifecycle with good defaults — you provide a build script and configuration, they handle the rest.
-
-If you hit a wall and need more control, see [CICD-with-shared-actions.md](CICD-with-shared-actions.md) for the composable approach.
+These orchestrated workflows handle the full lifecycle with good defaults: you provide a build script and configuration, they handle the rest. This is the simpler of two approaches; if you need to insert custom steps between pipeline stages or otherwise need finer-grained control, see [CICD-composable.md](CICD-composable.md).
 
 ---
 
@@ -47,13 +45,11 @@ The architecture follows an ecosystem-specific build & sign pattern, where artif
 
 ## Standard Workflows for your project
 
-These orchestrated workflows are the expected entry points for all repositories:
-
 - `reusable_artifacts-cicd.yaml`: **Artifacts pipeline** (build → sign → deploy). [README](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/artifacts-cicd/README.md)
 - `reusable_docker-build-deploy.yaml`: **Docker pipeline** (container images with SLSA attestations). [README](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/docker-build-deploy/README.md)
 - `reusable_create-release-bundle.yaml`: **Release bundles** (combines artifact + docker outputs). [README](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/create-release-bundle/README.md)
 
-The lower-level workflows (`reusable_execute-build.yaml`, `reusable_sign-artifacts.yaml`, `reusable_deploy-artifacts.yaml`) are internal implementation details. If you find yourself calling them directly, that's usually a sign the orchestrator needs a new capability or the build process should be restructured to fit the standard path.
+The lower-level workflows (`reusable_execute-build.yaml`, `reusable_sign-artifacts.yaml`, `reusable_deploy-artifacts.yaml`) are the building blocks used internally by the orchestrators. They're also available directly if you're following the composable approach.
 
 ### Artifacts CI/CD
 
@@ -209,7 +205,7 @@ There is no `github.called_workflow_ref` or similar.
 
 ### Why this matters
 
-These workflows need to checkout their own repository to access entrypoint scripts (bash scripts that do the actual work). Without knowing which version was called, they can't checkout the matching scripts — leading to version mismatches where the workflow is v3.2.0 but the scripts are from a different version.
+These workflows need to checkout their own repository to access entrypoint scripts (bash scripts that do the actual work). Without knowing which version was called, they can't checkout the matching scripts, which leads to version mismatches where the workflow is v3.2.0 but the scripts are from a different version.
 
 ### Known issue
 

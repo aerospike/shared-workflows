@@ -54,7 +54,7 @@ Required inputs listed first, then optional (alphabetical).
 
 All reusable workflows require a `gh-workflows-ref` input that **must match** the version in the caller's `uses:` line. This exists because GitHub Actions provides no `github.called_workflow_ref` — reusable workflows cannot discover their own ref. Without this, entrypoint scripts would be checked out from the wrong version.
 
-See: `.github/workflows/docs/CICD-with-shared-actions.md#why-gh-workflows-ref-is-required`
+See: `.github/workflows/docs/CICD-composable.md#why-gh-workflows-ref-is-required`
 
 ## Artifact Pipeline Detail
 

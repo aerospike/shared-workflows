@@ -27,6 +27,10 @@ jobs:
       # Optional:
       build-type: release # Freeform label, applied as build.type target-prop
       internal: false # Set true to mark artifacts as internal-only
+      # Java/Maven (passed through to execute-build):
+      setup-java: true
+      java-version: "8"
+      java-distribution: temurin
     secrets: inherit
 ```
 
@@ -48,6 +52,7 @@ Companion files (`.asc` signatures, `.pom` files) are automatically gathered alo
 
 - The workflow generates a parent build-id automatically.
 - All artifacts get `version` and `package_name` target-props. Use `build-type` and `internal` for additional categorization.
+- **Java/Maven:** Set `setup-java: true` and optionally `java-version` (e.g. `"8"`, `"17"`), `java-distribution` (default `temurin`), and `java-cache` (default `maven`). These are passed through to the build step so Java is set up before your `build-script` runs. Matrix entries can override them per build (e.g. `setup-java: true`, `java-version: "17"`).
 
 ## Testing
 
