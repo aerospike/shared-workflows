@@ -126,3 +126,28 @@ setup() {
     [[ "${meta[1]}" == "0.1.0-beta.1" ]]
     rm -rf "$test_dir"
 }
+
+# --- _validate_npm_name ---
+
+@test "_validate_npm_name rejects name with semicolons (property injection)" {
+    run bash -c 'source "$DEPLOY_ARTIFACTS_DIR/package_utils.sh" && _validate_npm_name "evil;injected_prop=bar"'
+    [[ $status -ne 0 ]]
+}
+
+@test "_validate_npm_name rejects name with spaces" {
+    run bash -c 'source "$DEPLOY_ARTIFACTS_DIR/package_utils.sh" && _validate_npm_name "has spaces"'
+    [[ $status -ne 0 ]]
+}
+
+@test "_validate_npm_name rejects uppercase names" {
+    run bash -c 'source "$DEPLOY_ARTIFACTS_DIR/package_utils.sh" && _validate_npm_name "BadName"'
+    [[ $status -ne 0 ]]
+}
+
+@test "_validate_npm_name accepts valid unscoped name" {
+    _validate_npm_name "my-package"
+}
+
+@test "_validate_npm_name accepts valid scoped name" {
+    _validate_npm_name "@aerospike/client"
+}

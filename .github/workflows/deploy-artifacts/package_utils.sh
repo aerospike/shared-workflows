@@ -207,26 +207,35 @@ get_nupkg_metadata() {
     echo "$pkgname $version"
 }
 
-process_nupkg() {
-    local file="$1"
-    local dest_dir="$2"
+# Copy a file to dest_dir, preserving its relative path within build-artifacts/.
+# Additional prefixes (e.g. "unsigned-artifacts") can be stripped via extra arguments.
+# Usage: copy_to_structured <file> <dest_dir> [prefix_to_strip ...]
+copy_to_structured() {
+    local file="$1" dest_dir="$2"
+    shift 2
 
     local dir
     dir=$(dirname "$file")
     dir="${dir#build-artifacts/}"
     dir="${dir#build-artifacts}"
+    for prefix in "$@"; do
+        dir="${dir#"$prefix"/}"
+        dir="${dir#"$prefix"}"
+    done
 
     local target_file
+    target_file="$dest_dir/$(basename "$file")"
     if [[ -n $dir && $dir != "." ]]; then
         mkdir -p "$dest_dir/$dir"
         cp -v "$file" "$dest_dir/$dir" >&2
         target_file="$dest_dir/$dir/$(basename "$file")"
     else
         cp -v "$file" "$dest_dir/" >&2
-        target_file="$dest_dir/$(basename "$file")"
     fi
     echo "$target_file"
 }
+
+process_nupkg() { copy_to_structured "$1" "$2"; }
 
 # Extract the package.json content from an npm tarball.
 # npm tarballs have a single root directory containing package.json.
@@ -251,6 +260,17 @@ is_npm_package() {
         jq -e '.name and .version' >/dev/null 2>&1
 }
 
+# Validate an npm package name.
+# npm names must be lowercase, may be scoped (@scope/name), and contain only
+# alphanumerics, hyphens, dots, underscores, and tildes. Rejects names with
+# semicolons or other characters that could inject JFrog target-props.
+_validate_npm_name() {
+    local name="$1"
+    if [[ ! $name =~ ^(@[a-z0-9][a-z0-9._~-]*/)?[a-z0-9][a-z0-9._~-]*$ ]]; then
+        error "Invalid npm package name: '$name'"
+    fi
+}
+
 # Extract npm package metadata (name and version).
 # Caller must ensure the file is a valid npm package (via is_npm_package).
 get_npm_metadata() {
@@ -263,51 +283,12 @@ get_npm_metadata() {
     pkgname=$(echo "$pkg_json" | jq -r '.name')
     version=$(echo "$pkg_json" | jq -r '.version')
 
+    _validate_npm_name "$pkgname"
+
     echo "$pkgname $version"
 }
 
-process_npm() {
-    local file="$1"
-    local dest_dir="$2"
+process_npm() { copy_to_structured "$1" "$2"; }
 
-    local dir
-    dir=$(dirname "$file")
-    dir="${dir#build-artifacts/}"
-    dir="${dir#build-artifacts}"
-
-    local target_file
-    if [[ -n $dir && $dir != "." ]]; then
-        mkdir -p "$dest_dir/$dir"
-        cp -v "$file" "$dest_dir/$dir" >&2
-        target_file="$dest_dir/$dir/$(basename "$file")"
-    else
-        cp -v "$file" "$dest_dir/" >&2
-        target_file="$dest_dir/$(basename "$file")"
-    fi
-    echo "$target_file"
-}
-
-process_generic() {
-    local file="$1"
-    local dest_dir="$2"
-
-    local dir
-    dir=$(dirname "$file")
-    # Strip "build-artifacts" prefix to preserve only relative path within build-artifacts
-    dir="${dir#build-artifacts/}"
-    dir="${dir#build-artifacts}"
-    # Strip "unsigned-artifacts/" prefix leaked from the sign stage's cp --parents
-    dir="${dir#unsigned-artifacts/}"
-    dir="${dir#unsigned-artifacts}"
-
-    local target_file
-    if [[ -z $dir || $dir == "." ]]; then
-        cp -v "$file" "$dest_dir/" >&2
-        target_file="$dest_dir/$(basename "$file")"
-    else
-        mkdir -p "$dest_dir/$dir"
-        cp -v "$file" "$dest_dir/$dir" >&2
-        target_file="$dest_dir/$dir/$(basename "$file")"
-    fi
-    echo "$target_file"
-}
+# Generic strips the extra "unsigned-artifacts" prefix leaked from the sign stage's cp --parents
+process_generic() { copy_to_structured "$1" "$2" "unsigned-artifacts"; }
