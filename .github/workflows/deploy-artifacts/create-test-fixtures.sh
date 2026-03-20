@@ -49,6 +49,22 @@ else
     exit 1
 fi
 
+# Create a valid npm package .tgz (npm pack format: package/ prefix with package.json)
+mkdir -p "$BUILD_ARTIFACTS_DIR/temp-npm/package"
+cat >"$BUILD_ARTIFACTS_DIR/temp-npm/package/package.json" <<'PKGJSON'
+{"name":"@aerospike/test-package","version":"1.0.0","description":"test npm package"}
+PKGJSON
+echo "module.exports = {};" >"$BUILD_ARTIFACTS_DIR/temp-npm/package/index.js"
+cd "$BUILD_ARTIFACTS_DIR/temp-npm" && tar -czf "../aerospike-test-package-1.0.0.tgz" package/ && cd - >/dev/null
+rm -rf "$BUILD_ARTIFACTS_DIR/temp-npm"
+echo "  Created aerospike-test-package-1.0.0.tgz (npm package)"
+
+# Create a non-npm .tgz (should route to generic, not npm)
+echo "not an npm package" >"$BUILD_ARTIFACTS_DIR/temp-generic-tgz-content.txt"
+cd "$BUILD_ARTIFACTS_DIR" && tar -czf "generic-archive.tgz" "temp-generic-tgz-content.txt" && cd - >/dev/null
+rm -f "$BUILD_ARTIFACTS_DIR/temp-generic-tgz-content.txt"
+echo "  Created generic-archive.tgz (non-npm tarball)"
+
 # Create some additional test files with valid formats
 # Create a valid JAR file (JAR is a ZIP with META-INF/MANIFEST.MF)
 mkdir -p "$BUILD_ARTIFACTS_DIR/temp-jar/META-INF"
@@ -97,6 +113,7 @@ echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/nuget/Aerospike.HelloWorld.1.0.
 echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/nuget/Aerospike.HelloWorld.1.0.0.snupkg.asc"
 echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/nested/dir/test-debian12.deb.asc"
 echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/nested/dir/nested.rpm.asc"
+echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/aerospike-test-package-1.0.0.tgz.asc"
 
 # Create unsigned-artifacts/ prefix to simulate sign stage output
 # The sign stage uses cp --parents which creates: signed-artifacts/unsigned-artifacts/...

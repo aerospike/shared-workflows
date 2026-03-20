@@ -153,6 +153,8 @@ structure_build_artifacts() {
     done
 
     for type in "${!TYPE_EXTENSIONS[@]}"; do
+        # npm requires content-based detection (handled separately below)
+        [[ $type == "npm" ]] && continue
         local dest="./structured_build_artifacts/${TYPE_STRUCT_DIR[$type]}"
         local label="${type^^}"
         local processor="process_${type}"
@@ -160,6 +162,29 @@ structure_build_artifacts() {
         [[ $type == "snupkg" ]] && processor="process_nupkg"
         discover_and_process "${TYPE_EXTENSIONS[$type]}" "$label" "$processor" "$dest" "$type"
     done
+
+    # npm: content-based detection for .tgz files
+    # .tgz is ambiguous (npm pack vs generic tarball), so we inspect each file.
+    # npm packages always contain package/package.json.
+    # Non-npm .tgz files are routed to generic instead.
+    while IFS= read -r -d '' file; do
+        [[ -f $file ]] || continue
+        if is_npm_package "$file"; then
+            echo "Processing NPM: $file" >&2
+            local target_path
+            target_path=$(process_npm "$file" "./structured_build_artifacts/npm")
+            if [[ -n $target_path ]]; then
+                gather_companions "$file" "$(dirname "$target_path")" "npm"
+            fi
+        else
+            echo "Processing generic file (non-npm .tgz): $file" >&2
+            local target_path
+            target_path=$(process_generic "$file" "./structured_build_artifacts/generic")
+            if [[ -n $target_path ]]; then
+                gather_companions "$file" "$(dirname "$target_path")" "generic"
+            fi
+        fi
+    done < <(find build-artifacts -name "*.tgz" -print0)
 
     # Standalone POM files (unique logic: check for corresponding JAR, inline metadata)
     while IFS= read -r -d '' pom; do

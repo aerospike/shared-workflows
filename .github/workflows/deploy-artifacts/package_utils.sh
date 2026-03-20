@@ -228,6 +228,65 @@ process_nupkg() {
     echo "$target_file"
 }
 
+# Extract the package.json content from an npm tarball.
+# npm tarballs have a single root directory containing package.json.
+# The root dir is typically "package/" (npm pack) but can vary (yarn pack, manual builds).
+# Returns the JSON on stdout, or returns 1 if not found/invalid.
+_extract_npm_package_json() {
+    local file="$1"
+
+    local pkg_path
+    pkg_path=$(tar -tzf "$file" 2>/dev/null | grep -E '^[^/]+/package\.json$' | head -n1) || return 1
+
+    [ -z "$pkg_path" ] && return 1
+
+    tar -xOzf "$file" "$pkg_path" 2>/dev/null
+}
+
+# Check if a .tgz file is an npm package.
+# Validates that the tarball contains a root-level package.json with name and version fields.
+is_npm_package() {
+    local file="$1"
+    _extract_npm_package_json "$file" |
+        jq -e '.name and .version' >/dev/null 2>&1
+}
+
+# Extract npm package metadata (name and version).
+# Caller must ensure the file is a valid npm package (via is_npm_package).
+get_npm_metadata() {
+    local tgz="$1"
+
+    local pkg_json
+    pkg_json=$(_extract_npm_package_json "$tgz") || error "Failed to extract package.json from $tgz"
+
+    local pkgname version
+    pkgname=$(echo "$pkg_json" | jq -r '.name')
+    version=$(echo "$pkg_json" | jq -r '.version')
+
+    echo "$pkgname $version"
+}
+
+process_npm() {
+    local file="$1"
+    local dest_dir="$2"
+
+    local dir
+    dir=$(dirname "$file")
+    dir="${dir#build-artifacts/}"
+    dir="${dir#build-artifacts}"
+
+    local target_file
+    if [[ -n $dir && $dir != "." ]]; then
+        mkdir -p "$dest_dir/$dir"
+        cp -v "$file" "$dest_dir/$dir" >&2
+        target_file="$dest_dir/$dir/$(basename "$file")"
+    else
+        cp -v "$file" "$dest_dir/" >&2
+        target_file="$dest_dir/$(basename "$file")"
+    fi
+    echo "$target_file"
+}
+
 process_generic() {
     local file="$1"
     local dest_dir="$2"

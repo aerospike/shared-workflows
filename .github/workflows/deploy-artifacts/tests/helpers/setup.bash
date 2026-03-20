@@ -44,6 +44,9 @@ setup_test_artifacts() {
                 "$BUILD_ARTIFACTS_DIR/nuget/Aerospike.HelloWorld.1.0.0.snupkg.asc"
                 "$BUILD_ARTIFACTS_DIR/unsigned-artifacts/net8.0/app.dll"
                 "$BUILD_ARTIFACTS_DIR/unsigned-artifacts/net8.0/app.dll.asc"
+                "$BUILD_ARTIFACTS_DIR/aerospike-test-package-1.0.0.tgz"
+                "$BUILD_ARTIFACTS_DIR/aerospike-test-package-1.0.0.tgz.asc"
+                "$BUILD_ARTIFACTS_DIR/generic-archive.tgz"
         )
 
         for file in "${TEST_FILES[@]}"; do

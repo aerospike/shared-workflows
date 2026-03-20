@@ -57,5 +57,38 @@ teardown() {
     [[ -d "structured_build_artifacts/rpm" ]]
     [[ -d "structured_build_artifacts/jar" ]]
     [[ -d "structured_build_artifacts/nupkg" ]]
+    [[ -d "structured_build_artifacts/npm" ]]
     [[ -d "structured_build_artifacts/generic" ]]
+}
+
+@test "npm .tgz with package.json routes to npm dir" {
+    run_entrypoint_dry_run >/dev/null 2>&1 || true
+    local npm_count
+    npm_count=$(find structured_build_artifacts/npm -name "*.tgz" 2>/dev/null | wc -l)
+    [[ "$npm_count" -ge 1 ]]
+}
+
+@test "npm .asc companion is co-located with primary after structuring" {
+    run_entrypoint_dry_run >/dev/null 2>&1 || true
+    local npm_dir
+    npm_dir=$(find structured_build_artifacts/npm -name "aerospike-test-package-1.0.0.tgz" -printf '%h\n' 2>/dev/null | head -1)
+    [[ -n "$npm_dir" ]]
+    [[ -f "$npm_dir/aerospike-test-package-1.0.0.tgz.asc" ]]
+}
+
+@test "non-npm .tgz routes to generic, not npm" {
+    run_entrypoint_dry_run >/dev/null 2>&1 || true
+    # generic-archive.tgz has no package/package.json, so it should be in generic
+    [[ -f "structured_build_artifacts/generic/generic-archive.tgz" ]]
+    # And NOT in npm
+    local npm_generic_count
+    npm_generic_count=$(find structured_build_artifacts/npm -name "generic-archive.tgz" 2>/dev/null | wc -l)
+    [[ "$npm_generic_count" -eq 0 ]]
+}
+
+@test "No npm .tgz files leak into generic structured dir" {
+    run_entrypoint_dry_run >/dev/null 2>&1 || true
+    local npm_in_generic
+    npm_in_generic=$(find structured_build_artifacts/generic -name "aerospike-test-package-*.tgz" 2>/dev/null | wc -l)
+    [[ "$npm_in_generic" -eq 0 ]]
 }
