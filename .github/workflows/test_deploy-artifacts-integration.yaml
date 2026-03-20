@@ -1,0 +1,194 @@
+name: "Test: Deploy Artifacts Integration (Real JFrog Upload)"
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/reusable_deploy-artifacts.yaml
+      - .github/workflows/deploy-artifacts/**
+      - .github/workflows/test_deploy-artifacts-integration.yaml
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  JF_PROJECT: test
+  BUILD_NAME: integration-test-deploy-${{ github.run_id }}
+  BUILD_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+  VERSION: v1.0.0-inttest
+
+jobs:
+  # Job 1: Create test fixtures using the shared script and upload as GH artifact
+  create-fixtures:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create test fixtures
+        run: .github/workflows/deploy-artifacts/create-test-fixtures.sh integration-test-fixtures
+
+      - name: Upload fixtures
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: integration-test-fixtures
+          path: integration-test-fixtures
+          retention-days: 1
+
+  # Job 2: Real (non-dry-run) deploy to JFrog
+  deploy:
+    needs: create-fixtures
+    uses: ./.github/workflows/reusable_deploy-artifacts.yaml
+    with:
+      jf-project: test
+      jf-build-name: integration-test-deploy-${{ github.run_id }}
+      jf-build-id: ${{ github.run_id }}-${{ github.run_attempt }}
+      version: v1.0.0-inttest
+      gh-workflows-ref: ${{ github.sha }}
+      gh-checkout-path: .
+      gh-artifact-name: integration-test-fixtures
+      jf-url: https://artifact.aerospike.io
+      oidc-provider-name: gh-aerospike
+      oidc-audience: aerospike
+      dry-run: false
+
+  # Job 3: Verify uploads arrived correctly, then clean up
+  verify-and-cleanup:
+    needs: deploy
+    if: always()
+    runs-on: ubuntu-22.04
+    env:
+      ARTIFACT_BUILD_ID: ${{ github.run_id }}-${{ github.run_attempt }}-artifacts
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+        with:
+          egress-policy: audit
+
+      - name: Setup JFrog CLI
+        uses: step-security/setup-jfrog-cli@893a92f96c7727242adf0e603c77b1f2a22390e1 # v4.9.1
+        env:
+          JF_URL: https://artifact.aerospike.io
+          JF_PROJECT: test
+        with:
+          oidc-provider-name: gh-aerospike
+          oidc-audience: aerospike
+
+      - name: Verify JFrog connectivity
+        run: jf rt ping
+
+      # --- npm verification ---
+
+      - name: Verify npm package exists in npm repo
+        id: verify-npm
+        if: needs.deploy.result == 'success'
+        run: |
+          result=$(jf rt search "test-npm-dev-local/**/aerospike-test-package-1.0.0.tgz" --project=test)
+          echo "Search result: $result"
+          count=$(echo "$result" | jq 'length')
+          if [[ "$count" -lt 1 ]]; then
+            echo "FAIL: npm package not found in test-npm-dev-local"
+            exit 1
+          fi
+          echo "PASS: npm package found ($count result(s))"
+
+      - name: Verify npm .asc companion exists
+        if: needs.deploy.result == 'success'
+        run: |
+          result=$(jf rt search "test-npm-dev-local/**/aerospike-test-package-1.0.0.tgz.asc" --project=test)
+          echo "Search result: $result"
+          count=$(echo "$result" | jq 'length')
+          if [[ "$count" -lt 1 ]]; then
+            echo "FAIL: npm .asc companion not found"
+            exit 1
+          fi
+          echo "PASS: npm .asc companion found"
+
+      - name: Verify npm target-props
+        if: needs.deploy.result == 'success'
+        run: |
+          result=$(jf rt search "test-npm-dev-local/**/aerospike-test-package-1.0.0.tgz" --project=test --include="property")
+          echo "Search result with props: $result"
+
+          # Verify version property
+          echo "$result" | jq -e '.[0].properties.version | index("v1.0.0-inttest")' || {
+            echo "FAIL: version property not set correctly"
+            exit 1
+          }
+          echo "PASS: version property correct"
+
+          # Verify package_name property
+          echo "$result" | jq -e '.[0].properties.package_name | index("@aerospike/test-package")' || {
+            echo "FAIL: package_name property not set correctly"
+            exit 1
+          }
+          echo "PASS: package_name property correct"
+
+      # --- non-npm .tgz regression ---
+
+      - name: Verify non-npm .tgz is NOT in npm repo
+        if: needs.deploy.result == 'success'
+        run: |
+          result=$(jf rt search "test-npm-dev-local/**/generic-archive.tgz" --project=test)
+          count=$(echo "$result" | jq 'length')
+          if [[ "$count" -gt 0 ]]; then
+            echo "FAIL: non-npm .tgz was incorrectly routed to npm repo"
+            echo "$result"
+            exit 1
+          fi
+          echo "PASS: non-npm .tgz correctly excluded from npm repo"
+
+      - name: Verify non-npm .tgz IS in generic repo
+        if: needs.deploy.result == 'success'
+        run: |
+          result=$(jf rt search "test-generic-dev-local/**/generic-archive.tgz" --project=test)
+          echo "Search result: $result"
+          count=$(echo "$result" | jq 'length')
+          if [[ "$count" -lt 1 ]]; then
+            echo "FAIL: non-npm .tgz not found in generic repo"
+            exit 1
+          fi
+          echo "PASS: non-npm .tgz correctly routed to generic repo"
+
+      # --- build-info verification ---
+
+      - name: Verify build-info was published
+        if: needs.deploy.result == 'success'
+        run: |
+          response=$(jf rt curl -XGET "/api/build/${{ env.BUILD_NAME }}/${{ env.ARTIFACT_BUILD_ID }}?project=test" --silent)
+          echo "Build-info response: $response"
+          echo "$response" | jq -e '.buildInfo' || {
+            echo "FAIL: build-info not found"
+            exit 1
+          }
+          echo "PASS: build-info published successfully"
+
+      # --- cleanup (always runs) ---
+      # The fixture script creates deb, rpm, jar, nupkg, snupkg, npm, and generic
+      # artifacts. Even though we only verify npm now, the deploy uploads everything.
+
+      - name: Cleanup all test artifacts
+        if: always()
+        run: |
+          echo "Cleaning up all test artifacts from JFrog..."
+          jf rt delete "test-npm-dev-local/**/aerospike-test-package-*" --project=test --quiet || true
+          jf rt delete "test-generic-dev-local/**/*" --project=test --quiet || true
+          jf rt delete "test-deb-dev-local/**/*" --project=test --quiet || true
+          jf rt delete "test-rpm-dev-local/**/*" --project=test --quiet || true
+          jf rt delete "test-maven-dev-local/**/*" --project=test --quiet || true
+          jf rt delete "test-nuget-dev-local/**/*" --project=test --quiet || true
+          echo "Done"
+
+      - name: Cleanup build-info
+        if: always()
+        run: |
+          echo "Deleting build-info for ${{ env.BUILD_NAME }}..."
+          jf rt curl -XDELETE "/api/build/${{ env.BUILD_NAME }}?project=test&deleteAll=1" --silent || true
+          echo "Done"
