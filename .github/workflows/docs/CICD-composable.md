@@ -59,11 +59,13 @@ extract-version  →  build (matrix)  →  collect  →  [your tests here]  → 
 
 Key things to note when composing manually:
 
-- **`jf-build-id`** must be the same in the build and deploy jobs; it ties the build-info together. Use `${{ github.run_id }}-${{ github.run_attempt }}` as the base, which is unique per run and safe for re-runs.
+- **`jf-build-id`** must be the same in the build and deploy jobs; it ties the build-info together. Use `${{ github.run_id }}-${{ github.run_attempt }}` as the base, which is unique per run and safe for re-runs. In matrix builds, each per-matrix job should use a distinct suffix (e.g., `${{ github.run_id }}-${{ github.run_attempt }}-buildinfo-${{ matrix.distro }}-${{ matrix.arch }}`), and the parent deploy job uses the base without the per-matrix suffix.
 - **`jf-metadata-build-id`** is the prefix used to discover per-matrix child build-infos for aggregation (e.g., `${{ github.run_id }}-${{ github.run_attempt }}-buildinfo`). It is optional; when omitted, aggregation is skipped and only the parent build-info is published.
 - **`gh-artifact-name`** / **`gh-unsigned-artifacts`** must match between stages; this is how artifacts flow via GitHub Artifacts.
 - **Matrix builds** require a collect step to merge per-matrix artifacts into a single artifact before sign and deploy can consume them. See the example for the inline download + upload pattern.
 - **Signing secrets** (GPG keys, and SSL.com credentials if nupkg files are present) must be available via `secrets: inherit`.
+- **Java/Maven setup:** Pass `setup-java: true` to `reusable_execute-build.yaml` along with optional `java-version` (default `"21"`), `java-distribution` (default `temurin`), and `java-cache` (default `maven`).
+- **JAR artifacts:** Pass `jar-group-id` to `reusable_deploy-artifacts.yaml` as a Maven group ID fallback when JAR metadata doesn't include one.
 
 ## Full composable example with docker and release bundle
 
@@ -80,6 +82,9 @@ jobs:
       gh-artifact-directory: dist
       build-script: |
         make build
+      # Optional: Java/Maven setup
+      # setup-java: true
+      # java-version: "17"
     secrets: inherit
 
   sign:
@@ -99,6 +104,8 @@ jobs:
       jf-build-id: ${{ github.run_id }}-${{ github.run_attempt }}
       jf-metadata-build-id: ${{ github.run_id }}-${{ github.run_attempt }}-buildinfo
       version: 1.2.3
+      # Optional: Maven group ID fallback for JAR artifacts
+      # jar-group-id: com.aerospike
     secrets: inherit
 
   # Docker pipeline: build with attestations → deploy

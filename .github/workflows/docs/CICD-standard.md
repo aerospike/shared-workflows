@@ -71,14 +71,27 @@ jobs:
       # Optional:
       build-type: release # Freeform label, applied as build.type target-prop on all artifacts
       internal: false # Set true to mark artifacts as internal-only (promotion control)
+      jar-group-id: com.aerospike # Maven group ID fallback for JAR artifacts
+
+      # Java/Maven setup (optional):
+      setup-java: true
+      java-version: "21" # Default: 21
+      java-distribution: temurin # Default: temurin
+      java-cache: maven # Default: maven
+
+      # Dotnet setup (optional):
+      setup-dotnet: true
+      dotnet-version: "8.0" # Default: 8.0
     secrets: inherit
 ```
 
 Notes:
 
-- `reusable_artifacts-cicd.yaml` generates a unique parent `jf-build-id` internally (millisecond timestamp) and uses a distinct metadata build-id for the build-info produced during the build.
+- `reusable_artifacts-cicd.yaml` generates a unique parent `jf-build-id` internally (`GITHUB_RUN_ID-GITHUB_RUN_ATTEMPT`) and uses a distinct metadata build-id (`{jf-build-id}-buildinfo`) for the build-info produced during the build.
 - Signing is always enabled; provide the required signing secrets (GPG, and SSL.com secrets if `.nupkg` files are present). Using `secrets: inherit` is simplest.
 - All artifacts get `version` and `package_name` target-props automatically. DEB/RPM also get distribution and architecture. Use `build-type` and `internal` for additional categorization.
+- **Java/Maven:** Set `setup-java: true` to have Java installed before your build script runs. Optionally set `java-version` (default `"21"`), `java-distribution` (default `temurin`), and `java-cache` (default `maven`). Matrix entries can override all four fields per build.
+- **JAR artifacts:** Use `jar-group-id` to provide a Maven group ID fallback when the JAR metadata doesn't include one.
 
 ### Simple matrix builds (optional)
 
@@ -97,6 +110,10 @@ Matrix entries can override these per-build settings:
 - `build-env`
 - `setup-dotnet`
 - `dotnet-version`
+- `setup-java`
+- `java-version`
+- `java-distribution`
+- `java-cache`
 
 Precedence is always: **matrix entry override → workflow input defaults**.
 
@@ -133,6 +150,25 @@ matrix-json: >-
       "build-env":"DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1",
       "setup-dotnet":true,
       "dotnet-version":"8.0.x"
+    }
+  ]}
+```
+
+#### Java/Maven matrix entry example
+
+```yaml
+matrix-json: >-
+  {"include":[
+    {
+      "runs-on":"ubuntu-22.04",
+      "distro":"jammy",
+      "arch":"x86_64",
+      "build-script":"mvn -B package",
+      "gh-artifact-directory":"target",
+      "setup-java":true,
+      "java-version":"17",
+      "java-distribution":"temurin",
+      "java-cache":"maven"
     }
   ]}
 ```
