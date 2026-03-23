@@ -169,7 +169,16 @@ structure_build_artifacts() {
         jar_file="$(dirname "$pom")/$base_name.jar"
 
         # Skip if a corresponding JAR exists (already handled by process_jar)
-        [[ -f $jar_file ]] && continue
+        if [[ -f $jar_file ]]; then
+            group_id=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='groupId'])" "$pom" 2>/dev/null)
+            artifact_id=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='artifactId'])" "$pom" 2>/dev/null)
+            version=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='version'])" "$pom" 2>/dev/null)
+            group_path="${group_id//./\/}"
+            target="./structured_build_artifacts/jar/${group_path}/${artifact_id}/${version}"
+            cp "$pom" "$target/"
+            [[ -f "$pom.asc" ]] && cp "$pom.asc" "$target/"
+            continue
+        fi
 
         echo "Processing standalone POM: $pom" >&2
 
