@@ -55,8 +55,8 @@ jobs:
       gh-checkout-path: .
       gh-artifact-name: integration-test-fixtures
       jf-url: https://artifact.aerospike.io
-      oidc-provider-name: gh-aerospike
-      oidc-audience: aerospike
+      oidc-provider-name: gh-dev-test
+      oidc-audience: aerospike/testing
       dry-run: false
 
   # Job 3: Verify uploads arrived correctly, then clean up
@@ -78,8 +78,8 @@ jobs:
           JF_URL: https://artifact.aerospike.io
           JF_PROJECT: test
         with:
-          oidc-provider-name: gh-aerospike
-          oidc-audience: aerospike
+          oidc-provider-name: gh-dev-test
+          oidc-audience: aerospike/testing
 
       - name: Verify JFrog connectivity
         run: jf rt ping
