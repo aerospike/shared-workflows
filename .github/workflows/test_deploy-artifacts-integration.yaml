@@ -139,13 +139,13 @@ jobs:
           result=$(jf rt search "test-npm-dev-local/@aerospike/test-package/-/aerospike-test-package-1.0.0.tgz" --project=test --include="property")
           echo "Search result with props: $result"
 
-          echo "$result" | jq -e '.[0].properties.version | index("v1.0.0-inttest")' || {
+          echo "$result" | jq -e '.[0].props.version | index("v1.0.0-inttest")' || {
             echo "FAIL: version property not set correctly"
             exit 1
           }
           echo "PASS: version property correct"
 
-          echo "$result" | jq -e '.[0].properties.package_name | index("@aerospike/test-package")' || {
+          echo "$result" | jq -e '.[0].props.package_name | index("@aerospike/test-package")' || {
             echo "FAIL: package_name property not set correctly"
             exit 1
           }
@@ -157,13 +157,13 @@ jobs:
           result=$(jf rt search "test-npm-dev-local/aerospike/-/aerospike-6.0.0.tgz" --project=test --include="property")
           echo "Search result with props: $result"
 
-          echo "$result" | jq -e '.[0].properties.version | index("v1.0.0-inttest")' || {
+          echo "$result" | jq -e '.[0].props.version | index("v1.0.0-inttest")' || {
             echo "FAIL: version property not set correctly"
             exit 1
           }
           echo "PASS: version property correct"
 
-          echo "$result" | jq -e '.[0].properties.package_name | index("aerospike")' || {
+          echo "$result" | jq -e '.[0].props.package_name | index("aerospike")' || {
             echo "FAIL: package_name property not set correctly"
             exit 1
           }
