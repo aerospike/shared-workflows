@@ -62,6 +62,25 @@
 						"type": "string",
 						"minLength": 1,
 						"description": "Override dotnet SDK version for this matrix entry"
+					},
+					"setup-java": {
+						"type": "boolean",
+						"description": "Enable Java setup for this matrix entry"
+					},
+					"java-version": {
+						"type": "string",
+						"minLength": 1,
+						"description": "Override Java version for this matrix entry (e.g., 8, 17, 21)"
+					},
+					"java-distribution": {
+						"type": "string",
+						"minLength": 1,
+						"description": "Override Java distribution for this matrix entry (e.g., temurin, zulu, corretto)"
+					},
+					"java-cache": {
+						"type": "string",
+						"minLength": 1,
+						"description": "Override package manager cache for this matrix entry (maven, gradle, sbt)"
 					}
 				}
 			}
