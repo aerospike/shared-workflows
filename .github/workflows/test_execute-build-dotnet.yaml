@@ -2,7 +2,7 @@ name: Test Execute Build Dotnet Workflow
 on:
   workflow_dispatch:
   push:
-    branches: [main, feature/INFRA-253-integrate-nuget-in-cicd]
+    branches: [main]
 
 permissions:
   contents: read

@@ -194,7 +194,7 @@ jobs:
       oidc-provider-name: gh-dev-test
       oidc-audience: aerospike/testing
       dry-run: false
-      gh-workflows-ref: feature/INFRA-253-integrate-nuget-in-cicd
+      gh-workflows-ref: main
   # This job demonstrates custom packaging logic using standard GitHub Actions (actions/checkout, actions/download-artifact, actions/upload-artifact)
   # No reusable actions from shared-workflows are used here - this is custom packaging logic that could be done in the build step
   # In this case it is using fpm to generate debs and rpms and uploading them to be processed further.
