@@ -61,19 +61,30 @@ teardown() {
     [[ -d "structured_build_artifacts/generic" ]]
 }
 
-@test "npm .tgz with package.json routes to npm dir" {
+@test "scoped npm .tgz with package.json routes to npm dir" {
     run_entrypoint_dry_run >/dev/null 2>&1 || true
-    local npm_count
-    npm_count=$(find structured_build_artifacts/npm -name "*.tgz" 2>/dev/null | wc -l)
-    [[ "$npm_count" -ge 1 ]]
+    [[ -f "structured_build_artifacts/npm/aerospike-test-package-1.0.0.tgz" ]]
 }
 
-@test "npm .asc companion is co-located with primary after structuring" {
+@test "unscoped npm .tgz with package.json routes to npm dir" {
+    run_entrypoint_dry_run >/dev/null 2>&1 || true
+    [[ -f "structured_build_artifacts/npm/aerospike-6.0.0.tgz" ]]
+}
+
+@test "npm .asc companion is co-located with scoped primary after structuring" {
     run_entrypoint_dry_run >/dev/null 2>&1 || true
     local npm_dir
     npm_dir=$(find structured_build_artifacts/npm -name "aerospike-test-package-1.0.0.tgz" -printf '%h\n' 2>/dev/null | head -1)
     [[ -n "$npm_dir" ]]
     [[ -f "$npm_dir/aerospike-test-package-1.0.0.tgz.asc" ]]
+}
+
+@test "npm .asc companion is co-located with unscoped primary after structuring" {
+    run_entrypoint_dry_run >/dev/null 2>&1 || true
+    local npm_dir
+    npm_dir=$(find structured_build_artifacts/npm -name "aerospike-6.0.0.tgz" -printf '%h\n' 2>/dev/null | head -1)
+    [[ -n "$npm_dir" ]]
+    [[ -f "$npm_dir/aerospike-6.0.0.tgz.asc" ]]
 }
 
 @test "non-npm .tgz routes to generic, not npm" {

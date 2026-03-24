@@ -346,6 +346,54 @@ upload_nupkg_packages() {
     done < <(find . \( -name "*.nupkg" -o -name "*.snupkg" \) -print0)
 }
 
+upload_npm_packages() {
+    echo "Uploading npm packages to JFrog..." >&2
+
+    while IFS= read -r -d '' pkg; do
+        [[ -f $pkg ]] || continue
+
+        local -a metadata
+        read -r -a metadata < <(get_npm_metadata "$pkg")
+        local pkgname="${metadata[0]}"
+        local pkgversion="${metadata[1]}"
+        local pkg_filename
+        pkg_filename=$(basename "$pkg")
+
+        if [[ -z $pkgname ]] || [[ -z $pkgversion ]]; then
+            echo "Warning: Failed to extract metadata from $pkg, skipping" >&2
+            continue
+        fi
+
+        local props
+        props=$(get_npm_props "$pkg")
+
+        # JFrog npm layout: @scope/name/-/filename.tgz (scoped) or name/-/filename.tgz (unscoped)
+        local target_path
+        target_path="${pkgname}/-/${pkg_filename}"
+
+        echo "  Uploading npm package: $pkg" >&2
+        echo "    Package: $pkgname, Version: $pkgversion" >&2
+        echo "    Target: $target_path" >&2
+        run jf rt upload "$pkg" "$PROJECT-npm-dev-local/${target_path}" \
+            --build-name="$BUILD_NAME" \
+            --build-number="$ARTIFACT_BUILD_NUMBER" \
+            --project="$PROJECT" \
+            --target-props "$props"
+
+        # Upload companions with explicit target path (same directory as the package)
+        local companions="${TYPE_COMPANIONS[npm]-}"
+        for suffix in $companions; do
+            if [[ -f "$pkg$suffix" ]]; then
+                echo "  Uploading companion: $pkg$suffix" >&2
+                run jf rt upload "$pkg$suffix" "$PROJECT-npm-dev-local/${target_path}${suffix}" \
+                    --build-name="$BUILD_NAME" \
+                    --build-number="$ARTIFACT_BUILD_NUMBER" \
+                    --project="$PROJECT"
+            fi
+        done
+    done < <(find . -name "*.tgz" -print0)
+}
+
 upload_generic_files() {
     echo "Uploading generic files..." >&2
 
