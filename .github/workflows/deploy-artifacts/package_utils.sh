@@ -207,48 +207,88 @@ get_nupkg_metadata() {
     echo "$pkgname $version"
 }
 
-process_nupkg() {
-    local file="$1"
-    local dest_dir="$2"
+# Copy a file to dest_dir, preserving its relative path within build-artifacts/.
+# Additional prefixes (e.g. "unsigned-artifacts") can be stripped via extra arguments.
+# Usage: copy_to_structured <file> <dest_dir> [prefix_to_strip ...]
+copy_to_structured() {
+    local file="$1" dest_dir="$2"
+    shift 2
 
     local dir
     dir=$(dirname "$file")
     dir="${dir#build-artifacts/}"
     dir="${dir#build-artifacts}"
+    for prefix in "$@"; do
+        dir="${dir#"$prefix"/}"
+        dir="${dir#"$prefix"}"
+    done
 
     local target_file
+    target_file="$dest_dir/$(basename "$file")"
     if [[ -n $dir && $dir != "." ]]; then
         mkdir -p "$dest_dir/$dir"
         cp -v "$file" "$dest_dir/$dir" >&2
         target_file="$dest_dir/$dir/$(basename "$file")"
     else
         cp -v "$file" "$dest_dir/" >&2
-        target_file="$dest_dir/$(basename "$file")"
     fi
     echo "$target_file"
 }
 
-process_generic() {
+process_nupkg() { copy_to_structured "$1" "$2"; }
+
+# Extract the package.json content from an npm tarball.
+# npm tarballs have a single root directory containing package.json.
+# The root dir is typically "package/" (npm pack) but can vary (yarn pack, manual builds).
+# Returns the JSON on stdout, or returns 1 if not found/invalid.
+_extract_npm_package_json() {
     local file="$1"
-    local dest_dir="$2"
 
-    local dir
-    dir=$(dirname "$file")
-    # Strip "build-artifacts" prefix to preserve only relative path within build-artifacts
-    dir="${dir#build-artifacts/}"
-    dir="${dir#build-artifacts}"
-    # Strip "unsigned-artifacts/" prefix leaked from the sign stage's cp --parents
-    dir="${dir#unsigned-artifacts/}"
-    dir="${dir#unsigned-artifacts}"
+    local pkg_path
+    pkg_path=$(tar -tzf "$file" 2>/dev/null | grep -E '^[^/]+/package\.json$' | head -n1) || return 1
 
-    local target_file
-    if [[ -z $dir || $dir == "." ]]; then
-        cp -v "$file" "$dest_dir/" >&2
-        target_file="$dest_dir/$(basename "$file")"
-    else
-        mkdir -p "$dest_dir/$dir"
-        cp -v "$file" "$dest_dir/$dir" >&2
-        target_file="$dest_dir/$dir/$(basename "$file")"
-    fi
-    echo "$target_file"
+    [ -z "$pkg_path" ] && return 1
+
+    tar -xOzf "$file" "$pkg_path" 2>/dev/null
 }
+
+# Check if a .tgz file is an npm package.
+# Validates that the tarball contains a root-level package.json with name and version fields.
+is_npm_package() {
+    local file="$1"
+    _extract_npm_package_json "$file" |
+        jq -e '.name and .version' >/dev/null 2>&1
+}
+
+# Validate an npm package name.
+# npm names must be lowercase, may be scoped (@scope/name), and contain only
+# alphanumerics, hyphens, dots, underscores, and tildes. Rejects names with
+# semicolons or other characters that could inject JFrog target-props.
+_validate_npm_name() {
+    local name="$1"
+    if [[ ! $name =~ ^(@[a-z0-9][a-z0-9._~-]*/)?[a-z0-9][a-z0-9._~-]*$ ]]; then
+        error "Invalid npm package name: '$name'"
+    fi
+}
+
+# Extract npm package metadata (name and version).
+# Caller must ensure the file is a valid npm package (via is_npm_package).
+get_npm_metadata() {
+    local tgz="$1"
+
+    local pkg_json
+    pkg_json=$(_extract_npm_package_json "$tgz") || error "Failed to extract package.json from $tgz"
+
+    local pkgname version
+    pkgname=$(echo "$pkg_json" | jq -r '.name')
+    version=$(echo "$pkg_json" | jq -r '.version')
+
+    _validate_npm_name "$pkgname"
+
+    echo "$pkgname $version"
+}
+
+process_npm() { copy_to_structured "$1" "$2"; }
+
+# Generic strips the extra "unsigned-artifacts" prefix leaked from the sign stage's cp --parents
+process_generic() { copy_to_structured "$1" "$2" "unsigned-artifacts"; }

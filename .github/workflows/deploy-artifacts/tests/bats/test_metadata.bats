@@ -74,3 +74,80 @@ setup() {
     # arch
     [[ "${meta[2]}" == "noarch" ]]
 }
+
+# --- is_npm_package ---
+
+@test "is_npm_package returns true for npm tarball" {
+    local test_dir
+    test_dir=$(mktemp -d)
+    mkdir -p "$test_dir/package"
+    echo '{"name":"test","version":"1.0.0"}' > "$test_dir/package/package.json"
+    tar -czf "$test_dir/npm-pkg.tgz" -C "$test_dir" package/
+    rm -rf "$test_dir/package"
+    is_npm_package "$test_dir/npm-pkg.tgz"
+    rm -rf "$test_dir"
+}
+
+@test "is_npm_package returns false for non-npm tarball" {
+    local test_dir
+    test_dir=$(mktemp -d)
+    echo "not npm" > "$test_dir/data.txt"
+    tar -czf "$test_dir/plain.tgz" -C "$test_dir" data.txt
+    rm -f "$test_dir/data.txt"
+    run is_npm_package "$test_dir/plain.tgz"
+    [[ $status -ne 0 ]]
+    rm -rf "$test_dir"
+}
+
+# --- get_npm_metadata ---
+
+@test "get_npm_metadata extracts name and version from tarball" {
+    local test_dir
+    test_dir=$(mktemp -d)
+    mkdir -p "$test_dir/package"
+    echo '{"name":"@aerospike/my-lib","version":"3.2.1"}' > "$test_dir/package/package.json"
+    tar -czf "$test_dir/my-lib-3.2.1.tgz" -C "$test_dir" package/
+    rm -rf "$test_dir/package"
+    read -r -a meta < <(get_npm_metadata "$test_dir/my-lib-3.2.1.tgz")
+    [[ "${meta[0]}" == "@aerospike/my-lib" ]]
+    [[ "${meta[1]}" == "3.2.1" ]]
+    rm -rf "$test_dir"
+}
+
+@test "get_npm_metadata handles scoped package names" {
+    local test_dir
+    test_dir=$(mktemp -d)
+    mkdir -p "$test_dir/package"
+    echo '{"name":"@scope/pkg","version":"0.1.0-beta.1"}' > "$test_dir/package/package.json"
+    tar -czf "$test_dir/scope-pkg-0.1.0-beta.1.tgz" -C "$test_dir" package/
+    rm -rf "$test_dir/package"
+    read -r -a meta < <(get_npm_metadata "$test_dir/scope-pkg-0.1.0-beta.1.tgz")
+    [[ "${meta[0]}" == "@scope/pkg" ]]
+    [[ "${meta[1]}" == "0.1.0-beta.1" ]]
+    rm -rf "$test_dir"
+}
+
+# --- _validate_npm_name ---
+
+@test "_validate_npm_name rejects name with semicolons (property injection)" {
+    run bash -c 'source "$DEPLOY_ARTIFACTS_DIR/package_utils.sh" && _validate_npm_name "evil;injected_prop=bar"'
+    [[ $status -ne 0 ]]
+}
+
+@test "_validate_npm_name rejects name with spaces" {
+    run bash -c 'source "$DEPLOY_ARTIFACTS_DIR/package_utils.sh" && _validate_npm_name "has spaces"'
+    [[ $status -ne 0 ]]
+}
+
+@test "_validate_npm_name rejects uppercase names" {
+    run bash -c 'source "$DEPLOY_ARTIFACTS_DIR/package_utils.sh" && _validate_npm_name "BadName"'
+    [[ $status -ne 0 ]]
+}
+
+@test "_validate_npm_name accepts valid unscoped name" {
+    _validate_npm_name "my-package"
+}
+
+@test "_validate_npm_name accepts valid scoped name" {
+    _validate_npm_name "@aerospike/client"
+}

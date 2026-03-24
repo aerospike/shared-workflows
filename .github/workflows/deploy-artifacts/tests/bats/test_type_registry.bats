@@ -22,6 +22,7 @@ setup() {
     [[ "${TYPE_EXTENSIONS[jar]}" == "*.jar" ]]
     [[ "${TYPE_EXTENSIONS[nupkg]}" == "*.nupkg" ]]
     [[ "${TYPE_EXTENSIONS[snupkg]}" == "*.snupkg" ]]
+    [[ "${TYPE_EXTENSIONS[npm]}" == "*.tgz" ]]
     # Generic is NOT in TYPE_EXTENSIONS -- it's the catch-all
     [[ -z "${TYPE_EXTENSIONS[generic]}" ]]
 }
@@ -31,6 +32,7 @@ setup() {
     [[ "${TYPE_REPO[rpm]}" == "rpm-dev-local" ]]
     [[ "${TYPE_REPO[jar]}" == "maven-dev-local" ]]
     [[ "${TYPE_REPO[nupkg]}" == "nuget-dev-local" ]]
+    [[ "${TYPE_REPO[npm]}" == "npm-dev-local" ]]
     [[ "${TYPE_REPO[generic]}" == "generic-dev-local" ]]
 }
 
@@ -38,6 +40,7 @@ setup() {
     [[ "${TYPE_COMPANIONS[deb]}" == ".asc" ]]
     [[ "${TYPE_COMPANIONS[rpm]}" == ".asc" ]]
     [[ "${TYPE_COMPANIONS[jar]}" == ".pom .asc .pom.asc" ]]
+    [[ "${TYPE_COMPANIONS[npm]}" == ".asc" ]]
     [[ "${TYPE_COMPANIONS[generic]}" == ".asc" ]]
 }
 
@@ -61,6 +64,7 @@ setup() {
     [[ "$exts" == *"*.jar"* ]]
     [[ "$exts" == *"*.nupkg"* ]]
     [[ "$exts" == *"*.snupkg"* ]]
+    [[ "$exts" == *"*.tgz"* ]]
 }
 
 @test "get_known_extensions includes companion and build file extensions" {
@@ -159,5 +163,25 @@ setup() {
     [[ "$props" == *"deb.distribution=jammy"* ]]
     [[ "$props" == *"deb.component=main"* ]]
     [[ "$props" == *"package_name="* ]]
+    rm -rf "$test_dir"
+}
+
+# --- get_npm_props ---
+
+@test "get_npm_props returns correct props for npm package" {
+    local test_dir
+    test_dir=$(mktemp -d)
+    # Create a valid npm package tarball
+    mkdir -p "$test_dir/package"
+    echo '{"name":"@aerospike/test-pkg","version":"2.0.0"}' > "$test_dir/package/package.json"
+    tar -czf "$test_dir/test-pkg-2.0.0.tgz" -C "$test_dir" package/
+    rm -rf "$test_dir/package"
+    VERSION="2.0.0"
+    BUILD_TYPE=""
+    INTERNAL="false"
+    local props
+    props=$(get_npm_props "$test_dir/test-pkg-2.0.0.tgz" 2>/dev/null)
+    [[ "$props" == *"version=2.0.0"* ]]
+    [[ "$props" == *"package_name=@aerospike/test-pkg"* ]]
     rm -rf "$test_dir"
 }

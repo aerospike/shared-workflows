@@ -23,6 +23,7 @@ declare -A TYPE_EXTENSIONS=(
     [jar]="*.jar"
     [nupkg]="*.nupkg"
     [snupkg]="*.snupkg"
+    [npm]="*.tgz"
 )
 
 # JFrog repository suffix per type
@@ -32,6 +33,7 @@ declare -A TYPE_REPO=(
     [jar]="maven-dev-local"
     [nupkg]="nuget-dev-local"
     [snupkg]="nuget-dev-local"
+    [npm]="npm-dev-local"
     [generic]="generic-dev-local"
 )
 
@@ -46,6 +48,7 @@ declare -A TYPE_COMPANIONS=(
     [jar]=".pom .asc .pom.asc"
     [nupkg]=".asc"
     [snupkg]=".asc"
+    [npm]=".asc"
     [generic]=".asc"
 )
 
@@ -56,11 +59,12 @@ declare -A TYPE_STRUCT_DIR=(
     [jar]="jar"
     [nupkg]="nupkg"
     [snupkg]="nupkg"
+    [npm]="npm"
     [generic]="generic"
 )
 
 # Upload order matters: jar before generic (jar can move files to generic)
-UPLOAD_ORDER=(rpm deb jar nupkg generic)
+UPLOAD_ORDER=(rpm deb jar nupkg npm generic)
 
 # --- helpers ---
 
@@ -137,6 +141,15 @@ get_nupkg_props() {
     local -a metadata
     read -r -a metadata < <(get_nupkg_metadata "$file")
     local pkgname="${metadata[0]}"
+    echo "$(get_base_props);package_name=$pkgname"
+}
+
+get_npm_props() {
+    local file="$1"
+    local -a metadata
+    read -r -a metadata < <(get_npm_metadata "$file")
+    local pkgname="${metadata[0]}"
+    echo "  Package: $pkgname" >&2
     echo "$(get_base_props);package_name=$pkgname"
 }
 
