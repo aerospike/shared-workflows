@@ -397,11 +397,8 @@ upload_npm_packages() {
 upload_generic_files() {
     echo "Uploading generic files..." >&2
 
-    # Build exclusion args from the registry
-    local -a exclude_args=()
-    while IFS= read -r ext; do
-        exclude_args+=(-not -name "$ext")
-    done < <(get_known_extensions)
+    # Only exclude companion/build file extensions.
+    local -a exclude_args=(-not -name "*.asc" -not -name "*.pom" -not -name "*.csproj")
 
     while IFS= read -r -d '' file; do
         [[ -f $file ]] || continue
