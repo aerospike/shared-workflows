@@ -247,12 +247,9 @@ jobs:
           BUNDLE_NAME: test-release
           BUNDLE_VERSION: ${{ needs.extract-version.outputs.version }}
         run: |
-          echo "Existing bundle: $BUNDLE_NAME $BUNDLE_VERSION"
-          echo ""
-          echo "=== Bundle metadata ==="
-          jf rt curl -XGET "/lifecycle/api/v2/release_bundle/records/${BUNDLE_NAME}/${BUNDLE_VERSION}?project=test" --silent | jq .
-          echo ""
-          echo "This bundle will be deleted and recreated."
+          echo "Existing bundle to delete:"
+          jf release-bundle-search versions "$BUNDLE_NAME" --project=test --format=json | \
+            jq --arg v "$BUNDLE_VERSION" '.release_bundles[] | select(.release_bundle_version == $v)'
 
       - name: Delete existing release bundle
         if: steps.check.outputs.exists == 'true'
@@ -274,7 +271,7 @@ jobs:
     with:
       gh-workflows-ref: ${{ github.sha }}
       jf-project: test
-      jf-build-names: test-build:${{ needs.extract-version.outputs.version }}
+      jf-build-names: test-build:${{ github.run_id }}-${{ github.run_attempt }}
       jf-bundle-name: test-release
       version: ${{ needs.extract-version.outputs.version }}
       oidc-provider-name: gh-dev-test
@@ -301,11 +298,11 @@ jobs:
         with:
           oidc-provider-name: gh-dev-test
           oidc-audience: aerospike/testing
-      - name: Show bundle contents before promotion
+      - name: Show bundle before promotion
         run: |
           echo "Bundle to promote: $BUNDLE_NAME $BUNDLE_VERSION"
           jf release-bundle-search versions "$BUNDLE_NAME" --project=test --format=json | \
-            jq --arg v "$BUNDLE_VERSION" '.[] | select(.version == $v)'
+            jq --arg v "$BUNDLE_VERSION" '.release_bundles[] | select(.release_bundle_version == $v)'
       - name: Promote release bundle to TEST
         run: |
           echo "Promoting $BUNDLE_NAME $BUNDLE_VERSION to TEST environment..."
