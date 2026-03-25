@@ -226,14 +226,47 @@ jobs:
         with:
           oidc-provider-name: gh-dev-test
           oidc-audience: aerospike/testing
-      - name: Delete existing release bundle
+      - name: Check for existing release bundle
+        id: check
+        env:
+          BUNDLE_NAME: test-release
+          BUNDLE_VERSION: ${{ needs.extract-version.outputs.version }}
         run: |
-          echo "Deleting existing release bundle (if any) to allow recreation..."
-          jf release-bundle-delete-local test-release ${{ needs.extract-version.outputs.version }} \
-            --project=test --quiet || echo "Bundle did not exist, skipping deletion."
+          echo "Checking for existing bundle: $BUNDLE_NAME $BUNDLE_VERSION"
+          versions=$(jf release-bundle-search versions "$BUNDLE_NAME" --project=test --format=json 2>/dev/null || echo "[]")
+          if echo "$versions" | jq -e --arg v "$BUNDLE_VERSION" '.[] | select(.version == $v)' >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No existing bundle found."
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Show existing bundle details
+        if: steps.check.outputs.exists == 'true'
+        env:
+          BUNDLE_NAME: test-release
+          BUNDLE_VERSION: ${{ needs.extract-version.outputs.version }}
+        run: |
+          echo "Existing bundle: $BUNDLE_NAME $BUNDLE_VERSION"
+          echo ""
+          echo "=== Bundle metadata ==="
+          jf rt curl -XGET "/lifecycle/api/v2/release_bundle/records/${BUNDLE_NAME}/${BUNDLE_VERSION}?project=test" --silent | jq .
+          echo ""
+          echo "This bundle will be deleted and recreated."
+
+      - name: Delete existing release bundle
+        if: steps.check.outputs.exists == 'true'
+        env:
+          BUNDLE_NAME: test-release
+          BUNDLE_VERSION: ${{ needs.extract-version.outputs.version }}
+        run: |
+          echo "Deleting bundle: $BUNDLE_NAME $BUNDLE_VERSION"
+          jf release-bundle-delete-local "$BUNDLE_NAME" "$BUNDLE_VERSION" \
+            --project=test --quiet
 
   # Create a release bundle from the deployed artifacts.
   # Depends on delete-existing-bundle because create does not allow overwriting.
+  # The bundle includes build: test-build at the deployed version.
   bundle:
     needs: [delete-existing-bundle, extract-version]
     uses: ./.github/workflows/reusable_create-release-bundle.yaml
@@ -252,6 +285,9 @@ jobs:
     needs: [bundle, extract-version]
     runs-on: ubuntu-22.04
     if: github.event_name == 'workflow_dispatch'
+    env:
+      BUNDLE_NAME: test-release
+      BUNDLE_VERSION: ${{ needs.extract-version.outputs.version }}
     steps:
       - name: Harden the runner (Audit all outbound calls)
         uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
@@ -265,8 +301,13 @@ jobs:
         with:
           oidc-provider-name: gh-dev-test
           oidc-audience: aerospike/testing
-      - name: Promote release bundle
+      - name: Show bundle contents before promotion
         run: |
-          echo "Promoting release bundle to TEST environment..."
-          jf release-bundle-promote test-release ${{ needs.extract-version.outputs.version }} TEST \
+          echo "Bundle to promote: $BUNDLE_NAME $BUNDLE_VERSION"
+          jf release-bundle-search versions "$BUNDLE_NAME" --project=test --format=json | \
+            jq --arg v "$BUNDLE_VERSION" '.[] | select(.version == $v)'
+      - name: Promote release bundle to TEST
+        run: |
+          echo "Promoting $BUNDLE_NAME $BUNDLE_VERSION to TEST environment..."
+          jf release-bundle-promote "$BUNDLE_NAME" "$BUNDLE_VERSION" TEST \
             --project=test
