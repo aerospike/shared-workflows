@@ -209,10 +209,12 @@ jobs:
       build-script: |
         echo "Building npm package in $(pwd)"
         npm pack
+        mkdir -p output
+        mv *.tgz output/
         echo "npm package created"
-        ls -la *.tgz
+        ls -la output/
       gh-source-path: repo-source
-      gh-artifact-directory: NpmHelloWorld
+      gh-artifact-directory: output
       gh-artifact-name: build-artifacts-npm
       oidc-provider-name: gh-dev-test
       oidc-audience: aerospike/testing
@@ -232,7 +234,7 @@ jobs:
         echo "Maven build complete"
         ls -la target/*.jar
       gh-source-path: repo-source
-      gh-artifact-directory: JavaHelloWorld/target
+      gh-artifact-directory: target
       gh-artifact-name: build-artifacts-java
       oidc-provider-name: gh-dev-test
       oidc-audience: aerospike/testing

@@ -17,6 +17,7 @@ permissions:
 # This workflow demonstrates the composable artifact pipeline pattern.
 # Unlike reusable_artifacts-cicd.yaml (which is all-in-one), this calls the
 # underlying workflows individually so you can insert custom steps between them.
+# It also demonstrates using a release bundle. To enable this, THE EXAMPLE DELETES THE PREVIOUS BUNDLE IF IT EXISTS.
 #
 # WORKFLOW FLOW:
 # 1. extract-version  - read version from file or input
@@ -82,10 +83,49 @@ jobs:
       oidc-audience: aerospike/testing
     secrets: inherit
 
+  build-npm:
+    needs: extract-version
+    uses: ./.github/workflows/reusable_execute-build.yaml
+    with:
+      gh-workflows-ref: ${{ github.sha }}
+      jf-project: test
+      jf-build-name: test-build
+      jf-build-id: ${{ github.run_id }}-${{ github.run_attempt }}-buildinfo-npm-x86_64
+      gh-source-path: repo-source
+      working-directory: repo-source/.github/workflows/execute-build/test_apps/NpmHelloWorld
+      build-script: |
+        npm pack
+        mkdir -p output
+        mv *.tgz output/
+      gh-artifact-directory: output
+      gh-artifact-name: build-artifacts-npm-x86_64
+      oidc-provider-name: gh-dev-test
+      oidc-audience: aerospike/testing
+    secrets: inherit
+
+  build-java:
+    needs: extract-version
+    uses: ./.github/workflows/reusable_execute-build.yaml
+    with:
+      gh-workflows-ref: ${{ github.sha }}
+      jf-project: test
+      jf-build-name: test-build
+      jf-build-id: ${{ github.run_id }}-${{ github.run_attempt }}-buildinfo-java-x86_64
+      gh-source-path: repo-source
+      working-directory: repo-source/.github/workflows/execute-build/test_apps/JavaHelloWorld
+      build-script: mvn package -q
+      gh-artifact-directory: target
+      gh-artifact-name: build-artifacts-java-x86_64
+      oidc-provider-name: gh-dev-test
+      oidc-audience: aerospike/testing
+      setup-java: true
+      java-version: "17"
+    secrets: inherit
+
   # Merge all per-matrix artifacts into a single github artifact for downstream jobs.
   # This is intentionally inline (not a reusable workflow) since it is only download + upload.
   collect:
-    needs: build
+    needs: [build, build-npm, build-java]
     runs-on: ubuntu-22.04
     steps:
       - name: Harden the runner (Audit all outbound calls)
@@ -138,7 +178,14 @@ jobs:
       gh-workflows-ref: ${{ github.sha }}
       # gh-unsigned-artifacts defaults to build-artifacts (matches collect job output)
       # gh-artifact-name defaults to signed-artifacts (matches deploy job input)
-    secrets: inherit
+    secrets:
+      gpg-private-key: ${{ secrets.GPG_SECRET_KEY }}
+      gpg-public-key: ${{ secrets.GPG_PUBLIC_KEY }}
+      gpg-key-pass: ${{ secrets.GPG_PASS }}
+      es-username: ${{ secrets.ES_USERNAME }}
+      es-password: ${{ secrets.ES_PASSWORD }}
+      credential_id: ${{ secrets.CREDENTIAL_ID }}
+      es-totp_secret: ${{ secrets.ES_TOTP_SECRET }}
 
   deploy:
     needs: [extract-version, sign]
@@ -153,3 +200,65 @@ jobs:
       oidc-provider-name: gh-dev-test
       oidc-audience: aerospike/testing
     secrets: inherit
+
+  delete-existing-bundle:
+    needs: [deploy, extract-version]
+    runs-on: ubuntu-22.04
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+        with:
+          egress-policy: audit
+      - name: Setup JFrog CLI
+        uses: step-security/setup-jfrog-cli@893a92f96c7727242adf0e603c77b1f2a22390e1 # v4.9.1
+        env:
+          JF_URL: https://artifact.aerospike.io
+          JF_PROJECT: test
+        with:
+          oidc-provider-name: gh-dev-test
+          oidc-audience: aerospike/testing
+      - name: Delete existing release bundle
+        run: |
+          echo "Deleting existing release bundle (if any) to allow recreation..."
+          jf release-bundle-delete test-release ${{ needs.extract-version.outputs.version }} \
+            --project=test --quiet || echo "Bundle did not exist, skipping deletion."
+
+  # Create a release bundle from the deployed artifacts.
+  # Depends on delete-existing-bundle because create does not allow overwriting.
+  bundle:
+    needs: [delete-existing-bundle, extract-version]
+    uses: ./.github/workflows/reusable_create-release-bundle.yaml
+    if: github.event_name == 'workflow_dispatch'
+    with:
+      gh-workflows-ref: ${{ github.sha }}
+      jf-project: test
+      jf-build-names: test-build:${{ needs.extract-version.outputs.version }}
+      jf-bundle-name: test-release
+      version: ${{ needs.extract-version.outputs.version }}
+      oidc-provider-name: gh-dev-test
+      oidc-audience: aerospike/testing
+      dry-run: false
+
+  promote-bundle:
+    needs: [bundle, extract-version]
+    runs-on: ubuntu-22.04
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+        with:
+          egress-policy: audit
+      - name: Setup JFrog CLI
+        uses: step-security/setup-jfrog-cli@893a92f96c7727242adf0e603c77b1f2a22390e1 # v4.9.1
+        env:
+          JF_URL: https://artifact.aerospike.io
+          JF_PROJECT: test
+        with:
+          oidc-provider-name: gh-dev-test
+          oidc-audience: aerospike/testing
+      - name: Promote release bundle
+        run: |
+          echo "Promoting release bundle to TEST environment..."
+          jf release-bundle-promote test-release ${{ needs.extract-version.outputs.version }} TEST \
+            --project=test
