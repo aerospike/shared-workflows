@@ -17,15 +17,23 @@ permissions:
 # This workflow demonstrates the composable artifact pipeline pattern.
 # Unlike reusable_artifacts-cicd.yaml (which is all-in-one), this calls the
 # underlying workflows individually so you can insert custom steps between them.
-# It also demonstrates using a release bundle. To enable this, THE EXAMPLE DELETES THE PREVIOUS BUNDLE IF IT EXISTS.
+# It also demonstrates using a release bundle. To enable this, THE EXAMPLE
+# DELETES THE PREVIOUS BUNDLE IF IT EXISTS.
 #
 # WORKFLOW FLOW:
-# 1. extract-version  - read version from file or input
-# 2. build            - matrix build across multiple distros (reusable_execute-build.yaml)
-# 3. collect          - merge per-matrix artifacts into one (inline download + upload)
-# 4. test             - INSERT YOUR TESTS HERE - runs against the merged build artifacts
-# 5. sign             - GPG sign the artifacts (reusable_sign-artifacts.yaml)
-# 6. deploy           - upload to JFrog Artifactory (reusable_deploy-artifacts.yaml)
+# 1. extract-version    - read version from file or input
+# 2. build (matrix)     - C builds across distros: el9, jammy (reusable_execute-build.yaml)
+#    build-npm          - npm package build (separate job, see note below)
+#    build-java         - Java/Maven build (separate job, see note below)
+# 3. collect            - merge all build artifacts into one (inline download + upload)
+# 4. test               - INSERT YOUR TESTS HERE
+# 5. sign               - GPG sign the artifacts (reusable_sign-artifacts.yaml)
+# 6. deploy             - upload to JFrog Artifactory (reusable_deploy-artifacts.yaml)
+# 7. delete/bundle/promote - release bundle lifecycle (workflow_dispatch only)
+#
+# npm and Java are separate jobs here because they need different working
+# directories and toolchains. They could also be folded into a matrix with
+# per-entry overrides (see example_artifacts-cicd.yaml for that approach).
 #
 # BUILD ID SCHEME (no resolve job needed):
 # - Per-matrix build:  ${{ github.run_id }}-${{ github.run_attempt }}-buildinfo-{distro}-{arch}
@@ -221,7 +229,7 @@ jobs:
       - name: Delete existing release bundle
         run: |
           echo "Deleting existing release bundle (if any) to allow recreation..."
-          jf release-bundle-delete test-release ${{ needs.extract-version.outputs.version }} \
+          jf release-bundle-delete-local test-release ${{ needs.extract-version.outputs.version }} \
             --project=test --quiet || echo "Bundle did not exist, skipping deletion."
 
   # Create a release bundle from the deployed artifacts.
