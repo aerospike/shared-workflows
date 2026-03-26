@@ -68,10 +68,14 @@ jobs:
             arch: x86_64
             runs-on: ubuntu-22.04
             emulated: false
+            pkg-type: rpm
+            fpm-image: aerospike.jfrog.io/devops-containers-prod-local/fpm-redhat:9
           - distro: jammy
             arch: x86_64
             runs-on: ubuntu-22.04
             emulated: false
+            pkg-type: deb
+            fpm-image: aerospike.jfrog.io/devops-containers-prod-local/fpm-ubuntu:22.04
     uses: ./.github/workflows/reusable_execute-build.yaml
     with:
       gh-workflows-ref: ${{ github.sha }}
@@ -80,11 +84,26 @@ jobs:
       jf-build-id: ${{ github.run_id }}-${{ github.run_attempt }}-buildinfo-${{ matrix.distro }}-${{ matrix.arch }}
       gh-source-path: repo-source
       working-directory: repo-source/.github/workflows/execute-build/test_apps/hi
+      build-env: VERSION=${{ needs.extract-version.outputs.version }}
       build-script: |
-        DISTRO=${{ matrix.distro }} \
-        ARCH=${{ matrix.arch }} \
-        EMULATED=${{ matrix.emulated }} \
-        make docker-build
+        DISTRO=${{ matrix.distro }}
+        ARCH=${{ matrix.arch }}
+        PKG_TYPE=${{ matrix.pkg-type }}
+        FPM_IMAGE=${{ matrix.fpm-image }}
+
+        # Compile the binary
+        DISTRO="$DISTRO" ARCH="$ARCH" EMULATED=${{ matrix.emulated }} make docker-build
+
+        # Package into .deb or .rpm using pre-built FPM containers
+        jf docker pull "$FPM_IMAGE"
+        docker run --rm -v "$PWD/build:/work" -w /work "$FPM_IMAGE" \
+          fpm -s dir -t "$PKG_TYPE" -n hi -v "$VERSION" -a native \
+          --prefix /usr/bin \
+          "$DISTRO/$ARCH/hi"
+
+        # Move package to distro/arch dir and remove the bare binary
+        mv "build/hi"*."$PKG_TYPE" "build/$DISTRO/$ARCH/"
+        rm "build/$DISTRO/$ARCH/hi"
       gh-artifact-directory: build
       gh-artifact-name: build-artifacts-${{ matrix.distro }}-${{ matrix.arch }}
       oidc-provider-name: gh-dev-test
