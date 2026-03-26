@@ -93,6 +93,29 @@ Notes:
 - **Java/Maven:** Set `setup-java: true` to have Java installed before your build script runs. Optionally set `java-version` (default `"21"`), `java-distribution` (default `temurin`), and `java-cache` (default `maven`). Matrix entries can override all four fields per build.
 - **JAR artifacts:** Use `jar-group-id` to provide a Maven group ID fallback when the JAR metadata doesn't include one.
 
+### Build-info
+
+The orchestrator publishes JFrog build-info records that trace artifacts back to the environment and commit that produced them. You don't need to manage this directly, but understanding the structure helps when inspecting builds in JFrog or debugging deployment issues.
+
+Each pipeline run produces a tree of build-info records:
+
+```text
+my-app / 1234567-1                                (parent)
+├── my-app / 1234567-1-buildinfo-el9-x86_64        (metadata child)
+├── my-app / 1234567-1-buildinfo-jammy-x86_64      (metadata child)
+└── my-app / 1234567-1-artifacts                    (artifact child)
+```
+
+The suffixes after `buildinfo-` vary by build type. The orchestrator uses `-{distro}-{arch}` for its matrix, but composable callers may use any unique suffix (e.g., `-npm`, `-dotnet`, `-java`). The only requirement is that all metadata children share the same prefix so the deploy stage can discover them.
+
+**Metadata children** are published during the build stage, one per matrix variant (or per build job in a non-matrix pipeline). They capture the CI environment variables and git commit/branch on the worker that ran the build. They contain no artifact references, because artifacts are uploaded later by the deploy job on a separate runner.
+
+**The artifact child** is published during the deploy stage. Each artifact uploaded to JFrog is tagged with this build number, linking the files to the build.
+
+**The parent** is assembled at the end of the deploy stage. The deploy entrypoint discovers all metadata children, appends them along with the artifact child, then publishes the parent as a single record: these artifacts, from these environments, at this commit.
+
+Release bundles reference the parent build-info by name and version, providing a complete chain of custody from source to distributable.
+
 ### Simple matrix builds (optional)
 
 Use `matrix-json` to run a constrained matrix while keeping the rest of the workflow simple. Each matrix job publishes its own build-info and artifacts, then the workflow aggregates build-info and merges artifacts before signing/deploying.

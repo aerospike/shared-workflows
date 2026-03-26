@@ -67,6 +67,40 @@ Key things to note when composing manually:
 - **Java/Maven setup:** Pass `setup-java: true` to `reusable_execute-build.yaml` along with optional `java-version` (default `"21"`), `java-distribution` (default `temurin`), and `java-cache` (default `maven`).
 - **JAR artifacts:** Pass `jar-group-id` to `reusable_deploy-artifacts.yaml` as a Maven group ID fallback when JAR metadata doesn't include one.
 
+### Build-info architecture
+
+The pipeline produces three kinds of JFrog build-info records that form a parent-child tree. Understanding this structure is important when wiring the composable workflows, since you are responsible for passing consistent build IDs between stages.
+
+Each pipeline run produces:
+
+```text
+my-app / 1234567-1                                (parent)
+├── my-app / 1234567-1-buildinfo-el9-x86_64        (metadata child)
+├── my-app / 1234567-1-buildinfo-jammy-x86_64      (metadata child)
+└── my-app / 1234567-1-artifacts                    (artifact child)
+```
+
+The suffixes after `buildinfo-` are yours to choose. Use whatever uniquely identifies the build variant: `-{distro}-{arch}` for OS matrix builds, `-npm` or `-java` for ecosystem-specific builds, etc. The only requirement is that all metadata children share the `jf-metadata-build-id` prefix so the deploy stage can discover them via AQL.
+
+**Metadata children** (produced by `reusable_execute-build.yaml`). One per build job (matrix variant or standalone). Each build worker publishes a build-info containing CI environment variables and git commit/branch but no artifact references, because artifacts are uploaded later by a different job on a different runner.
+
+**The artifact child** (produced by `reusable_deploy-artifacts.yaml`). Created during deployment when artifacts are uploaded to JFrog. Each `jf rt upload` call tags the artifact with this build number (`{jf-build-id}-artifacts`), so JFrog knows which files belong to this build.
+
+**The parent** (produced by `reusable_deploy-artifacts.yaml`). At the end of deployment, the deploy entrypoint discovers all metadata children via an AQL query using the `jf-metadata-build-id` prefix, appends them and the artifact child via `jf rt build-append`, then publishes the parent. This is the single record that ties everything together: these artifacts, from these environments, at this commit.
+
+Release bundles reference the parent build-info by `name:version`, providing a complete chain of custody from source to distributable.
+
+#### How the IDs connect
+
+| Input                        | Value                                       | Used by                                       |
+| ---------------------------- | ------------------------------------------- | --------------------------------------------- |
+| `jf-build-id` (build stage)  | `{run}-{attempt}-buildinfo-{unique-suffix}` | Metadata child build number                   |
+| `jf-build-id` (deploy stage) | `{run}-{attempt}`                           | Parent build number                           |
+| `jf-metadata-build-id`       | `{run}-{attempt}-buildinfo`                 | Prefix for AQL discovery of metadata children |
+| _(derived internally)_       | `{jf-build-id}-artifacts`                   | Artifact child build number                   |
+
+The deploy stage uses `jf-metadata-build-id` as a search prefix to find all metadata children published during the build stage. This is why per-matrix build IDs must start with the metadata prefix and add a unique suffix (typically `-{distro}-{arch}`).
+
 ## Full composable example with docker and release bundle
 
 ```yaml
