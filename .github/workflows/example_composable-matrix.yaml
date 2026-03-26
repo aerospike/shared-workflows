@@ -95,8 +95,17 @@ jobs:
         # Compile the binary
         DISTRO="$DISTRO" ARCH="$ARCH" EMULATED=${{ matrix.emulated }} make docker-build
 
-        # Package into .deb or .rpm using pre-built FPM containers
-        jf docker pull "$FPM_IMAGE"
+        # Package into .deb or .rpm using pre-built FPM containers.
+        # The FPM images are in devops-containers-prod-local, which requires the
+        # aerospike OIDC identity (not the test project identity used for build-info).
+        # Add a temporary server config to pull from there. See INFRA-430 for the
+        # long-term fix to unify OIDC access.
+        jf c add aerospike-read \
+          --url=https://artifact.aerospike.io \
+          --oidc-provider-name=gh-aerospike \
+          --oidc-audience=aerospike \
+          --interactive=false
+        jf docker pull "$FPM_IMAGE" --server-id=aerospike-read
         docker run --rm -v "$PWD/build:/work" -w /work "$FPM_IMAGE" \
           fpm -s dir -t "$PKG_TYPE" -n hi -v "$VERSION" -a native \
           --prefix /usr/bin \
