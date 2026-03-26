@@ -86,6 +86,7 @@ jobs:
       working-directory: repo-source/.github/workflows/execute-build/test_apps/hi
       build-env: VERSION=${{ needs.extract-version.outputs.version }}
       build-script: |
+        set -x # show what script is doing
         DISTRO=${{ matrix.distro }}
         ARCH=${{ matrix.arch }}
         PKG_TYPE=${{ matrix.pkg-type }}
@@ -181,6 +182,8 @@ jobs:
   # This job runs after the build artifacts are collected and
   # before signing and deployment. Use it for integration tests,
   # smoke tests, security scans, or any other validation.
+  # `test` here would be a placeholder name for your actual
+  # testing job(s) that should be run before signing
   # ============================================================
   test:
     needs: collect
@@ -201,7 +204,6 @@ jobs:
           find build-artifacts
           # Replace this step with your actual test commands, e.g.:
           # ./scripts/run-integration-tests.sh build-artifacts/
-
   sign:
     needs: test
     uses: ./.github/workflows/reusable_sign-artifacts.yaml
