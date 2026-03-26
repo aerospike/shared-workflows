@@ -69,13 +69,15 @@ jobs:
             runs-on: ubuntu-22.04
             emulated: false
             pkg-type: rpm
-            fpm-image: aerospike.jfrog.io/devops-containers-prod-local/fpm-redhat:9
+            docker-image: rockylinux:9
+            fpm-setup: dnf install -y -q ruby ruby-devel gcc make rpm-build
           - distro: jammy
             arch: x86_64
             runs-on: ubuntu-22.04
             emulated: false
             pkg-type: deb
-            fpm-image: aerospike.jfrog.io/devops-containers-prod-local/fpm-ubuntu:22.04
+            docker-image: ubuntu:22.04
+            fpm-setup: apt-get update -qq && apt-get install -y -qq ruby
     uses: ./.github/workflows/reusable_execute-build.yaml
     with:
       gh-workflows-ref: ${{ github.sha }}
@@ -90,29 +92,24 @@ jobs:
         DISTRO=${{ matrix.distro }}
         ARCH=${{ matrix.arch }}
         PKG_TYPE=${{ matrix.pkg-type }}
-        FPM_IMAGE=${{ matrix.fpm-image }}
 
         # Compile the binary
         DISTRO="$DISTRO" ARCH="$ARCH" EMULATED=${{ matrix.emulated }} make docker-build
 
-        # Package into .deb or .rpm using pre-built FPM containers.
-        # The FPM images are in devops-containers-prod-local, which requires the
-        # aerospike OIDC identity (not the test project identity used for build-info).
-        # Request a GitHub OIDC token with the aerospike audience, then configure
-        # a second JFrog server to pull from there. See INFRA-430 for the long-term fix.
-        OIDC_TOKEN=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-          "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=aerospike" | jq -r '.value')
-        jf c add aerospike-read \
-          --url=https://artifact.aerospike.io \
-          --oidc-provider-name=gh-aerospike \
-          --oidc-audience=aerospike \
-          --oidc-token-id="$OIDC_TOKEN" \
-          --interactive=false
-        jf docker pull "$FPM_IMAGE" --server-id=aerospike-read
-        docker run --rm -v "$PWD/build:/work" -w /work "$FPM_IMAGE" \
-          fpm -s dir -t "$PKG_TYPE" -n hi -v "$VERSION" -a native \
-          --prefix /usr/bin \
-          "$DISTRO/$ARCH/hi"
+        # Package into .deb or .rpm. Install FPM inline to avoid needing
+        # separate OIDC auth for the pre-built FPM containers (see INFRA-430).
+        docker run --rm \
+          -v "$PWD/build:/work" -w /work \
+          -e PKG_TYPE="$PKG_TYPE" \
+          -e VERSION="$VERSION" \
+          -e DISTRO="$DISTRO" \
+          -e ARCH="$ARCH" \
+          "${{ matrix.docker-image }}" \
+          bash -c "${{ matrix.fpm-setup }} && \
+            gem install --no-document fpm >/dev/null 2>&1 && \
+            fpm -s dir -t \$PKG_TYPE -n hi -v \$VERSION -a native \
+              --prefix /usr/bin \
+              \$DISTRO/\$ARCH/hi"
 
         # Move package to distro/arch dir and remove the bare binary
         mv "build/hi"*."$PKG_TYPE" "build/$DISTRO/$ARCH/"
