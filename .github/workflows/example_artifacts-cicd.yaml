@@ -75,8 +75,8 @@ jobs:
             "distro":"java",
             "arch":"x86_64",
             "working-directory":"repo-source/.github/workflows/execute-build/test_apps/JavaHelloWorld",
-            "gh-artifact-directory":"target",
-            "build-script":"mvn package -q",
+            "gh-artifact-directory":"output",
+            "build-script":"mvn package -q && mkdir -p output && cp target/*.jar output/ && cp pom.xml output/hello-world-1.0.0.pom",
             "setup-java":true,
             "java-version":"17"
           }

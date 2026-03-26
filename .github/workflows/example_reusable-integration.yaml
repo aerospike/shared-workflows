@@ -231,10 +231,13 @@ jobs:
       build-script: |
         echo "Building Java project in $(pwd)"
         mvn package -q
+        mkdir -p output
+        cp target/*.jar output/
+        cp pom.xml output/hello-world-1.0.0.pom
         echo "Maven build complete"
-        ls -la target/*.jar
+        ls -la output/
       gh-source-path: repo-source
-      gh-artifact-directory: target
+      gh-artifact-directory: output
       gh-artifact-name: build-artifacts-java
       oidc-provider-name: gh-dev-test
       oidc-audience: aerospike/testing
