@@ -98,12 +98,15 @@ jobs:
         # Package into .deb or .rpm using pre-built FPM containers.
         # The FPM images are in devops-containers-prod-local, which requires the
         # aerospike OIDC identity (not the test project identity used for build-info).
-        # Add a temporary server config to pull from there. See INFRA-430 for the
-        # long-term fix to unify OIDC access.
+        # Request a GitHub OIDC token with the aerospike audience, then configure
+        # a second JFrog server to pull from there. See INFRA-430 for the long-term fix.
+        OIDC_TOKEN=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+          "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=aerospike" | jq -r '.value')
         jf c add aerospike-read \
           --url=https://artifact.aerospike.io \
           --oidc-provider-name=gh-aerospike \
           --oidc-audience=aerospike \
+          --oidc-token-id="$OIDC_TOKEN" \
           --interactive=false
         jf docker pull "$FPM_IMAGE" --server-id=aerospike-read
         docker run --rm -v "$PWD/build:/work" -w /work "$FPM_IMAGE" \
