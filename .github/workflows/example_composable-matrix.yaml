@@ -237,8 +237,10 @@ jobs:
           BUNDLE_VERSION: ${{ needs.extract-version.outputs.version }}
         run: |
           echo "Checking for existing bundle: $BUNDLE_NAME $BUNDLE_VERSION"
-          versions=$(jf release-bundle-search versions "$BUNDLE_NAME" --project=test --format=json 2>/dev/null || echo "[]")
-          if echo "$versions" | jq -e --arg v "$BUNDLE_VERSION" '.[] | select(.version == $v)' >/dev/null 2>&1; then
+          versions=$(jf release-bundle-search versions "$BUNDLE_NAME" --project=test --format=json)
+          echo "$versions" | jq .
+          if echo "$versions" | jq -e --arg v "$BUNDLE_VERSION" '.release_bundles[] | select(.release_bundle_version == $v)' >/dev/null 2>&1; then
+            echo "Found existing bundle."
             echo "exists=true" >> "$GITHUB_OUTPUT"
           else
             echo "No existing bundle found."
