@@ -1,0 +1,27 @@
+name: Test OIDC Access
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  test-global-read:
+    name: Test global read-only OIDC
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup JFrog CLI
+        uses: jfrog/setup-jfrog-cli@v4
+        env:
+          JF_URL: https://artifact.aerospike.io
+        with:
+          oidc-provider-name: gh-aerospike
+          oidc-audience: aerospike
+
+      - name: Pull docker image
+        run: jf docker pull aerospike.jfrog.io/database-docker-virtual/aerospike-server-enterprise:8.1.1.2
