@@ -30,6 +30,7 @@ setup_file() {
   local -a expected_debs=(
     "$BUILD_ARTIFACTS_DIR/test-ubuntu22.04.deb"
     "$BUILD_ARTIFACTS_DIR/nested/dir/test-debian12.deb"
+    "$BUILD_ARTIFACTS_DIR/test-all-arch_1.0.0-1ubuntu22.04_all.deb"
   )
   
   local -a expected_rpms=(
@@ -83,6 +84,10 @@ get_deb_expectations() {
   # This isn't very flexible (it will fail if we add more files) but that will force us to change the test if we change the fixture.
   local file_location codename
   case "$filename" in
+    *all-arch*ubuntu22.04*)
+      file_location="$BUILD_ARTIFACTS_DIR/test-all-arch_1.0.0-1ubuntu22.04_all.deb"
+      codename="jammy"
+      ;;
     *ubuntu22.04*)
       file_location="$BUILD_ARTIFACTS_DIR/test-ubuntu22.04.deb"
       codename="jammy"

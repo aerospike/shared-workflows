@@ -27,6 +27,8 @@ setup_test_artifacts() {
                 "$BUILD_ARTIFACTS_DIR/test-ubuntu22.04.deb.asc"
                 "$BUILD_ARTIFACTS_DIR/test-1.0-2.noarch.rpm"
                 "$BUILD_ARTIFACTS_DIR/test-1.0-2.noarch.rpm.asc"
+                "$BUILD_ARTIFACTS_DIR/test-all-arch_1.0.0-1ubuntu22.04_all.deb"
+                "$BUILD_ARTIFACTS_DIR/test-all-arch_1.0.0-1ubuntu22.04_all.deb.asc"
                 "$BUILD_ARTIFACTS_DIR/test.jar"
                 "$BUILD_ARTIFACTS_DIR/test.jar.asc"
                 "$BUILD_ARTIFACTS_DIR/test.zip"

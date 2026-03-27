@@ -43,6 +43,23 @@ teardown() {
     [[ ! -d "structured_build_artifacts/generic/unsigned-artifacts" ]]
 }
 
+@test "Architecture: all DEB is structured into deb dir with companion" {
+    run_entrypoint_dry_run >/dev/null 2>&1 || true
+    local deb_dir
+    deb_dir=$(find structured_build_artifacts/deb -name "test-all-arch_1.0.0-1ubuntu22.04_all.deb" -printf '%h\n' 2>/dev/null | head -1)
+    [[ -n "$deb_dir" ]]
+    [[ -f "$deb_dir/test-all-arch_1.0.0-1ubuntu22.04_all.deb.asc" ]]
+}
+
+@test "Architecture: all DEB is structured under correct codename pool" {
+    run_entrypoint_dry_run >/dev/null 2>&1 || true
+    local deb_path
+    deb_path=$(find structured_build_artifacts/deb -name "test-all-arch_1.0.0-1ubuntu22.04_all.deb" 2>/dev/null | head -1)
+    [[ -n "$deb_path" ]]
+    # Should be under pool/jammy/ (codename derived from ubuntu22.04 in filename)
+    [[ "$deb_path" == *"/pool/jammy/"* ]]
+}
+
 @test "No .nupkg files leak into generic structured dir" {
     # NuGet packages should be in nupkg/, never in generic/
     run_entrypoint_dry_run >/dev/null 2>&1 || true
