@@ -69,13 +69,13 @@ jobs:
             runs-on: ubuntu-22.04
             emulated: false
             pkg-type: rpm
-            distro-label: el9
+            fpm-extra: --rpm-dist el9
           - distro: jammy
             arch: x86_64
             runs-on: ubuntu-22.04
             emulated: false
             pkg-type: deb
-            distro-label: ubuntu22.04
+            fpm-extra: --iteration 1ubuntu22.04
     uses: ./.github/workflows/reusable_execute-build.yaml
     with:
       gh-workflows-ref: ${{ github.sha }}
@@ -96,12 +96,14 @@ jobs:
 
         # Package into .deb or .rpm using the public tenzer/fpm container.
         # Our internal FPM containers require separate OIDC auth (see INFRA-430).
-        # The distro-label is embedded in the package name so deploy-artifacts can
-        # identify the deb codename (see get_codename_for_deb in package_utils.sh).
+        # The fpm-extra matrix field embeds the distro identifier so deploy-artifacts
+        # can identify the deb codename (see get_codename_for_deb in package_utils.sh).
+        # Output follows Aerospike package naming guidelines.
         docker run --rm \
           -v "$PWD/build:/work" -w /work \
           tenzer/fpm \
-          -s dir -t "$PKG_TYPE" -n "hi-${{ matrix.distro-label }}" -v "$VERSION" -a native \
+          -s dir -t "$PKG_TYPE" -n hi -v "$VERSION" -a native \
+          ${{ matrix.fpm-extra }} \
           --prefix /usr/bin \
           "$DISTRO/$ARCH/hi"
 
