@@ -1,0 +1,33 @@
+name: Promote Release Bundle
+description: Promote a JFrog release bundle to a target environment. JFrog CLI must be configured by the caller.
+inputs:
+  bundle-name:
+    description: Release bundle name
+    required: true
+  version:
+    description: Release bundle version to promote
+    required: true
+  environment:
+    description: Target environment (DEV, TEST, STAGE, PROD, etc.)
+    required: true
+  jf-project:
+    description: JFrog project key
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Show bundle before promotion
+      shell: bash
+      run: |
+        echo "Bundle to promote: ${{ inputs.bundle-name }} ${{ inputs.version }}"
+        jf release-bundle-search versions "${{ inputs.bundle-name }}" \
+          --project="${{ inputs.jf-project }}" --format=json | \
+          jq --arg v "${{ inputs.version }}" \
+          '.release_bundles[] | select(.release_bundle_version == $v)'
+
+    - name: Promote release bundle
+      shell: bash
+      run: |
+        echo "Promoting ${{ inputs.bundle-name }} ${{ inputs.version }} to ${{ inputs.environment }}..."
+        jf release-bundle-promote "${{ inputs.bundle-name }}" "${{ inputs.version }}" \
+          "${{ inputs.environment }}" --project="${{ inputs.jf-project }}"

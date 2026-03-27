@@ -1,0 +1,53 @@
+name: Delete Release Bundle
+description: Check for and delete an existing JFrog release bundle version. JFrog CLI must be configured by the caller.
+inputs:
+  bundle-name:
+    description: Release bundle name
+    required: true
+  version:
+    description: Release bundle version to delete
+    required: true
+  jf-project:
+    description: JFrog project key
+    required: true
+outputs:
+  existed:
+    description: Whether a matching bundle was found and deleted (true/false)
+    value: ${{ steps.check.outputs.exists }}
+runs:
+  using: composite
+  steps:
+    - name: Check for existing release bundle
+      id: check
+      shell: bash
+      run: |
+        echo "Checking for existing bundle: ${{ inputs.bundle-name }} ${{ inputs.version }}"
+        versions=$(jf release-bundle-search versions "${{ inputs.bundle-name }}" \
+          --project="${{ inputs.jf-project }}" --format=json)
+        echo "$versions" | jq .
+        if echo "$versions" | jq -e --arg v "${{ inputs.version }}" \
+          '.release_bundles[] | select(.release_bundle_version == $v)' >/dev/null 2>&1; then
+          echo "Found existing bundle."
+          echo "exists=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "No existing bundle found."
+          echo "exists=false" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Show existing bundle details
+      if: steps.check.outputs.exists == 'true'
+      shell: bash
+      run: |
+        echo "Existing bundle to delete:"
+        jf release-bundle-search versions "${{ inputs.bundle-name }}" \
+          --project="${{ inputs.jf-project }}" --format=json | \
+          jq --arg v "${{ inputs.version }}" \
+          '.release_bundles[] | select(.release_bundle_version == $v)'
+
+    - name: Delete existing release bundle
+      if: steps.check.outputs.exists == 'true'
+      shell: bash
+      run: |
+        echo "Deleting bundle: ${{ inputs.bundle-name }} ${{ inputs.version }}"
+        jf release-bundle-delete-local "${{ inputs.bundle-name }}" "${{ inputs.version }}" \
+          --project="${{ inputs.jf-project }}" --quiet

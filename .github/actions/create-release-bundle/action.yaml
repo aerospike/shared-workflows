@@ -1,0 +1,48 @@
+name: Create Release Bundle
+description: Create a JFrog release bundle from one or more builds. JFrog CLI must be configured by the caller.
+inputs:
+  build-names:
+    description: |
+      Comma-separated list of build name:version pairs to include in the release bundle.
+      Format: "build-name1:version1,build-name2:version2"
+    required: true
+  bundle-name:
+    description: Name for the release bundle
+    required: true
+  version:
+    description: Version of the release bundle
+    required: true
+  jf-project:
+    description: JFrog project key
+    required: true
+  dry-run:
+    description: Whether to run in dry-run mode
+    required: false
+    default: "false"
+  entrypoint-path:
+    description: Path to the create-release-bundle entrypoint script (relative to workspace)
+    required: false
+    default: .github/workflows/create-release-bundle/entrypoint.sh
+runs:
+  using: composite
+  steps:
+    - name: Create Release Bundle
+      shell: bash
+      run: |
+        entrypoint="${{ inputs.entrypoint-path }}"
+        if [[ ! -f "$entrypoint" ]]; then
+          echo "Error: entrypoint not found at $entrypoint" >&2
+          echo "The caller must checkout the shared-workflows repo (or at least the entrypoint script) before calling this action." >&2
+          exit 1
+        fi
+        chmod +x "$entrypoint"
+        dry_run_arg=""
+        if [ "${{ inputs.dry-run }}" = "true" ]; then
+          dry_run_arg="--dry-run"
+        fi
+        "$entrypoint" \
+          --project "${{ inputs.jf-project }}" \
+          --build-names "${{ inputs.build-names }}" \
+          --bundle-name "${{ inputs.bundle-name }}" \
+          --version "${{ inputs.version }}" \
+          $dry_run_arg

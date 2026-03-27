@@ -239,7 +239,9 @@ jobs:
       oidc-audience: aerospike/testing
     secrets: inherit
 
-  delete-existing-bundle:
+  # Release bundle: delete old, create new, promote. Uses composite actions
+  # so all three steps run in a single job (one runner, one auth setup).
+  release-bundle:
     needs: [deploy, extract-version]
     runs-on: ubuntu-22.04
     if: github.event_name == 'workflow_dispatch'
@@ -248,6 +250,13 @@ jobs:
         uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
         with:
           egress-policy: audit
+      - name: Checkout shared-workflows (actions and entrypoint)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          sparse-checkout: |
+            .github/actions
+            .github/workflows/create-release-bundle
+          sparse-checkout-cone-mode: false
       - name: Setup JFrog CLI
         uses: step-security/setup-jfrog-cli@893a92f96c7727242adf0e603c77b1f2a22390e1 # v4.9.1
         env:
@@ -256,87 +265,23 @@ jobs:
         with:
           oidc-provider-name: gh-dev-test
           oidc-audience: aerospike/testing
-      - name: Check for existing release bundle
-        id: check
-        env:
-          BUNDLE_NAME: test-release
-          BUNDLE_VERSION: ${{ needs.extract-version.outputs.version }}
-        run: |
-          echo "Checking for existing bundle: $BUNDLE_NAME $BUNDLE_VERSION"
-          versions=$(jf release-bundle-search versions "$BUNDLE_NAME" --project=test --format=json)
-          echo "$versions" | jq .
-          if echo "$versions" | jq -e --arg v "$BUNDLE_VERSION" '.release_bundles[] | select(.release_bundle_version == $v)' >/dev/null 2>&1; then
-            echo "Found existing bundle."
-            echo "exists=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "No existing bundle found."
-            echo "exists=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Show existing bundle details
-        if: steps.check.outputs.exists == 'true'
-        env:
-          BUNDLE_NAME: test-release
-          BUNDLE_VERSION: ${{ needs.extract-version.outputs.version }}
-        run: |
-          echo "Existing bundle to delete:"
-          jf release-bundle-search versions "$BUNDLE_NAME" --project=test --format=json | \
-            jq --arg v "$BUNDLE_VERSION" '.release_bundles[] | select(.release_bundle_version == $v)'
-
-      - name: Delete existing release bundle
-        if: steps.check.outputs.exists == 'true'
-        env:
-          BUNDLE_NAME: test-release
-          BUNDLE_VERSION: ${{ needs.extract-version.outputs.version }}
-        run: |
-          echo "Deleting bundle: $BUNDLE_NAME $BUNDLE_VERSION"
-          jf release-bundle-delete-local "$BUNDLE_NAME" "$BUNDLE_VERSION" \
-            --project=test --quiet
-
-  # Create a release bundle from the deployed artifacts.
-  # Depends on delete-existing-bundle because create does not allow overwriting.
-  # The bundle includes build: test-build at the deployed version.
-  bundle:
-    needs: [delete-existing-bundle, extract-version]
-    uses: ./.github/workflows/reusable_create-release-bundle.yaml
-    if: github.event_name == 'workflow_dispatch'
-    with:
-      gh-workflows-ref: ${{ github.sha }}
-      jf-project: test
-      jf-build-names: test-build:${{ github.run_id }}-${{ github.run_attempt }}
-      jf-bundle-name: test-release
-      version: ${{ needs.extract-version.outputs.version }}
-      oidc-provider-name: gh-dev-test
-      oidc-audience: aerospike/testing
-      dry-run: false
-
-  promote-bundle:
-    needs: [bundle, extract-version]
-    runs-on: ubuntu-22.04
-    if: github.event_name == 'workflow_dispatch'
-    env:
-      BUNDLE_NAME: test-release
-      BUNDLE_VERSION: ${{ needs.extract-version.outputs.version }}
-    steps:
-      - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+      - name: Delete existing bundle (if any)
+        uses: ./.github/actions/delete-release-bundle
         with:
-          egress-policy: audit
-      - name: Setup JFrog CLI
-        uses: step-security/setup-jfrog-cli@893a92f96c7727242adf0e603c77b1f2a22390e1 # v4.9.1
-        env:
-          JF_URL: https://artifact.aerospike.io
-          JF_PROJECT: test
+          bundle-name: test-release
+          version: ${{ needs.extract-version.outputs.version }}
+          jf-project: test
+      - name: Create release bundle
+        uses: ./.github/actions/create-release-bundle
         with:
-          oidc-provider-name: gh-dev-test
-          oidc-audience: aerospike/testing
-      - name: Show bundle before promotion
-        run: |
-          echo "Bundle to promote: $BUNDLE_NAME $BUNDLE_VERSION"
-          jf release-bundle-search versions "$BUNDLE_NAME" --project=test --format=json | \
-            jq --arg v "$BUNDLE_VERSION" '.release_bundles[] | select(.release_bundle_version == $v)'
+          build-names: test-build:${{ github.run_id }}-${{ github.run_attempt }}
+          bundle-name: test-release
+          version: ${{ needs.extract-version.outputs.version }}
+          jf-project: test
       - name: Promote release bundle to DEV
-        run: |
-          echo "Promoting $BUNDLE_NAME $BUNDLE_VERSION to DEV environment..."
-          jf release-bundle-promote "$BUNDLE_NAME" "$BUNDLE_VERSION" DEV \
-            --project=test
+        uses: ./.github/actions/promote-release-bundle
+        with:
+          bundle-name: test-release
+          version: ${{ needs.extract-version.outputs.version }}
+          environment: DEV
+          jf-project: test

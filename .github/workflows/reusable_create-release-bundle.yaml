@@ -99,17 +99,11 @@ jobs:
           jf rt ping
 
       - name: Create Release Bundle
-        shell: bash
-        run: |
-          entrypoint="${{ inputs.gh-checkout-path }}/.github/workflows/create-release-bundle/entrypoint.sh"
-          chmod +x "$entrypoint"
-          dry_run_arg=""
-          if [ "${{ inputs.dry-run }}" = "true" ]; then
-            dry_run_arg="--dry-run"
-          fi
-          "$entrypoint" \
-            --project "${{ inputs.jf-project }}" \
-            --build-names "${{ inputs.jf-build-names }}" \
-            --bundle-name "${{ inputs.jf-bundle-name }}" \
-            --version "${{ inputs.version }}" \
-            $dry_run_arg
+        uses: ./shared-workflows/.github/actions/create-release-bundle
+        with:
+          build-names: ${{ inputs.jf-build-names }}
+          bundle-name: ${{ inputs.jf-bundle-name }}
+          version: ${{ inputs.version }}
+          jf-project: ${{ inputs.jf-project }}
+          dry-run: ${{ inputs.dry-run }}
+          entrypoint-path: shared-workflows/.github/workflows/create-release-bundle/entrypoint.sh
