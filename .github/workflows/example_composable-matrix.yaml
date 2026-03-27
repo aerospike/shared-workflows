@@ -69,15 +69,11 @@ jobs:
             runs-on: ubuntu-22.04
             emulated: false
             pkg-type: rpm
-            docker-image: rockylinux:9
-            fpm-setup: dnf install -y -q ruby ruby-devel gcc make rpm-build
           - distro: jammy
             arch: x86_64
             runs-on: ubuntu-22.04
             emulated: false
             pkg-type: deb
-            docker-image: ubuntu:22.04
-            fpm-setup: apt-get update -qq && apt-get install -y -qq ruby
     uses: ./.github/workflows/reusable_execute-build.yaml
     with:
       gh-workflows-ref: ${{ github.sha }}
@@ -96,20 +92,14 @@ jobs:
         # Compile the binary
         DISTRO="$DISTRO" ARCH="$ARCH" EMULATED=${{ matrix.emulated }} make docker-build
 
-        # Package into .deb or .rpm. Install FPM inline to avoid needing
-        # separate OIDC auth for the pre-built FPM containers (see INFRA-430).
+        # Package into .deb or .rpm using the public tenzer/fpm container.
+        # Our internal FPM containers require separate OIDC auth (see INFRA-430).
         docker run --rm \
           -v "$PWD/build:/work" -w /work \
-          -e PKG_TYPE="$PKG_TYPE" \
-          -e VERSION="$VERSION" \
-          -e DISTRO="$DISTRO" \
-          -e ARCH="$ARCH" \
-          "${{ matrix.docker-image }}" \
-          bash -c "${{ matrix.fpm-setup }} && \
-            gem install --no-document fpm >/dev/null 2>&1 && \
-            fpm -s dir -t \$PKG_TYPE -n hi -v \$VERSION -a native \
-              --prefix /usr/bin \
-              \$DISTRO/\$ARCH/hi"
+          tenzer/fpm \
+          -s dir -t "$PKG_TYPE" -n hi -v "$VERSION" -a native \
+          --prefix /usr/bin \
+          "$DISTRO/$ARCH/hi"
 
         # Move package to distro/arch dir and remove the bare binary
         mv "build/hi"*."$PKG_TYPE" "build/$DISTRO/$ARCH/"
