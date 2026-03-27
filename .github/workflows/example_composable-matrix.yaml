@@ -335,8 +335,8 @@ jobs:
           echo "Bundle to promote: $BUNDLE_NAME $BUNDLE_VERSION"
           jf release-bundle-search versions "$BUNDLE_NAME" --project=test --format=json | \
             jq --arg v "$BUNDLE_VERSION" '.release_bundles[] | select(.release_bundle_version == $v)'
-      - name: Promote release bundle to TEST
+      - name: Promote release bundle to DEV
         run: |
-          echo "Promoting $BUNDLE_NAME $BUNDLE_VERSION to TEST environment..."
-          jf release-bundle-promote "$BUNDLE_NAME" "$BUNDLE_VERSION" TEST \
+          echo "Promoting $BUNDLE_NAME $BUNDLE_VERSION to DEV environment..."
+          jf release-bundle-promote "$BUNDLE_NAME" "$BUNDLE_VERSION" DEV \
             --project=test
