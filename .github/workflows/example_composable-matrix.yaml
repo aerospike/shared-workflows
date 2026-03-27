@@ -1,4 +1,38 @@
 name: Example Composable Matrix CI/CD
+# Demonstrates the composable artifact pipeline: calling the underlying shared
+# workflows individually with custom steps between them. Builds DEB, RPM, npm,
+# and Java artifacts across a matrix, then signs, deploys, and creates a release
+# bundle with promotion.
+#
+# On workflow_dispatch the full pipeline runs including the release bundle
+# lifecycle. On push to main only the build/sign/deploy steps run.
+#
+# RELEASE BUNDLE STRATEGY:
+# The bundle from the previous run is intentionally left in place so it can be
+# inspected after the workflow completes. On the next run, the delete step cleans
+# up the old bundle before deploy (promoted bundles can lock artifacts in
+# dev-local repos, so deletion must happen before new artifacts are uploaded).
+#
+# WORKFLOW FLOW:
+#  1. extract-version        - read version from file or input
+#  2. build (matrix)         - DEB/RPM builds across distros using FPM for packaging
+#     build-npm              - npm package build
+#     build-java             - Java/Maven build
+#  3. collect                - merge per-matrix artifacts into one (collect-build-artifacts action)
+#  4. test                   - INSERT YOUR TESTS HERE
+#  5. sign                   - GPG sign artifacts (reusable_sign-artifacts.yaml)
+#  6. delete-existing-bundle - remove previous bundle if it exists (workflow_dispatch only)
+#  7. deploy                 - upload to JFrog Artifactory (reusable_deploy-artifacts.yaml)
+#  8. release-bundle         - create bundle and promote to DEV (workflow_dispatch only)
+#
+# npm and Java are separate jobs because they need different working directories
+# and toolchains. They could also be folded into a matrix with per-entry
+# overrides (see example_artifacts-cicd.yaml for that approach).
+#
+# BUILD ID SCHEME (no resolve job needed):
+# - Per-matrix build:  {run_id}-{run_attempt}-buildinfo-{distro}-{arch}
+# - Deploy parent:     {run_id}-{run_attempt}
+# - Deploy metadata:   {run_id}-{run_attempt}-buildinfo
 
 on:
   workflow_dispatch: # checkov:skip=CKV_GHA_7:version input is an optional override, not required for reproducibility
@@ -13,32 +47,6 @@ on:
 permissions:
   id-token: write
   contents: read
-
-# This workflow demonstrates the composable artifact pipeline pattern.
-# Unlike reusable_artifacts-cicd.yaml (which is all-in-one), this calls the
-# underlying workflows individually so you can insert custom steps between them.
-# It also demonstrates using a release bundle. To enable this, THE EXAMPLE
-# DELETES THE PREVIOUS BUNDLE IF IT EXISTS.
-#
-# WORKFLOW FLOW:
-# 1. extract-version    - read version from file or input
-# 2. build (matrix)     - C builds across distros: el9, jammy (reusable_execute-build.yaml)
-#    build-npm          - npm package build (separate job, see note below)
-#    build-java         - Java/Maven build (separate job, see note below)
-# 3. collect            - merge all build artifacts into one (inline download + upload)
-# 4. test               - INSERT YOUR TESTS HERE
-# 5. sign               - GPG sign the artifacts (reusable_sign-artifacts.yaml)
-# 6. deploy             - upload to JFrog Artifactory (reusable_deploy-artifacts.yaml)
-# 7. delete/bundle/promote - release bundle lifecycle (workflow_dispatch only)
-#
-# npm and Java are separate jobs here because they need different working
-# directories and toolchains. They could also be folded into a matrix with
-# per-entry overrides (see example_artifacts-cicd.yaml for that approach).
-#
-# BUILD ID SCHEME (no resolve job needed):
-# - Per-matrix build:  ${{ github.run_id }}-${{ github.run_attempt }}-buildinfo-{distro}-{arch}
-# - Deploy parent:     ${{ github.run_id }}-${{ github.run_attempt }}
-# - Deploy metadata:   ${{ github.run_id }}-${{ github.run_attempt }}-buildinfo
 
 jobs:
   extract-version:
@@ -220,7 +228,7 @@ jobs:
       es-totp_secret: ${{ secrets.ES_TOTP_SECRET }}
 
   deploy:
-    needs: [extract-version, sign]
+    needs: [extract-version, sign, delete-existing-bundle]
     uses: ./.github/workflows/reusable_deploy-artifacts.yaml
     with:
       gh-workflows-ref: ${{ github.sha }}
@@ -233,7 +241,38 @@ jobs:
       oidc-audience: aerospike/testing
     secrets: inherit
 
-  # Release bundle: delete old, create new, promote.
+  # Delete existing bundle before deploy. Promoted bundles can lock artifacts
+  # in dev-local repos, causing deploy uploads to fail.
+  delete-existing-bundle:
+    needs: [sign, extract-version]
+    runs-on: ubuntu-22.04
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+        with:
+          egress-policy: audit
+      - name: Checkout shared-workflows (actions)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          sparse-checkout: .github/actions
+          sparse-checkout-cone-mode: false
+      - name: Setup JFrog CLI
+        uses: step-security/setup-jfrog-cli@893a92f96c7727242adf0e603c77b1f2a22390e1 # v4.9.1
+        env:
+          JF_URL: https://artifact.aerospike.io
+          JF_PROJECT: test
+        with:
+          oidc-provider-name: gh-dev-test
+          oidc-audience: aerospike/testing
+      - name: Delete existing bundle (if any)
+        uses: ./.github/actions/delete-release-bundle
+        with:
+          bundle-name: test-release
+          version: ${{ needs.extract-version.outputs.version }}
+          jf-project: test
+
+  # Create and promote release bundle after deploy.
   release-bundle:
     needs: [deploy, extract-version]
     runs-on: ubuntu-22.04
@@ -258,12 +297,6 @@ jobs:
         with:
           oidc-provider-name: gh-dev-test
           oidc-audience: aerospike/testing
-      - name: Delete existing bundle (if any)
-        uses: ./.github/actions/delete-release-bundle
-        with:
-          bundle-name: test-release
-          version: ${{ needs.extract-version.outputs.version }}
-          jf-project: test
       - name: Create release bundle
         uses: ./.github/actions/create-release-bundle
         with:
@@ -271,8 +304,8 @@ jobs:
           bundle-name: test-release
           version: ${{ needs.extract-version.outputs.version }}
           jf-project: test
-        # We are just promoting to DEV here but the action supports any environment the user has
-        # configured in JFrog and has enough permissions.
+      # Promoting to DEV here. The action supports any environment the user has
+      # configured in JFrog with sufficient permissions.
       - name: Promote release bundle to DEV
         uses: ./.github/actions/promote-release-bundle
         with:
