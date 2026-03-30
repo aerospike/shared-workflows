@@ -133,7 +133,7 @@ deploy-artifacts/
 
 ## Required: gh-workflows-ref
 
-The `gh-workflows-ref` input is **required** and must match the version in your `uses:` line. See [Why gh-workflows-ref is required](../docs/CICD-composable.md#why-gh-workflows-ref-is-required) for details.
+The `gh-workflows-ref` input is **required** and must match the version in your `uses:` line. See [Why gh-workflows-ref is required](../docs/why-gh-workflows-ref.md) for details.
 
 ## Prerequisites
 

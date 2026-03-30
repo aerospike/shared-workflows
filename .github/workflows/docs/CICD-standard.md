@@ -1,6 +1,6 @@
 # Shared Workflows – Standard CI/CD
 
-These orchestrated workflows handle the full lifecycle with good defaults: you provide a build script and configuration, they handle the rest. This is the simpler of two approaches; if you need to insert custom steps between pipeline stages or otherwise need finer-grained control, see [CICD-composable.md](CICD-composable.md).
+These orchestrated workflows handle the full lifecycle with good defaults: you provide a build script and configuration, they handle the rest. This is the simpler of two approaches; if you need to insert custom steps between pipeline stages or otherwise need finer-grained control, see [CICD-composable.md](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/docs/CICD-composable.md).
 
 ---
 
@@ -196,84 +196,14 @@ matrix-json: >-
   ]}
 ```
 
-## Example Usage
+## Full examples
 
-The typical pattern combines both pipelines: Build and sign according to ecosystem, then unify in a release bundle.
-
-```yaml
-jobs:
-  # Artifact pipeline: build → sign → deploy (all handled by the orchestrator)
-  artifacts:
-    uses: aerospike/shared-workflows/.github/workflows/reusable_artifacts-cicd.yaml@v3.2.0
-    with:
-      gh-workflows-ref: v3.2.0
-      jf-project: my-project
-      jf-build-name: my-app
-      version: 1.2.3
-      gh-artifact-directory: dist
-      build-script: |
-        make build
-    secrets: inherit
-
-  # Docker pipeline: build with attestations → deploy
-  docker:
-    uses: aerospike/shared-workflows/.github/workflows/reusable_docker-build-deploy.yaml@v3.2.0
-    with:
-      attest: true # SLSA attestation (container ecosystem standard)
-      sbom: true # Software Bill of Materials
-      # ... docker config ...
-
-  # Unified release: bundle all builds together
-  release-bundle:
-    needs: [artifacts, docker]
-    uses: aerospike/shared-workflows/.github/workflows/reusable_create-release-bundle.yaml@v3.2.0
-    with:
-      gh-workflows-ref: v3.2.0
-      jf-build-names: "my-app:1.2.3,my-app-container:1.2.3"
-      # Single bundle containing both artifact and container builds
-```
-
-For a drop-in artifacts-cicd example see [example_artifacts-cicd.yaml](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/example_artifacts-cicd.yaml).
+- [example_artifacts-cicd.yaml](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/example_artifacts-cicd.yaml): drop-in orchestrated pipeline with multi-ecosystem matrix (C, .NET, npm, Java)
+- [example_reusable-integration.yaml](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/example_reusable-integration.yaml): combines artifact and Docker pipelines with a unified release bundle
 
 ---
 
-## Why gh-workflows-ref is required
-
-All shared workflows require the `gh-workflows-ref` input, which **should match** the version in your `uses:` line:
-
-```yaml
-jobs:
-  build:
-    uses: aerospike/shared-workflows/.github/workflows/reusable_artifacts-cicd.yaml@v3.2.0
-    with:
-      gh-workflows-ref: v3.2.0 # Should match @v3.2.0 above
-      # ... other inputs ...
-```
-
-### The problem
-
-GitHub Actions has a fundamental limitation: **reusable workflows cannot access their own ref**. When you call `uses: org/repo/.github/workflows/workflow.yaml@v3.2.0`, the workflow itself has no way to know it was called with `@v3.2.0`.
-
-The available context variables don't help:
-
-- `github.sha` → SHA of the _caller's_ commit, not shared-workflows
-- `github.workflow_sha` → SHA of the _caller's_ workflow file, not the reusable one
-- `github.ref` → ref of the _caller's_ repository
-
-There is no `github.called_workflow_ref` or similar.
-
-### Why this matters
-
-These workflows need to checkout their own repository to access entrypoint scripts (bash scripts that do the actual work). Without knowing which version was called, they can't checkout the matching scripts, which leads to version mismatches where the workflow is v3.2.0 but the scripts are from a different version.
-
-### Known issue
-
-This is a long-standing GitHub Actions limitation with no native solution:
-
-- [actions/runner#2417](https://github.com/actions/runner/issues/2417)
-- [community/discussions#38659](https://github.com/orgs/community/discussions/38659)
-
-Third-party workarounds exist but don't pass security review. Until GitHub adds native support, `gh-workflows-ref` is the reliable solution.
+See [Why gh-workflows-ref is required](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/docs/why-gh-workflows-ref.md) for details on this GitHub Actions limitation.
 
 ---
 
@@ -281,6 +211,6 @@ Third-party workarounds exist but don't pass security review. Until GitHub adds 
 
 - **Deploy fails (auth)** → confirm GitHub→JFrog **OIDC** trust/policy is configured and that the workflow's identity has deploy permission to the target project/repo. (example mistakes often around wrong audience or incorrect token permissions)
 - **Docker push fails** → ensure `tag` includes the full registry path (e.g., `artifact.aerospike.io/project-docker-dev-local/image:tag`). Verify JFrog registry permissions and OIDC authentication.
-- **Bundle creation issues** → confirm the `jf-build-names` input is a comma-separated list of `name:version` pairs that exist for the specified build, and that your JFrog project/repo permissions allow bundle creation. This permission is higher than upload/download so often a source of error.
+- **Bundle issues** → see the troubleshooting section in [Release Bundles](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/docs/release-bundles.md#troubleshooting).
 
 ---

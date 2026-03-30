@@ -27,7 +27,7 @@ on:
         description: |
           Git reference for shared-workflows checkout. Should match the version in your 'uses:' line.
           GitHub Actions doesn't expose the called workflow's ref, so this is required.
-          See: .github/workflows/docs/CICD-composable.md#why-gh-workflows-ref-is-required
+          See: .github/workflows/docs/why-gh-workflows-ref.md
         required: true
         type: string
 
@@ -99,11 +99,21 @@ jobs:
           jf rt ping
 
       - name: Create Release Bundle
-        uses: ./shared-workflows/.github/actions/create-release-bundle
-        with:
-          build-names: ${{ inputs.jf-build-names }}
-          bundle-name: ${{ inputs.jf-bundle-name }}
-          version: ${{ inputs.version }}
-          jf-project: ${{ inputs.jf-project }}
-          dry-run: ${{ inputs.dry-run }}
-          entrypoint-path: shared-workflows/.github/workflows/create-release-bundle/entrypoint.sh
+        shell: bash
+        run: |
+          entrypoint="${{ inputs.gh-checkout-path }}/.github/workflows/create-release-bundle/entrypoint.sh"
+          if [[ ! -f "$entrypoint" ]]; then
+            echo "Error: entrypoint not found at $entrypoint" >&2
+            exit 1
+          fi
+          chmod +x "$entrypoint"
+          dry_run_arg=""
+          if [ "${{ inputs.dry-run }}" = "true" ]; then
+            dry_run_arg="--dry-run"
+          fi
+          "$entrypoint" \
+            --project "${{ inputs.jf-project }}" \
+            --build-names "${{ inputs.jf-build-names }}" \
+            --bundle-name "${{ inputs.jf-bundle-name }}" \
+            --version "${{ inputs.version }}" \
+            $dry_run_arg
