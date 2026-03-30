@@ -49,6 +49,33 @@ setup() {
     [[ $status -ne 0 ]]
 }
 
+# --- DEB Architecture: all ---
+
+@test "dpkg-deb reads Architecture: all from real deb" {
+    local deb="$GIT_ROOT/tests/test-all-arch_1.0.0-1ubuntu22.04_all.deb"
+    if [[ ! -f "$deb" ]]; then
+        skip "Test fixture not available"
+    fi
+    local arch
+    arch=$(dpkg-deb -f "$deb" Architecture)
+    [[ "$arch" == "all" ]]
+}
+
+@test "dpkg-deb reads Package name from Architecture: all deb" {
+    local deb="$GIT_ROOT/tests/test-all-arch_1.0.0-1ubuntu22.04_all.deb"
+    if [[ ! -f "$deb" ]]; then
+        skip "Test fixture not available"
+    fi
+    local pkg
+    pkg=$(dpkg-deb -f "$deb" Package)
+    [[ "$pkg" == "test-all-arch" ]]
+}
+
+@test "get_codename_for_deb works with Architecture: all deb filename" {
+    result=$(get_codename_for_deb "test-all-arch_1.0.0-1ubuntu22.04_all.deb")
+    [[ "$result" == "jammy" ]]
+}
+
 # --- get_nupkg_metadata ---
 
 @test "get_nupkg_metadata extracts name and version from real nupkg" {

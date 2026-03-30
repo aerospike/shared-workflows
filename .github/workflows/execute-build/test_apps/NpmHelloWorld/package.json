@@ -1,0 +1,11 @@
+{
+	"name": "@aerospike/hello-world",
+	"version": "1.0.0",
+	"description": "Test npm package for shared-workflows CI/CD example",
+	"main": "index.js",
+	"scripts": {
+		"build": "echo 'Build complete'",
+		"pack": "npm pack"
+	},
+	"license": "Apache-2.0"
+}

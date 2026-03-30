@@ -35,6 +35,13 @@ else
     echo "Error: tests/test-1.0-2.noarch.rpm not found. Cannot create mock RPM file." >&2
     exit 1
 fi
+if [[ -f "tests/test-all-arch_1.0.0-1ubuntu22.04_all.deb" ]]; then
+    cp "tests/test-all-arch_1.0.0-1ubuntu22.04_all.deb" "$BUILD_ARTIFACTS_DIR/"
+    echo "   Copied test-all-arch_1.0.0-1ubuntu22.04_all.deb (Architecture: all)"
+else
+    echo "Error: tests/test-all-arch_1.0.0-1ubuntu22.04_all.deb not found." >&2
+    exit 1
+fi
 
 # Create NuGet package in subdirectory to match real-world scenario
 mkdir -p "$BUILD_ARTIFACTS_DIR/nuget"
@@ -118,6 +125,7 @@ echo "Creating .asc companion files..."
 echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/test.jar.asc"
 echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/test-ubuntu22.04.deb.asc"
 echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/test-1.0-2.noarch.rpm.asc"
+echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/test-all-arch_1.0.0-1ubuntu22.04_all.deb.asc"
 echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/Aerospike.Client.8.0.2.nupkg.asc"
 echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/nuget/Aerospike.HelloWorld.1.0.0.nupkg.asc"
 echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/nuget/Aerospike.HelloWorld.1.0.0.snupkg.asc"

@@ -61,6 +61,24 @@ jobs:
             "build-env":"DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1",
             "setup-dotnet":true,
             "dotnet-version":"8.0.x"
+          },
+          {
+            "runs-on":"ubuntu-22.04",
+            "distro":"npm",
+            "arch":"x86_64",
+            "working-directory":"repo-source/.github/workflows/execute-build/test_apps/NpmHelloWorld",
+            "gh-artifact-directory":"output",
+            "build-script":"npm pack && mkdir -p output && mv *.tgz output/"
+          },
+          {
+            "runs-on":"ubuntu-22.04",
+            "distro":"java",
+            "arch":"x86_64",
+            "working-directory":"repo-source/.github/workflows/execute-build/test_apps/JavaHelloWorld",
+            "gh-artifact-directory":"output",
+            "build-script":"mvn package -q && mkdir -p output && cp target/*.jar output/ && cp pom.xml output/hello-world-1.0.0.pom",
+            "setup-java":true,
+            "java-version":"17"
           }
         ]}
       build-script: |
