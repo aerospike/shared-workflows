@@ -29,8 +29,10 @@ else
     exit 1
 fi
 if [[ -f "tests/test-1.0-2.noarch.rpm" ]]; then
-    cp "tests/test-1.0-2.noarch.rpm" "$BUILD_ARTIFACTS_DIR/"
-    echo "   Copied test-1.0-2.noarch.rpm"
+    # Rename to include dist tag so get_rpm_metadata extracts a valid distribution.
+    # The source RPM lacks a dist segment; real RPMs use patterns like name-ver-rel.el9.arch.rpm.
+    cp "tests/test-1.0-2.noarch.rpm" "$BUILD_ARTIFACTS_DIR/test-1.0-2.el9.noarch.rpm"
+    echo "   Copied test-1.0-2.noarch.rpm as test-1.0-2.el9.noarch.rpm"
 else
     echo "Error: tests/test-1.0-2.noarch.rpm not found. Cannot create mock RPM file." >&2
     exit 1
@@ -147,8 +149,8 @@ else
     exit 1
 fi
 if [[ -f "tests/test-1.0-2.noarch.rpm" ]]; then
-    cp "tests/test-1.0-2.noarch.rpm" "$BUILD_ARTIFACTS_DIR/nested/dir/nested.rpm"
-    echo "   Copied test-1.0-2.noarch.rpm as nested.rpm"
+    cp "tests/test-1.0-2.noarch.rpm" "$BUILD_ARTIFACTS_DIR/nested/dir/test-1.0-2.el9.noarch.rpm"
+    echo "   Copied test-1.0-2.noarch.rpm as nested/dir/test-1.0-2.el9.noarch.rpm"
 else
     echo "Error: tests/test-1.0-2.noarch.rpm not found. This file is required for nested test fixtures." >&2
     exit 1
@@ -159,13 +161,13 @@ fi
 echo "Creating .asc companion files..."
 echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/test.jar.asc"
 echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/test-ubuntu22.04.deb.asc"
-echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/test-1.0-2.noarch.rpm.asc"
+echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/test-1.0-2.el9.noarch.rpm.asc"
 echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/test-all-arch_1.0.0-1ubuntu22.04_all.deb.asc"
 echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/Aerospike.Client.8.0.2.nupkg.asc"
 echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/nuget/Aerospike.HelloWorld.1.0.0.nupkg.asc"
 echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/nuget/Aerospike.HelloWorld.1.0.0.snupkg.asc"
 echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/nested/dir/test-debian12.deb.asc"
-echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/nested/dir/nested.rpm.asc"
+echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/nested/dir/test-1.0-2.el9.noarch.rpm.asc"
 echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/aerospike-test-package-1.0.0.tgz.asc"
 echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/aerospike-6.0.0.tgz.asc"
 echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/aerospike_hello-1.0.0-py3-none-any.whl.asc"

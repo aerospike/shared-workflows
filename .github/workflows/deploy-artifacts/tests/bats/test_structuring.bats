@@ -24,9 +24,9 @@ teardown() {
 @test "RPM .asc companion is co-located with primary after structuring" {
     run_entrypoint_dry_run >/dev/null 2>&1 || true
     local rpm_dir
-    rpm_dir=$(find structured_build_artifacts/rpm -name "test-1.0-2.noarch.rpm" -printf '%h\n' 2>/dev/null | head -1)
+    rpm_dir=$(find structured_build_artifacts/rpm -name "test-1.0-2.el9.noarch.rpm" -printf '%h\n' 2>/dev/null | head -1)
     [[ -n "$rpm_dir" ]]
-    [[ -f "$rpm_dir/test-1.0-2.noarch.rpm.asc" ]]
+    [[ -f "$rpm_dir/test-1.0-2.el9.noarch.rpm.asc" ]]
 }
 
 @test "NuGet .asc companion is co-located with primary after structuring" {
