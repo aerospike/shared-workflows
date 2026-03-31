@@ -1,0 +1,6 @@
+pyproject.toml
+src/aerospike_hello/__init__.py
+src/aerospike_hello.egg-info/PKG-INFO
+src/aerospike_hello.egg-info/SOURCES.txt
+src/aerospike_hello.egg-info/dependency_links.txt
+src/aerospike_hello.egg-info/top_level.txt
