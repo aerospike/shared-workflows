@@ -80,8 +80,7 @@ get_known_extensions() {
         exts+=("$ext_pattern")
     done
     # Companion, build file, and content-detected extensions excluded from generic.
-    # *.tar.gz is here because pypi sdist detection handles routing .tar.gz files
-    # (either to pypi or to generic explicitly), so the generic catch-all must skip them.
+    # tarballs are already covered via TYPE_EXTENSIONS    # files (to npm, pypi, or generic explicitly), so the generic catch-all must skip them.
     exts+=("*.asc" "*.pom" "*.csproj" "*.tar.gz")
     printf '%s\n' "${exts[@]}"
 }

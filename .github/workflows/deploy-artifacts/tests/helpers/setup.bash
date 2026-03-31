@@ -22,7 +22,7 @@ setup_test_artifacts() {
         cd "$DEPLOY_ARTIFACTS_DIR/test-artifacts" || exit 1
 
         # Verify test files exist
-        declare -a TEST_FILES=(
+        TEST_FILES=(
                 "$BUILD_ARTIFACTS_DIR/test-ubuntu22.04.deb"
                 "$BUILD_ARTIFACTS_DIR/test-ubuntu22.04.deb.asc"
                 "$BUILD_ARTIFACTS_DIR/test-1.0-2.noarch.rpm"

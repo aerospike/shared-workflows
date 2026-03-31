@@ -163,10 +163,9 @@ structure_build_artifacts() {
         discover_and_process "${TYPE_EXTENSIONS[$type]}" "$label" "$processor" "$dest" "$type"
     done
 
-    # npm: content-based detection for .tgz files
-    # .tgz is ambiguous (npm pack vs generic tarball), so we inspect each file.
-    # npm packages always contain package/package.json.
-    # Non-npm .tgz files are routed to generic instead.
+    # Content-based detection for gzipped tarballs (.tgz and .tar.gz).
+    # Both extensions are the same format. Each file is tested against type
+    # detectors in priority order. Unrecognized tarballs route to generic.
     while IFS= read -r -d '' file; do
         [[ -f $file ]] || continue
         if is_npm_package "$file"; then
@@ -176,23 +175,7 @@ structure_build_artifacts() {
             if [[ -n $target_path ]]; then
                 gather_companions "$file" "$(dirname "$target_path")" "npm"
             fi
-        else
-            echo "Processing generic file (non-npm .tgz): $file" >&2
-            local target_path
-            target_path=$(process_generic "$file" "./structured_build_artifacts/generic")
-            if [[ -n $target_path ]]; then
-                gather_companions "$file" "$(dirname "$target_path")" "generic"
-            fi
-        fi
-    done < <(find build-artifacts -name "*.tgz" -print0)
-
-    # pypi sdist: content-based detection for .tar.gz files
-    # .tar.gz is ambiguous (Python sdist vs generic tarball), so we inspect each file.
-    # Python sdists always contain {name}-{version}/PKG-INFO at the root.
-    # Non-sdist .tar.gz files are routed to generic instead.
-    while IFS= read -r -d '' file; do
-        [[ -f $file ]] || continue
-        if is_pypi_sdist "$file"; then
+        elif is_pypi_sdist "$file"; then
             echo "Processing PYPI sdist: $file" >&2
             local target_path
             target_path=$(process_pypi "$file" "./structured_build_artifacts/pypi")
@@ -200,14 +183,14 @@ structure_build_artifacts() {
                 gather_companions "$file" "$(dirname "$target_path")" "pypi"
             fi
         else
-            echo "Processing generic file (non-sdist .tar.gz): $file" >&2
+            echo "Processing generic tarball: $file" >&2
             local target_path
             target_path=$(process_generic "$file" "./structured_build_artifacts/generic")
             if [[ -n $target_path ]]; then
                 gather_companions "$file" "$(dirname "$target_path")" "generic"
             fi
         fi
-    done < <(find build-artifacts -name "*.tar.gz" -print0)
+    done < <(find build-artifacts \( -name "*.tgz" -o -name "*.tar.gz" \) -print0)
 
     # Standalone POM files (unique logic: check for corresponding JAR, inline metadata)
     while IFS= read -r -d '' pom; do
@@ -414,7 +397,7 @@ upload_npm_packages() {
                     --project="$PROJECT"
             fi
         done
-    done < <(find . -name "*.tgz" -print0)
+    done < <(find . \( -name "*.tgz" -o -name "*.tar.gz" \) -print0)
 }
 
 upload_pypi_packages() {
@@ -465,7 +448,7 @@ upload_pypi_packages() {
                     --project="$PROJECT"
             fi
         done
-    done < <(find . \( -name "*.whl" -o -name "*.tar.gz" \) -print0)
+    done < <(find . \( -name "*.whl" -o -name "*.tar.gz" -o -name "*.tgz" \) -print0)
 }
 
 upload_generic_files() {

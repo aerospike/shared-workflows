@@ -387,9 +387,11 @@ _get_sdist_metadata() {
         version=$(tar -xOzf "$package" "$pkg_info_path" 2>/dev/null | grep -m1 -i '^Version:' | cut -d' ' -f2- | tr -d '\r')
     fi
 
-    # Fallback: parse filename ({name}-{version}.tar.gz)
+    # Fallback: parse filename ({name}-{version}.tar.gz or .tgz)
     if [[ -z ${pkgname-} ]] || [[ -z ${version-} ]]; then
+        # Strip tarball extensions
         local base="${filename%.tar.gz}"
+        base="${base%.tgz}"
         if [[ $base =~ ^(.+)-([0-9]+.*)$ ]]; then
             [[ -z ${pkgname-} ]] && pkgname="${BASH_REMATCH[1]}"
             [[ -z ${version-} ]] && version="${BASH_REMATCH[2]}"
@@ -405,7 +407,7 @@ _get_sdist_metadata() {
 
 # Extract Python package metadata (name and version).
 # Dispatches to wheel or sdist handler based on extension.
-# Args: <package_file> (.whl or .tar.gz)
+# Args: <package_file> (.whl, .tar.gz, or .tgz)
 # Returns: "name version" on stdout.
 get_pypi_metadata() {
     local package="$1"
@@ -413,7 +415,7 @@ get_pypi_metadata() {
 
     if [[ $filename == *.whl ]]; then
         _get_wheel_metadata "$package"
-    elif [[ $filename == *.tar.gz ]]; then
+    elif [[ $filename == *.tar.gz || $filename == *.tgz ]]; then
         _get_sdist_metadata "$package"
     else
         echo "unknown unknown"
