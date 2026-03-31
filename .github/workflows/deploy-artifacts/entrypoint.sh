@@ -144,6 +144,54 @@ run_optional() {
     run "$@" || echo "Warning: $*" >&2
 }
 
+structure_standalone_poms() {
+    while IFS= read -r -d '' pom; do
+        [[ -f $pom ]] || continue
+        base_name=$(basename "$pom" .pom)
+        jar_file="$(dirname "$pom")/$base_name.jar"
+
+        # Skip if a corresponding JAR exists (already handled by process_jar)
+        [[ -f $jar_file ]] && continue
+
+        echo "Processing standalone POM: $pom" >&2
+
+        # Extract metadata from POM
+        group_id=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='groupId'])" "$pom" 2>/dev/null)
+        artifact_id=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='artifactId'])" "$pom" 2>/dev/null)
+        version=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='version'])" "$pom" 2>/dev/null)
+
+        group_path="${group_id//./\/}"
+
+        target="./structured_build_artifacts/jar/${group_path}/${artifact_id}/${version}"
+        mkdir -p "$target"
+        cp "$pom" "$target/"
+        if [[ -f "$pom.asc" ]]; then
+            cp "$pom.asc" "$target/"
+        fi
+    done < <(find build-artifacts -name "*.pom" -print0)
+}
+
+structure_generic_files() {
+    local -a exclude_args=()
+    while IFS= read -r ext; do
+        exclude_args+=(-not -name "$ext")
+    done < <(get_known_extensions)
+
+    while IFS= read -r -d '' generic; do
+        if [[ ! -f $generic ]]; then
+            echo "Skipping non-file: $generic" >&2
+            continue
+        fi
+        echo "Processing generic file: $generic" >&2
+        local target_path
+        target_path=$(process_generic "$generic" "./structured_build_artifacts/generic")
+
+        if [[ -n $target_path ]]; then
+            gather_companions "$generic" "$(dirname "$target_path")" "generic"
+        fi
+    done < <(find build-artifacts \( "${exclude_args[@]}" \) -type f -print0)
+}
+
 structure_build_artifacts() {
     echo "Structuring build artifacts..." >&2
 
@@ -192,51 +240,8 @@ structure_build_artifacts() {
         fi
     done < <(find build-artifacts \( -name "*.tgz" -o -name "*.tar.gz" \) -print0)
 
-    # Standalone POM files (unique logic: check for corresponding JAR, inline metadata)
-    while IFS= read -r -d '' pom; do
-        [[ -f $pom ]] || continue
-        base_name=$(basename "$pom" .pom)
-        jar_file="$(dirname "$pom")/$base_name.jar"
-
-        # Skip if a corresponding JAR exists (already handled by process_jar)
-        [[ -f $jar_file ]] && continue
-
-        echo "Processing standalone POM: $pom" >&2
-
-        # Extract metadata from POM
-        group_id=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='groupId'])" "$pom" 2>/dev/null)
-        artifact_id=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='artifactId'])" "$pom" 2>/dev/null)
-        version=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='version'])" "$pom" 2>/dev/null)
-
-        group_path="${group_id//./\/}"
-
-        target="./structured_build_artifacts/jar/${group_path}/${artifact_id}/${version}"
-        mkdir -p "$target"
-        cp "$pom" "$target/"
-        if [[ -f "$pom.asc" ]]; then
-            cp "$pom.asc" "$target/"
-        fi
-    done < <(find build-artifacts -name "*.pom" -print0)
-
-    # Generic: everything not claimed by a registered type
-    local -a exclude_args=()
-    while IFS= read -r ext; do
-        exclude_args+=(-not -name "$ext")
-    done < <(get_known_extensions)
-
-    while IFS= read -r -d '' generic; do
-        if [[ ! -f $generic ]]; then
-            echo "Skipping non-file: $generic" >&2
-            continue
-        fi
-        echo "Processing generic file: $generic" >&2
-        local target_path
-        target_path=$(process_generic "$generic" "./structured_build_artifacts/generic")
-
-        if [[ -n $target_path ]]; then
-            gather_companions "$generic" "$(dirname "$target_path")" "generic"
-        fi
-    done < <(find build-artifacts \( "${exclude_args[@]}" \) -type f -print0)
+    structure_standalone_poms
+    structure_generic_files
 }
 
 # DEB and RPM uploads are handled by upload_type() via the type registry.
