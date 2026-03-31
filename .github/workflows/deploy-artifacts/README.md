@@ -12,6 +12,8 @@ A reusable GitHub Actions workflow for uploading build artifacts to JFrog Artifa
 | RPM                       | `{project}-rpm-dev-local`     | `.asc`                     | `version`, `package_name`, `rpm.distribution`, `rpm.component`, `rpm.architecture` |
 | JAR                       | `{project}-maven-dev-local`   | `.pom`, `.asc`, `.pom.asc` | `version`, `group_id`, `package_name`                                              |
 | NuGet (.nupkg/.snupkg)    | `{project}-nuget-dev-local`   | `.asc`                     | `version`, `package_name`                                                          |
+| npm (.tgz)                | `{project}-npm-dev-local`     | `.asc`                     | `version`, `package_name`                                                          |
+| PyPI (.whl/.tar.gz sdist) | `{project}-pypi-dev-local`    | `.asc`                     | `version`, `package_name`, `pypi.name`, `pypi.version`                             |
 | Generic (everything else) | `{project}-generic-dev-local` | `.asc`                     | `version`, `package_name`                                                          |
 
 All types also include `build.type` and `internal` properties when those inputs are set.
@@ -115,6 +117,26 @@ nupkg/
   {PackageName}.{Version}.nupkg
   {PackageName}.{Version}.nupkg.asc
   {PackageName}.{Version}.snupkg
+```
+
+### npm
+
+```text
+npm/
+  {filename}.tgz
+  {filename}.tgz.asc
+```
+
+### PyPI
+
+`.whl` files are routed by extension. `.tar.gz` files are inspected for a root-level `PKG-INFO` to distinguish Python source distributions from generic tarballs (the same content-based detection pattern used for npm `.tgz` files).
+
+```text
+pypi/
+  {filename}.whl
+  {filename}.whl.asc
+  {filename}.tar.gz
+  {filename}.tar.gz.asc
 ```
 
 ## File layout

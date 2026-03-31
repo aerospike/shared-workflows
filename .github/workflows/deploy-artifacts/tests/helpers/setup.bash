@@ -51,6 +51,10 @@ setup_test_artifacts() {
                 "$BUILD_ARTIFACTS_DIR/aerospike-6.0.0.tgz"
                 "$BUILD_ARTIFACTS_DIR/aerospike-6.0.0.tgz.asc"
                 "$BUILD_ARTIFACTS_DIR/generic-archive.tgz"
+                "$BUILD_ARTIFACTS_DIR/aerospike_hello-1.0.0-py3-none-any.whl"
+                "$BUILD_ARTIFACTS_DIR/aerospike_hello-1.0.0-py3-none-any.whl.asc"
+                "$BUILD_ARTIFACTS_DIR/aerospike-hello-1.0.0.tar.gz"
+                "$BUILD_ARTIFACTS_DIR/aerospike-hello-1.0.0.tar.gz.asc"
         )
 
         for file in "${TEST_FILES[@]}"; do

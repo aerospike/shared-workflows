@@ -195,6 +195,70 @@ jobs:
           fi
           echo "PASS: non-npm .tgz correctly routed to generic repo"
 
+      # --- pypi verification ---
+
+      - name: Verify wheel exists in pypi repo
+        if: needs.deploy.result == 'success'
+        run: |
+          result=$(jf rt search "test-pypi-dev-local/aerospike-hello/1.0.0/aerospike_hello-1.0.0-py3-none-any.whl" --project=test)
+          echo "Search result: $result"
+          count=$(echo "$result" | jq 'length')
+          if [[ "$count" -lt 1 ]]; then
+            echo "FAIL: wheel not found at aerospike-hello/1.0.0/"
+            exit 1
+          fi
+          echo "PASS: wheel found at correct path ($count result(s))"
+
+      - name: Verify sdist exists in pypi repo
+        if: needs.deploy.result == 'success'
+        run: |
+          result=$(jf rt search "test-pypi-dev-local/aerospike-hello/1.0.0/aerospike-hello-1.0.0.tar.gz" --project=test)
+          echo "Search result: $result"
+          count=$(echo "$result" | jq 'length')
+          if [[ "$count" -lt 1 ]]; then
+            echo "FAIL: sdist not found at aerospike-hello/1.0.0/"
+            exit 1
+          fi
+          echo "PASS: sdist found at correct path ($count result(s))"
+
+      - name: Verify pypi .asc companions exist
+        if: needs.deploy.result == 'success'
+        run: |
+          result=$(jf rt search "test-pypi-dev-local/aerospike-hello/1.0.0/aerospike_hello-1.0.0-py3-none-any.whl.asc" --project=test)
+          count=$(echo "$result" | jq 'length')
+          [[ "$count" -ge 1 ]] || { echo "FAIL: wheel .asc not found"; exit 1; }
+          echo "PASS: wheel .asc companion found"
+
+      - name: Verify pypi target-props
+        if: needs.deploy.result == 'success'
+        run: |
+          result=$(jf rt search "test-pypi-dev-local/aerospike-hello/1.0.0/aerospike_hello-1.0.0-py3-none-any.whl" --project=test --include="property")
+          echo "Search result with props: $result"
+
+          echo "$result" | jq -e '.[0].props.version | index("v1.0.0-inttest")' || {
+            echo "FAIL: version property not set correctly"
+            exit 1
+          }
+          echo "PASS: version property correct"
+
+          echo "$result" | jq -e '.[0].props.package_name | index("aerospike-hello")' || {
+            echo "FAIL: package_name property not set correctly"
+            exit 1
+          }
+          echo "PASS: package_name property correct"
+
+      - name: Verify non-sdist .tar.gz is NOT in pypi repo
+        if: needs.deploy.result == 'success'
+        run: |
+          result=$(jf rt search "test-pypi-dev-local/**/test.tar.gz" --project=test)
+          count=$(echo "$result" | jq 'length')
+          if [[ "$count" -gt 0 ]]; then
+            echo "FAIL: non-sdist .tar.gz was incorrectly routed to pypi repo"
+            echo "$result"
+            exit 1
+          fi
+          echo "PASS: non-sdist .tar.gz correctly excluded from pypi repo"
+
       # --- build-info verification ---
 
       - name: Verify build-info was published
@@ -222,6 +286,7 @@ jobs:
           jf rt delete "test-rpm-dev-local/**/*" --project=test --quiet || true
           jf rt delete "test-maven-dev-local/**/*" --project=test --quiet || true
           jf rt delete "test-nuget-dev-local/**/*" --project=test --quiet || true
+          jf rt delete "test-pypi-dev-local/**/*" --project=test --quiet || true
           echo "Done"
 
       - name: Cleanup build-info

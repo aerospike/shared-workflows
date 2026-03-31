@@ -82,6 +82,41 @@ cd "$BUILD_ARTIFACTS_DIR" && tar -czf "generic-archive.tgz" "temp-generic-tgz-co
 rm -f "$BUILD_ARTIFACTS_DIR/temp-generic-tgz-content.txt"
 echo "  Created generic-archive.tgz (non-npm tarball)"
 
+# Create a valid Python wheel (.whl) file
+# Wheel is a ZIP with a .dist-info/METADATA file
+mkdir -p "$BUILD_ARTIFACTS_DIR/temp-whl/aerospike_hello-1.0.0.dist-info"
+cat >"$BUILD_ARTIFACTS_DIR/temp-whl/aerospike_hello-1.0.0.dist-info/METADATA" <<'METADATA'
+Metadata-Version: 2.1
+Name: aerospike-hello
+Version: 1.0.0
+Summary: Test Python package for shared-workflows CI/CD
+METADATA
+cat >"$BUILD_ARTIFACTS_DIR/temp-whl/aerospike_hello-1.0.0.dist-info/WHEEL" <<'WHEEL'
+Wheel-Version: 1.0
+Generator: test
+Root-Is-Purelib: true
+Tag: py3-none-any
+WHEEL
+mkdir -p "$BUILD_ARTIFACTS_DIR/temp-whl/aerospike_hello"
+echo 'print("Hello from aerospike-hello!")' >"$BUILD_ARTIFACTS_DIR/temp-whl/aerospike_hello/__init__.py"
+cd "$BUILD_ARTIFACTS_DIR/temp-whl" && zip -q -r "../aerospike_hello-1.0.0-py3-none-any.whl" . && cd - >/dev/null
+rm -rf "$BUILD_ARTIFACTS_DIR/temp-whl"
+echo "  Created aerospike_hello-1.0.0-py3-none-any.whl (Python wheel)"
+
+# Create a valid Python sdist (.tar.gz) with PKG-INFO
+mkdir -p "$BUILD_ARTIFACTS_DIR/temp-sdist/aerospike-hello-1.0.0"
+cat >"$BUILD_ARTIFACTS_DIR/temp-sdist/aerospike-hello-1.0.0/PKG-INFO" <<'PKGINFO'
+Metadata-Version: 2.1
+Name: aerospike-hello
+Version: 1.0.0
+Summary: Test Python package for shared-workflows CI/CD
+PKGINFO
+mkdir -p "$BUILD_ARTIFACTS_DIR/temp-sdist/aerospike-hello-1.0.0/src/aerospike_hello"
+echo 'print("Hello!")' >"$BUILD_ARTIFACTS_DIR/temp-sdist/aerospike-hello-1.0.0/src/aerospike_hello/__init__.py"
+cd "$BUILD_ARTIFACTS_DIR/temp-sdist" && tar -czf "../aerospike-hello-1.0.0.tar.gz" "aerospike-hello-1.0.0/" && cd - >/dev/null
+rm -rf "$BUILD_ARTIFACTS_DIR/temp-sdist"
+echo "  Created aerospike-hello-1.0.0.tar.gz (Python sdist)"
+
 # Create some additional test files with valid formats
 # Create a valid JAR file (JAR is a ZIP with META-INF/MANIFEST.MF)
 mkdir -p "$BUILD_ARTIFACTS_DIR/temp-jar/META-INF"
@@ -133,6 +168,8 @@ echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/nested/dir/test-debian12.deb.as
 echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/nested/dir/nested.rpm.asc"
 echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/aerospike-test-package-1.0.0.tgz.asc"
 echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/aerospike-6.0.0.tgz.asc"
+echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/aerospike_hello-1.0.0-py3-none-any.whl.asc"
+echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/aerospike-hello-1.0.0.tar.gz.asc"
 
 # Create unsigned-artifacts/ prefix to simulate sign stage output
 # The sign stage uses cp --parents which creates: signed-artifacts/unsigned-artifacts/...

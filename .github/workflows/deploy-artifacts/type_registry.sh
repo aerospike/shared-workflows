@@ -24,6 +24,7 @@ declare -A TYPE_EXTENSIONS=(
     [nupkg]="*.nupkg"
     [snupkg]="*.snupkg"
     [npm]="*.tgz"
+    [pypi]="*.whl"
 )
 
 # JFrog repository suffix per type
@@ -34,6 +35,7 @@ declare -A TYPE_REPO=(
     [nupkg]="nuget-dev-local"
     [snupkg]="nuget-dev-local"
     [npm]="npm-dev-local"
+    [pypi]="pypi-dev-local"
     [generic]="generic-dev-local"
 )
 
@@ -49,6 +51,7 @@ declare -A TYPE_COMPANIONS=(
     [nupkg]=".asc"
     [snupkg]=".asc"
     [npm]=".asc"
+    [pypi]=".asc"
     [generic]=".asc"
 )
 
@@ -60,11 +63,12 @@ declare -A TYPE_STRUCT_DIR=(
     [nupkg]="nupkg"
     [snupkg]="nupkg"
     [npm]="npm"
+    [pypi]="pypi"
     [generic]="generic"
 )
 
 # Upload order matters: jar before generic (jar can move files to generic)
-UPLOAD_ORDER=(rpm deb jar nupkg npm generic)
+UPLOAD_ORDER=(rpm deb jar nupkg npm pypi generic)
 
 # --- helpers ---
 
@@ -75,8 +79,10 @@ get_known_extensions() {
     for ext_pattern in "${TYPE_EXTENSIONS[@]}"; do
         exts+=("$ext_pattern")
     done
-    # Companion and build file extensions excluded from generic
-    exts+=("*.asc" "*.pom" "*.csproj")
+    # Companion, build file, and content-detected extensions excluded from generic.
+    # *.tar.gz is here because pypi sdist detection handles routing .tar.gz files
+    # (either to pypi or to generic explicitly), so the generic catch-all must skip them.
+    exts+=("*.asc" "*.pom" "*.csproj" "*.tar.gz")
     printf '%s\n' "${exts[@]}"
 }
 
@@ -151,6 +157,16 @@ get_npm_props() {
     local pkgname="${metadata[0]}"
     echo "  Package: $pkgname" >&2
     echo "$(get_base_props);package_name=$pkgname"
+}
+
+get_pypi_props() {
+    local file="$1"
+    local -a metadata
+    read -r -a metadata < <(get_pypi_metadata "$file")
+    local pkgname="${metadata[0]}"
+    local pkgversion="${metadata[1]}"
+    echo "  Package: $pkgname, Version: $pkgversion" >&2
+    echo "$(get_base_props);package_name=$pkgname;pypi.name=$pkgname;pypi.version=$pkgversion"
 }
 
 get_generic_props() {

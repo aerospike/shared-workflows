@@ -167,9 +167,31 @@ jobs:
       java-version: "17"
     secrets: inherit
 
+  build-python:
+    needs: extract-version
+    uses: ./.github/workflows/reusable_execute-build.yaml
+    with:
+      gh-workflows-ref: ${{ github.sha }}
+      jf-project: test
+      jf-build-name: test-build
+      jf-build-id: ${{ github.run_id }}-${{ github.run_attempt }}-buildinfo-python-x86_64
+      gh-source-path: repo-source
+      working-directory: repo-source/.github/workflows/execute-build/test_apps/PythonHelloWorld
+      build-script: |
+        python -m build
+        mkdir -p output
+        mv dist/*.whl dist/*.tar.gz output/
+      gh-artifact-directory: output
+      gh-artifact-name: build-artifacts-python-x86_64
+      oidc-provider-name: gh-dev-test
+      oidc-audience: aerospike/testing
+      setup-python: true
+      python-version: "3.12"
+    secrets: inherit
+
   # Merge all per-matrix artifacts into a single github artifact for downstream jobs.
   collect:
-    needs: [build, build-npm, build-java]
+    needs: [build, build-npm, build-java, build-python]
     runs-on: ubuntu-22.04
     steps:
       - name: Harden the runner (Audit all outbound calls)

@@ -79,6 +79,16 @@ jobs:
             "build-script":"mvn package -q && mkdir -p output && cp target/*.jar output/ && cp pom.xml output/hello-world-1.0.0.pom",
             "setup-java":true,
             "java-version":"17"
+          },
+          {
+            "runs-on":"ubuntu-22.04",
+            "distro":"python",
+            "arch":"x86_64",
+            "working-directory":"repo-source/.github/workflows/execute-build/test_apps/PythonHelloWorld",
+            "gh-artifact-directory":"output",
+            "build-script":"python -m build && mkdir -p output && mv dist/*.whl dist/*.tar.gz output/",
+            "setup-python":true,
+            "python-version":"3.12"
           }
         ]}
       build-script: |

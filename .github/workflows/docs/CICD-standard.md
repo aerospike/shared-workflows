@@ -15,7 +15,7 @@ sequenceDiagram
   participant JF as JFrog Artifactory
   participant RB as Create Release Bundle
 
-  Note over WF,RB: Artifact Pipeline (DEB/RPM/Generic)
+  Note over WF,RB: Artifact Pipeline (DEB/RPM/npm/JAR/Generic)
   WF->>CICD: uses reusable_artifacts-cicd
   CICD-->>GA: build artifacts (internal handoff)
   CICD-->>JF: sign & deploy with build-info
