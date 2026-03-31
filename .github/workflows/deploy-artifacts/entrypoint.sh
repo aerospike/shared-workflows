@@ -171,6 +171,43 @@ structure_standalone_poms() {
     done < <(find build-artifacts -name "*.pom" -print0)
 }
 
+structure_content_detected_files() {
+    # Build the find pattern from CONTENT_DETECT_EXTENSIONS
+    local -a find_args=()
+    for i in "${!CONTENT_DETECT_EXTENSIONS[@]}"; do
+        ((i > 0)) && find_args+=(-o)
+        find_args+=(-name "${CONTENT_DETECT_EXTENSIONS[$i]}")
+    done
+
+    while IFS= read -r -d '' file; do
+        [[ -f $file ]] || continue
+        local matched=false
+        for type in "${CONTENT_DETECT_ORDER[@]}"; do
+            local detector="${TYPE_CONTENT_DETECT[$type]}"
+            if "$detector" "$file"; then
+                echo "Processing ${type^^}: $file" >&2
+                local dest="./structured_build_artifacts/${TYPE_STRUCT_DIR[$type]}"
+                local processor="process_${type}"
+                local target_path
+                target_path=$("$processor" "$file" "$dest")
+                if [[ -n $target_path ]]; then
+                    gather_companions "$file" "$(dirname "$target_path")" "$type"
+                fi
+                matched=true
+                break
+            fi
+        done
+        if [[ $matched == false ]]; then
+            echo "Processing generic tarball: $file" >&2
+            local target_path
+            target_path=$(process_generic "$file" "./structured_build_artifacts/generic")
+            if [[ -n $target_path ]]; then
+                gather_companions "$file" "$(dirname "$target_path")" "generic"
+            fi
+        fi
+    done < <(find build-artifacts \( "${find_args[@]}" \) -print0)
+}
+
 structure_generic_files() {
     local -a exclude_args=()
     while IFS= read -r ext; do
@@ -200,9 +237,8 @@ structure_build_artifacts() {
         mkdir -p "structured_build_artifacts/$dir"
     done
 
+    # Extension-based types: unambiguous file extension maps directly to type
     for type in "${!TYPE_EXTENSIONS[@]}"; do
-        # npm requires content-based detection (handled separately below)
-        [[ $type == "npm" ]] && continue
         local dest="./structured_build_artifacts/${TYPE_STRUCT_DIR[$type]}"
         local label="${type^^}"
         local processor="process_${type}"
@@ -211,34 +247,8 @@ structure_build_artifacts() {
         discover_and_process "${TYPE_EXTENSIONS[$type]}" "$label" "$processor" "$dest" "$type"
     done
 
-    # Content-based detection for gzipped tarballs (.tgz and .tar.gz).
-    # Both extensions are the same format. Each file is tested against type
-    # detectors in priority order. Unrecognized tarballs route to generic.
-    while IFS= read -r -d '' file; do
-        [[ -f $file ]] || continue
-        if is_npm_package "$file"; then
-            echo "Processing NPM: $file" >&2
-            local target_path
-            target_path=$(process_npm "$file" "./structured_build_artifacts/npm")
-            if [[ -n $target_path ]]; then
-                gather_companions "$file" "$(dirname "$target_path")" "npm"
-            fi
-        elif is_pypi_sdist "$file"; then
-            echo "Processing PYPI sdist: $file" >&2
-            local target_path
-            target_path=$(process_pypi "$file" "./structured_build_artifacts/pypi")
-            if [[ -n $target_path ]]; then
-                gather_companions "$file" "$(dirname "$target_path")" "pypi"
-            fi
-        else
-            echo "Processing generic tarball: $file" >&2
-            local target_path
-            target_path=$(process_generic "$file" "./structured_build_artifacts/generic")
-            if [[ -n $target_path ]]; then
-                gather_companions "$file" "$(dirname "$target_path")" "generic"
-            fi
-        fi
-    done < <(find build-artifacts \( -name "*.tgz" -o -name "*.tar.gz" \) -print0)
+    # Content-detected types: ambiguous extensions need inspection to determine type
+    structure_content_detected_files
 
     structure_standalone_poms
     structure_generic_files
