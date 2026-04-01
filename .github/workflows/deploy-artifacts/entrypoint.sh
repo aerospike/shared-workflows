@@ -165,6 +165,7 @@ structure_standalone_poms() {
         target="./structured_build_artifacts/jar/${group_path}/${artifact_id}/${version}"
         mkdir -p "$target"
         cp "$pom" "$target/"
+        manifest_add "$target/$(basename "$pom")" "jar"
         if [[ -f "$pom.asc" ]]; then
             cp "$pom.asc" "$target/"
         fi
@@ -192,6 +193,7 @@ structure_content_detected_files() {
                 target_path=$("$processor" "$file" "$dest")
                 if [[ -n $target_path ]]; then
                     gather_companions "$file" "$(dirname "$target_path")" "$type"
+                    manifest_add "$target_path" "$type"
                 fi
                 matched=true
                 break
@@ -203,6 +205,7 @@ structure_content_detected_files() {
             target_path=$(process_generic "$file" "./structured_build_artifacts/generic")
             if [[ -n $target_path ]]; then
                 gather_companions "$file" "$(dirname "$target_path")" "generic"
+                manifest_add "$target_path" "generic"
             fi
         fi
     done < <(find build-artifacts \( "${find_args[@]}" \) -print0)
@@ -225,12 +228,14 @@ structure_generic_files() {
 
         if [[ -n $target_path ]]; then
             gather_companions "$generic" "$(dirname "$target_path")" "generic"
+            manifest_add "$target_path" "generic"
         fi
     done < <(find build-artifacts \( "${exclude_args[@]}" \) -type f -print0)
 }
 
 structure_build_artifacts() {
     echo "Structuring build artifacts..." >&2
+    init_manifest
 
     # Create all type directories from registry
     for dir in "${TYPE_STRUCT_DIR[@]}"; do
@@ -260,11 +265,13 @@ structure_build_artifacts() {
 upload_jar_packages() {
     echo "Uploading JAR/POM files to JFrog..." >&2
 
-    # Find all JAR and POM files, then process unique base names
+    # Process unique base names from manifest
     declare -A processed_artifacts
 
-    while IFS= read -r -d '' artifact; do
-        [[ -f $artifact ]] || continue
+    # shellcheck disable=SC2329  # invoked indirectly via manifest_for_type
+    _upload_jar_entry() {
+        local artifact="$1"
+        [[ -f $artifact ]] || return 0
 
         # Get the directory and base name
         local artifact_dir artifact_name base_name
@@ -276,7 +283,7 @@ upload_jar_packages() {
         # Skip if we've already processed this base artifact
         local artifact_key="$artifact_dir/$base_name"
         if [[ -n ${processed_artifacts[$artifact_key]-} ]]; then
-            continue
+            return 0
         fi
         processed_artifacts[$artifact_key]=1
 
@@ -307,7 +314,7 @@ upload_jar_packages() {
                     mv "$artifact_file" "../generic/"
                 fi
             done
-            continue
+            return 0
         fi
 
         echo "  Package: $pkgname, Version: $version, Group ID: $group_id" >&2
@@ -323,15 +330,18 @@ upload_jar_packages() {
                     --target-props "$props"
             fi
         done
-    done < <(find . \( -name "*.jar" -o -name "*.pom" \) -print0)
+    }
+
+    manifest_for_type "jar" _upload_jar_entry
 }
 
 upload_nupkg_packages() {
     echo "Uploading NuGet packages to JFrog..." >&2
 
-    # loop for both .nupkg and .snupkg
-    while IFS= read -r -d '' pkg; do
-        [[ -f $pkg ]] || continue
+    # shellcheck disable=SC2329  # invoked indirectly via manifest_for_type
+    _upload_nupkg_entry() {
+        local pkg="$1"
+        [[ -f $pkg ]] || return 0
 
         local -a metadata
         read -r -a metadata < <(get_nupkg_metadata "$pkg")
@@ -364,14 +374,19 @@ upload_nupkg_packages() {
         local pkg_type="nupkg"
         [[ $pkg == *.snupkg ]] && pkg_type="snupkg"
         upload_companions "$pkg" "$PROJECT-nuget-dev-local" "$pkg_type"
-    done < <(find . \( -name "*.nupkg" -o -name "*.snupkg" \) -print0)
+    }
+
+    manifest_for_type "nupkg" _upload_nupkg_entry
+    manifest_for_type "snupkg" _upload_nupkg_entry
 }
 
 upload_npm_packages() {
     echo "Uploading npm packages to JFrog..." >&2
 
-    while IFS= read -r -d '' pkg; do
-        [[ -f $pkg ]] || continue
+    # shellcheck disable=SC2329  # invoked indirectly via manifest_for_type
+    _upload_npm_entry() {
+        local pkg="$1"
+        [[ -f $pkg ]] || return 0
 
         local -a metadata
         read -r -a metadata < <(get_npm_metadata "$pkg")
@@ -382,7 +397,7 @@ upload_npm_packages() {
 
         if [[ -z $pkgname ]] || [[ -z $pkgversion ]]; then
             echo "Warning: Failed to extract metadata from $pkg, skipping" >&2
-            continue
+            return 0
         fi
 
         local props
@@ -412,14 +427,18 @@ upload_npm_packages() {
                     --project="$PROJECT"
             fi
         done
-    done < <(find . \( -name "*.tgz" -o -name "*.tar.gz" \) -print0)
+    }
+
+    manifest_for_type "npm" _upload_npm_entry
 }
 
 upload_pypi_packages() {
     echo "Uploading PyPI packages to JFrog..." >&2
 
-    while IFS= read -r -d '' pkg; do
-        [[ -f $pkg ]] || continue
+    # shellcheck disable=SC2329  # invoked indirectly via manifest_for_type
+    _upload_pypi_entry() {
+        local pkg="$1"
+        [[ -f $pkg ]] || return 0
 
         local -a metadata
         read -r -a metadata < <(get_pypi_metadata "$pkg")
@@ -430,7 +449,7 @@ upload_pypi_packages() {
 
         if [[ -z $pkgname ]] || [[ -z $pkgversion ]]; then
             echo "Warning: Failed to extract metadata from $pkg, skipping" >&2
-            continue
+            return 0
         fi
 
         local normalized_name
@@ -463,17 +482,18 @@ upload_pypi_packages() {
                     --project="$PROJECT"
             fi
         done
-    done < <(find . \( -name "*.whl" -o -name "*.tar.gz" -o -name "*.tgz" \) -print0)
+    }
+
+    manifest_for_type "pypi" _upload_pypi_entry
 }
 
 upload_generic_files() {
     echo "Uploading generic files..." >&2
 
-    # Only exclude companion/build file extensions.
-    local -a exclude_args=(-not -name "*.asc" -not -name "*.pom" -not -name "*.csproj")
-
-    while IFS= read -r -d '' file; do
-        [[ -f $file ]] || continue
+    # shellcheck disable=SC2329  # invoked indirectly via manifest_for_type
+    _upload_generic_entry() {
+        local file="$1"
+        [[ -f $file ]] || return 0
         echo "Uploading generic file: $file" >&2
 
         local props
@@ -483,7 +503,9 @@ upload_generic_files() {
             --target-props "$props"
 
         upload_companions "$file" "$PROJECT-generic-dev-local" "generic"
-    done < <(find . \( "${exclude_args[@]}" \) -type f -print0)
+    }
+
+    manifest_for_type "generic" _upload_generic_entry
 }
 
 # Collects build-info metadata by querying Artifactory for JSON files.

@@ -78,6 +78,16 @@ cd "$BUILD_ARTIFACTS_DIR/temp-npm-unscoped" && tar -czf "../aerospike-6.0.0.tgz"
 rm -rf "$BUILD_ARTIFACTS_DIR/temp-npm-unscoped"
 echo "  Created aerospike-6.0.0.tgz (unscoped npm package)"
 
+# Create a valid npm package with .tar.gz extension (less common but valid)
+mkdir -p "$BUILD_ARTIFACTS_DIR/temp-npm-targz/package"
+cat >"$BUILD_ARTIFACTS_DIR/temp-npm-targz/package/package.json" <<'PKGJSON'
+{"name":"@aerospike/targz-package","version":"3.0.0","description":"npm package with .tar.gz extension"}
+PKGJSON
+echo "module.exports = {};" >"$BUILD_ARTIFACTS_DIR/temp-npm-targz/package/index.js"
+cd "$BUILD_ARTIFACTS_DIR/temp-npm-targz" && tar -czf "../aerospike-targz-package-3.0.0.tar.gz" package/ && cd - >/dev/null
+rm -rf "$BUILD_ARTIFACTS_DIR/temp-npm-targz"
+echo "  Created aerospike-targz-package-3.0.0.tar.gz (npm package with .tar.gz extension)"
+
 # Create a non-npm .tgz (should route to generic, not npm)
 echo "not an npm package" >"$BUILD_ARTIFACTS_DIR/temp-generic-tgz-content.txt"
 cd "$BUILD_ARTIFACTS_DIR" && tar -czf "generic-archive.tgz" "temp-generic-tgz-content.txt" && cd - >/dev/null
@@ -118,6 +128,20 @@ echo 'print("Hello!")' >"$BUILD_ARTIFACTS_DIR/temp-sdist/aerospike-hello-1.0.0/s
 cd "$BUILD_ARTIFACTS_DIR/temp-sdist" && tar -czf "../aerospike-hello-1.0.0.tar.gz" "aerospike-hello-1.0.0/" && cd - >/dev/null
 rm -rf "$BUILD_ARTIFACTS_DIR/temp-sdist"
 echo "  Created aerospike-hello-1.0.0.tar.gz (Python sdist)"
+
+# Create a valid Python sdist with .tgz extension (less common but valid)
+mkdir -p "$BUILD_ARTIFACTS_DIR/temp-sdist-tgz/aerospike-utils-2.0.0"
+cat >"$BUILD_ARTIFACTS_DIR/temp-sdist-tgz/aerospike-utils-2.0.0/PKG-INFO" <<'PKGINFO'
+Metadata-Version: 2.1
+Name: aerospike-utils
+Version: 2.0.0
+Summary: Test Python package with .tgz extension
+PKGINFO
+mkdir -p "$BUILD_ARTIFACTS_DIR/temp-sdist-tgz/aerospike-utils-2.0.0/src/aerospike_utils"
+echo 'print("Hello!")' >"$BUILD_ARTIFACTS_DIR/temp-sdist-tgz/aerospike-utils-2.0.0/src/aerospike_utils/__init__.py"
+cd "$BUILD_ARTIFACTS_DIR/temp-sdist-tgz" && tar -czf "../aerospike-utils-2.0.0.tgz" "aerospike-utils-2.0.0/" && cd - >/dev/null
+rm -rf "$BUILD_ARTIFACTS_DIR/temp-sdist-tgz"
+echo "  Created aerospike-utils-2.0.0.tgz (Python sdist with .tgz extension)"
 
 # Create some additional test files with valid formats
 # Create a valid JAR file (JAR is a ZIP with META-INF/MANIFEST.MF)
@@ -172,6 +196,8 @@ echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/aerospike-test-package-1.0.0.tg
 echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/aerospike-6.0.0.tgz.asc"
 echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/aerospike_hello-1.0.0-py3-none-any.whl.asc"
 echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/aerospike-hello-1.0.0.tar.gz.asc"
+echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/aerospike-utils-2.0.0.tgz.asc"
+echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/aerospike-targz-package-3.0.0.tar.gz.asc"
 
 # Create unsigned-artifacts/ prefix to simulate sign stage output
 # The sign stage uses cp --parents which creates: signed-artifacts/unsigned-artifacts/...

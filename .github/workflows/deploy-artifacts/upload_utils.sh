@@ -6,6 +6,41 @@
 #   run() function must be defined
 #   TYPE_EXTENSIONS, TYPE_COMPANIONS, TYPE_REPO, TYPE_STRUCT_DIR arrays from type_registry.sh
 
+# --- Manifest helpers ---
+# The manifest tracks every file placed during structuring so upload functions
+# can iterate it instead of re-discovering files with find.
+# Format: TSV with columns: relative-path, type
+
+MANIFEST_FILE=""
+
+init_manifest() {
+    MANIFEST_FILE="$(pwd)/structured_build_artifacts/.manifest"
+    : >"$MANIFEST_FILE"
+}
+
+# Add a file to the manifest. Paths are stored as-is (as returned by process functions).
+manifest_add() {
+    local path="$1"
+    local type="$2"
+    printf '%s\t%s\n' "$path" "$type" >>"$MANIFEST_FILE"
+}
+
+# Iterate manifest entries for a given type, calling a callback for each file.
+# Stored paths like ./structured_build_artifacts/TYPE_DIR/... are converted to
+# ./... relative to the type's structured directory (where upload functions run).
+# Usage: manifest_for_type <type> <callback>
+manifest_for_type() {
+    local target_type="$1"
+    local callback="$2"
+    local struct_dir="${TYPE_STRUCT_DIR[$target_type]:-$target_type}"
+    local prefix="./structured_build_artifacts/${struct_dir}/"
+    while IFS=$'\t' read -r path type; do
+        if [[ $type == "$target_type" ]]; then
+            "$callback" "./${path#"$prefix"}"
+        fi
+    done <"$MANIFEST_FILE"
+}
+
 # --- Upload helpers ---
 
 # Wraps `jf rt upload` with the standard flags that every upload needs.
@@ -83,6 +118,7 @@ discover_and_process() {
         # Copy companion files to the same directory as the primary
         if [[ -n $type && -n $target_path ]]; then
             gather_companions "$file" "$(dirname "$target_path")" "$type"
+            manifest_add "$target_path" "$type"
         fi
     done < <(find build-artifacts -name "$pattern" -print0)
 }
@@ -110,8 +146,10 @@ upload_type() {
 
     echo "Uploading ${type^^} packages to JFrog..." >&2
 
-    while IFS= read -r -d '' file; do
-        [[ -f $file ]] || continue
+    # shellcheck disable=SC2329  # invoked indirectly via manifest_for_type
+    _upload_single_file() {
+        local file="$1"
+        [[ -f $file ]] || return 0
 
         local -a extra_flags=()
 
@@ -131,5 +169,7 @@ upload_type() {
 
         jf_upload "$file" "$repo" "${extra_flags[@]}"
         upload_companions "$file" "$repo" "$type"
-    done < <(find . -name "${TYPE_EXTENSIONS[$type]}" -print0)
+    }
+
+    manifest_for_type "$type" _upload_single_file
 }
