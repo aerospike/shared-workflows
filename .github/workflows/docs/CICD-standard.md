@@ -8,25 +8,17 @@ These orchestrated workflows handle the full lifecycle with good defaults: you p
 
 ```mermaid
 sequenceDiagram
-  participant WF as Caller Workflow
-  participant CICD as Artifacts CICD
-  participant DBD as Docker Build & Deploy
-  participant GA as GitHub Artifacts
-  participant JF as JFrog Artifactory
-  participant RB as Create Release Bundle
-
-  Note over WF,RB: Artifact Pipeline (DEB/RPM/npm/JAR/Generic)
-  WF->>CICD: uses reusable_artifacts-cicd
-  CICD-->>GA: build artifacts (internal handoff)
-  CICD-->>JF: sign & deploy with build-info
-
-  Note over WF,RB: Docker Pipeline (Containers)
-  WF->>DBD: uses reusable_docker-build-deploy
-  DBD-->>JF: build, attest & publish image + build-info
-
-  Note over WF,RB: Release Bundle (Both Pipelines)
-  WF->>RB: uses reusable_create-release-bundle
-  RB-->>JF: create bundle from artifacts and/or docker builds
+    participant YW as Your Workflow
+    participant CICD as Artifacts CI/CD
+    participant DBD as Docker Build & Deploy
+    participant RB as Release Bundle
+    participant JF as JFrog
+    YW->>CICD: build, sign, deploy
+    CICD->>JF: artifacts
+    YW->>DBD: build, push
+    DBD->>JF: images
+    YW->>RB: bundle builds
+    RB->>JF: release bundle
 ```
 
 The architecture follows an ecosystem-specific build & sign pattern, where artifacts are built and secured according to their type (DEB/RPM with GPG, Docker with attestations), then unified at the release bundle step.
@@ -199,7 +191,6 @@ matrix-json: >-
 ## Full examples
 
 - [example_artifacts-cicd.yaml](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/example_artifacts-cicd.yaml): drop-in orchestrated pipeline with multi-ecosystem matrix (C, .NET, npm, Java)
-- [example_reusable-integration.yaml](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/example_reusable-integration.yaml): combines artifact and Docker pipelines with a unified release bundle
 
 ---
 

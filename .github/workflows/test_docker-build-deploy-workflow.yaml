@@ -16,6 +16,10 @@ permissions:
   attestations: write
   id-token: write
 
+concurrency:
+  group: jfrog-test-deploy
+  cancel-in-progress: false
+
 jobs:
   extract-version:
     runs-on: ubuntu-22.04

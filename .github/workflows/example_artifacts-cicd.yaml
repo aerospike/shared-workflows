@@ -6,14 +6,16 @@ on:
         description: Version override (leave empty for auto-detection)
         required: false
         default: ""
-  push:
-    branches: [main]
 
 permissions:
   id-token: write
   contents: read
   packages: write
   attestations: write
+
+concurrency:
+  group: jfrog-test-deploy
+  cancel-in-progress: false
 
 # This workflow demonstrates a drop-in artifacts pipeline using reusable_artifacts-cicd.yaml.
 

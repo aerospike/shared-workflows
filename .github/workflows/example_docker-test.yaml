@@ -12,6 +12,10 @@ on:
         required: false
         default: ""
 
+concurrency:
+  group: jfrog-test-deploy
+  cancel-in-progress: false
+
 jobs:
   extract-version:
     runs-on: ubuntu-22.04

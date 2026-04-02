@@ -13,6 +13,10 @@ permissions:
   id-token: write
   contents: read
 
+concurrency:
+  group: jfrog-test-deploy
+  cancel-in-progress: false
+
 env:
   JF_PROJECT: test
   BUILD_NAME: integration-test-deploy-${{ github.run_id }}
