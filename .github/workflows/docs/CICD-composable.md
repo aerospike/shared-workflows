@@ -39,7 +39,7 @@ sequenceDiagram
   participant JF as JFrog Artifactory
   participant SW4 as Create Release Bundle
 
-  Note over WF,SW4: Artifact Pipeline (DEB/RPM/npm/JAR/PyPI/Generic)
+  Note over WF,JF: Artifact Pipeline (DEB/RPM/npm/JAR/PyPI/Generic)
   WF->>SW1: uses reusable_execute-build
   SW1-->>GA: upload artifacts
   WF->>SW2: uses reusable_sign-artifacts
