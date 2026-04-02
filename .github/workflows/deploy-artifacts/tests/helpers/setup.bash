@@ -22,11 +22,11 @@ setup_test_artifacts() {
         cd "$DEPLOY_ARTIFACTS_DIR/test-artifacts" || exit 1
 
         # Verify test files exist
-        declare -a TEST_FILES=(
+        TEST_FILES=(
                 "$BUILD_ARTIFACTS_DIR/test-ubuntu22.04.deb"
                 "$BUILD_ARTIFACTS_DIR/test-ubuntu22.04.deb.asc"
-                "$BUILD_ARTIFACTS_DIR/test-1.0-2.noarch.rpm"
-                "$BUILD_ARTIFACTS_DIR/test-1.0-2.noarch.rpm.asc"
+                "$BUILD_ARTIFACTS_DIR/test-1.0-2.el9.noarch.rpm"
+                "$BUILD_ARTIFACTS_DIR/test-1.0-2.el9.noarch.rpm.asc"
                 "$BUILD_ARTIFACTS_DIR/test-all-arch_1.0.0-1ubuntu22.04_all.deb"
                 "$BUILD_ARTIFACTS_DIR/test-all-arch_1.0.0-1ubuntu22.04_all.deb.asc"
                 "$BUILD_ARTIFACTS_DIR/test.jar"
@@ -36,8 +36,8 @@ setup_test_artifacts() {
                 "$BUILD_ARTIFACTS_DIR/test.tar.gz"
                 "$BUILD_ARTIFACTS_DIR/nested/dir/test-debian12.deb"
                 "$BUILD_ARTIFACTS_DIR/nested/dir/test-debian12.deb.asc"
-                "$BUILD_ARTIFACTS_DIR/nested/dir/nested.rpm"
-                "$BUILD_ARTIFACTS_DIR/nested/dir/nested.rpm.asc"
+                "$BUILD_ARTIFACTS_DIR/nested/dir/test-1.0-2.el9.noarch.rpm"
+                "$BUILD_ARTIFACTS_DIR/nested/dir/test-1.0-2.el9.noarch.rpm.asc"
                 "$BUILD_ARTIFACTS_DIR/Aerospike.Client.8.0.2.nupkg"
                 "$BUILD_ARTIFACTS_DIR/Aerospike.Client.8.0.2.nupkg.asc"
                 "$BUILD_ARTIFACTS_DIR/nuget/Aerospike.HelloWorld.1.0.0.nupkg"
@@ -51,6 +51,10 @@ setup_test_artifacts() {
                 "$BUILD_ARTIFACTS_DIR/aerospike-6.0.0.tgz"
                 "$BUILD_ARTIFACTS_DIR/aerospike-6.0.0.tgz.asc"
                 "$BUILD_ARTIFACTS_DIR/generic-archive.tgz"
+                "$BUILD_ARTIFACTS_DIR/aerospike_hello-1.0.0-py3-none-any.whl"
+                "$BUILD_ARTIFACTS_DIR/aerospike_hello-1.0.0-py3-none-any.whl.asc"
+                "$BUILD_ARTIFACTS_DIR/aerospike-hello-1.0.0.tar.gz"
+                "$BUILD_ARTIFACTS_DIR/aerospike-hello-1.0.0.tar.gz.asc"
         )
 
         for file in "${TEST_FILES[@]}"; do

@@ -163,10 +163,9 @@ structure_build_artifacts() {
         discover_and_process "${TYPE_EXTENSIONS[$type]}" "$label" "$processor" "$dest" "$type"
     done
 
-    # npm: content-based detection for .tgz files
-    # .tgz is ambiguous (npm pack vs generic tarball), so we inspect each file.
-    # npm packages always contain package/package.json.
-    # Non-npm .tgz files are routed to generic instead.
+    # Content-based detection for gzipped tarballs (.tgz and .tar.gz).
+    # Both extensions are the same format. Each file is tested against type
+    # detectors in priority order. Unrecognized tarballs route to generic.
     while IFS= read -r -d '' file; do
         [[ -f $file ]] || continue
         if is_npm_package "$file"; then
@@ -176,15 +175,22 @@ structure_build_artifacts() {
             if [[ -n $target_path ]]; then
                 gather_companions "$file" "$(dirname "$target_path")" "npm"
             fi
+        elif is_pypi_sdist "$file"; then
+            echo "Processing PYPI sdist: $file" >&2
+            local target_path
+            target_path=$(process_pypi "$file" "./structured_build_artifacts/pypi")
+            if [[ -n $target_path ]]; then
+                gather_companions "$file" "$(dirname "$target_path")" "pypi"
+            fi
         else
-            echo "Processing generic file (non-npm .tgz): $file" >&2
+            echo "Processing generic tarball: $file" >&2
             local target_path
             target_path=$(process_generic "$file" "./structured_build_artifacts/generic")
             if [[ -n $target_path ]]; then
                 gather_companions "$file" "$(dirname "$target_path")" "generic"
             fi
         fi
-    done < <(find build-artifacts -name "*.tgz" -print0)
+    done < <(find build-artifacts \( -name "*.tgz" -o -name "*.tar.gz" \) -print0)
 
     # Standalone POM files (unique logic: check for corresponding JAR, inline metadata)
     while IFS= read -r -d '' pom; do
@@ -391,7 +397,58 @@ upload_npm_packages() {
                     --project="$PROJECT"
             fi
         done
-    done < <(find . -name "*.tgz" -print0)
+    done < <(find . \( -name "*.tgz" -o -name "*.tar.gz" \) -print0)
+}
+
+upload_pypi_packages() {
+    echo "Uploading PyPI packages to JFrog..." >&2
+
+    while IFS= read -r -d '' pkg; do
+        [[ -f $pkg ]] || continue
+
+        local -a metadata
+        read -r -a metadata < <(get_pypi_metadata "$pkg")
+        local pkgname="${metadata[0]}"
+        local pkgversion="${metadata[1]}"
+        local pkg_filename
+        pkg_filename=$(basename "$pkg")
+
+        if [[ -z $pkgname ]] || [[ -z $pkgversion ]]; then
+            echo "Warning: Failed to extract metadata from $pkg, skipping" >&2
+            continue
+        fi
+
+        local normalized_name
+        normalized_name=$(_normalize_pypi_name "$pkgname")
+
+        local props
+        props=$(get_pypi_props "$pkg")
+
+        # JFrog PyPI layout: {normalized-name}/{version}/{filename}
+        local target_path
+        target_path="${normalized_name}/${pkgversion}/${pkg_filename}"
+
+        echo "  Uploading PyPI package: $pkg" >&2
+        echo "    Package: $pkgname (normalized: $normalized_name), Version: $pkgversion" >&2
+        echo "    Target: $target_path" >&2
+        run jf rt upload "$pkg" "$PROJECT-pypi-dev-local/${target_path}" \
+            --build-name="$BUILD_NAME" \
+            --build-number="$ARTIFACT_BUILD_NUMBER" \
+            --project="$PROJECT" \
+            --target-props "$props"
+
+        # Upload companions with explicit target path (same directory as the package)
+        local companions="${TYPE_COMPANIONS[pypi]-}"
+        for suffix in $companions; do
+            if [[ -f "$pkg$suffix" ]]; then
+                echo "  Uploading companion: $pkg$suffix" >&2
+                run jf rt upload "$pkg$suffix" "$PROJECT-pypi-dev-local/${target_path}${suffix}" \
+                    --build-name="$BUILD_NAME" \
+                    --build-number="$ARTIFACT_BUILD_NUMBER" \
+                    --project="$PROJECT"
+            fi
+        done
+    done < <(find . \( -name "*.whl" -o -name "*.tar.gz" -o -name "*.tgz" \) -print0)
 }
 
 upload_generic_files() {

@@ -1,0 +1,13 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aerospike-hello"
+version = "1.0.0"
+description = "Test Python package for shared-workflows CI/CD example"
+license = "Apache-2.0"
+requires-python = ">=3.8"
+
+[tool.setuptools.packages.find]
+where = ["src"]

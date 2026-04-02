@@ -178,3 +178,93 @@ setup() {
 @test "_validate_npm_name accepts valid scoped name" {
     _validate_npm_name "@aerospike/client"
 }
+
+# --- is_pypi_sdist ---
+
+@test "is_pypi_sdist returns true for sdist tarball" {
+    local test_dir
+    test_dir=$(mktemp -d)
+    mkdir -p "$test_dir/mypackage-1.0.0"
+    echo -e "Metadata-Version: 2.1\nName: mypackage\nVersion: 1.0.0" > "$test_dir/mypackage-1.0.0/PKG-INFO"
+    tar -czf "$test_dir/mypackage-1.0.0.tar.gz" -C "$test_dir" mypackage-1.0.0/
+    rm -rf "$test_dir/mypackage-1.0.0"
+    is_pypi_sdist "$test_dir/mypackage-1.0.0.tar.gz"
+    rm -rf "$test_dir"
+}
+
+@test "is_pypi_sdist returns false for non-sdist tarball" {
+    local test_dir
+    test_dir=$(mktemp -d)
+    echo "not a python package" > "$test_dir/data.txt"
+    tar -czf "$test_dir/plain.tar.gz" -C "$test_dir" data.txt
+    rm -f "$test_dir/data.txt"
+    run is_pypi_sdist "$test_dir/plain.tar.gz"
+    [[ $status -ne 0 ]]
+    rm -rf "$test_dir"
+}
+
+# --- get_pypi_metadata ---
+
+@test "get_pypi_metadata extracts name and version from wheel" {
+    local test_dir
+    test_dir=$(mktemp -d)
+    mkdir -p "$test_dir/temp-whl/aerospike_hello-2.0.0.dist-info"
+    echo -e "Metadata-Version: 2.1\nName: aerospike-hello\nVersion: 2.0.0" > \
+        "$test_dir/temp-whl/aerospike_hello-2.0.0.dist-info/METADATA"
+    cd "$test_dir/temp-whl" && zip -q -r "../aerospike_hello-2.0.0-py3-none-any.whl" . && cd - >/dev/null
+    rm -rf "$test_dir/temp-whl"
+    read -r -a meta < <(get_pypi_metadata "$test_dir/aerospike_hello-2.0.0-py3-none-any.whl")
+    [[ "${meta[0]}" == "aerospike-hello" ]]
+    [[ "${meta[1]}" == "2.0.0" ]]
+    rm -rf "$test_dir"
+}
+
+@test "get_pypi_metadata extracts name and version from sdist" {
+    local test_dir
+    test_dir=$(mktemp -d)
+    mkdir -p "$test_dir/aerospike-hello-3.0.0"
+    echo -e "Metadata-Version: 2.1\nName: aerospike-hello\nVersion: 3.0.0" > \
+        "$test_dir/aerospike-hello-3.0.0/PKG-INFO"
+    tar -czf "$test_dir/aerospike-hello-3.0.0.tar.gz" -C "$test_dir" aerospike-hello-3.0.0/
+    rm -rf "$test_dir/aerospike-hello-3.0.0"
+    read -r -a meta < <(get_pypi_metadata "$test_dir/aerospike-hello-3.0.0.tar.gz")
+    [[ "${meta[0]}" == "aerospike-hello" ]]
+    [[ "${meta[1]}" == "3.0.0" ]]
+    rm -rf "$test_dir"
+}
+
+# --- _validate_pypi_name ---
+
+@test "_validate_pypi_name rejects name with semicolons (property injection)" {
+    export DEPLOY_DIR
+    run bash -c 'source "$DEPLOY_DIR/package_utils.sh" && _validate_pypi_name "evil;injected=bar"'
+    [[ $status -ne 0 ]]
+}
+
+@test "_validate_pypi_name rejects name with spaces" {
+    export DEPLOY_DIR
+    run bash -c 'source "$DEPLOY_DIR/package_utils.sh" && _validate_pypi_name "has spaces"'
+    [[ $status -ne 0 ]]
+}
+
+@test "_validate_pypi_name accepts valid Python package name" {
+    _validate_pypi_name "aerospike-hello"
+}
+
+@test "_validate_pypi_name accepts name with dots and underscores" {
+    _validate_pypi_name "My_Package.Name"
+}
+
+# --- _normalize_pypi_name ---
+
+@test "_normalize_pypi_name lowercases and normalizes separators" {
+    local result
+    result=$(_normalize_pypi_name "My_Package.Name")
+    [[ "$result" == "my-package-name" ]]
+}
+
+@test "_normalize_pypi_name handles already normalized names" {
+    local result
+    result=$(_normalize_pypi_name "aerospike-hello")
+    [[ "$result" == "aerospike-hello" ]]
+}

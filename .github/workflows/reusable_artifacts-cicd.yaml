@@ -166,6 +166,17 @@ on:
         required: false
         type: string
         default: maven
+      # Python setup (passed through to execute-build)
+      setup-python:
+        description: Whether to set up Python for builds
+        required: false
+        type: boolean
+        default: false
+      python-version:
+        description: Python version to set up (e.g., "3.11", "3.12")
+        required: false
+        type: string
+        default: "3.12"
       working-directory:
         description: |
           Working directory for build script execution. Defaults to gh-source-path (so builds run inside the checked out source repo).
@@ -284,6 +295,8 @@ jobs:
       java-version: ${{ matrix['java-version'] || inputs.java-version }}
       java-distribution: ${{ matrix['java-distribution'] || inputs.java-distribution }}
       java-cache: ${{ matrix['java-cache'] || inputs.java-cache }}
+      setup-python: ${{ matrix['setup-python'] != null && matrix['setup-python'] || matrix['setup-python'] == null && inputs.setup-python }}
+      python-version: ${{ matrix['python-version'] || inputs.python-version }}
       working-directory: ${{ matrix['working-directory'] || needs.resolve.outputs.resolved-working-directory }}
     secrets: inherit
 

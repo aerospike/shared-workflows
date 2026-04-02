@@ -12,6 +12,8 @@ A reusable GitHub Actions workflow for uploading build artifacts to JFrog Artifa
 | RPM                       | `{project}-rpm-dev-local`     | `.asc`                     | `version`, `package_name`, `rpm.distribution`, `rpm.component`, `rpm.architecture` |
 | JAR                       | `{project}-maven-dev-local`   | `.pom`, `.asc`, `.pom.asc` | `version`, `group_id`, `package_name`                                              |
 | NuGet (.nupkg/.snupkg)    | `{project}-nuget-dev-local`   | `.asc`                     | `version`, `package_name`                                                          |
+| npm (.tgz)                | `{project}-npm-dev-local`     | `.asc`                     | `version`, `package_name`                                                          |
+| PyPI (.whl/.tar.gz sdist) | `{project}-pypi-dev-local`    | `.asc`                     | `version`, `package_name`, `pypi.name`, `pypi.version`                             |
 | Generic (everything else) | `{project}-generic-dev-local` | `.asc`                     | `version`, `package_name`                                                          |
 
 All types also include `build.type` and `internal` properties when those inputs are set.
@@ -26,7 +28,15 @@ The deploy pipeline uses a centralized type registry (`type_registry.sh`). To ad
 4. Add a `process_TYPE()` function in `package_utils.sh` (or reuse `process_generic`)
 5. Add tests
 
-Simple types (like DEB/RPM) need no custom upload function -- the generic `upload_type()` dispatch handles them. Complex types that need special upload logic (like JAR's dedup or NuGet's path-based layout) define an `upload_TYPE_packages()` override in `entrypoint.sh`.
+**Simple types** (like DEB/RPM) with unique extensions need no custom upload function. The generic `upload_type()` dispatch handles them.
+
+**Types with ambiguous extensions** (like npm and PyPI, which share `.tgz`/`.tar.gz` with generic tarballs) also need:
+
+- A content-detection function (e.g., `is_npm_package`, `is_pypi_sdist`) in `package_utils.sh`
+- A detector entry in the unified tarball content-detection block in `entrypoint.sh`'s `structure_build_artifacts()`
+- The ambiguous extension added to `get_known_extensions()` if not already covered by `TYPE_EXTENSIONS`
+
+**Types with custom path layouts** (JAR, NuGet, npm, PyPI) define an `upload_TYPE_packages()` override in `entrypoint.sh` instead of using the generic dispatch.
 
 ## Inputs
 
@@ -62,17 +72,18 @@ Simple types (like DEB/RPM) need no custom upload function -- the generic `uploa
 
 Artifacts arrive in `build-artifacts/` as a flat collection from the sign stage. The structuring phase categorizes them by type and gathers companion files:
 
-- Each registered type's extension is matched
+- Types with unique extensions (DEB, RPM, JAR, NuGet, `.whl`) are matched by extension
+- Gzipped tarballs (`.tgz` and `.tar.gz`) are inspected with content-based detectors to distinguish npm packages, PyPI source distributions, and generic tarballs
 - Companion files (defined per type in `TYPE_COMPANIONS`) are automatically copied alongside their primary artifact
-- Generic catches everything not claimed by a registered type
+- Generic catches everything not claimed by the above
 
 ### 2. Upload phase
 
 Each type directory is uploaded to its respective repository with appropriate properties. The upload functions are driven by the type registry:
 
 - Simple types (DEB, RPM) use the generic `upload_type()` dispatch which calls `get_TYPE_props()` and `get_TYPE_extra_flags()` by convention
-- Complex types (JAR, NuGet, generic) use custom upload functions
-- All uploads go through `jf_upload()` which adds standard flags (`--flat=false`, `--build-name`, `--build-number`, `--project`)
+- Types with custom path layouts (JAR, NuGet, npm, PyPI, generic) define `upload_TYPE_packages()` overrides
+- All uploads go through `jf_upload()` or `run jf rt upload` which adds standard flags (`--build-name`, `--build-number`, `--project`)
 
 ### 3. Build info
 
@@ -115,6 +126,26 @@ nupkg/
   {PackageName}.{Version}.nupkg
   {PackageName}.{Version}.nupkg.asc
   {PackageName}.{Version}.snupkg
+```
+
+### npm
+
+```text
+npm/
+  {filename}.tgz
+  {filename}.tgz.asc
+```
+
+### PyPI
+
+`.whl` files are routed by extension. `.tar.gz` files are inspected for a root-level `PKG-INFO` to distinguish Python source distributions from generic tarballs (the same content-based detection pattern used for npm `.tgz` files).
+
+```text
+pypi/
+  {filename}.whl
+  {filename}.whl.asc
+  {filename}.tar.gz
+  {filename}.tar.gz.asc
 ```
 
 ## File layout

@@ -23,6 +23,7 @@ setup() {
     [[ "${TYPE_EXTENSIONS[nupkg]}" == "*.nupkg" ]]
     [[ "${TYPE_EXTENSIONS[snupkg]}" == "*.snupkg" ]]
     [[ "${TYPE_EXTENSIONS[npm]}" == "*.tgz" ]]
+    [[ "${TYPE_EXTENSIONS[pypi]}" == "*.whl" ]]
     # Generic is NOT in TYPE_EXTENSIONS -- it's the catch-all
     [[ -z "${TYPE_EXTENSIONS[generic]}" ]]
 }
@@ -33,6 +34,7 @@ setup() {
     [[ "${TYPE_REPO[jar]}" == "maven-dev-local" ]]
     [[ "${TYPE_REPO[nupkg]}" == "nuget-dev-local" ]]
     [[ "${TYPE_REPO[npm]}" == "npm-dev-local" ]]
+    [[ "${TYPE_REPO[pypi]}" == "pypi-dev-local" ]]
     [[ "${TYPE_REPO[generic]}" == "generic-dev-local" ]]
 }
 
@@ -41,17 +43,22 @@ setup() {
     [[ "${TYPE_COMPANIONS[rpm]}" == ".asc" ]]
     [[ "${TYPE_COMPANIONS[jar]}" == ".pom .asc .pom.asc" ]]
     [[ "${TYPE_COMPANIONS[npm]}" == ".asc" ]]
+    [[ "${TYPE_COMPANIONS[pypi]}" == ".asc" ]]
     [[ "${TYPE_COMPANIONS[generic]}" == ".asc" ]]
 }
 
-@test "UPLOAD_ORDER has jar before generic" {
+@test "UPLOAD_ORDER has jar before generic and pypi before generic" {
     local jar_idx=-1
+    local pypi_idx=-1
     local generic_idx=-1
     for i in "${!UPLOAD_ORDER[@]}"; do
         [[ "${UPLOAD_ORDER[$i]}" == "jar" ]] && jar_idx=$i
+        [[ "${UPLOAD_ORDER[$i]}" == "pypi" ]] && pypi_idx=$i
         [[ "${UPLOAD_ORDER[$i]}" == "generic" ]] && generic_idx=$i
     done
     [[ $jar_idx -lt $generic_idx ]]
+    [[ $pypi_idx -lt $generic_idx ]]
+    [[ $pypi_idx -gt 0 ]]
 }
 
 # --- get_known_extensions ---
@@ -65,6 +72,7 @@ setup() {
     [[ "$exts" == *"*.nupkg"* ]]
     [[ "$exts" == *"*.snupkg"* ]]
     [[ "$exts" == *"*.tgz"* ]]
+    [[ "$exts" == *"*.whl"* ]]
 }
 
 @test "get_known_extensions includes companion and build file extensions" {
@@ -73,6 +81,7 @@ setup() {
     [[ "$exts" == *"*.asc"* ]]
     [[ "$exts" == *"*.pom"* ]]
     [[ "$exts" == *"*.csproj"* ]]
+    [[ "$exts" == *"*.tar.gz"* ]]
 }
 
 # --- get_base_props ---

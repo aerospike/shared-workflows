@@ -235,12 +235,16 @@ copy_to_structured() {
     echo "$target_file"
 }
 
+# Structure a NuGet package into the destination directory.
+# Args: <file> <dest_dir>
+# Returns: target path on stdout.
 process_nupkg() { copy_to_structured "$1" "$2"; }
 
 # Extract the package.json content from an npm tarball.
 # npm tarballs have a single root directory containing package.json.
 # The root dir is typically "package/" (npm pack) but can vary (yarn pack, manual builds).
-# Returns the JSON on stdout, or returns 1 if not found/invalid.
+# Args: <tgz_file>
+# Returns: the JSON on stdout, or returns 1 if not found/invalid.
 _extract_npm_package_json() {
     local file="$1"
 
@@ -254,6 +258,8 @@ _extract_npm_package_json() {
 
 # Check if a .tgz file is an npm package.
 # Validates that the tarball contains a root-level package.json with name and version fields.
+# Args: <tgz_file>
+# Returns: 0 if npm package, 1 otherwise.
 is_npm_package() {
     local file="$1"
     _extract_npm_package_json "$file" |
@@ -264,6 +270,8 @@ is_npm_package() {
 # npm names must be lowercase, may be scoped (@scope/name), and contain only
 # alphanumerics, hyphens, dots, underscores, and tildes. Rejects names with
 # semicolons or other characters that could inject JFrog target-props.
+# Args: <name>
+# Exits with error if invalid.
 _validate_npm_name() {
     local name="$1"
     if [[ ! $name =~ ^(@[a-z0-9][a-z0-9._~-]*/)?[a-z0-9][a-z0-9._~-]*$ ]]; then
@@ -273,6 +281,8 @@ _validate_npm_name() {
 
 # Extract npm package metadata (name and version).
 # Caller must ensure the file is a valid npm package (via is_npm_package).
+# Args: <tgz_file>
+# Returns: "name version" on stdout.
 get_npm_metadata() {
     local tgz="$1"
 
@@ -288,7 +298,137 @@ get_npm_metadata() {
     echo "$pkgname $version"
 }
 
+# Structure an npm package into the destination directory.
+# Args: <file> <dest_dir>
+# Returns: target path on stdout.
 process_npm() { copy_to_structured "$1" "$2"; }
 
-# Generic strips the extra "unsigned-artifacts" prefix leaked from the sign stage's cp --parents
+# --- PyPI (Python) package functions ---
+
+# Check if a .tar.gz file is a Python source distribution.
+# Python sdists contain a root-level PKG-INFO file (mandatory per PEP 625).
+# Args: <tar_gz_file>
+# Returns: 0 if the tarball is an sdist, 1 otherwise.
+is_pypi_sdist() {
+    local file="$1"
+    # Capture full listing to avoid SIGPIPE from tar when grep matches early.
+    local listing
+    listing=$(tar -tzf "$file" 2>/dev/null) || return 1
+    echo "$listing" | grep -qE '^[^/]+/PKG-INFO$'
+}
+
+# Validate a Python package name against PEP 508 naming rules.
+# Rejects names that could inject JFrog target-props (semicolons, etc.).
+# Args: <name>
+# Exits with error if invalid.
+_validate_pypi_name() {
+    local name="$1"
+    if [[ ! $name =~ ^[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?$ ]]; then
+        error "Invalid Python package name: '$name'"
+    fi
+}
+
+# Normalize a Python package name per PEP 503.
+# Replaces runs of [-_.] with single hyphen, lowercases.
+# Args: <name>
+# Returns: normalized name on stdout.
+_normalize_pypi_name() {
+    local name="$1"
+    echo "$name" | tr '[:upper:]' '[:lower:]' | sed -E 's/[-_.]+/-/g'
+}
+
+# Extract metadata from a wheel file.
+# Parses filename first, then overrides from .dist-info/METADATA if available.
+# Args: <whl_file>
+# Returns: "name version" on stdout.
+_get_wheel_metadata() {
+    local package="$1"
+    local filename="${package##*/}"
+    local base="${filename%.whl}"
+    local pkgname version
+
+    # Wheel filename: {name}-{version}-{python}-{abi}-{platform}.whl
+    # Name and version fields use underscores (never hyphens) in the filename.
+    pkgname="${base%%-*}"
+    local rest="${base#"$pkgname"-}"
+    version="${rest%%-*}"
+
+    # Try to get canonical name from METADATA inside the wheel (ZIP format)
+    if command -v unzip >/dev/null 2>&1 && [[ -f $package ]]; then
+        local metadata_file
+        metadata_file=$(unzip -Z1 "$package" 2>/dev/null | grep -E '\.dist-info/METADATA$' | head -n1)
+        if [[ -n $metadata_file ]]; then
+            local meta_name meta_version
+            meta_name=$(unzip -p "$package" "$metadata_file" 2>/dev/null | grep -m1 -i '^Name:' | cut -d' ' -f2- | tr -d '\r')
+            meta_version=$(unzip -p "$package" "$metadata_file" 2>/dev/null | grep -m1 -i '^Version:' | cut -d' ' -f2- | tr -d '\r')
+            [[ -n $meta_name ]] && pkgname="$meta_name"
+            [[ -n $meta_version ]] && version="$meta_version"
+        fi
+    fi
+
+    _validate_pypi_name "$pkgname"
+    echo "$pkgname $version"
+}
+
+# Extract metadata from a Python source distribution (.tar.gz).
+# Parses PKG-INFO inside the tarball, falls back to filename.
+# Args: <tar_gz_file>
+# Returns: "name version" on stdout.
+_get_sdist_metadata() {
+    local package="$1"
+    local filename="${package##*/}"
+    local pkgname="" version=""
+
+    # Try to extract from PKG-INFO inside the tarball
+    local pkg_info_path
+    pkg_info_path=$(tar -tzf "$package" 2>/dev/null | grep -E '^[^/]+/PKG-INFO$' | head -n1)
+    if [[ -n $pkg_info_path ]]; then
+        pkgname=$(tar -xOzf "$package" "$pkg_info_path" 2>/dev/null | grep -m1 -i '^Name:' | cut -d' ' -f2- | tr -d '\r')
+        version=$(tar -xOzf "$package" "$pkg_info_path" 2>/dev/null | grep -m1 -i '^Version:' | cut -d' ' -f2- | tr -d '\r')
+    fi
+
+    # Fallback: parse filename ({name}-{version}.tar.gz or .tgz)
+    if [[ -z ${pkgname-} ]] || [[ -z ${version-} ]]; then
+        # Strip tarball extensions
+        local base="${filename%.tar.gz}"
+        base="${base%.tgz}"
+        if [[ $base =~ ^(.+)-([0-9]+.*)$ ]]; then
+            [[ -z ${pkgname-} ]] && pkgname="${BASH_REMATCH[1]}"
+            [[ -z ${version-} ]] && version="${BASH_REMATCH[2]}"
+        else
+            [[ -z ${pkgname-} ]] && pkgname="$base"
+            [[ -z ${version-} ]] && version="unknown"
+        fi
+    fi
+
+    _validate_pypi_name "$pkgname"
+    echo "$pkgname $version"
+}
+
+# Extract Python package metadata (name and version).
+# Dispatches to wheel or sdist handler based on extension.
+# Args: <package_file> (.whl, .tar.gz, or .tgz)
+# Returns: "name version" on stdout.
+get_pypi_metadata() {
+    local package="$1"
+    local filename="${package##*/}"
+
+    if [[ $filename == *.whl ]]; then
+        _get_wheel_metadata "$package"
+    elif [[ $filename == *.tar.gz || $filename == *.tgz ]]; then
+        _get_sdist_metadata "$package"
+    else
+        echo "unknown unknown"
+    fi
+}
+
+# Structure a Python package into the destination directory.
+# Args: <file> <dest_dir>
+# Returns: target path on stdout.
+process_pypi() { copy_to_structured "$1" "$2"; }
+
+# Structure a generic file into the destination directory.
+# Strips the "unsigned-artifacts" prefix leaked from the sign stage's cp --parents.
+# Args: <file> <dest_dir>
+# Returns: target path on stdout.
 process_generic() { copy_to_structured "$1" "$2" "unsigned-artifacts"; }

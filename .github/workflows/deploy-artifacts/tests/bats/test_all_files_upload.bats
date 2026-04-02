@@ -56,8 +56,14 @@ teardown_file() {
   # ZIP should go to generic repo
   [[ "$upload_commands" == *"test.zip"*"generic-dev-local"* ]]
 
-  # TAR.GZ should go to generic repo
+  # Non-sdist TAR.GZ should go to generic repo
   [[ "$upload_commands" == *"test.tar.gz"*"generic-dev-local"* ]]
+
+  # Python wheel should go to pypi repo
+  [[ "$upload_commands" == *"aerospike_hello"*"pypi-dev-local"* ]]
+
+  # Python sdist should go to pypi repo, not generic
+  [[ "$upload_commands" == *"aerospike-hello-1.0.0.tar.gz"*"pypi-dev-local"* ]]
 
   # NuGet packages should ONLY go to nuget-dev-local, never generic-dev-local
   local nupkg_in_generic_found=false

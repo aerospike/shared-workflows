@@ -24,9 +24,9 @@ teardown() {
 @test "RPM .asc companion is co-located with primary after structuring" {
     run_entrypoint_dry_run >/dev/null 2>&1 || true
     local rpm_dir
-    rpm_dir=$(find structured_build_artifacts/rpm -name "test-1.0-2.noarch.rpm" -printf '%h\n' 2>/dev/null | head -1)
+    rpm_dir=$(find structured_build_artifacts/rpm -name "test-1.0-2.el9.noarch.rpm" -printf '%h\n' 2>/dev/null | head -1)
     [[ -n "$rpm_dir" ]]
-    [[ -f "$rpm_dir/test-1.0-2.noarch.rpm.asc" ]]
+    [[ -f "$rpm_dir/test-1.0-2.el9.noarch.rpm.asc" ]]
 }
 
 @test "NuGet .asc companion is co-located with primary after structuring" {
@@ -75,6 +75,7 @@ teardown() {
     [[ -d "structured_build_artifacts/jar" ]]
     [[ -d "structured_build_artifacts/nupkg" ]]
     [[ -d "structured_build_artifacts/npm" ]]
+    [[ -d "structured_build_artifacts/pypi" ]]
     [[ -d "structured_build_artifacts/generic" ]]
 }
 
@@ -119,4 +120,49 @@ teardown() {
     local npm_in_generic
     npm_in_generic=$(find structured_build_artifacts/generic -name "aerospike-test-package-*.tgz" 2>/dev/null | wc -l)
     [[ "$npm_in_generic" -eq 0 ]]
+}
+
+# --- PyPI structuring ---
+
+@test "wheel .whl routes to pypi dir" {
+    run_entrypoint_dry_run >/dev/null 2>&1 || true
+    [[ -f "structured_build_artifacts/pypi/aerospike_hello-1.0.0-py3-none-any.whl" ]]
+}
+
+@test "sdist .tar.gz with PKG-INFO routes to pypi dir" {
+    run_entrypoint_dry_run >/dev/null 2>&1 || true
+    [[ -f "structured_build_artifacts/pypi/aerospike-hello-1.0.0.tar.gz" ]]
+}
+
+@test "pypi .asc companion is co-located with wheel after structuring" {
+    run_entrypoint_dry_run >/dev/null 2>&1 || true
+    local whl_dir
+    whl_dir=$(find structured_build_artifacts/pypi -name "aerospike_hello-1.0.0-py3-none-any.whl" -printf '%h\n' 2>/dev/null | head -1)
+    [[ -n "$whl_dir" ]]
+    [[ -f "$whl_dir/aerospike_hello-1.0.0-py3-none-any.whl.asc" ]]
+}
+
+@test "pypi .asc companion is co-located with sdist after structuring" {
+    run_entrypoint_dry_run >/dev/null 2>&1 || true
+    local sdist_dir
+    sdist_dir=$(find structured_build_artifacts/pypi -name "aerospike-hello-1.0.0.tar.gz" -printf '%h\n' 2>/dev/null | head -1)
+    [[ -n "$sdist_dir" ]]
+    [[ -f "$sdist_dir/aerospike-hello-1.0.0.tar.gz.asc" ]]
+}
+
+@test "non-sdist .tar.gz routes to generic, not pypi" {
+    run_entrypoint_dry_run >/dev/null 2>&1 || true
+    # test.tar.gz has no PKG-INFO, so it should be in generic
+    [[ -f "structured_build_artifacts/generic/test.tar.gz" ]]
+    # And NOT in pypi
+    local pypi_generic_count
+    pypi_generic_count=$(find structured_build_artifacts/pypi -name "test.tar.gz" 2>/dev/null | wc -l)
+    [[ "$pypi_generic_count" -eq 0 ]]
+}
+
+@test "No pypi .whl files leak into generic structured dir" {
+    run_entrypoint_dry_run >/dev/null 2>&1 || true
+    local whl_in_generic
+    whl_in_generic=$(find structured_build_artifacts/generic -name "*.whl" 2>/dev/null | wc -l)
+    [[ "$whl_in_generic" -eq 0 ]]
 }

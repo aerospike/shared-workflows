@@ -34,8 +34,8 @@ setup_file() {
   )
   
   local -a expected_rpms=(
-    "$BUILD_ARTIFACTS_DIR/test-1.0-2.noarch.rpm"
-    "$BUILD_ARTIFACTS_DIR/nested/dir/nested.rpm"
+    "$BUILD_ARTIFACTS_DIR/test-1.0-2.el9.noarch.rpm"
+    "$BUILD_ARTIFACTS_DIR/nested/dir/test-1.0-2.el9.noarch.rpm"
   )
   
   local missing=0
@@ -123,11 +123,8 @@ get_rpm_expectations() {
   # This isn't very flexible (it will fail if we add more files) but that will force us to change the test if we change the fixture.
   local file_location
   case "$filename" in
-    test-1.0-2.noarch.rpm)
+    test-1.0-2.el9.noarch.rpm)
       file_location="$BUILD_ARTIFACTS_DIR/$filename"
-      ;;
-    nested.rpm)
-      file_location="$BUILD_ARTIFACTS_DIR/nested/dir/$filename"
       ;;
     *)
       echo "Error: Unexpected RPM file '$filename' not in test fixture list" >&2

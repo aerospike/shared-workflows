@@ -245,6 +245,30 @@ jobs:
       java-version: "17"
       dry-run: false
       gh-workflows-ref: ${{ github.sha }}
+  build-python-packages:
+    needs: extract-version
+    uses: ./.github/workflows/reusable_execute-build.yaml
+    with:
+      jf-project: test
+      jf-build-name: test-build
+      jf-build-id: ${{ github.run_id }}-${{ github.run_attempt }}-buildinfo-python
+      working-directory: repo-source/.github/workflows/execute-build/test_apps/PythonHelloWorld
+      build-script: |
+        echo "Building Python package in $(pwd)"
+        python -m build
+        mkdir -p output
+        mv dist/*.whl dist/*.tar.gz output/
+        echo "Python build complete"
+        ls -la output/
+      gh-source-path: repo-source
+      gh-artifact-directory: output
+      gh-artifact-name: build-artifacts-python
+      oidc-provider-name: gh-dev-test
+      oidc-audience: aerospike/testing
+      setup-python: true
+      python-version: "3.12"
+      dry-run: false
+      gh-workflows-ref: ${{ github.sha }}
   # This job demonstrates custom packaging logic using standard GitHub Actions (actions/checkout, actions/download-artifact, actions/upload-artifact)
   # No reusable actions from shared-workflows are used here - this is custom packaging logic that could be done in the build step
   # In this case it is using fpm to generate debs and rpms and uploading them to be processed further.
@@ -257,6 +281,7 @@ jobs:
         build-dotnet-packages,
         build-npm-packages,
         build-java-packages,
+        build-python-packages,
         extract-version,
       ]
     runs-on: ubuntu-22.04
@@ -289,6 +314,10 @@ jobs:
       - name: Copy Java artifacts
         run: |
           cp -i build-artifacts/*.jar packaged-artifacts
+      - name: Copy Python packages
+        run: |
+          cp -i build-artifacts/*.whl packaged-artifacts 2>/dev/null || true
+          cp -i build-artifacts/*.tar.gz packaged-artifacts 2>/dev/null || true
       - name: Upload packaged Artifacts
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
