@@ -16,14 +16,15 @@ setup() {
 
 # --- Registry configuration ---
 
-@test "TYPE_EXTENSIONS has entries for all standard types" {
+@test "TYPE_EXTENSIONS has entries for all extension-based types" {
     [[ "${TYPE_EXTENSIONS[deb]}" == "*.deb" ]]
     [[ "${TYPE_EXTENSIONS[rpm]}" == "*.rpm" ]]
     [[ "${TYPE_EXTENSIONS[jar]}" == "*.jar" ]]
     [[ "${TYPE_EXTENSIONS[nupkg]}" == "*.nupkg" ]]
     [[ "${TYPE_EXTENSIONS[snupkg]}" == "*.snupkg" ]]
-    [[ "${TYPE_EXTENSIONS[npm]}" == "*.tgz" ]]
     [[ "${TYPE_EXTENSIONS[pypi]}" == "*.whl" ]]
+    # npm uses content detection (*.tgz is ambiguous), not in TYPE_EXTENSIONS
+    [[ -z "${TYPE_EXTENSIONS[npm]}" ]]
     # Generic is NOT in TYPE_EXTENSIONS -- it's the catch-all
     [[ -z "${TYPE_EXTENSIONS[generic]}" ]]
 }
@@ -45,6 +46,21 @@ setup() {
     [[ "${TYPE_COMPANIONS[npm]}" == ".asc" ]]
     [[ "${TYPE_COMPANIONS[pypi]}" == ".asc" ]]
     [[ "${TYPE_COMPANIONS[generic]}" == ".asc" ]]
+}
+
+@test "CONTENT_DETECT_EXTENSIONS lists ambiguous tarball extensions" {
+    [[ "${CONTENT_DETECT_EXTENSIONS[*]}" == *"*.tgz"* ]]
+    [[ "${CONTENT_DETECT_EXTENSIONS[*]}" == *"*.tar.gz"* ]]
+}
+
+@test "TYPE_CONTENT_DETECT maps types to detection functions" {
+    [[ "${TYPE_CONTENT_DETECT[npm]}" == "is_npm_package" ]]
+    [[ "${TYPE_CONTENT_DETECT[pypi]}" == "is_pypi_sdist" ]]
+}
+
+@test "CONTENT_DETECT_ORDER defines detection priority" {
+    [[ "${CONTENT_DETECT_ORDER[0]}" == "npm" ]]
+    [[ "${CONTENT_DETECT_ORDER[1]}" == "pypi" ]]
 }
 
 @test "UPLOAD_ORDER has jar before generic and pypi before generic" {
@@ -75,13 +91,16 @@ setup() {
     [[ "$exts" == *"*.whl"* ]]
 }
 
-@test "get_known_extensions includes companion and build file extensions" {
+@test "get_known_extensions includes content-detected, companion, and build file extensions" {
     local exts
     exts=$(get_known_extensions)
+    # Content-detected extensions
+    [[ "$exts" == *"*.tgz"* ]]
+    [[ "$exts" == *"*.tar.gz"* ]]
+    # Companion and build file extensions
     [[ "$exts" == *"*.asc"* ]]
     [[ "$exts" == *"*.pom"* ]]
     [[ "$exts" == *"*.csproj"* ]]
-    [[ "$exts" == *"*.tar.gz"* ]]
 }
 
 # --- get_base_props ---

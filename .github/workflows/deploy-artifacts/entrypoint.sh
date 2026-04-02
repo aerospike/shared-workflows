@@ -144,55 +144,7 @@ run_optional() {
     run "$@" || echo "Warning: $*" >&2
 }
 
-structure_build_artifacts() {
-    echo "Structuring build artifacts..." >&2
-
-    # Create all type directories from registry
-    for dir in "${TYPE_STRUCT_DIR[@]}"; do
-        mkdir -p "structured_build_artifacts/$dir"
-    done
-
-    for type in "${!TYPE_EXTENSIONS[@]}"; do
-        # npm requires content-based detection (handled separately below)
-        [[ $type == "npm" ]] && continue
-        local dest="./structured_build_artifacts/${TYPE_STRUCT_DIR[$type]}"
-        local label="${type^^}"
-        local processor="process_${type}"
-        # snupkg uses process_nupkg
-        [[ $type == "snupkg" ]] && processor="process_nupkg"
-        discover_and_process "${TYPE_EXTENSIONS[$type]}" "$label" "$processor" "$dest" "$type"
-    done
-
-    # Content-based detection for gzipped tarballs (.tgz and .tar.gz).
-    # Both extensions are the same format. Each file is tested against type
-    # detectors in priority order. Unrecognized tarballs route to generic.
-    while IFS= read -r -d '' file; do
-        [[ -f $file ]] || continue
-        if is_npm_package "$file"; then
-            echo "Processing NPM: $file" >&2
-            local target_path
-            target_path=$(process_npm "$file" "./structured_build_artifacts/npm")
-            if [[ -n $target_path ]]; then
-                gather_companions "$file" "$(dirname "$target_path")" "npm"
-            fi
-        elif is_pypi_sdist "$file"; then
-            echo "Processing PYPI sdist: $file" >&2
-            local target_path
-            target_path=$(process_pypi "$file" "./structured_build_artifacts/pypi")
-            if [[ -n $target_path ]]; then
-                gather_companions "$file" "$(dirname "$target_path")" "pypi"
-            fi
-        else
-            echo "Processing generic tarball: $file" >&2
-            local target_path
-            target_path=$(process_generic "$file" "./structured_build_artifacts/generic")
-            if [[ -n $target_path ]]; then
-                gather_companions "$file" "$(dirname "$target_path")" "generic"
-            fi
-        fi
-    done < <(find build-artifacts \( -name "*.tgz" -o -name "*.tar.gz" \) -print0)
-
-    # Standalone POM files (unique logic: check for corresponding JAR, inline metadata)
+structure_standalone_poms() {
     while IFS= read -r -d '' pom; do
         [[ -f $pom ]] || continue
         base_name=$(basename "$pom" .pom)
@@ -213,12 +165,53 @@ structure_build_artifacts() {
         target="./structured_build_artifacts/jar/${group_path}/${artifact_id}/${version}"
         mkdir -p "$target"
         cp "$pom" "$target/"
+        manifest_add "$target/$(basename "$pom")" "jar"
         if [[ -f "$pom.asc" ]]; then
             cp "$pom.asc" "$target/"
         fi
     done < <(find build-artifacts -name "*.pom" -print0)
+}
 
-    # Generic: everything not claimed by a registered type
+structure_content_detected_files() {
+    # Build the find pattern from CONTENT_DETECT_EXTENSIONS
+    local -a find_args=()
+    for i in "${!CONTENT_DETECT_EXTENSIONS[@]}"; do
+        ((i > 0)) && find_args+=(-o)
+        find_args+=(-name "${CONTENT_DETECT_EXTENSIONS[$i]}")
+    done
+
+    while IFS= read -r -d '' file; do
+        [[ -f $file ]] || continue
+        local matched=false
+        for type in "${CONTENT_DETECT_ORDER[@]}"; do
+            local detector="${TYPE_CONTENT_DETECT[$type]}"
+            if "$detector" "$file"; then
+                echo "Processing ${type^^}: $file" >&2
+                local dest="./structured_build_artifacts/${TYPE_STRUCT_DIR[$type]}"
+                local processor="process_${type}"
+                local target_path
+                target_path=$("$processor" "$file" "$dest")
+                if [[ -n $target_path ]]; then
+                    gather_companions "$file" "$(dirname "$target_path")" "$type"
+                    manifest_add "$target_path" "$type"
+                fi
+                matched=true
+                break
+            fi
+        done
+        if [[ $matched == false ]]; then
+            echo "Processing generic tarball: $file" >&2
+            local target_path
+            target_path=$(process_generic "$file" "./structured_build_artifacts/generic")
+            if [[ -n $target_path ]]; then
+                gather_companions "$file" "$(dirname "$target_path")" "generic"
+                manifest_add "$target_path" "generic"
+            fi
+        fi
+    done < <(find build-artifacts \( "${find_args[@]}" \) -print0)
+}
+
+structure_generic_files() {
     local -a exclude_args=()
     while IFS= read -r ext; do
         exclude_args+=(-not -name "$ext")
@@ -235,8 +228,35 @@ structure_build_artifacts() {
 
         if [[ -n $target_path ]]; then
             gather_companions "$generic" "$(dirname "$target_path")" "generic"
+            manifest_add "$target_path" "generic"
         fi
     done < <(find build-artifacts \( "${exclude_args[@]}" \) -type f -print0)
+}
+
+structure_build_artifacts() {
+    echo "Structuring build artifacts..." >&2
+    init_manifest
+
+    # Create all type directories from registry
+    for dir in "${TYPE_STRUCT_DIR[@]}"; do
+        mkdir -p "structured_build_artifacts/$dir"
+    done
+
+    # Extension-based types: unambiguous file extension maps directly to type
+    for type in "${!TYPE_EXTENSIONS[@]}"; do
+        local dest="./structured_build_artifacts/${TYPE_STRUCT_DIR[$type]}"
+        local label="${type^^}"
+        local processor="process_${type}"
+        # snupkg uses process_nupkg
+        [[ $type == "snupkg" ]] && processor="process_nupkg"
+        discover_and_process "${TYPE_EXTENSIONS[$type]}" "$label" "$processor" "$dest" "$type"
+    done
+
+    # Content-detected types: ambiguous extensions need inspection to determine type
+    structure_content_detected_files
+
+    structure_standalone_poms
+    structure_generic_files
 }
 
 # DEB and RPM uploads are handled by upload_type() via the type registry.
@@ -245,11 +265,13 @@ structure_build_artifacts() {
 upload_jar_packages() {
     echo "Uploading JAR/POM files to JFrog..." >&2
 
-    # Find all JAR and POM files, then process unique base names
+    # Process unique base names from manifest
     declare -A processed_artifacts
 
-    while IFS= read -r -d '' artifact; do
-        [[ -f $artifact ]] || continue
+    # shellcheck disable=SC2329  # invoked indirectly via manifest_for_type
+    _upload_jar_entry() {
+        local artifact="$1"
+        [[ -f $artifact ]] || return 0
 
         # Get the directory and base name
         local artifact_dir artifact_name base_name
@@ -261,7 +283,7 @@ upload_jar_packages() {
         # Skip if we've already processed this base artifact
         local artifact_key="$artifact_dir/$base_name"
         if [[ -n ${processed_artifacts[$artifact_key]-} ]]; then
-            continue
+            return 0
         fi
         processed_artifacts[$artifact_key]=1
 
@@ -292,7 +314,7 @@ upload_jar_packages() {
                     mv "$artifact_file" "../generic/"
                 fi
             done
-            continue
+            return 0
         fi
 
         echo "  Package: $pkgname, Version: $version, Group ID: $group_id" >&2
@@ -308,15 +330,18 @@ upload_jar_packages() {
                     --target-props "$props"
             fi
         done
-    done < <(find . \( -name "*.jar" -o -name "*.pom" \) -print0)
+    }
+
+    manifest_for_type "jar" _upload_jar_entry
 }
 
 upload_nupkg_packages() {
     echo "Uploading NuGet packages to JFrog..." >&2
 
-    # loop for both .nupkg and .snupkg
-    while IFS= read -r -d '' pkg; do
-        [[ -f $pkg ]] || continue
+    # shellcheck disable=SC2329  # invoked indirectly via manifest_for_type
+    _upload_nupkg_entry() {
+        local pkg="$1"
+        [[ -f $pkg ]] || return 0
 
         local -a metadata
         read -r -a metadata < <(get_nupkg_metadata "$pkg")
@@ -349,14 +374,19 @@ upload_nupkg_packages() {
         local pkg_type="nupkg"
         [[ $pkg == *.snupkg ]] && pkg_type="snupkg"
         upload_companions "$pkg" "$PROJECT-nuget-dev-local" "$pkg_type"
-    done < <(find . \( -name "*.nupkg" -o -name "*.snupkg" \) -print0)
+    }
+
+    manifest_for_type "nupkg" _upload_nupkg_entry
+    manifest_for_type "snupkg" _upload_nupkg_entry
 }
 
 upload_npm_packages() {
     echo "Uploading npm packages to JFrog..." >&2
 
-    while IFS= read -r -d '' pkg; do
-        [[ -f $pkg ]] || continue
+    # shellcheck disable=SC2329  # invoked indirectly via manifest_for_type
+    _upload_npm_entry() {
+        local pkg="$1"
+        [[ -f $pkg ]] || return 0
 
         local -a metadata
         read -r -a metadata < <(get_npm_metadata "$pkg")
@@ -367,7 +397,7 @@ upload_npm_packages() {
 
         if [[ -z $pkgname ]] || [[ -z $pkgversion ]]; then
             echo "Warning: Failed to extract metadata from $pkg, skipping" >&2
-            continue
+            return 0
         fi
 
         local props
@@ -397,14 +427,18 @@ upload_npm_packages() {
                     --project="$PROJECT"
             fi
         done
-    done < <(find . \( -name "*.tgz" -o -name "*.tar.gz" \) -print0)
+    }
+
+    manifest_for_type "npm" _upload_npm_entry
 }
 
 upload_pypi_packages() {
     echo "Uploading PyPI packages to JFrog..." >&2
 
-    while IFS= read -r -d '' pkg; do
-        [[ -f $pkg ]] || continue
+    # shellcheck disable=SC2329  # invoked indirectly via manifest_for_type
+    _upload_pypi_entry() {
+        local pkg="$1"
+        [[ -f $pkg ]] || return 0
 
         local -a metadata
         read -r -a metadata < <(get_pypi_metadata "$pkg")
@@ -415,7 +449,7 @@ upload_pypi_packages() {
 
         if [[ -z $pkgname ]] || [[ -z $pkgversion ]]; then
             echo "Warning: Failed to extract metadata from $pkg, skipping" >&2
-            continue
+            return 0
         fi
 
         local normalized_name
@@ -448,17 +482,18 @@ upload_pypi_packages() {
                     --project="$PROJECT"
             fi
         done
-    done < <(find . \( -name "*.whl" -o -name "*.tar.gz" -o -name "*.tgz" \) -print0)
+    }
+
+    manifest_for_type "pypi" _upload_pypi_entry
 }
 
 upload_generic_files() {
     echo "Uploading generic files..." >&2
 
-    # Only exclude companion/build file extensions.
-    local -a exclude_args=(-not -name "*.asc" -not -name "*.pom" -not -name "*.csproj")
-
-    while IFS= read -r -d '' file; do
-        [[ -f $file ]] || continue
+    # shellcheck disable=SC2329  # invoked indirectly via manifest_for_type
+    _upload_generic_entry() {
+        local file="$1"
+        [[ -f $file ]] || return 0
         echo "Uploading generic file: $file" >&2
 
         local props
@@ -468,7 +503,9 @@ upload_generic_files() {
             --target-props "$props"
 
         upload_companions "$file" "$PROJECT-generic-dev-local" "generic"
-    done < <(find . \( "${exclude_args[@]}" \) -type f -print0)
+    }
+
+    manifest_for_type "generic" _upload_generic_entry
 }
 
 # Collects build-info metadata by querying Artifactory for JSON files.
