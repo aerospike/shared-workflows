@@ -4,7 +4,7 @@ Reusable workflow that validates PR titles against conventional commit format an
 
 ## PR Title Format
 
-PR titles must follow conventional commit format with a JIRA ticket:
+PR titles must follow conventional commit format:
 
 ```text
 type(scope): [JIRA-123] description
@@ -12,7 +12,7 @@ type(scope): [JIRA-123] description
 
 - **type**: `feat|fix|refactor|docs|test|ci|chore|build|perf` (validated by commitlint)
 - **scope**: optional, lowercase (e.g., `workflows`, `deploy`, `actions`)
-- **JIRA**: uppercase project key in brackets, before the description
+- **JIRA**: uppercase project key in brackets, required for certain types (see `types-requiring-jira`)
 
 Examples:
 
