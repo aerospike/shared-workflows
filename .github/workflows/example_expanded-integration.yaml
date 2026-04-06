@@ -1,4 +1,4 @@
-name: Example Reusable Integration
+name: Example Expanded Integration
 on:
   workflow_dispatch:
     inputs:
@@ -6,8 +6,6 @@ on:
         description: Version override (leave empty for auto-detection)
         required: false
         default: ""
-  push:
-    branches: [main]
 
 permissions:
   id-token: write
@@ -15,25 +13,15 @@ permissions:
   packages: write
   attestations: write
 
-# This workflow demonstrates the complete CI/CD pipeline using all reusable
-# workflows from shared-workflows. It shows how to chain workflows together to
-# create a production-ready artifact pipeline with build-info aggregation.
+concurrency:
+  group: jfrog-test-deploy
+  cancel-in-progress: false
+
+# Exhaustive integration exercise that builds, signs, deploys, and bundles
+# artifacts across multiple ecosystems (C, .NET, npm, Java, Python) plus Docker.
+# Also demonstrates consuming deployed artifacts from JFrog via apt and yum.
 #
-# WORKFLOW FLOW:
-# 1. extract-version: Extract version from test file
-# 2. build-packages: Build C packages across platforms using matrix strategy (deb/rpm)
-#    build-dotnet-packages: Build .NET/NuGet packages
-#    build-npm-packages: Build npm packages
-#    build-java-packages: Build Java/Maven packages (JAR)
-# 3. package-built-artifacts: Collect all build outputs into a single artifact
-# 4. sign-artifacts: GPG sign the packaged artifacts for security (uses reusable_sign-artifacts.yaml)
-# 5. deploy-artifacts: Deploy signed artifacts to JFrog Artifactory (uses reusable_deploy-artifacts.yaml)
-# 6. create-release-bundle: Create a release bundle from deployed artifacts (uses reusable_create-release-bundle.yaml)
-#
-#
-# USAGE:
-# This example demonstrates best practices for integrating shared-workflows
-# components into a complete CI/CD pipeline with build-info aggregation.
+# For the recommended composable pipeline pattern, see example_composable-matrix.yaml.
 # =============================================================================
 
 jobs:

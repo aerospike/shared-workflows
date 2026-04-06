@@ -30,31 +30,22 @@ The orchestrated `reusable_artifacts-cicd.yaml` handles build → sign → deplo
 
 ```mermaid
 sequenceDiagram
-  participant WF as Caller Workflow
-  participant SW1 as Execute Build
-  participant SW2 as Sign Artifacts
-  participant SW3 as Deploy Artifacts
-  participant SW5 as Docker Build & Deploy
-  participant GA as GitHub Artifacts
-  participant JF as JFrog Artifactory
-  participant SW4 as Create Release Bundle
-
-  Note over WF,SW4: Artifact Pipeline (DEB/RPM/npm/JAR/PyPI/Generic)
-  WF->>SW1: uses reusable_execute-build
-  SW1-->>GA: upload artifacts
-  WF->>SW2: uses reusable_sign-artifacts
-  SW2-->>GA: download unsigned, upload signed
-  WF->>SW3: uses reusable_deploy-artifacts
-  SW3-->>GA: download signed artifacts
-  SW3-->>JF: deploy with build-info
-
-  Note over WF,SW5: Docker Pipeline (Containers)
-  WF->>SW5: uses reusable_docker-build-deploy
-  SW5-->>JF: build, attest & publish image + build-info
-
-  Note over WF,SW4: Release Bundle (Both Pipelines)
-  WF->>SW4: uses reusable_create-release-bundle
-  SW4-->>JF: create bundle from artifacts and/or docker builds
+    participant YW as Your Workflow
+    participant EB as Build
+    participant SA as Sign
+    participant DA as Deploy
+    participant DBD as Docker Build & Deploy
+    participant RB as Release Bundle
+    participant JF as JFrog
+    YW->>EB: run build script
+    EB->>SA: unsigned artifacts
+    Note over EB,SA: your tests or custom jobs go here
+    SA->>DA: signed artifacts
+    DA->>JF: artifacts
+    YW->>DBD: build, push
+    DBD->>JF: images
+    YW->>RB: bundle builds
+    RB->>JF: release bundle
 ```
 
 Internally, GitHub Actions artifacts are used for _in-runner handoff_ between stages; JFrog deployments are used for _durable discovery and consumption_ beyond the workflow.
@@ -135,7 +126,6 @@ At Aerospike, release bundles are the only way artifacts are promoted between en
 ## Full examples
 
 - [example_composable-matrix.yaml](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/example_composable-matrix.yaml): multi-ecosystem matrix builds (DEB/RPM, npm, Java) with custom test step, release bundle lifecycle, and promotion
-- [example_reusable-integration.yaml](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/example_reusable-integration.yaml): end-to-end pipeline combining artifact and Docker pipelines with a unified release bundle
 
 ---
 
