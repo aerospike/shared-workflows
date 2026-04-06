@@ -71,6 +71,10 @@ jobs:
       java-distribution: temurin # Default: temurin
       java-cache: maven # Default: maven
 
+      # Python setup (optional):
+      setup-python: true
+      python-version: "3.12" # Default: 3.12
+
       # Dotnet setup (optional):
       setup-dotnet: true
       dotnet-version: "8.0" # Default: 8.0
@@ -84,6 +88,7 @@ Notes:
 - All artifacts get `version` and `package_name` target-props automatically. DEB/RPM also get distribution and architecture. Use `build-type` and `internal` for additional categorization.
 - **Java/Maven:** Set `setup-java: true` to have Java installed before your build script runs. Optionally set `java-version` (default `"21"`), `java-distribution` (default `temurin`), and `java-cache` (default `maven`). Matrix entries can override all four fields per build.
 - **JAR artifacts:** Use `jar-group-id` to provide a Maven group ID fallback when the JAR metadata doesn't include one.
+- **Python/PyPI:** Set `setup-python: true` to install Python and build tools (`build`, `twine`) before your build script runs. Optionally set `python-version` (default `"3.12"`). The deploy stage auto-detects `.whl` and `.tar.gz` sdist files and routes them to the appropriate PyPI repository. Matrix entries can override `setup-python` and `python-version` per build.
 
 ### Build-info
 
@@ -129,6 +134,8 @@ Matrix entries can override these per-build settings:
 - `java-version`
 - `java-distribution`
 - `java-cache`
+- `setup-python`
+- `python-version`
 
 Precedence is always: **matrix entry override → workflow input defaults**.
 
@@ -188,9 +195,25 @@ matrix-json: >-
   ]}
 ```
 
+#### Python/PyPI matrix entry example
+
+```yaml
+matrix-json: >-
+  {"include":[
+    {
+      "runs-on":"ubuntu-22.04",
+      "working-directory":"src/python",
+      "gh-artifact-directory":"src/python/dist",
+      "build-script":"python -m build",
+      "setup-python":true,
+      "python-version":"3.12"
+    }
+  ]}
+```
+
 ## Full examples
 
-- [example_artifacts-cicd.yaml](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/example_artifacts-cicd.yaml): drop-in orchestrated pipeline with multi-ecosystem matrix (C, .NET, npm, Java)
+- [example_artifacts-cicd.yaml](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/example_artifacts-cicd.yaml): drop-in orchestrated pipeline with multi-ecosystem matrix (C, .NET, npm, Java, Python)
 
 ---
 

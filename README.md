@@ -104,7 +104,7 @@ For CI/CD pipelines, see the [CI/CD standard](.github/workflows/docs/CICD-standa
 
 | Workflow / Action            | Purpose                                         | Docs                                               |
 | ---------------------------- | ----------------------------------------------- | -------------------------------------------------- |
-| `reusable_pr-hygiene.yml`    | PR title Jira check + commit message prepend    | [README](.github/workflows/pr-hygeine/README.md)   |
+| `reusable_pr-hygiene.yml`    | PR title Jira check + commit message prepend    | [README](.github/workflows/pr-hygiene/README.md)   |
 | `reusable_anchore-scan.yaml` | Security scanning with GitHub Advanced Security | [README](.github/workflows/anchore-scan/README.md) |
 | `actions/setup-gpg`          | Composite action to configure GPG signing       | [README](.github/actions/setup-gpg/README.md)      |
 
