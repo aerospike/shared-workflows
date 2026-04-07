@@ -494,7 +494,7 @@ jobs:
       gh-workflows-ref: ${{ github.sha }}
       # gh-checkout-path defaults to 'shared-workflows'
       jf-project: test
-      jf-build-names: test-build:${{ github.run_id }}-${{ github.run_attempt }},test-build-container:${{ github.run_id }}-${{ github.run_attempt }}
+      jf-build-names: test-build:${{ github.run_id }}-${{ github.run_attempt }}
       jf-bundle-name: test-release
       version: ${{ needs.extract-version.outputs.version }}
       oidc-provider-name: gh-dev-test
