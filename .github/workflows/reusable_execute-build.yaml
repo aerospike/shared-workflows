@@ -86,11 +86,11 @@ on:
         default: https://artifact.aerospike.io
       oidc-audience:
         type: string
-        default: aerospike/testing
+        default: aerospike
         description: OIDC audience value for token
       oidc-provider-name:
         type: string
-        default: gh-dev-test
+        default: gh-aerospike
         description: JFrog OIDC provider name
       publish-build-info:
         description: |

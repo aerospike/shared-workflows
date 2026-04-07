@@ -56,8 +56,8 @@ The deploy pipeline uses a centralized type registry (`type_registry.sh`). To ad
 | `gh-checkout-path`     | Directory to checkout shared-workflows into                                 | No       | `shared-workflows`              |
 | `gh-retention-days`    | Retention days for the artifacts                                            | No       | `1`                             |
 | `jf-url`               | JFrog Artifactory URL                                                       | No       | `https://artifact.aerospike.io` |
-| `oidc-provider-name`   | OIDC provider name for authentication                                       | No       | `gh-citrusleaf`                 |
-| `oidc-audience`        | OIDC audience for authentication                                            | No       | `citrusleaf`                    |
+| `oidc-provider-name`   | OIDC provider name for authentication                                       | No       | `gh-aerospike`                  |
+| `oidc-audience`        | OIDC audience for authentication                                            | No       | `aerospike`                     |
 | `runs-on`              | The runner to use                                                           | No       | `ubuntu-22.04`                  |
 
 ## Outputs
