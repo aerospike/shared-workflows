@@ -50,3 +50,5 @@ jobs:
       context: ./.github/workflows/execute-build/test_apps/hi
       file: ./.github/workflows/execute-build/test_apps/hi/Dockerfile
       jf-build-name: test-container
+      oidc-provider-name: gh-dev-test
+      oidc-audience: aerospike/testing
