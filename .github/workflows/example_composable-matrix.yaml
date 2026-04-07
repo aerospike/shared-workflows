@@ -115,8 +115,7 @@ jobs:
           tenzer/fpm \
           -s dir -t "$PKG_TYPE" -n hi -v "$VERSION" -a native \
           ${{ matrix.fpm-extra }} \
-          --prefix /usr/bin \
-          "$DISTRO/$ARCH/hi"
+          "$DISTRO/$ARCH/hi=/usr/local/bin/hi"
 
         # Move package to distro/arch dir and remove the bare binary
         mv "build/hi"*."$PKG_TYPE" "build/$DISTRO/$ARCH/"

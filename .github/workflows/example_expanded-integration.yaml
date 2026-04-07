@@ -60,10 +60,10 @@ jobs:
       matrix:
         include:
           # Ubuntu/Debian family (x86_64)
-          #   - distro: jammy
-          #     arch: x86_64
-          #     runs-on: ubuntu-22.04
-          #     emulated: false
+          - distro: jammy
+            arch: x86_64
+            runs-on: ubuntu-22.04
+            emulated: false
           #   - distro: noble
           #     arch: x86_64
           #     runs-on: ubuntu-22.04
