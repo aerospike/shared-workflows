@@ -427,6 +427,56 @@ get_pypi_metadata() {
 # Returns: target path on stdout.
 process_pypi() { copy_to_structured "$1" "$2"; }
 
+# --- Go module functions ---
+
+# Check if a .zip file is a Go module archive.
+# Go module zips have files prefixed with module@version/ and contain go.mod.
+# Args: <zip_file>
+# Returns: 0 if Go module, 1 otherwise.
+is_go_module() {
+    local file="$1"
+    local listing
+    listing=$(unzip -Z1 "$file" 2>/dev/null) || return 1
+    echo "$listing" | grep -qE '^[^@]+@v[^/]+/go\.mod$'
+}
+
+# Validate a Go module path.
+# Go module paths are slash-separated, each element matching [a-zA-Z0-9._~-]+.
+# The first element must contain a dot (domain name). Rejects semicolons and other
+# characters that could inject JFrog target-props.
+# Args: <module_path>
+# Exits with error if invalid.
+_validate_go_module_path() {
+    local path="$1"
+    if [[ ! $path =~ ^[a-zA-Z0-9._~/-]+$ ]]; then
+        error "Invalid Go module path: '$path'"
+    fi
+    local first_element="${path%%/*}"
+    if [[ $first_element != *.* ]]; then
+        error "Invalid Go module path (first element must be a domain): '$path'"
+    fi
+}
+
+# Extract Go module metadata (module path and version) from a Go module zip.
+# Go module zips have entries prefixed with module@version/.
+# Args: <zip_file>
+# Returns: "module_path version" on stdout.
+get_go_metadata() {
+    local zip="$1"
+    local mod_entry
+    mod_entry=$(unzip -Z1 "$zip" 2>/dev/null | grep -E '^[^@]+@v[^/]+/go\.mod$' | head -n1) || return 1
+    local prefix="${mod_entry%/go.mod}"
+    local module_path="${prefix%@*}"
+    local module_version="${prefix##*@}"
+    _validate_go_module_path "$module_path"
+    echo "$module_path $module_version"
+}
+
+# Structure a Go module zip into the destination directory.
+# Args: <file> <dest_dir>
+# Returns: target path on stdout.
+process_go() { copy_to_structured "$1" "$2"; }
+
 # Structure a generic file into the destination directory.
 # Strips the "unsigned-artifacts" prefix leaked from the sign stage's cp --parents.
 # Args: <file> <dest_dir>

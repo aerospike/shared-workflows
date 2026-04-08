@@ -36,6 +36,7 @@ setup() {
     [[ "${TYPE_REPO[nupkg]}" == "nuget-dev-local" ]]
     [[ "${TYPE_REPO[npm]}" == "npm-dev-local" ]]
     [[ "${TYPE_REPO[pypi]}" == "pypi-dev-local" ]]
+    [[ "${TYPE_REPO[go]}" == "go-dev-local" ]]
     [[ "${TYPE_REPO[generic]}" == "generic-dev-local" ]]
 }
 
@@ -48,32 +49,38 @@ setup() {
     [[ "${TYPE_COMPANIONS[generic]}" == ".asc" ]]
 }
 
-@test "CONTENT_DETECT_EXTENSIONS lists ambiguous tarball extensions" {
+@test "CONTENT_DETECT_EXTENSIONS lists ambiguous extensions" {
     [[ "${CONTENT_DETECT_EXTENSIONS[*]}" == *"*.tgz"* ]]
     [[ "${CONTENT_DETECT_EXTENSIONS[*]}" == *"*.tar.gz"* ]]
+    [[ "${CONTENT_DETECT_EXTENSIONS[*]}" == *"*.zip"* ]]
 }
 
 @test "TYPE_CONTENT_DETECT maps types to detection functions" {
     [[ "${TYPE_CONTENT_DETECT[npm]}" == "is_npm_package" ]]
     [[ "${TYPE_CONTENT_DETECT[pypi]}" == "is_pypi_sdist" ]]
+    [[ "${TYPE_CONTENT_DETECT[go]}" == "is_go_module" ]]
 }
 
 @test "CONTENT_DETECT_ORDER defines detection priority" {
     [[ "${CONTENT_DETECT_ORDER[0]}" == "npm" ]]
     [[ "${CONTENT_DETECT_ORDER[1]}" == "pypi" ]]
+    [[ "${CONTENT_DETECT_ORDER[2]}" == "go" ]]
 }
 
-@test "UPLOAD_ORDER has jar before generic and pypi before generic" {
+@test "UPLOAD_ORDER has jar, pypi, and go before generic" {
     local jar_idx=-1
     local pypi_idx=-1
+    local go_idx=-1
     local generic_idx=-1
     for i in "${!UPLOAD_ORDER[@]}"; do
         [[ "${UPLOAD_ORDER[$i]}" == "jar" ]] && jar_idx=$i
         [[ "${UPLOAD_ORDER[$i]}" == "pypi" ]] && pypi_idx=$i
+        [[ "${UPLOAD_ORDER[$i]}" == "go" ]] && go_idx=$i
         [[ "${UPLOAD_ORDER[$i]}" == "generic" ]] && generic_idx=$i
     done
     [[ $jar_idx -lt $generic_idx ]]
     [[ $pypi_idx -lt $generic_idx ]]
+    [[ $go_idx -lt $generic_idx ]]
     [[ $pypi_idx -gt 0 ]]
 }
 
@@ -195,6 +202,24 @@ setup() {
 }
 
 # --- get_npm_props ---
+
+@test "get_go_props returns correct props for Go module zip" {
+    local test_dir
+    test_dir=$(mktemp -d)
+    mkdir -p "$test_dir/github.com/aerospike/testmod@v1.0.0"
+    echo "module github.com/aerospike/testmod" > "$test_dir/github.com/aerospike/testmod@v1.0.0/go.mod"
+    cd "$test_dir" && zip -q -r "gomod.zip" "github.com/" && cd - >/dev/null
+    VERSION="1.0.0"
+    BUILD_TYPE=""
+    INTERNAL="false"
+    local props
+    props=$(get_go_props "$test_dir/gomod.zip" 2>/dev/null)
+    [[ "$props" == *"version=1.0.0"* ]]
+    [[ "$props" == *"package_name=github.com/aerospike/testmod"* ]]
+    [[ "$props" == *"go.module=github.com/aerospike/testmod"* ]]
+    [[ "$props" == *"go.version=v1.0.0"* ]]
+    rm -rf "$test_dir"
+}
 
 @test "get_npm_props returns correct props for npm package" {
     local test_dir

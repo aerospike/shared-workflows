@@ -78,16 +78,17 @@ register_type nupkg --extension "*.nupkg" --repo "nuget-dev-local"
 register_type snupkg --extension "*.snupkg" --repo "nuget-dev-local" --struct-dir "nupkg"
 register_type npm --repo "npm-dev-local" --detect "is_npm_package"
 register_type pypi --extension "*.whl" --repo "pypi-dev-local" --detect "is_pypi_sdist"
+register_type go --repo "go-dev-local" --detect "is_go_module"
 register_type generic --repo "generic-dev-local"
 
 # Ambiguous extensions that trigger content-based detection.
 # Shared across all content-detected types (npm, pypi sdist, etc.).
 # Files matching these patterns are tested against detectors in CONTENT_DETECT_ORDER;
 # unmatched files route to generic.
-CONTENT_DETECT_EXTENSIONS=("*.tgz" "*.tar.gz")
+CONTENT_DETECT_EXTENSIONS=("*.tgz" "*.tar.gz" "*.zip")
 
 # Upload order matters: jar before generic (jar can move files to generic)
-UPLOAD_ORDER=(rpm deb jar nupkg npm pypi generic)
+UPLOAD_ORDER=(rpm deb jar nupkg npm pypi go generic)
 
 # --- helpers ---
 
@@ -186,6 +187,16 @@ get_pypi_props() {
     local pkgversion="${metadata[1]}"
     echo "  Package: $pkgname, Version: $pkgversion" >&2
     echo "$(get_base_props);package_name=$pkgname;pypi.name=$pkgname;pypi.version=$pkgversion"
+}
+
+get_go_props() {
+    local file="$1"
+    local -a metadata
+    read -r -a metadata < <(get_go_metadata "$file")
+    local module_path="${metadata[0]}"
+    local module_version="${metadata[1]}"
+    echo "  Module: $module_path, Version: $module_version" >&2
+    echo "$(get_base_props);package_name=$module_path;go.module=$module_path;go.version=$module_version"
 }
 
 get_generic_props() {

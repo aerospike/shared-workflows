@@ -487,6 +487,85 @@ upload_pypi_packages() {
     manifest_for_type "pypi" _upload_pypi_entry
 }
 
+upload_go_packages() {
+    echo "Uploading Go module packages to JFrog..." >&2
+
+    # shellcheck disable=SC2329  # invoked indirectly via manifest_for_type
+    _upload_go_entry() {
+        local pkg="$1"
+        [[ -f $pkg ]] || return 0
+
+        local -a metadata
+        read -r -a metadata < <(get_go_metadata "$pkg")
+        local module_path="${metadata[0]}"
+        local module_version="${metadata[1]}"
+
+        if [[ -z $module_path ]] || [[ -z $module_version ]]; then
+            echo "Warning: Failed to extract metadata from $pkg, skipping" >&2
+            return 0
+        fi
+
+        local props
+        props=$(get_go_props "$pkg")
+
+        # GOPROXY layout: <module>/@v/<version>.{zip,mod,info}
+        local base_target="${module_path}/@v/${module_version}"
+
+        echo "  Uploading Go module: $pkg" >&2
+        echo "    Module: $module_path, Version: $module_version" >&2
+        echo "    Target: ${base_target}.zip" >&2
+
+        # Upload the .zip
+        run jf rt upload "$pkg" "$PROJECT-go-dev-local/${base_target}.zip" \
+            --build-name="$BUILD_NAME" \
+            --build-number="$ARTIFACT_BUILD_NUMBER" \
+            --project="$PROJECT" \
+            --target-props "$props"
+
+        # Extract go.mod from zip, upload as .mod sidecar
+        local mod_entry
+        mod_entry=$(unzip -Z1 "$pkg" | grep -E '^[^@]+@v[^/]+/go\.mod$' | head -n1)
+        if [[ -n $mod_entry ]]; then
+            local mod_tmpfile
+            mod_tmpfile=$(mktemp)
+            unzip -p "$pkg" "$mod_entry" >"$mod_tmpfile"
+            echo "  Uploading .mod: ${base_target}.mod" >&2
+            run jf rt upload "$mod_tmpfile" "$PROJECT-go-dev-local/${base_target}.mod" \
+                --build-name="$BUILD_NAME" \
+                --build-number="$ARTIFACT_BUILD_NUMBER" \
+                --project="$PROJECT" \
+                --target-props "$props"
+            rm -f "$mod_tmpfile"
+        fi
+
+        # Generate and upload .info JSON sidecar
+        local info_tmpfile
+        info_tmpfile=$(mktemp)
+        printf '{"Version":"%s","Time":"%s"}' "$module_version" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >"$info_tmpfile"
+        echo "  Uploading .info: ${base_target}.info" >&2
+        run jf rt upload "$info_tmpfile" "$PROJECT-go-dev-local/${base_target}.info" \
+            --build-name="$BUILD_NAME" \
+            --build-number="$ARTIFACT_BUILD_NUMBER" \
+            --project="$PROJECT" \
+            --target-props "$props"
+        rm -f "$info_tmpfile"
+
+        # Upload .asc companion for the zip
+        local companions="${TYPE_COMPANIONS[go]-}"
+        for suffix in $companions; do
+            if [[ -f "$pkg$suffix" ]]; then
+                echo "  Uploading companion: $pkg$suffix" >&2
+                run jf rt upload "$pkg$suffix" "$PROJECT-go-dev-local/${base_target}.zip${suffix}" \
+                    --build-name="$BUILD_NAME" \
+                    --build-number="$ARTIFACT_BUILD_NUMBER" \
+                    --project="$PROJECT"
+            fi
+        done
+    }
+
+    manifest_for_type "go" _upload_go_entry
+}
+
 upload_generic_files() {
     echo "Uploading generic files..." >&2
 

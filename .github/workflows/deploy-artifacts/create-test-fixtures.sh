@@ -143,6 +143,19 @@ cd "$BUILD_ARTIFACTS_DIR/temp-sdist-tgz" && tar -czf "../aerospike-utils-2.0.0.t
 rm -rf "$BUILD_ARTIFACTS_DIR/temp-sdist-tgz"
 echo "  Created aerospike-utils-2.0.0.tgz (Python sdist with .tgz extension)"
 
+# Create a valid Go module zip archive
+# Go module zips have files prefixed with module@version/
+mkdir -p "$BUILD_ARTIFACTS_DIR/temp-gomod/github.com/aerospike/aeromod@v1.2.3"
+cat >"$BUILD_ARTIFACTS_DIR/temp-gomod/github.com/aerospike/aeromod@v1.2.3/go.mod" <<'GOMOD'
+module github.com/aerospike/aeromod
+
+go 1.21
+GOMOD
+echo 'package aeromod' >"$BUILD_ARTIFACTS_DIR/temp-gomod/github.com/aerospike/aeromod@v1.2.3/aeromod.go"
+cd "$BUILD_ARTIFACTS_DIR/temp-gomod" && zip -q -r "../aeromod-v1.2.3.zip" "github.com/" && cd - >/dev/null
+rm -rf "$BUILD_ARTIFACTS_DIR/temp-gomod"
+echo "  Created aeromod-v1.2.3.zip (Go module)"
+
 # Create some additional test files with valid formats
 # Create a valid JAR file (JAR is a ZIP with META-INF/MANIFEST.MF)
 mkdir -p "$BUILD_ARTIFACTS_DIR/temp-jar/META-INF"
@@ -198,6 +211,7 @@ echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/aerospike_hello-1.0.0-py3-none-
 echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/aerospike-hello-1.0.0.tar.gz.asc"
 echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/aerospike-utils-2.0.0.tgz.asc"
 echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/aerospike-targz-package-3.0.0.tar.gz.asc"
+echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/aeromod-v1.2.3.zip.asc"
 
 # Create unsigned-artifacts/ prefix to simulate sign stage output
 # The sign stage uses cp --parents which creates: signed-artifacts/unsigned-artifacts/...

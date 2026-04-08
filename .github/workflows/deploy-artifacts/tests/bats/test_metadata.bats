@@ -268,3 +268,59 @@ setup() {
     result=$(_normalize_pypi_name "aerospike-hello")
     [[ "$result" == "aerospike-hello" ]]
 }
+
+# --- is_go_module ---
+
+@test "is_go_module returns true for Go module zip" {
+    local test_dir
+    test_dir=$(mktemp -d)
+    mkdir -p "$test_dir/github.com/test/mod@v1.0.0"
+    echo "module github.com/test/mod" > "$test_dir/github.com/test/mod@v1.0.0/go.mod"
+    echo "package mod" > "$test_dir/github.com/test/mod@v1.0.0/mod.go"
+    cd "$test_dir" && zip -q -r "gomod.zip" "github.com/" && cd - >/dev/null
+    is_go_module "$test_dir/gomod.zip"
+    rm -rf "$test_dir"
+}
+
+@test "is_go_module returns false for non-Go-module zip" {
+    local test_dir
+    test_dir=$(mktemp -d)
+    echo "not a go module" > "$test_dir/data.txt"
+    cd "$test_dir" && zip -q "plain.zip" "data.txt" && cd - >/dev/null
+    rm -f "$test_dir/data.txt"
+    run is_go_module "$test_dir/plain.zip"
+    [[ $status -ne 0 ]]
+    rm -rf "$test_dir"
+}
+
+# --- get_go_metadata ---
+
+@test "get_go_metadata extracts module path and version" {
+    local test_dir
+    test_dir=$(mktemp -d)
+    mkdir -p "$test_dir/github.com/aerospike/mod@v2.1.0"
+    echo "module github.com/aerospike/mod" > "$test_dir/github.com/aerospike/mod@v2.1.0/go.mod"
+    cd "$test_dir" && zip -q -r "gomod.zip" "github.com/" && cd - >/dev/null
+    read -r -a meta < <(get_go_metadata "$test_dir/gomod.zip")
+    [[ "${meta[0]}" == "github.com/aerospike/mod" ]]
+    [[ "${meta[1]}" == "v2.1.0" ]]
+    rm -rf "$test_dir"
+}
+
+# --- _validate_go_module_path ---
+
+@test "_validate_go_module_path rejects path with semicolons (property injection)" {
+    export DEPLOY_DIR
+    run bash -c 'source "$DEPLOY_DIR/package_utils.sh" && _validate_go_module_path "evil;injected=bar"'
+    [[ $status -ne 0 ]]
+}
+
+@test "_validate_go_module_path rejects path without domain dot" {
+    export DEPLOY_DIR
+    run bash -c 'source "$DEPLOY_DIR/package_utils.sh" && _validate_go_module_path "noDomain/pkg"'
+    [[ $status -ne 0 ]]
+}
+
+@test "_validate_go_module_path accepts valid Go module path" {
+    _validate_go_module_path "github.com/aerospike/aeromod"
+}
