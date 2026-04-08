@@ -228,7 +228,7 @@ jobs:
       gh-artifact-directory: dist
       build-env: VERSION=1.2.3
       build-script: |
-        MODULE=$(head -1 go.mod | cut -d' ' -f2)
+        MODULE=$(sed -n 's/^module //p' go.mod)
         TMP=$(mktemp -d)
         mkdir -p "$TMP/$MODULE@v$VERSION" dist
         cp go.mod *.go "$TMP/$MODULE@v$VERSION/"
