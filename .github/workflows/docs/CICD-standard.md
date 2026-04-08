@@ -226,6 +226,7 @@ jobs:
       jf-build-name: my-gomod
       version: 1.2.3
       gh-artifact-directory: dist
+      build-env: VERSION=1.2.3
       build-script: |
         MODULE=$(awk 'NR==1{print $2}' go.mod)
         TMP=$(mktemp -d)
@@ -238,7 +239,7 @@ jobs:
 
 ## Full examples
 
-- [example_artifacts-cicd.yaml](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/example_artifacts-cicd.yaml): drop-in orchestrated pipeline with multi-ecosystem matrix (C, .NET, npm, Java, Python)
+- [example_artifacts-cicd.yaml](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/example_artifacts-cicd.yaml): drop-in orchestrated pipeline with multi-ecosystem matrix (C, .NET, npm, Java, Python, Go)
 
 ---
 
