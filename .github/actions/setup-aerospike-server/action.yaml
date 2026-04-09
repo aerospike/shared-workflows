@@ -516,6 +516,35 @@ runs:
           --tools-image "${{ inputs.container-repo-url }}/database-docker-virtual/aerospike-tools:${{ inputs.tools-tag }}" \
           --network "${{ inputs.network-name }}"
 
+    - name: Print Aerospike server version
+      shell: bash
+      run: |
+        image="${{ inputs.container-repo-url }}/${{ inputs.server-container-repo }}:${{ inputs.server-tag }}"
+        first_container="${{ inputs.container-name-prefix }}-1"
+
+        echo "============================================"
+        echo "Aerospike Server Image"
+        echo "============================================"
+        echo "Aerospike server image: ${image}"
+        echo "Aerospike server image tag: ${{ inputs.server-tag }}"
+        echo ""
+
+        echo "============================================"
+        echo "Aerospike Server Version (from container)"
+        echo "============================================"
+        if version_output=$(docker exec "$first_container" asd --version 2>&1); then
+          echo "Aerospike server version: ${version_output}"
+        else
+          echo "::warning::Could not retrieve Aerospike server version via 'asd --version': ${version_output}"
+          # Fall back to checking container logs for the version line
+          if log_version=$(docker logs "$first_container" 2>&1 | grep -m1 'Aerospike'); then
+            echo "Aerospike server version (from logs): ${log_version}"
+          else
+            echo "::warning::Could not determine Aerospike server version from container logs either"
+          fi
+        fi
+        echo "============================================"
+
     - name: Setup strong consistency
       if: inputs.enable-strong-consistency == 'true'
       shell: bash
