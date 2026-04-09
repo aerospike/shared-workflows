@@ -91,6 +91,14 @@ jobs:
             "build-script":"python -m build && mkdir -p output && mv dist/*.whl dist/*.tar.gz output/",
             "setup-python":true,
             "python-version":"3.12"
+          },
+          {
+            "runs-on":"ubuntu-22.04",
+            "distro":"go",
+            "arch":"x86_64",
+            "working-directory":"repo-source/.github/workflows/execute-build/test_apps/GoHelloWorld",
+            "gh-artifact-directory":"dist",
+            "build-script":"VERSION=1.0.0 && read -r _ MODULE < go.mod && TMP=$(mktemp -d) && mkdir -p \"$TMP/$MODULE@v$VERSION\" dist && cp go.mod *.go \"$TMP/$MODULE@v$VERSION/\" && (cd \"$TMP\" && zip -qr \"$OLDPWD/dist/hello-v$VERSION.zip\" .) && rm -rf \"$TMP\""
           }
         ]}
       build-script: |

@@ -14,6 +14,7 @@ A reusable GitHub Actions workflow for uploading build artifacts to JFrog Artifa
 | NuGet (.nupkg/.snupkg)    | `{project}-nuget-dev-local`   | `.asc`                     | `version`, `package_name`                                                          |
 | npm (.tgz)                | `{project}-npm-dev-local`     | `.asc`                     | `version`, `package_name`                                                          |
 | PyPI (.whl/.tar.gz sdist) | `{project}-pypi-dev-local`    | `.asc`                     | `version`, `package_name`, `pypi.name`, `pypi.version`                             |
+| Go module (.zip)          | `{project}-go-dev-local`      | `.asc`                     | `version`, `package_name`, `go.module`, `go.version`                               |
 | Generic (everything else) | `{project}-generic-dev-local` | `.asc`                     | `version`, `package_name`                                                          |
 
 All types also include `build.type` and `internal` properties when those inputs are set.
@@ -73,7 +74,7 @@ The deploy pipeline uses a centralized type registry (`type_registry.sh`). To ad
 Artifacts arrive in `build-artifacts/` as a flat collection from the sign stage. The structuring phase categorizes them by type and gathers companion files:
 
 - Types with unique extensions (DEB, RPM, JAR, NuGet, `.whl`) are matched by extension
-- Gzipped tarballs (`.tgz` and `.tar.gz`) are inspected with content-based detectors to distinguish npm packages, PyPI source distributions, and generic tarballs
+- Gzipped tarballs (`.tgz` and `.tar.gz`) and zip archives (`.zip`) are inspected with content-based detectors to distinguish npm packages, PyPI source distributions, Go modules, and generic archives
 - Companion files (defined per type in `TYPE_COMPANIONS`) are automatically copied alongside their primary artifact
 - Generic catches everything not claimed by the above
 
@@ -82,7 +83,7 @@ Artifacts arrive in `build-artifacts/` as a flat collection from the sign stage.
 Each type directory is uploaded to its respective repository with appropriate properties. The upload functions are driven by the type registry:
 
 - Simple types (DEB, RPM) use the generic `upload_type()` dispatch which calls `get_TYPE_props()` and `get_TYPE_extra_flags()` by convention
-- Types with custom path layouts (JAR, NuGet, npm, PyPI, generic) define `upload_TYPE_packages()` overrides
+- Types with custom path layouts (JAR, NuGet, npm, PyPI, Go, generic) define `upload_TYPE_packages()` overrides
 - All uploads go through `jf_upload()` or `run jf rt upload` which adds standard flags (`--build-name`, `--build-number`, `--project`)
 
 ### 3. Build info
@@ -146,6 +147,26 @@ pypi/
   {filename}.whl.asc
   {filename}.tar.gz
   {filename}.tar.gz.asc
+```
+
+### Go module
+
+`.zip` files are inspected for Go module layout (`module@version/go.mod`). At upload time, the `.mod` file is extracted from the zip and a `.info` JSON is generated, following the [GOPROXY protocol](https://go.dev/ref/mod#goproxy-protocol).
+
+```text
+go/
+  {filename}.zip
+  {filename}.zip.asc
+```
+
+Uploaded to JFrog as:
+
+```text
+{project}-go-dev-local/
+  {module}/@v/{version}.zip
+  {module}/@v/{version}.zip.asc
+  {module}/@v/{version}.mod
+  {module}/@v/{version}.info
 ```
 
 ## File layout

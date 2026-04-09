@@ -54,10 +54,10 @@ Internally, GitHub Actions artifacts are used for _in-runner handoff_ between st
 
 ## Composable artifact pipeline
 
-See [example_composable-matrix.yaml](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/example_composable-matrix.yaml) for the complete working example. It demonstrates DEB/RPM, npm, and Java/Maven builds with a custom test step inserted between build and sign:
+See [example_composable-matrix.yaml](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/example_composable-matrix.yaml) for the complete working example. It demonstrates DEB/RPM, npm, Java/Maven, Python/PyPI, and Go module builds with a custom test step inserted between build and sign:
 
 ```text
-extract-version  →  build (matrix + npm + java)  →  collect  →  [your tests]  →  sign  →  deploy
+extract-version  →  build (matrix + npm + java + python + go)  →  collect  →  [your tests]  →  sign  →  deploy
 ```
 
 With release bundles (shown in the example for `workflow_dispatch`):
@@ -72,7 +72,7 @@ deploy  →  create-release-bundle  →  promote
 
 ```text
 Per-matrix build:  {run_id}-{run_attempt}-buildinfo-{distro}-{arch}
-Ecosystem build:   {run_id}-{run_attempt}-buildinfo-npm-x86_64
+Ecosystem build:   {run_id}-{run_attempt}-buildinfo-{ecosystem}-x86_64
 Metadata prefix:   {run_id}-{run_attempt}-buildinfo
 Deploy parent:     {run_id}-{run_attempt}
 ```
@@ -95,6 +95,8 @@ my-app / 1234567-1                                (parent)
 ├── my-app / 1234567-1-buildinfo-el9-x86_64        (metadata child)
 ├── my-app / 1234567-1-buildinfo-npm-x86_64         (metadata child)
 ├── my-app / 1234567-1-buildinfo-java-x86_64        (metadata child)
+├── my-app / 1234567-1-buildinfo-python-x86_64      (metadata child)
+├── my-app / 1234567-1-buildinfo-go-x86_64          (metadata child)
 └── my-app / 1234567-1-artifacts                    (artifact child)
 ```
 
@@ -125,7 +127,7 @@ At Aerospike, release bundles are the only way artifacts are promoted between en
 
 ## Full examples
 
-- [example_composable-matrix.yaml](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/example_composable-matrix.yaml): multi-ecosystem matrix builds (DEB/RPM, npm, Java) with custom test step, release bundle lifecycle, and promotion
+- [example_composable-matrix.yaml](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/example_composable-matrix.yaml): multi-ecosystem matrix builds (DEB/RPM, npm, Java, Python, Go) with custom test step, release bundle lifecycle, and promotion
 
 ---
 

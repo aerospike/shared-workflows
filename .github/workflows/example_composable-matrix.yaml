@@ -1,8 +1,8 @@
 name: Example Composable Matrix CI/CD
 # Demonstrates the composable artifact pipeline: calling the underlying shared
 # workflows individually with custom steps between them. Builds DEB, RPM, npm,
-# and Java artifacts across a matrix, then signs, deploys, and creates a release
-# bundle with promotion.
+# Java, Python, and Go module artifacts across a matrix, then signs, deploys,
+# and creates a release bundle with promotion.
 #
 # The full pipeline runs on workflow_dispatch, including the release bundle
 # lifecycle.
@@ -18,6 +18,8 @@ name: Example Composable Matrix CI/CD
 #  2. build (matrix)         - DEB/RPM builds across distros using FPM for packaging
 #     build-npm              - npm package build
 #     build-java             - Java/Maven build
+#     build-python           - Python wheel + sdist build
+#     build-go               - Go module zip build
 #  3. collect                - merge per-matrix artifacts into one (collect-build-artifacts action)
 #  4. test                   - INSERT YOUR TESTS HERE
 #  5. sign                   - GPG sign artifacts (reusable_sign-artifacts.yaml)
@@ -191,9 +193,33 @@ jobs:
       python-version: "3.12"
     secrets: inherit
 
+  build-go:
+    needs: extract-version
+    uses: ./.github/workflows/reusable_execute-build.yaml
+    with:
+      gh-workflows-ref: ${{ github.sha }}
+      jf-project: test
+      jf-build-name: test-build
+      jf-build-id: ${{ github.run_id }}-${{ github.run_attempt }}-buildinfo-go-x86_64
+      gh-source-path: repo-source
+      working-directory: repo-source/.github/workflows/execute-build/test_apps/GoHelloWorld
+      build-env: VERSION=${{ needs.extract-version.outputs.version }}
+      build-script: |
+        read -r _ MODULE < go.mod
+        TMP=$(mktemp -d)
+        mkdir -p "$TMP/$MODULE@v$VERSION" dist
+        cp go.mod *.go "$TMP/$MODULE@v$VERSION/"
+        (cd "$TMP" && zip -qr "$OLDPWD/dist/hello-v$VERSION.zip" .)
+        rm -rf "$TMP"
+      gh-artifact-directory: dist
+      gh-artifact-name: build-artifacts-go-x86_64
+      oidc-provider-name: gh-dev-test
+      oidc-audience: aerospike/testing
+    secrets: inherit
+
   # Merge all per-matrix artifacts into a single github artifact for downstream jobs.
   collect:
-    needs: [build, build-npm, build-java, build-python]
+    needs: [build, build-npm, build-java, build-python, build-go]
     runs-on: ubuntu-22.04
     steps:
       - name: Harden the runner (Audit all outbound calls)

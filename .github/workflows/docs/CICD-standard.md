@@ -89,6 +89,7 @@ Notes:
 - **Java/Maven:** Set `setup-java: true` to have Java installed before your build script runs. Optionally set `java-version` (default `"21"`), `java-distribution` (default `temurin`), and `java-cache` (default `maven`). Matrix entries can override all four fields per build.
 - **JAR artifacts:** Use `jar-group-id` to provide a Maven group ID fallback when the JAR metadata doesn't include one.
 - **Python/PyPI:** Set `setup-python: true` to install Python and build tools (`build`, `twine`) before your build script runs. Optionally set `python-version` (default `"3.12"`). The deploy stage auto-detects `.whl` and `.tar.gz` sdist files and routes them to the appropriate PyPI repository. Matrix entries can override `setup-python` and `python-version` per build.
+- **Go modules:** The deploy stage auto-detects Go module `.zip` archives (those containing `module@version/go.mod`) and routes them to the Go repository. At upload time, it extracts the `.mod` file and generates a `.info` JSON following the [GOPROXY protocol](https://go.dev/ref/mod#goproxy-protocol). No special setup inputs are needed. Your build script should produce a Go module zip with the standard `module@version/` prefix layout.
 
 ### Build-info
 
@@ -211,9 +212,34 @@ matrix-json: >-
   ]}
 ```
 
+#### Go module example
+
+Go modules are source-only zip archives. Since Go has no built-in packaging command like `npm pack` or `python -m build`, the build script creates the zip manually with the required `module@version/` prefix:
+
+```yaml
+jobs:
+  ci:
+    uses: aerospike/shared-workflows/.github/workflows/reusable_artifacts-cicd.yaml@v3.2.0
+    with:
+      gh-workflows-ref: v3.2.0
+      jf-project: my-project
+      jf-build-name: my-gomod
+      version: 1.2.3
+      gh-artifact-directory: dist
+      build-env: VERSION=1.2.3
+      build-script: |
+        read -r _ MODULE < go.mod
+        TMP=$(mktemp -d)
+        mkdir -p "$TMP/$MODULE@v$VERSION" dist
+        cp go.mod *.go "$TMP/$MODULE@v$VERSION/"
+        (cd "$TMP" && zip -qr "$OLDPWD/dist/hello-v$VERSION.zip" .)
+        rm -rf "$TMP"
+    secrets: inherit
+```
+
 ## Full examples
 
-- [example_artifacts-cicd.yaml](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/example_artifacts-cicd.yaml): drop-in orchestrated pipeline with multi-ecosystem matrix (C, .NET, npm, Java, Python)
+- [example_artifacts-cicd.yaml](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/example_artifacts-cicd.yaml): drop-in orchestrated pipeline with multi-ecosystem matrix (C, .NET, npm, Java, Python, Go)
 
 ---
 
