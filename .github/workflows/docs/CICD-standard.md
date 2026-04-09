@@ -50,9 +50,9 @@ This orchestrates the full build → sign → deploy lifecycle internally.
 ```yaml
 jobs:
   ci:
-    uses: aerospike/shared-workflows/.github/workflows/reusable_artifacts-cicd.yaml@v3.2.0
+    uses: aerospike/shared-workflows/.github/workflows/reusable_artifacts-cicd.yaml@v3.3.0
     with:
-      gh-workflows-ref: v3.2.0 # Must match @v3.2.0 above
+      gh-workflows-ref: v3.3.0 # Must match @v3.3.0 above
       jf-project: my-project
       jf-build-name: my-app
       version: 1.2.3
@@ -142,9 +142,9 @@ Precedence is always: **matrix entry override → workflow input defaults**.
 ```yaml
 jobs:
   ci:
-    uses: aerospike/shared-workflows/.github/workflows/reusable_artifacts-cicd.yaml@v3.2.0
+    uses: aerospike/shared-workflows/.github/workflows/reusable_artifacts-cicd.yaml@v3.3.0
     with:
-      gh-workflows-ref: v3.2.0
+      gh-workflows-ref: v3.3.0
       jf-project: my-project
       jf-build-name: my-app
       version: 1.2.3

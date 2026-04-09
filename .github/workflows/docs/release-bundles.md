@@ -44,9 +44,9 @@ Use `reusable_create-release-bundle.yaml` to create a release bundle as a standa
 ```yaml
 release-bundle:
   needs: [deploy]
-  uses: aerospike/shared-workflows/.github/workflows/reusable_create-release-bundle.yaml@v3.2.0
+  uses: aerospike/shared-workflows/.github/workflows/reusable_create-release-bundle.yaml@v3.3.0
   with:
-    gh-workflows-ref: v3.2.0
+    gh-workflows-ref: v3.3.0
     jf-build-names: "my-app:1.2.3,my-container:1.2.3"
     jf-bundle-name: my-release
     version: 1.2.3

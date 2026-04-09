@@ -29,17 +29,22 @@ The orchestrated `reusable_artifacts-cicd.yaml` handles build → sign → deplo
 ## High-level flow
 
 ```mermaid
+---
+config:
+  theme: redux-dark
+---
 sequenceDiagram
     participant YW as Your Workflow
     participant EB as Build
+    actor YJ as Your Custom Job
     participant SA as Sign
     participant DA as Deploy
     participant DBD as Docker Build & Deploy
     participant RB as Release Bundle
     participant JF as JFrog
     YW->>EB: run build script
-    EB->>SA: unsigned artifacts
-    Note over EB,SA: your tests or custom jobs go here
+    EB->>YJ: unsigned artifacts
+    YJ->>SA: pass artifacts
     SA->>DA: signed artifacts
     DA->>JF: artifacts
     YW->>DBD: build, push
