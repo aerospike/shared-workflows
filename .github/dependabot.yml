@@ -38,3 +38,13 @@ updates:
         update-types:
           - minor
           - patch
+
+  - package-ecosystem: npm
+    directory: /.github/workflows/execute-build/test_apps/NpmHelloWorld
+    schedule:
+      interval: daily
+
+  - package-ecosystem: maven
+    directory: /.github/workflows/execute-build/test_apps/JavaHelloWorld
+    schedule:
+      interval: daily
