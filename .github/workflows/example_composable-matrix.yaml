@@ -205,7 +205,7 @@ jobs:
       working-directory: repo-source/.github/workflows/execute-build/test_apps/GoHelloWorld
       build-env: VERSION=${{ needs.extract-version.outputs.version }}
       build-script: |
-        MODULE=$(sed -n 's/^module //p' go.mod)
+        read -r _ MODULE < go.mod
         TMP=$(mktemp -d)
         mkdir -p "$TMP/$MODULE@v$VERSION" dist
         cp go.mod *.go "$TMP/$MODULE@v$VERSION/"
