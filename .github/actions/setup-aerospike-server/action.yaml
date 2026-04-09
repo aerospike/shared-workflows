@@ -193,6 +193,8 @@ runs:
             dns_idx=$(( dns_idx + 1 ))
           done
           echo "DNS.${dns_idx} = localhost"
+          dns_idx=$(( dns_idx + 1 ))
+          echo "DNS.${dns_idx} = docker"
           echo "IP.1 = 127.0.0.1"
         } > san.ext
 
