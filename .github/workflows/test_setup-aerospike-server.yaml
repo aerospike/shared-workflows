@@ -356,3 +356,179 @@ jobs:
           echo "Unauthenticated result: $result"
           [[ "$result" == *"ERROR"* || "$result" == *"not authenticated"* || "$result" == *"error"* ]] \
             || { echo "Expected unauthenticated access to be rejected"; exit 1; }
+
+  test-tls-with-security:
+    name: Single node with TLS and security
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup Aerospike Server with TLS and security
+        id: setup-aerospike-server
+        uses: ./.github/actions/setup-aerospike-server
+        with:
+          enable-tls: "true"
+          enable-security: "true"
+          features-content: ${{ secrets.AES_FEATURES_CONF }}
+          startup-timeout: "60"
+          oidc-provider: ${{ vars.JFROG_OIDC_PROVIDER }}
+          oidc-audience: ${{ vars.JFROG_OIDC_AUDIENCE }}
+
+      - name: Verify TLS outputs
+        run: |
+          echo "tls-service-ports: ${{ steps.setup-aerospike-server.outputs.tls-service-ports }}"
+          echo "tls-cert-dir: ${{ steps.setup-aerospike-server.outputs.tls-cert-dir }}"
+
+          [[ "${{ steps.setup-aerospike-server.outputs.tls-service-ports }}" == "4333" ]] \
+            || { echo "Unexpected tls-service-ports"; exit 1; }
+          [[ -n "${{ steps.setup-aerospike-server.outputs.tls-cert-dir }}" ]] \
+            || { echo "tls-cert-dir is empty"; exit 1; }
+
+      - name: Verify cert files exist
+        run: |
+          cert_dir="${{ steps.setup-aerospike-server.outputs.tls-cert-dir }}"
+          for f in ca.crt ca.key server.crt server.key client.crt client.key; do
+            [[ -f "$cert_dir/$f" ]] || { echo "Missing cert file: $f"; exit 1; }
+          done
+          echo "All expected cert files present"
+
+      - name: Verify authenticated access on service port
+        run: |
+          tools_image="aerospike.jfrog.io/database-docker-virtual/aerospike-tools:12.1.1_2"
+          network="${{ steps.setup-aerospike-server.outputs.network-name }}"
+          rc=0
+          result=$(docker run --rm --network "$network" "$tools_image" \
+            asinfo -h aerospike-1 -p 3000 -U admin -P admin -v status 2>&1) || rc=$?
+          echo "Exit code: $rc"
+          echo "asinfo status (auth, non-TLS): $result"
+          [[ $rc -eq 0 && "$result" == *"ok"* ]] || { echo "Expected status=ok with auth on service port"; exit 1; }
+
+      - name: Verify authenticated access on TLS port
+        run: |
+          tools_image="aerospike.jfrog.io/database-docker-virtual/aerospike-tools:12.1.1_2"
+          network="${{ steps.setup-aerospike-server.outputs.network-name }}"
+          cert_dir="${{ steps.setup-aerospike-server.outputs.tls-cert-dir }}"
+          rc=0
+          result=$(docker run --rm --network "$network" \
+            -v "$cert_dir:/certs:ro" "$tools_image" \
+            asinfo -h "aerospike-1:aerospike-tls" -p 4333 \
+            --tls-enable --tls-cafile /certs/ca.crt \
+            -U admin -P admin -v status 2>&1) || rc=$?
+          echo "Exit code: $rc"
+          echo "asinfo status (auth, TLS): $result"
+          [[ $rc -eq 0 && "$result" == *"ok"* ]] || { echo "Expected status=ok with auth on TLS port"; exit 1; }
+
+      - name: Verify unauthenticated access is rejected
+        run: |
+          tools_image="aerospike.jfrog.io/database-docker-virtual/aerospike-tools:12.1.1_2"
+          network="${{ steps.setup-aerospike-server.outputs.network-name }}"
+          rc=0
+          result=$(docker run --rm --network "$network" "$tools_image" \
+            asinfo -h aerospike-1 -p 3000 -v status 2>&1) || rc=$?
+          echo "Exit code: $rc"
+          echo "Unauthenticated result: $result"
+          [[ "$result" == *"ERROR"* || "$result" == *"not authenticated"* || "$result" == *"error"* ]] \
+            || { echo "Expected unauthenticated access to be rejected"; exit 1; }
+
+      - name: Verify TLS handshake
+        run: |
+          cert_dir="${{ steps.setup-aerospike-server.outputs.tls-cert-dir }}"
+          echo | openssl s_client -connect 127.0.0.1:4333 -CAfile "$cert_dir/ca.crt" 2>&1 | grep -q "Verify return code: 0"
+          echo "TLS handshake verified"
+
+  test-tls-with-security-multi-node:
+    name: Multi-node with TLS and security (3 nodes)
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup Aerospike Server with TLS and security (3 nodes)
+        id: setup-aerospike-server
+        uses: ./.github/actions/setup-aerospike-server
+        with:
+          num-nodes: "3"
+          enable-tls: "true"
+          enable-security: "true"
+          features-content: ${{ secrets.AES_FEATURES_CONF }}
+          startup-timeout: "60"
+          oidc-provider: ${{ vars.JFROG_OIDC_PROVIDER }}
+          oidc-audience: ${{ vars.JFROG_OIDC_AUDIENCE }}
+
+      - name: Verify outputs
+        run: |
+          echo "container-names: ${{ steps.setup-aerospike-server.outputs.container-names }}"
+          echo "service-ports: ${{ steps.setup-aerospike-server.outputs.service-ports }}"
+          echo "tls-service-ports: ${{ steps.setup-aerospike-server.outputs.tls-service-ports }}"
+          echo "tls-cert-dir: ${{ steps.setup-aerospike-server.outputs.tls-cert-dir }}"
+
+          [[ "${{ steps.setup-aerospike-server.outputs.container-names }}" == "aerospike-1,aerospike-2,aerospike-3" ]] \
+            || { echo "Unexpected container-names"; exit 1; }
+          [[ "${{ steps.setup-aerospike-server.outputs.service-ports }}" == "3000,3001,3002" ]] \
+            || { echo "Unexpected service-ports"; exit 1; }
+          [[ "${{ steps.setup-aerospike-server.outputs.tls-service-ports }}" == "4333,4334,4335" ]] \
+            || { echo "Unexpected tls-service-ports"; exit 1; }
+          [[ -n "${{ steps.setup-aerospike-server.outputs.tls-cert-dir }}" ]] \
+            || { echo "tls-cert-dir is empty"; exit 1; }
+
+      - name: Verify all containers are running
+        run: |
+          for i in 1 2 3; do
+            docker ps --filter "name=aerospike-${i}" --format '{{.Names}}' | grep -q "aerospike-${i}"
+          done
+
+      - name: Verify cluster formation via authenticated asinfo
+        run: |
+          tools_image="aerospike.jfrog.io/database-docker-virtual/aerospike-tools:12.1.1_2"
+          network="${{ steps.setup-aerospike-server.outputs.network-name }}"
+          for container in aerospike-1 aerospike-2 aerospike-3; do
+            echo "Checking cluster_size on $container..."
+            rc=0
+            stats=$(docker run --rm --network "$network" "$tools_image" \
+              asinfo -h "$container" -p 3000 -U admin -P admin -v "statistics" 2>&1) || rc=$?
+            cluster_size=$(echo "$stats" | tr ';' '\n' | grep -oP 'cluster_size=\K\d+' || echo "N/A")
+            echo "$container cluster_size: $cluster_size (exit code: $rc)"
+            [[ $rc -eq 0 && "$cluster_size" == "3" ]] \
+              || { echo "Expected cluster_size=3 on $container, got $cluster_size"; exit 1; }
+          done
+
+      - name: Verify authenticated TLS connection on each node
+        run: |
+          tools_image="aerospike.jfrog.io/database-docker-virtual/aerospike-tools:12.1.1_2"
+          network="${{ steps.setup-aerospike-server.outputs.network-name }}"
+          cert_dir="${{ steps.setup-aerospike-server.outputs.tls-cert-dir }}"
+          for container in aerospike-1 aerospike-2 aerospike-3; do
+            echo "Checking TLS on $container..."
+            rc=0
+            result=$(docker run --rm --network "$network" \
+              -v "$cert_dir:/certs:ro" "$tools_image" \
+              asinfo -h "${container}:aerospike-tls" -p 4333 \
+              --tls-enable --tls-cafile /certs/ca.crt \
+              -U admin -P admin -v status 2>&1) || rc=$?
+            echo "$container TLS status: $result (exit code: $rc)"
+            [[ $rc -eq 0 && "$result" == *"ok"* ]] \
+              || { echo "Expected status=ok with auth on TLS port for $container"; exit 1; }
+          done
+
+      - name: Verify unauthenticated access is rejected
+        run: |
+          tools_image="aerospike.jfrog.io/database-docker-virtual/aerospike-tools:12.1.1_2"
+          network="${{ steps.setup-aerospike-server.outputs.network-name }}"
+          rc=0
+          result=$(docker run --rm --network "$network" "$tools_image" \
+            asinfo -h aerospike-1 -p 3000 -v status 2>&1) || rc=$?
+          echo "Exit code: $rc"
+          echo "Unauthenticated result: $result"
+          [[ "$result" == *"ERROR"* || "$result" == *"not authenticated"* || "$result" == *"error"* ]] \
+            || { echo "Expected unauthenticated access to be rejected"; exit 1; }
