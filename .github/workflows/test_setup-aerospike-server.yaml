@@ -417,8 +417,8 @@ jobs:
           rc=0
           result=$(docker run --rm --network "$network" \
             -v "$cert_dir:/certs:ro" "$tools_image" \
-            asinfo -h "aerospike-1:aerospike-tls" -p 4333 \
-            --tls-enable --tls-cafile /certs/ca.crt \
+            asinfo -h aerospike-1 -p 4333 \
+            --tls-enable --tls-name aerospike-tls --tls-cafile /certs/ca.crt \
             -U admin -P admin -v status 2>&1) || rc=$?
           echo "Exit code: $rc"
           echo "asinfo status (auth, TLS): $result"
@@ -513,8 +513,8 @@ jobs:
             rc=0
             result=$(docker run --rm --network "$network" \
               -v "$cert_dir:/certs:ro" "$tools_image" \
-              asinfo -h "${container}:aerospike-tls" -p 4333 \
-              --tls-enable --tls-cafile /certs/ca.crt \
+              asinfo -h "$container" -p 4333 \
+              --tls-enable --tls-name aerospike-tls --tls-cafile /certs/ca.crt \
               -U admin -P admin -v status 2>&1) || rc=$?
             echo "$container TLS status: $result (exit code: $rc)"
             [[ $rc -eq 0 && "$result" == *"ok"* ]] \
