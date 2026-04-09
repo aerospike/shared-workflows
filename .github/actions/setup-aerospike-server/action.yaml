@@ -238,6 +238,12 @@ runs:
 
         render_tpl="${{ github.action_path }}/render-template.sh"
 
+        # Build feature-key-file directive (omitted from config when no features file is provided)
+        export FEATURE_KEY_FILE=""
+        if [[ -n "${{ inputs.features-file }}" || -n "${FEATURES_CONTENT}" ]]; then
+          FEATURE_KEY_FILE="feature-key-file /etc/aerospike/features.conf"
+        fi
+
         # Build security stanza from template
         export SECURITY=""
         if [[ "$effective_security" == "true" ]]; then
@@ -391,6 +397,12 @@ runs:
             tpl_dir="${{ github.action_path }}/templates"
             render_tpl="${{ github.action_path }}/render-template.sh"
 
+            # Build feature-key-file directive
+            export FEATURE_KEY_FILE=""
+            if [[ -n "$features_path" ]]; then
+              FEATURE_KEY_FILE="feature-key-file /etc/aerospike/features.conf"
+            fi
+
             # Build security stanza from template
             export SECURITY=""
             if [[ "$effective_security" == "true" ]]; then
@@ -446,15 +458,14 @@ runs:
           # Decide whether to bypass the entrypoint. The Aerospike Docker entrypoint
           # regenerates aerospike.conf, overwriting any mounted config. Bypass it
           # whenever we need a custom config that must not be overwritten.
-          # SC always requires a features file (enterprise), so bypass is safe.
-          # Security alone can work without features, so only bypass when a
-          # features file is available (entrypoint would overwrite our config).
           bypass_entrypoint="false"
           if (( num_nodes > 1 )); then
             bypass_entrypoint="true"
           elif [[ "$enable_sc" == "true" ]]; then
             bypass_entrypoint="true"
-          elif [[ "$effective_security" == "true" && -n "$features_path" ]]; then
+          elif [[ "$enable_tls" == "true" ]]; then
+            bypass_entrypoint="true"
+          elif [[ "$effective_security" == "true" ]]; then
             bypass_entrypoint="true"
           fi
 
