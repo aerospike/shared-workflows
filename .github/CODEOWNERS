@@ -1,5 +1,8 @@
 # Default - dev-infra owns all files
 *   @aerospike/dev-infra
 
+# Markdown documentation
+*.md   @aerospike/dev-infra @aerospike/AeroAPI
+
 # setup-aerospike-server composite action
 /.github/actions/setup-aerospike-server/   @aerospike/dev-infra @mirzakaracic
