@@ -185,6 +185,38 @@ on:
         type: string
         default: ""
 
+      # Mac signing inputs (optional, all prefixed with mac-)
+      sign-mac:
+        description: Enable Apple code signing and notarization for Mac artifacts
+        required: false
+        type: boolean
+        default: false
+      mac-artifact-glob:
+        description: Glob pattern for files to Apple-sign (controls signing scope, not download scope)
+        required: false
+        type: string
+        default: "**/*"
+      mac-installer-identity:
+        description: "productsign identity (e.g. 'Developer ID Installer: Aerospike, Inc. (TEAMID)')"
+        required: false
+        type: string
+        default: ""
+      mac-notarize:
+        description: Whether to notarize Mac artifacts after signing
+        required: false
+        type: boolean
+        default: true
+      mac-runs-on:
+        description: macOS runner for sign-mac job
+        required: false
+        type: string
+        default: macos-14
+      mac-signing-identity:
+        description: "codesign identity (e.g. 'Developer ID Application: Aerospike, Inc. (TEAMID)')"
+        required: false
+        type: string
+        default: ""
+
     secrets:
       gpg-private-key:
         required: true
@@ -199,6 +231,18 @@ on:
       credential_id:
         required: false
       es-totp_secret:
+        required: false
+      apple-application-cert:
+        required: false
+      apple-cert-password:
+        required: false
+      apple-id:
+        required: false
+      apple-id-password:
+        required: false
+      apple-installer-cert:
+        required: false
+      apple-team-id:
         required: false
 
     outputs:
@@ -326,8 +370,25 @@ jobs:
           path: build-artifacts
           retention-days: ${{ inputs.gh-retention-days }}
 
-  sign:
+  sign-mac:
+    if: inputs.sign-mac
     needs: [resolve, collect-matrix-artifacts]
+    uses: ./.github/workflows/reusable_sign-mac-artifacts.yaml
+    with:
+      gh-unsigned-artifacts: build-artifacts
+      gh-checkout-path: ${{ inputs.gh-checkout-path }}
+      gh-retention-days: ${{ inputs.gh-retention-days }}
+      gh-workflows-ref: ${{ inputs.gh-workflows-ref }}
+      runs-on: ${{ inputs.mac-runs-on }}
+      signing-identity: ${{ inputs.mac-signing-identity }}
+      installer-identity: ${{ inputs.mac-installer-identity }}
+      notarize: ${{ inputs.mac-notarize }}
+      artifact-glob: ${{ inputs.mac-artifact-glob }}
+    secrets: inherit
+
+  sign:
+    needs: [resolve, collect-matrix-artifacts, sign-mac]
+    if: always() && !cancelled() && !failure()
     uses: ./.github/workflows/reusable_sign-artifacts.yaml
     with:
       gh-artifact-name: signed-artifacts

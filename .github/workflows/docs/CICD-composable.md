@@ -13,6 +13,7 @@ The orchestrated `reusable_artifacts-cicd.yaml` handles build → sign → deplo
 | Workflow                              | Purpose                                                                                      |
 | ------------------------------------- | -------------------------------------------------------------------------------------------- |
 | `reusable_execute-build.yaml`         | Run a build script, upload artifacts to GitHub Artifacts, publish build-info to JFrog        |
+| `reusable_sign-mac-artifacts.yaml`    | Apple codesign/productsign/notarize for .pkg, .dmg, Mach-O binaries (macOS runner)           |
 | `reusable_sign-artifacts.yaml`        | Download unsigned artifacts, GPG-sign deb/rpm/generic files, SSL.com-sign nupkg files        |
 | `reusable_deploy-artifacts.yaml`      | Download signed artifacts, upload to JFrog Artifactory (auto-routes by file extension)       |
 | `reusable_create-release-bundle.yaml` | Create JFrog release bundle from one or more builds (standalone, handles checkout and setup) |
@@ -57,7 +58,7 @@ Internally, GitHub Actions artifacts are used for _in-runner handoff_ between st
 See [example_composable-matrix.yaml](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/example_composable-matrix.yaml) for the complete working example. It demonstrates DEB/RPM, npm, Java/Maven, Python/PyPI, and Go module builds with a custom test step inserted between build and sign:
 
 ```text
-extract-version  →  build (matrix + npm + java + python + go)  →  collect  →  [your tests]  →  sign  →  deploy
+extract-version  →  build (matrix + npm + java + python + go)  →  collect  →  [your tests]  →  sign-mac (optional)  →  sign  →  deploy
 ```
 
 With release bundles (shown in the example for `workflow_dispatch`):
@@ -80,7 +81,39 @@ Deploy parent:     {run_id}-{run_attempt}
 **Artifact naming.** Each build job uploads with a distinct name (e.g., `build-artifacts-el9-x86_64`, `build-artifacts-npm-x86_64`). The `collect-build-artifacts` action merges these into a single `build-artifacts` artifact that sign and deploy consume.
 
 **Collecting matrix artifacts.** Use the `collect-build-artifacts` composite action after all build jobs complete. It downloads all artifacts matching a pattern (default `build-artifacts-*`) and re-uploads them as one merged artifact:
-**Signing secrets.** GPG keys (and SSL.com credentials if nupkg files are present) must be available.
+**Signing secrets.** GPG keys (and SSL.com credentials if nupkg files are present) must be available. For Mac signing, provide Apple certificates and notarization credentials. See the [sign-mac-artifacts README](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/sign-mac-artifacts/README.md).
+
+**Mac signing (optional).** If your build produces macOS artifacts, insert `reusable_sign-mac-artifacts.yaml` between collect and GPG sign. It downloads `build-artifacts`, Apple-signs the matched files, and re-uploads with `overwrite: true`. The GPG sign step then picks up the already-Apple-signed artifacts:
+
+```yaml
+sign-mac:
+  needs: collect
+  uses: aerospike/shared-workflows/.github/workflows/reusable_sign-mac-artifacts.yaml@v3.2.0
+  with:
+    gh-unsigned-artifacts: build-artifacts
+    gh-workflows-ref: v3.2.0
+    signing-identity: "Developer ID Application: Aerospike, Inc. (23221RFU77)"
+    installer-identity: "Developer ID Installer: Aerospike, Inc. (23221RFU77)"
+    artifact-glob: "*.pkg"
+  secrets:
+    apple-application-cert: ${{ secrets.APPLE_APPLICATION_CERT }}
+    apple-cert-password: ${{ secrets.APPLE_CERT_PASSWORD }}
+    apple-id: ${{ secrets.APPLE_ID }}
+    apple-id-password: ${{ secrets.APPLE_ID_PASSWORD }}
+    apple-installer-cert: ${{ secrets.APPLE_INSTALLER_CERT }}
+    apple-team-id: ${{ secrets.APPLE_TEAM_ID }}
+
+sign:
+  needs: [collect, sign-mac]
+  if: always() && !cancelled() && !failure()
+  uses: aerospike/shared-workflows/.github/workflows/reusable_sign-artifacts.yaml@v3.2.0
+  with:
+    gh-unsigned-artifacts: build-artifacts
+    gh-workflows-ref: v3.2.0
+  secrets: inherit
+```
+
+The `if: always() && !cancelled() && !failure()` on the GPG sign job ensures it runs even when `sign-mac` is skipped (a skipped needed job would otherwise silently skip the downstream job too).
 
 **Java/Maven setup.** Pass `setup-java: true` to `reusable_execute-build.yaml` along with optional `java-version` (default `"21"`), `java-distribution` (default `temurin`), and `java-cache` (default `maven`). For JAR artifacts, pass `jar-group-id` to `reusable_deploy-artifacts.yaml` as a Maven group ID fallback when JAR metadata doesn't include one.
 
