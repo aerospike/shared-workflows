@@ -30,13 +30,13 @@ jobs:
             "distro":"el9",
             "arch":"x86_64",
             "runs-on":"ubuntu-latest",
-            "build-script":"DISTRO=$(echo \"$MATRIX_JSON\" | jq -r .distro) && ARCH=$(echo \"$MATRIX_JSON\" | jq -r .arch) && OUTPUT_DIR=$(pwd)/packaged && cd .github/workflows/execute-build/test_apps/hi && make docker-build DISTRO=$DISTRO ARCH=$ARCH && ./package.sh --version 1.0.0-test --packages-dir build --output-dir $OUTPUT_DIR"
+            "build-script":"OUTPUT_DIR=$(pwd)/packaged && cd .github/workflows/execute-build/test_apps/hi && make docker-build DISTRO=el9 ARCH=x86_64 && ./package.sh --version 1.0.0-test --packages-dir build --output-dir $OUTPUT_DIR"
           },
           {
             "distro":"jammy",
             "arch":"x86_64",
             "runs-on":"ubuntu-latest",
-            "build-script":"DISTRO=$(echo \"$MATRIX_JSON\" | jq -r .distro) && ARCH=$(echo \"$MATRIX_JSON\" | jq -r .arch) && OUTPUT_DIR=$(pwd)/packaged && cd .github/workflows/execute-build/test_apps/hi && make docker-build DISTRO=$DISTRO ARCH=$ARCH && ./package.sh --version 1.0.0-test --packages-dir build --output-dir $OUTPUT_DIR"
+            "build-script":"OUTPUT_DIR=$(pwd)/packaged && cd .github/workflows/execute-build/test_apps/hi && make docker-build DISTRO=jammy ARCH=x86_64 && ./package.sh --version 1.0.0-test --packages-dir build --output-dir $OUTPUT_DIR"
           },
           {
             "distro":"dotnet",
