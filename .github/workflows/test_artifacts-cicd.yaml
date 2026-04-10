@@ -1,4 +1,4 @@
-name: "Test: Artifacts CI/CD Full Workflow"
+name: "Test: Artifacts CI/CD"
 
 on:
   workflow_dispatch:
@@ -10,32 +10,48 @@ permissions:
   id-token: write
 
 jobs:
-  # Validates the complete end-to-end workflow including signing
-  full-workflow-test:
-    name: Full Workflow Test (Build + Sign)
+  # Skipped for Dependabot: SSL.com NuGet signing requires real credentials
+  cicd-test:
+    if: github.actor != 'dependabot[bot]'
+    name: Artifacts CI/CD
     uses: ./.github/workflows/reusable_artifacts-cicd.yaml
     with:
       jf-project: test
-      jf-build-name: full-workflow-test
+      jf-build-name: cicd-test
       version: 1.0.0-test
       gh-workflows-ref: ${{ github.ref }}
       gh-artifact-directory: packaged
       oidc-provider-name: gh-dev-test
       oidc-audience: aerospike/testing
-      build-script: |
-        DISTRO=$(echo "$MATRIX_JSON" | jq -r '.distro')
-        ARCH=$(echo "$MATRIX_JSON" | jq -r '.arch')
-        OUTPUT_DIR="$(pwd)/packaged"
-        cd .github/workflows/execute-build/test_apps/hi
-        make docker-build DISTRO="$DISTRO" ARCH="$ARCH"
-        ./package.sh --version 1.0.0-test --packages-dir build --output-dir "$OUTPUT_DIR"
-      matrix-json: |
-        {
-          "include": [
-            {"distro": "jammy", "arch": "x86_64", "runs-on": "ubuntu-latest"},
-            {"distro": "el9", "arch": "x86_64", "runs-on": "ubuntu-latest"}
-          ]
-        }
+      build-script: echo "overridden by matrix"
+      matrix-json: >-
+        {"include":[
+          {
+            "distro":"el9",
+            "arch":"x86_64",
+            "runs-on":"ubuntu-latest",
+            "build-script":"DISTRO=$(echo \"$MATRIX_JSON\" | jq -r .distro) && ARCH=$(echo \"$MATRIX_JSON\" | jq -r .arch) && OUTPUT_DIR=$(pwd)/packaged && cd .github/workflows/execute-build/test_apps/hi && make docker-build DISTRO=$DISTRO ARCH=$ARCH && ./package.sh --version 1.0.0-test --packages-dir build --output-dir $OUTPUT_DIR"
+          },
+          {
+            "distro":"jammy",
+            "arch":"x86_64",
+            "runs-on":"ubuntu-latest",
+            "build-script":"DISTRO=$(echo \"$MATRIX_JSON\" | jq -r .distro) && ARCH=$(echo \"$MATRIX_JSON\" | jq -r .arch) && OUTPUT_DIR=$(pwd)/packaged && cd .github/workflows/execute-build/test_apps/hi && make docker-build DISTRO=$DISTRO ARCH=$ARCH && ./package.sh --version 1.0.0-test --packages-dir build --output-dir $OUTPUT_DIR"
+          },
+          {
+            "distro":"dotnet",
+            "arch":"any",
+            "runs-on":"ubuntu-latest",
+            "setup-dotnet":true,
+            "build-script":"OUTPUT_DIR=$(pwd)/packaged && cd .github/workflows/execute-build/test_apps/DotnetHelloWorld/AerospikeHelloWorld && dotnet pack -c Release -p:Version=1.0.0-test -o $OUTPUT_DIR"
+          },
+          {
+            "distro":"darwin",
+            "arch":"arm64",
+            "runs-on":"macos-14",
+            "build-script":"mkdir -p packaged && echo 'test-pkg-payload' > /tmp/test-binary && pkgbuild --root /tmp --identifier com.aerospike.test --version 1.0.0-test --install-location /usr/local/bin packaged/test-1.0.0-test-darwin-arm64.pkg"
+          }
+        ]}
       dry-run: true
       sign-mac: true
       mac-signing-identity: "Developer ID Application: Test (TESTID)"
@@ -55,9 +71,10 @@ jobs:
       apple-team-id: ${{ secrets.APPLE_TEAM_ID }}
 
   verify:
-    name: Verify Signed Artifacts
+    if: github.actor != 'dependabot[bot]'
+    name: Verify Artifacts
     runs-on: ubuntu-latest
-    needs: full-workflow-test
+    needs: cicd-test
     steps:
       - name: Harden the runner (Audit all outbound calls)
         uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
@@ -81,9 +98,9 @@ jobs:
           cd ..
           rm -rf bats-core
 
-      - name: Run signing verification tests
+      - name: Run artifact verification tests
         working-directory: .github/workflows/artifacts-cicd
         run: |
-          bats tests/test_artifact_signing.bats
+          bats tests/test_artifacts_cicd.bats
         env:
           ARTIFACTS_DIR: ${{ github.workspace }}/verification/signed
