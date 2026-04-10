@@ -382,6 +382,7 @@ jobs:
       installer-identity: ${{ inputs.mac-installer-identity }}
       notarize: ${{ inputs.mac-notarize }}
       artifact-glob: ${{ inputs.mac-artifact-glob }}
+      dry-run: ${{ inputs.dry-run }}
     secrets: inherit
 
   sign:
