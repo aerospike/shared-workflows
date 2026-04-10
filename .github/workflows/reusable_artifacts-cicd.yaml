@@ -401,6 +401,7 @@ jobs:
 
   deploy-signed:
     needs: [resolve, sign]
+    if: always() && !cancelled() && !failure()
     uses: ./.github/workflows/reusable_deploy-artifacts.yaml
     with:
       build-type: ${{ inputs.build-type }}
