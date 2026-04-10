@@ -106,9 +106,8 @@ setup() {
   export SIGNING_IDENTITY="Developer ID Application: Test Corp (TESTID)"
   export INSTALLER_IDENTITY="Developer ID Installer: Test Corp (TESTID)"
   export APPLE_APPLICATION_CERT="dGVzdC1jZXJ0LWRhdGE="  # base64 of "test-cert-data"
-  export APPLE_CERT_PASSWORD="test-password"
+  export APPLE_PASSWORD="test-app-password"
   export APPLE_ID="test@example.com"
-  export APPLE_ID_PASSWORD="test-app-password"
   export APPLE_TEAM_ID="TESTID"
   export APPLE_INSTALLER_CERT="dGVzdC1pbnN0YWxsZXItY2VydA=="  # base64 of "test-installer-cert"
 }

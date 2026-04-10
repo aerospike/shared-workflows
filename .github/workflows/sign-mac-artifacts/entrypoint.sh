@@ -47,14 +47,13 @@ Options:
 
 Environment variables (required):
   APPLE_APPLICATION_CERT   Base64-encoded .p12 for codesign
-  APPLE_CERT_PASSWORD      Password for .p12 files
   SIGNING_IDENTITY         codesign identity string
 
 Environment variables (optional):
   APPLE_INSTALLER_CERT     Base64-encoded .p12 for productsign
+  APPLE_PASSWORD           App-specific password (for notarization and .p12 import if cert is encrypted)
   INSTALLER_IDENTITY       productsign identity string
   APPLE_ID                 Apple ID email (required for notarization)
-  APPLE_ID_PASSWORD        App-specific password (required for notarization)
   APPLE_TEAM_ID            Developer Team ID (required for notarization)
 
 Examples:
@@ -125,21 +124,19 @@ if [[ -z ${SIGNING_IDENTITY-} ]]; then
     echo "ERROR: SIGNING_IDENTITY environment variable is required" >&2
     exit 1
 fi
-if [[ -z ${APPLE_APPLICATION_CERT-} ]]; then
-    echo "ERROR: APPLE_APPLICATION_CERT environment variable is required" >&2
-    exit 1
-fi
-if [[ -z ${APPLE_CERT_PASSWORD-} ]]; then
-    echo "ERROR: APPLE_CERT_PASSWORD environment variable is required" >&2
-    exit 1
-fi
-if [[ $NOTARIZE == "true" ]]; then
-    for var in APPLE_ID APPLE_ID_PASSWORD APPLE_TEAM_ID; do
-        if [[ -z ${!var-} ]]; then
-            echo "ERROR: $var is required when notarization is enabled" >&2
-            exit 1
-        fi
-    done
+if [[ $DRY_RUN != "true" ]]; then
+    if [[ -z ${APPLE_APPLICATION_CERT-} ]]; then
+        echo "ERROR: APPLE_APPLICATION_CERT environment variable is required" >&2
+        exit 1
+    fi
+    if [[ $NOTARIZE == "true" ]]; then
+        for var in APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+            if [[ -z ${!var-} ]]; then
+                echo "ERROR: $var is required when notarization is enabled" >&2
+                exit 1
+            fi
+        done
+    fi
 fi
 
 # --- Keychain management ---
@@ -155,14 +152,14 @@ setup_keychain() {
     local app_p12
     app_p12=$(mktemp)
     echo "$APPLE_APPLICATION_CERT" | base64 -d >"$app_p12"
-    run security import "$app_p12" -k "$KEYCHAIN_NAME" -P "$APPLE_CERT_PASSWORD" -A
+    run security import "$app_p12" -k "$KEYCHAIN_NAME" -P "${APPLE_PASSWORD-}" -A
     rm -f "$app_p12"
 
     if [[ -n ${APPLE_INSTALLER_CERT-} ]]; then
         local inst_p12
         inst_p12=$(mktemp)
         echo "$APPLE_INSTALLER_CERT" | base64 -d >"$inst_p12"
-        run security import "$inst_p12" -k "$KEYCHAIN_NAME" -P "$APPLE_CERT_PASSWORD" -A
+        run security import "$inst_p12" -k "$KEYCHAIN_NAME" -P "${APPLE_PASSWORD-}" -A
         rm -f "$inst_p12"
     fi
 
@@ -244,7 +241,7 @@ notarize_and_staple() {
     local submit_output
     submit_output=$(xcrun notarytool submit "$file" \
         --apple-id "$APPLE_ID" \
-        --password "$APPLE_ID_PASSWORD" \
+        --password "$APPLE_PASSWORD" \
         --team-id "$APPLE_TEAM_ID" \
         --wait \
         --output-format json 2>&1) || {
@@ -258,7 +255,7 @@ notarize_and_staple() {
             echo "==> Fetching notarization log for submission $submission_id" >&2
             xcrun notarytool log "$submission_id" \
                 --apple-id "$APPLE_ID" \
-                --password "$APPLE_ID_PASSWORD" \
+                --password "$APPLE_PASSWORD" \
                 --team-id "$APPLE_TEAM_ID" >&2 || true
         fi
         exit 1
@@ -328,9 +325,13 @@ main() {
     echo "==> Artifact tree contents:"
     find "$TARGET_DIR" -type f | sort
 
-    # Set up keychain for signing
-    setup_keychain
-    trap cleanup_keychain EXIT
+    # Set up keychain for signing (skipped in dry-run since certs may not be available)
+    if [[ $DRY_RUN != "true" ]]; then
+        setup_keychain
+        trap cleanup_keychain EXIT
+    else
+        echo "==> [DRY-RUN] Skipping keychain setup"
+    fi
 
     # Process files
     local signed_count=0

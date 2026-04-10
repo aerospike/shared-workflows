@@ -120,7 +120,7 @@ jobs:
 
 The pipeline runs Mac signing before GPG signing: `collect -> sign-mac -> sign (GPG) -> deploy`. Apple signing modifies files in place, while GPG creates detached `.asc` signatures. Running Mac signing first ensures GPG signatures match the final file contents.
 
-Required secrets (set at org or repo level): `APPLE_APPLICATION_CERT`, `APPLE_CERT_PASSWORD`, `APPLE_ID`, `APPLE_ID_PASSWORD`, `APPLE_INSTALLER_CERT`, `APPLE_TEAM_ID`. See the [sign-mac-artifacts README](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/sign-mac-artifacts/README.md) for setup instructions.
+Required secrets (set at org or repo level): `APPLE_APPLICATION_CERT`, `APPLE_ID`, `APPLE_INSTALLER_CERT`, `APPLE_PASSWORD`, `APPLE_TEAM_ID`. See the [sign-mac-artifacts README](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/sign-mac-artifacts/README.md) for setup instructions.
 
 ### Build-info
 

@@ -31,14 +31,13 @@ The workflow downloads the full artifact tree, signs only the files matching `ar
 
 ## Secrets
 
-| Name                     | Required | Description                                                           |
-| ------------------------ | -------- | --------------------------------------------------------------------- |
-| `apple-application-cert` | Yes      | Base64-encoded `.p12` for `codesign` (Developer ID Application)       |
-| `apple-cert-password`    | Yes      | Password for `.p12` certificate files                                 |
-| `apple-id`               | Cond.    | Apple ID email (required when `notarize: true`)                       |
-| `apple-id-password`      | Cond.    | App-specific password for notarytool (required when `notarize: true`) |
-| `apple-installer-cert`   | Cond.    | Base64-encoded `.p12` for `productsign` (required for `.pkg` signing) |
-| `apple-team-id`          | Cond.    | Apple Developer Team ID (required when `notarize: true`)              |
+| Name                     | Required | Description                                                                               |
+| ------------------------ | -------- | ----------------------------------------------------------------------------------------- |
+| `apple-application-cert` | Yes      | Base64-encoded `.p12` for `codesign` (Developer ID Application)                           |
+| `apple-id`               | Cond.    | Apple ID email (required when `notarize: true`)                                           |
+| `apple-installer-cert`   | Cond.    | Base64-encoded `.p12` for `productsign` (required for `.pkg` signing)                     |
+| `apple-password`         | Cond.    | App-specific password for notarization. Also used for `.p12` import if cert is encrypted. |
+| `apple-team-id`          | Cond.    | Apple Developer Team ID (required when `notarize: true`)                                  |
 
 ---
 
@@ -58,10 +57,9 @@ jobs:
       artifact-glob: "*.pkg"
     secrets:
       apple-application-cert: ${{ secrets.APPLE_APPLICATION_CERT }}
-      apple-cert-password: ${{ secrets.APPLE_CERT_PASSWORD }}
       apple-id: ${{ secrets.APPLE_ID }}
-      apple-id-password: ${{ secrets.APPLE_ID_PASSWORD }}
       apple-installer-cert: ${{ secrets.APPLE_INSTALLER_CERT }}
+      apple-password: ${{ secrets.APPLE_PASSWORD }}
       apple-team-id: ${{ secrets.APPLE_TEAM_ID }}
 ```
 
@@ -131,18 +129,19 @@ base64 -i installer.p12 | pbcopy  # paste as APPLE_INSTALLER_CERT
 
 ### 3. Create an app-specific password
 
-Go to [appleid.apple.com](https://appleid.apple.com) > Sign-In and Security > App-Specific Passwords. Generate one and store it as `APPLE_ID_PASSWORD`.
+Go to [appleid.apple.com](https://appleid.apple.com) > Sign-In and Security > App-Specific Passwords. Generate one and store it as `APPLE_PASSWORD`.
 
 ### 4. Required GitHub secrets
 
-| Secret                   | Value                                         |
-| ------------------------ | --------------------------------------------- |
-| `APPLE_APPLICATION_CERT` | Base64 of Developer ID Application .p12       |
-| `APPLE_INSTALLER_CERT`   | Base64 of Developer ID Installer .p12         |
-| `APPLE_CERT_PASSWORD`    | Password used when exporting .p12             |
-| `APPLE_ID`               | Apple Developer account email                 |
-| `APPLE_ID_PASSWORD`      | App-specific password (not Apple ID password) |
-| `APPLE_TEAM_ID`          | Team ID (e.g. `23221RFU77`)                   |
+| Secret                   | Value                                                                    |
+| ------------------------ | ------------------------------------------------------------------------ |
+| `APPLE_APPLICATION_CERT` | Base64 of Developer ID Application `.p12`                                |
+| `APPLE_INSTALLER_CERT`   | Base64 of Developer ID Installer `.p12` (only needed for `.pkg` signing) |
+| `APPLE_PASSWORD`         | App-specific password for notarization (also used for `.p12` import)     |
+| `APPLE_ID`               | Apple Developer account email                                            |
+| `APPLE_TEAM_ID`          | Team ID (e.g. `23221RFU77`)                                              |
+
+Note: if your `.p12` certificates were exported without a password, `apple-password` is only used for notarization. The same value is passed to `security import -P` which harmlessly accepts it for unencrypted certs.
 
 ## Testing
 

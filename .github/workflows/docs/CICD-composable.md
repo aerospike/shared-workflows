@@ -97,10 +97,9 @@ sign-mac:
     artifact-glob: "*.pkg"
   secrets:
     apple-application-cert: ${{ secrets.APPLE_APPLICATION_CERT }}
-    apple-cert-password: ${{ secrets.APPLE_CERT_PASSWORD }}
     apple-id: ${{ secrets.APPLE_ID }}
-    apple-id-password: ${{ secrets.APPLE_ID_PASSWORD }}
     apple-installer-cert: ${{ secrets.APPLE_INSTALLER_CERT }}
+    apple-password: ${{ secrets.APPLE_PASSWORD }}
     apple-team-id: ${{ secrets.APPLE_TEAM_ID }}
 
 sign:

@@ -234,13 +234,11 @@ on:
         required: false
       apple-application-cert:
         required: false
-      apple-cert-password:
-        required: false
       apple-id:
         required: false
-      apple-id-password:
-        required: false
       apple-installer-cert:
+        required: false
+      apple-password:
         required: false
       apple-team-id:
         required: false
