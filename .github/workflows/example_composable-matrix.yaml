@@ -1,8 +1,8 @@
 name: Example Composable Matrix CI/CD
 # Demonstrates the composable artifact pipeline: calling the underlying shared
 # workflows individually with custom steps between them. Builds DEB, RPM, npm,
-# Java, Python, and Go module artifacts across a matrix, then signs, deploys,
-# and creates a release bundle with promotion.
+# Java, Python, Go module, and macOS .pkg artifacts across a matrix, then
+# signs (Apple + GPG), deploys, and creates a release bundle with promotion.
 #
 # The full pipeline runs on workflow_dispatch, including the release bundle
 # lifecycle.
@@ -20,17 +20,19 @@ name: Example Composable Matrix CI/CD
 #     build-java             - Java/Maven build
 #     build-python           - Python wheel + sdist build
 #     build-go               - Go module zip build
+#     build-mac              - macOS .pkg build
 #  3. collect                - merge per-matrix artifacts into one (collect-build-artifacts action)
 #  4. test                   - INSERT YOUR TESTS HERE
-#  5. sign                   - GPG sign artifacts (reusable_sign-artifacts.yaml)
-#  6. delete-existing-bundle - remove previous bundle if it exists (workflow_dispatch only)
-#  7. deploy                 - upload to JFrog Artifactory (reusable_deploy-artifacts.yaml)
-#  8. create-release-bundle  - create bundle (reusable_create-release-bundle.yaml, workflow_dispatch only)
-#  9. promote-release-bundle - promote bundle to DEV (workflow_dispatch only)
+#  5. sign-mac               - Apple codesign + notarize (reusable_sign-mac-artifacts.yaml, optional)
+#  6. sign                   - GPG sign artifacts (reusable_sign-artifacts.yaml)
+#  7. delete-existing-bundle - remove previous bundle if it exists (workflow_dispatch only)
+#  8. deploy                 - upload to JFrog Artifactory (reusable_deploy-artifacts.yaml)
+#  9. create-release-bundle  - create bundle (reusable_create-release-bundle.yaml, workflow_dispatch only)
+# 10. promote-release-bundle - promote bundle to DEV (workflow_dispatch only)
 #
-# npm and Java are separate jobs because they use different working directories
-# and toolchains. They could also be folded into a matrix with per-entry
-# overrides (see example_artifacts-cicd.yaml for that approach).
+# npm, Java, and Mac are separate jobs because they use different working
+# directories, runners, and toolchains. They could also be folded into a matrix
+# with per-entry overrides (see example_artifacts-cicd.yaml for that approach).
 #
 # BUILD ID SCHEME:
 # - Per-matrix build:  {run_id}-{run_attempt}-buildinfo-{distro}-{arch}
@@ -217,9 +219,33 @@ jobs:
       oidc-audience: aerospike/testing
     secrets: inherit
 
+  build-mac:
+    needs: extract-version
+    uses: ./.github/workflows/reusable_execute-build.yaml
+    with:
+      gh-workflows-ref: ${{ github.sha }}
+      jf-project: test
+      jf-build-name: test-build
+      jf-build-id: ${{ github.run_id }}-${{ github.run_attempt }}-buildinfo-darwin-arm64
+      gh-source-path: repo-source
+      working-directory: repo-source/.github/workflows/execute-build/test_apps/hi
+      runs-on: macos-14
+      build-env: VERSION=${{ needs.extract-version.outputs.version }}
+      build-script: |
+        make clean all
+        mkdir -p dist
+        pkgbuild --root . --identifier com.aerospike.test \
+          --version "$VERSION" --install-location /usr/local/bin \
+          dist/test-$VERSION-darwin-arm64.pkg
+      gh-artifact-directory: dist
+      gh-artifact-name: build-artifacts-darwin-arm64
+      oidc-provider-name: gh-dev-test
+      oidc-audience: aerospike/testing
+    secrets: inherit
+
   # Merge all per-matrix artifacts into a single github artifact for downstream jobs.
   collect:
-    needs: [build, build-npm, build-java, build-python, build-go]
+    needs: [build, build-npm, build-java, build-python, build-go, build-mac]
     runs-on: ubuntu-22.04
     steps:
       - name: Harden the runner (Audit all outbound calls)
@@ -261,8 +287,26 @@ jobs:
           find build-artifacts
           # Replace this step with your actual test commands, e.g.:
           # ./scripts/run-integration-tests.sh build-artifacts/
-  sign:
+
+  sign-mac:
     needs: test
+    uses: ./.github/workflows/reusable_sign-mac-artifacts.yaml
+    with:
+      gh-workflows-ref: ${{ github.sha }}
+      signing-identity: "Developer ID Application: Aerospike, Inc. (23221RFU77)"
+      installer-identity: "Developer ID Installer: Aerospike, Inc. (23221RFU77)"
+      artifact-glob: "*.pkg"
+      notarize: true
+    secrets:
+      apple-application-cert: ${{ secrets.APPLE_APPLICATION_CERT }}
+      apple-id: ${{ secrets.APPLE_ID }}
+      apple-installer-cert: ${{ secrets.APPLE_INSTALLER_CERT }}
+      apple-password: ${{ secrets.APPLE_PASSWORD }}
+      apple-team-id: ${{ secrets.APPLE_TEAM_ID }}
+
+  sign:
+    needs: sign-mac
+    if: always() && !cancelled() && !failure()
     uses: ./.github/workflows/reusable_sign-artifacts.yaml
     with:
       gh-workflows-ref: ${{ github.sha }}
