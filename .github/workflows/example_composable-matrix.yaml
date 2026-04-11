@@ -232,9 +232,9 @@ jobs:
       runs-on: macos-14
       build-env: VERSION=${{ needs.extract-version.outputs.version }}
       build-script: |
-        make clean all
+        make clean build DISTRO=darwin ARCH=arm64
         mkdir -p dist
-        pkgbuild --root . --identifier com.aerospike.test \
+        pkgbuild --root build/darwin/arm64 --identifier com.aerospike.test \
           --version "$VERSION" --install-location /usr/local/bin \
           dist/test-$VERSION-darwin-arm64.pkg
       gh-artifact-directory: dist

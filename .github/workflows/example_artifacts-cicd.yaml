@@ -107,7 +107,7 @@ jobs:
             "working-directory":"repo-source/.github/workflows/execute-build/test_apps/hi",
             "gh-artifact-directory":"dist",
             "build-env":"VERSION=${{ needs.extract-version.outputs.version }}",
-            "build-script":"make clean all && mkdir -p dist && pkgbuild --root . --identifier com.aerospike.test --version $VERSION --install-location /usr/local/bin dist/test-$VERSION-darwin-arm64.pkg"
+            "build-script":"make clean build DISTRO=darwin ARCH=arm64 && mkdir -p dist && pkgbuild --root build/darwin/arm64 --identifier com.aerospike.test --version $VERSION --install-location /usr/local/bin dist/test-$VERSION-darwin-arm64.pkg"
           }
         ]}
       build-script: |
