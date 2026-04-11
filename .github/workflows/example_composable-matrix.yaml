@@ -323,6 +323,7 @@ jobs:
 
   deploy:
     needs: [extract-version, sign, delete-existing-bundle]
+    if: always() && !cancelled() && needs.sign.result == 'success'
     uses: ./.github/workflows/reusable_deploy-artifacts.yaml
     with:
       gh-workflows-ref: ${{ github.sha }}
@@ -340,7 +341,7 @@ jobs:
   delete-existing-bundle:
     needs: [sign, extract-version]
     runs-on: ubuntu-22.04
-    if: github.event_name == 'workflow_dispatch'
+    if: always() && !cancelled() && needs.sign.result == 'success' && github.event_name == 'workflow_dispatch'
     steps:
       - name: Harden the runner (Audit all outbound calls)
         uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
@@ -370,7 +371,7 @@ jobs:
   create-release-bundle:
     needs: [deploy, extract-version]
     uses: ./.github/workflows/reusable_create-release-bundle.yaml
-    if: github.event_name == 'workflow_dispatch'
+    if: always() && !cancelled() && needs.deploy.result == 'success' && github.event_name == 'workflow_dispatch'
     with:
       gh-workflows-ref: ${{ github.sha }}
       jf-project: test
@@ -385,7 +386,7 @@ jobs:
   promote-release-bundle:
     needs: [create-release-bundle, extract-version]
     runs-on: ubuntu-22.04
-    if: github.event_name == 'workflow_dispatch'
+    if: always() && !cancelled() && needs.create-release-bundle.result == 'success' && github.event_name == 'workflow_dispatch'
     steps:
       - name: Harden the runner (Audit all outbound calls)
         uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
