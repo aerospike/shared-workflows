@@ -153,6 +153,7 @@ setup_keychain() {
     local app_p12
     app_p12=$(mktemp)
     echo "$APPLE_APPLICATION_CERT" | base64 -d >"$app_p12"
+    echo "  Decoded app cert: $(wc -c <"$app_p12") bytes, $(file -b "$app_p12")"
     run security import "$app_p12" -k "$KEYCHAIN_NAME" -P "${APPLE_CERT_PASSWORD-}" -A
     rm -f "$app_p12"
 
