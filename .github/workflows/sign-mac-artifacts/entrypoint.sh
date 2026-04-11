@@ -152,16 +152,16 @@ setup_keychain() {
 
     local app_p12
     app_p12=$(mktemp)
-    echo "$APPLE_APPLICATION_CERT" | base64 -d >"$app_p12"
+    printf '%s' "$APPLE_APPLICATION_CERT" | base64 -d >"$app_p12"
     echo "  Decoded app cert: $(wc -c <"$app_p12") bytes, $(file -b "$app_p12")"
-    run security import "$app_p12" -k "$KEYCHAIN_NAME" -P "${APPLE_CERT_PASSWORD-}" -A
+    run security import "$app_p12" -k "$KEYCHAIN_NAME" -f pkcs12 -P "${APPLE_CERT_PASSWORD-}" -A
     rm -f "$app_p12"
 
     if [[ -n ${APPLE_INSTALLER_CERT-} ]]; then
         local inst_p12
         inst_p12=$(mktemp)
-        echo "$APPLE_INSTALLER_CERT" | base64 -d >"$inst_p12"
-        run security import "$inst_p12" -k "$KEYCHAIN_NAME" -P "${APPLE_CERT_PASSWORD-}" -A
+        printf '%s' "$APPLE_INSTALLER_CERT" | base64 -d >"$inst_p12"
+        run security import "$inst_p12" -k "$KEYCHAIN_NAME" -f pkcs12 -P "${APPLE_CERT_PASSWORD-}" -A
         rm -f "$inst_p12"
     fi
 
