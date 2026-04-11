@@ -66,7 +66,8 @@ jobs:
       es-totp_secret: ${{ secrets.ES_TOTP_SECRET }}
       apple-application-cert: ${{ secrets.APPLE_APPLICATION_CERT }}
       apple-installer-cert: ${{ secrets.APPLE_INSTALLER_CERT }}
-      apple-password: ${{ secrets.APPLE_PASSWORD }}
+      apple-cert-password: ${{ secrets.APPLE_CERT_PASSWORD }}
+      apple-notarization-password: ${{ secrets.APPLE_NOTARIZATION_PASSWORD }}
       apple-id: ${{ secrets.APPLE_ID }}
       apple-team-id: ${{ secrets.APPLE_TEAM_ID }}
 

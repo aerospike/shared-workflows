@@ -68,8 +68,11 @@ on:
       apple-installer-cert:
         description: Base64-encoded .p12 certificate for productsign (Developer ID Installer). Required for .pkg signing.
         required: false
-      apple-password:
-        description: App-specific password for notarization and .p12 import (if cert is password-protected)
+      apple-cert-password:
+        description: Password for .p12 certificate import (if cert is password-protected)
+        required: false
+      apple-notarization-password:
+        description: App-specific password for notarization (from appleid.apple.com)
         required: false
       apple-team-id:
         description: Apple Developer Team ID (e.g. 23221RFU77)
@@ -115,11 +118,11 @@ jobs:
         run: |
           missing=()
           [ -z "${{ secrets.apple-id }}" ] && missing+=("apple-id")
-          [ -z "${{ secrets.apple-password }}" ] && missing+=("apple-password")
+          [ -z "${{ secrets.apple-notarization-password }}" ] && missing+=("apple-notarization-password")
           [ -z "${{ secrets.apple-team-id }}" ] && missing+=("apple-team-id")
           if [ ${#missing[@]} -gt 0 ]; then
             echo "Error: Notarization is enabled but required secrets are missing: ${missing[*]}" >&2
-            echo "Provide apple-id, apple-password, and apple-team-id, or set notarize: false" >&2
+            echo "Provide apple-id, apple-notarization-password, and apple-team-id, or set notarize: false" >&2
             exit 1
           fi
 
@@ -127,7 +130,8 @@ jobs:
         env:
           APPLE_APPLICATION_CERT: ${{ secrets.apple-application-cert }}
           APPLE_INSTALLER_CERT: ${{ secrets.apple-installer-cert }}
-          APPLE_PASSWORD: ${{ secrets.apple-password }}
+          APPLE_CERT_PASSWORD: ${{ secrets.apple-cert-password }}
+          APPLE_NOTARIZATION_PASSWORD: ${{ secrets.apple-notarization-password }}
           APPLE_ID: ${{ secrets.apple-id }}
           APPLE_TEAM_ID: ${{ secrets.apple-team-id }}
           SIGNING_IDENTITY: ${{ inputs.signing-identity }}

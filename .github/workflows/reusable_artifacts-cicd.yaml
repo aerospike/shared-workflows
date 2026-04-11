@@ -238,7 +238,9 @@ on:
         required: false
       apple-installer-cert:
         required: false
-      apple-password:
+      apple-cert-password:
+        required: false
+      apple-notarization-password:
         required: false
       apple-team-id:
         required: false

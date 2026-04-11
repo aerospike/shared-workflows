@@ -50,11 +50,12 @@ Environment variables (required):
   SIGNING_IDENTITY         codesign identity string
 
 Environment variables (optional):
-  APPLE_INSTALLER_CERT     Base64-encoded .p12 for productsign
-  APPLE_PASSWORD           App-specific password (for notarization and .p12 import if cert is encrypted)
-  INSTALLER_IDENTITY       productsign identity string
-  APPLE_ID                 Apple ID email (required for notarization)
-  APPLE_TEAM_ID            Developer Team ID (required for notarization)
+  APPLE_INSTALLER_CERT         Base64-encoded .p12 for productsign
+  APPLE_CERT_PASSWORD          Password for .p12 certificate import (if cert is encrypted)
+  APPLE_NOTARIZATION_PASSWORD  App-specific password for notarization
+  INSTALLER_IDENTITY           productsign identity string
+  APPLE_ID                     Apple ID email (required for notarization)
+  APPLE_TEAM_ID                Developer Team ID (required for notarization)
 
 Examples:
   # Sign all files
@@ -130,7 +131,7 @@ if [[ $DRY_RUN != "true" ]]; then
         exit 1
     fi
     if [[ $NOTARIZE == "true" ]]; then
-        for var in APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+        for var in APPLE_ID APPLE_NOTARIZATION_PASSWORD APPLE_TEAM_ID; do
             if [[ -z ${!var-} ]]; then
                 echo "ERROR: $var is required when notarization is enabled" >&2
                 exit 1
@@ -152,14 +153,14 @@ setup_keychain() {
     local app_p12
     app_p12=$(mktemp)
     echo "$APPLE_APPLICATION_CERT" | base64 -d >"$app_p12"
-    run security import "$app_p12" -k "$KEYCHAIN_NAME" -P "${APPLE_PASSWORD-}" -A
+    run security import "$app_p12" -k "$KEYCHAIN_NAME" -P "${APPLE_CERT_PASSWORD-}" -A
     rm -f "$app_p12"
 
     if [[ -n ${APPLE_INSTALLER_CERT-} ]]; then
         local inst_p12
         inst_p12=$(mktemp)
         echo "$APPLE_INSTALLER_CERT" | base64 -d >"$inst_p12"
-        run security import "$inst_p12" -k "$KEYCHAIN_NAME" -P "${APPLE_PASSWORD-}" -A
+        run security import "$inst_p12" -k "$KEYCHAIN_NAME" -P "${APPLE_CERT_PASSWORD-}" -A
         rm -f "$inst_p12"
     fi
 
@@ -241,7 +242,7 @@ notarize_and_staple() {
     local submit_output
     submit_output=$(xcrun notarytool submit "$file" \
         --apple-id "$APPLE_ID" \
-        --password "$APPLE_PASSWORD" \
+        --password "$APPLE_NOTARIZATION_PASSWORD" \
         --team-id "$APPLE_TEAM_ID" \
         --wait \
         --output-format json 2>&1) || {
@@ -255,7 +256,7 @@ notarize_and_staple() {
             echo "==> Fetching notarization log for submission $submission_id" >&2
             xcrun notarytool log "$submission_id" \
                 --apple-id "$APPLE_ID" \
-                --password "$APPLE_PASSWORD" \
+                --password "$APPLE_NOTARIZATION_PASSWORD" \
                 --team-id "$APPLE_TEAM_ID" >&2 || true
         fi
         exit 1

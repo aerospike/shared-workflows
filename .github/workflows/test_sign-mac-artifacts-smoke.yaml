@@ -3,8 +3,8 @@ name: "Smoke Test: Sign Mac Artifacts (Manual)"
 # End-to-end smoke test for Mac signing with real Apple certificates.
 # Requires repository variables and secrets to be configured:
 #   vars: APPLE_SIGNING_IDENTITY, APPLE_INSTALLER_IDENTITY
-#   secrets: APPLE_APPLICATION_CERT, APPLE_ID, APPLE_INSTALLER_CERT,
-#            APPLE_PASSWORD, APPLE_TEAM_ID
+#   secrets: APPLE_APPLICATION_CERT, APPLE_CERT_PASSWORD, APPLE_ID,
+#            APPLE_INSTALLER_CERT, APPLE_NOTARIZATION_PASSWORD, APPLE_TEAM_ID
 
 on:
   workflow_dispatch:
@@ -73,7 +73,8 @@ jobs:
       apple-application-cert: ${{ secrets.APPLE_APPLICATION_CERT }}
       apple-id: ${{ secrets.APPLE_ID }}
       apple-installer-cert: ${{ secrets.APPLE_INSTALLER_CERT }}
-      apple-password: ${{ secrets.APPLE_PASSWORD }}
+      apple-cert-password: ${{ secrets.APPLE_CERT_PASSWORD }}
+      apple-notarization-password: ${{ secrets.APPLE_NOTARIZATION_PASSWORD }}
       apple-team-id: ${{ secrets.APPLE_TEAM_ID }}
 
   verify:
