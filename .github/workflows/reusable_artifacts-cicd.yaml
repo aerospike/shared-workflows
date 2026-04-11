@@ -387,7 +387,7 @@ jobs:
 
   sign:
     needs: [resolve, collect-matrix-artifacts, sign-mac]
-    if: always() && !cancelled() && !failure()
+    if: always() && !cancelled() && needs.collect-matrix-artifacts.result == 'success'
     uses: ./.github/workflows/reusable_sign-artifacts.yaml
     with:
       gh-artifact-name: signed-artifacts
@@ -401,7 +401,7 @@ jobs:
 
   deploy-signed:
     needs: [resolve, sign]
-    if: always() && !cancelled() && !failure()
+    if: always() && !cancelled() && needs.sign.result == 'success'
     uses: ./.github/workflows/reusable_deploy-artifacts.yaml
     with:
       build-type: ${{ inputs.build-type }}
