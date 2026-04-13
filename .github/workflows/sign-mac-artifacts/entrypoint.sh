@@ -141,6 +141,26 @@ if [[ $DRY_RUN != "true" ]]; then
 fi
 
 # --- Keychain management ---
+import_p12_via_pem() {
+    local b64_p12="$1"
+    local password="${2-}"
+    local p12 cert_pem key_pem
+    p12=$(mktemp)
+    cert_pem=$(mktemp)
+    key_pem=$(mktemp)
+
+    printf '%s' "$b64_p12" | base64 -d >"$p12"
+    echo "  Importing cert: $(wc -c <"$p12") bytes"
+
+    openssl pkcs12 -in "$p12" -clcerts -nokeys -passin "pass:${password}" -out "$cert_pem"
+    openssl pkcs12 -in "$p12" -nocerts -nodes -passin "pass:${password}" -out "$key_pem"
+
+    run security import "$cert_pem" -k "$KEYCHAIN_NAME" -A
+    run security import "$key_pem" -k "$KEYCHAIN_NAME" -A
+
+    rm -f "$p12" "$cert_pem" "$key_pem"
+}
+
 setup_keychain() {
     echo "==> Setting up temporary keychain"
     KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
@@ -150,23 +170,10 @@ setup_keychain() {
     run security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_NAME"
     run security set-keychain-settings "$KEYCHAIN_NAME"
 
-    local app_p12
-    app_p12=$(mktemp)
-    printf '%s' "$APPLE_APPLICATION_CERT" | base64 -d >"$app_p12"
-    echo "  Decoded app cert: $(wc -c <"$app_p12") bytes, $(file -b "$app_p12"), md5=$(md5 -q "$app_p12" | cut -c1-8)"
-    echo "  Base64 input length: ${#APPLE_APPLICATION_CERT} chars"
-    echo "  Cert password length: ${#APPLE_CERT_PASSWORD} chars, sha256=$(printf '%s' "${APPLE_CERT_PASSWORD-}" | shasum -a 256 | cut -c1-8)"
-    echo "  OpenSSL verify:"
-    openssl pkcs12 -in "$app_p12" -nokeys -passin "pass:${APPLE_CERT_PASSWORD-}" -info 2>&1 | head -5 || echo "  OpenSSL verify FAILED"
-    run security import "$app_p12" -k "$KEYCHAIN_NAME" -f pkcs12 -P "${APPLE_CERT_PASSWORD-}" -A
-    rm -f "$app_p12"
+    import_p12_via_pem "$APPLE_APPLICATION_CERT" "${APPLE_CERT_PASSWORD-}"
 
     if [[ -n ${APPLE_INSTALLER_CERT-} ]]; then
-        local inst_p12
-        inst_p12=$(mktemp)
-        printf '%s' "$APPLE_INSTALLER_CERT" | base64 -d >"$inst_p12"
-        run security import "$inst_p12" -k "$KEYCHAIN_NAME" -f pkcs12 -P "${APPLE_CERT_PASSWORD-}" -A
-        rm -f "$inst_p12"
+        import_p12_via_pem "$APPLE_INSTALLER_CERT" "${APPLE_CERT_PASSWORD-}"
     fi
 
     run security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_NAME"
