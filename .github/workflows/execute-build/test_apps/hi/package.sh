@@ -89,6 +89,7 @@ declare -A DISTRO_VERSIONS=(
     [jammy]="ubuntu22.04"
     [noble]="ubuntu24.04"
     [focal]="ubuntu20.04"
+    [buster]="debian10"
     [bullseye]="debian11"
     [bookworm]="debian12"
     [trixie]="debian13"

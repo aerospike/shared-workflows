@@ -29,6 +29,11 @@ setup() {
     [[ "$result" == "focal" ]]
 }
 
+@test "get_codename_for_deb maps debian10 to buster" {
+    result=$(get_codename_for_deb "test-debian10.deb")
+    [[ "$result" == "buster" ]]
+}
+
 @test "get_codename_for_deb maps debian11 to bullseye" {
     result=$(get_codename_for_deb "test-debian11.deb")
     [[ "$result" == "bullseye" ]]
