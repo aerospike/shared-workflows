@@ -210,12 +210,56 @@ verify_codesign() {
     run codesign --verify --deep --strict "$file"
 }
 
+codesign_pkg_contents() {
+    local file="$1"
+    local expand_dir
+    expand_dir=$(mktemp -d)
+    echo "  Expanding .pkg to codesign embedded binaries"
+    pkgutil --expand "$file" "$expand_dir/expanded"
+
+    local found_binary=false
+    while IFS= read -r payload; do
+        local payload_dir
+        payload_dir=$(mktemp -d)
+        tar -xf "$payload" -C "$payload_dir" 2>/dev/null || continue
+
+        while IFS= read -r binary; do
+            if file "$binary" | grep -q "Mach-O"; then
+                echo "    Codesigning: ${binary#"$payload_dir"/}"
+                codesign --deep --force --options runtime --timestamp \
+                    --sign "$SIGNING_IDENTITY" "$binary"
+                found_binary=true
+            fi
+        done < <(find "$payload_dir" -type f)
+
+        if [[ $found_binary == "true" ]]; then
+            local payload_name
+            payload_name=$(basename "$payload")
+            (cd "$payload_dir" && find . -not -name '.' | cpio -o --format odc 2>/dev/null | gzip -c >"$(dirname "$payload")/$payload_name")
+        fi
+        rm -rf "$payload_dir"
+    done < <(find "$expand_dir/expanded" -name "Payload" -type f)
+
+    if [[ $found_binary == "true" ]]; then
+        pkgutil --flatten "$expand_dir/expanded" "$file"
+        echo "  Repackaged .pkg with codesigned binaries"
+    else
+        echo "  No Mach-O binaries found inside .pkg"
+    fi
+    rm -rf "$expand_dir"
+}
+
 sign_package() {
     local file="$1"
     if [[ -z ${INSTALLER_IDENTITY-} ]]; then
         echo "ERROR: INSTALLER_IDENTITY is required to sign .pkg files" >&2
         exit 1
     fi
+
+    if [[ $DRY_RUN != "true" ]]; then
+        codesign_pkg_contents "$file"
+    fi
+
     echo "  Signing package: $file"
     local signed_file="${file}.signed"
     run productsign --sign "$INSTALLER_IDENTITY" "$file" "$signed_file"
