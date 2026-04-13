@@ -75,7 +75,7 @@ on:
         description: App-specific password for notarization (from appleid.apple.com)
         required: false
       apple-team-id:
-        description: Apple Developer Team ID (e.g. 23221RFU77)
+        description: Apple Developer Team ID (e.g. 22224RFU67)
         required: false
 
     outputs:

@@ -92,8 +92,8 @@ sign-mac:
   with:
     gh-unsigned-artifacts: build-artifacts
     gh-workflows-ref: v3.2.0
-    signing-identity: "Developer ID Application: Aerospike, Inc. (23221RFU77)"
-    installer-identity: "Developer ID Installer: Aerospike, Inc. (23221RFU77)"
+    signing-identity: "Developer ID Application: Aerospike, Inc. (22224RFU67)"
+    installer-identity: "Developer ID Installer: Aerospike, Inc. (22224RFU67)"
     artifact-glob: "*.pkg"
   secrets:
     apple-application-cert: ${{ secrets.APPLE_APPLICATION_CERT }}

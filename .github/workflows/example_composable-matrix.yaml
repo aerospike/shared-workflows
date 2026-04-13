@@ -293,8 +293,8 @@ jobs:
     uses: ./.github/workflows/reusable_sign-mac-artifacts.yaml
     with:
       gh-workflows-ref: ${{ github.sha }}
-      signing-identity: "Developer ID Application: Aerospike, Inc. (23221RFU77)"
-      installer-identity: "Developer ID Installer: Aerospike, Inc. (23221RFU77)"
+      signing-identity: "Developer ID Application: Aerospike, Inc. (22224RFU67)"
+      installer-identity: "Developer ID Installer: Aerospike, Inc. (22224RFU67)"
       artifact-glob: "*.pkg"
       notarize: true
     secrets:

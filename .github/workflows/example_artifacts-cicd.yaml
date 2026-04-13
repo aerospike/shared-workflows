@@ -83,8 +83,8 @@ jobs:
       oidc-audience: aerospike/testing
       dry-run: false
       sign-mac: true
-      mac-signing-identity: "Developer ID Application: Aerospike, Inc. (23221RFU77)"
-      mac-installer-identity: "Developer ID Installer: Aerospike, Inc. (23221RFU77)"
+      mac-signing-identity: "Developer ID Application: Aerospike, Inc. (22224RFU67)"
+      mac-installer-identity: "Developer ID Installer: Aerospike, Inc. (22224RFU67)"
       mac-artifact-glob: "*.pkg"
       mac-notarize: true
     secrets:

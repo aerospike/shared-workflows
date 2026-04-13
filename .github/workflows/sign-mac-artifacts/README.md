@@ -53,8 +53,8 @@ jobs:
     with:
       gh-unsigned-artifacts: build-artifacts
       gh-workflows-ref: v4.0.0
-      signing-identity: "Developer ID Application: Aerospike, Inc. (23221RFU77)"
-      installer-identity: "Developer ID Installer: Aerospike, Inc. (23221RFU77)"
+      signing-identity: "Developer ID Application: Aerospike, Inc. (22224RFU67)"
+      installer-identity: "Developer ID Installer: Aerospike, Inc. (22224RFU67)"
       artifact-glob: "*.pkg"
     secrets:
       apple-application-cert: ${{ secrets.APPLE_APPLICATION_CERT }}
@@ -81,8 +81,8 @@ jobs:
 
       # Mac signing
       sign-mac: true
-      mac-signing-identity: "Developer ID Application: Aerospike, Inc. (23221RFU77)"
-      mac-installer-identity: "Developer ID Installer: Aerospike, Inc. (23221RFU77)"
+      mac-signing-identity: "Developer ID Application: Aerospike, Inc. (22224RFU67)"
+      mac-installer-identity: "Developer ID Installer: Aerospike, Inc. (22224RFU67)"
       mac-artifact-glob: "*.pkg"
     secrets: inherit
 ```
@@ -142,7 +142,7 @@ Go to [appleid.apple.com](https://appleid.apple.com) > Sign-In and Security > Ap
 | `APPLE_INSTALLER_CERT`        | Base64 of Developer ID Installer `.p12` (only needed for `.pkg` signing)   |
 | `APPLE_NOTARIZATION_PASSWORD` | App-specific password for notarization                                     |
 | `APPLE_ID`                    | Apple Developer account email                                              |
-| `APPLE_TEAM_ID`               | Team ID (e.g. `23221RFU77`)                                                |
+| `APPLE_TEAM_ID`               | Team ID (e.g. `22224RFU67`)                                                |
 
 ## Testing
 

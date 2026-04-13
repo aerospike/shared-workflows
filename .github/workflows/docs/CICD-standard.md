@@ -110,8 +110,8 @@ jobs:
 
       # Mac signing
       sign-mac: true
-      mac-signing-identity: "Developer ID Application: Aerospike, Inc. (23221RFU77)"
-      mac-installer-identity: "Developer ID Installer: Aerospike, Inc. (23221RFU77)"
+      mac-signing-identity: "Developer ID Application: Aerospike, Inc. (22224RFU67)"
+      mac-installer-identity: "Developer ID Installer: Aerospike, Inc. (22224RFU67)"
       mac-artifact-glob: "*.pkg" # Only sign .pkg files; other artifacts pass through
       mac-notarize: true # Default: true
       mac-runs-on: macos-14 # Default: macos-14
