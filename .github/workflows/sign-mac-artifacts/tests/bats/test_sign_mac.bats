@@ -21,14 +21,19 @@ setup_file() {
 
   # Mock: codesign
   # --verify succeeds by default (for post-sign verification).
-  # Tests that need --verify to fail (simulating unsigned pkg contents)
-  # create $TEST_TMPDIR/codesign_verify_fail.
+  # -dvv returns Authority= from $TEST_TMPDIR/codesign_dvv_authority if it exists.
+  # Tests that need pkg-contents binaries to appear "already signed with correct identity"
+  # write the signing identity to $TEST_TMPDIR/codesign_dvv_authority.
   cat > "$MOCK_BIN/codesign" <<'MOCK'
 #!/usr/bin/env bash
 echo "codesign $*" >> "$TEST_TMPDIR/commands.log"
 if [[ "$1" == "--verify" ]]; then
-  if [[ -f "$TEST_TMPDIR/codesign_verify_fail" ]]; then
-    exit 1
+  exit 0
+fi
+if [[ "$1" == "-dvv" ]]; then
+  if [[ -f "$TEST_TMPDIR/codesign_dvv_authority" ]]; then
+    authority=$(cat "$TEST_TMPDIR/codesign_dvv_authority")
+    echo "Authority=$authority" >&2
   fi
   exit 0
 fi
@@ -183,7 +188,7 @@ teardown_file() {
 
 setup() {
   > "$TEST_TMPDIR/commands.log"
-  rm -f "$TEST_TMPDIR/codesign_verify_fail"
+  rm -f "$TEST_TMPDIR/codesign_dvv_authority"
   rm -f "$TEST_TMPDIR/notary_status_override"
   rm -f "$TEST_TMPDIR/staple_fail_count"
 
@@ -341,8 +346,7 @@ setup() {
 
 @test "unsigned binaries inside .pkg are codesigned before productsign" {
   touch "$SOURCE_DIR/installer.pkg"
-  # Make codesign --verify fail so binaries appear unsigned
-  touch "$TEST_TMPDIR/codesign_verify_fail"
+  # No codesign_dvv_authority file -> -dvv returns no Authority line -> binary appears unsigned
 
   run "$ENTRYPOINT" --source-dir "$SOURCE_DIR" --target-dir "$TARGET_DIR" --no-notarize
 
@@ -355,15 +359,40 @@ setup() {
   [ "$codesign_line" -lt "$productsign_line" ]
 }
 
-@test "already-signed binaries inside .pkg are skipped" {
+@test "already-signed binaries inside .pkg are skipped when identity matches" {
   touch "$SOURCE_DIR/installer.pkg"
-  # codesign --verify succeeds by default, so binaries appear already signed
+  # Set authority to match SIGNING_IDENTITY so binaries appear correctly signed
+  echo "$SIGNING_IDENTITY" > "$TEST_TMPDIR/codesign_dvv_authority"
 
   run "$ENTRYPOINT" --source-dir "$SOURCE_DIR" --target-dir "$TARGET_DIR" --no-notarize
 
   [ "$status" -eq 0 ]
-  [[ "$output" == *"Already signed, skipping"* ]]
+  [[ "$output" == *"Already signed with correct identity, skipping"* ]]
   ! grep -q "codesign --deep --force" "$TEST_TMPDIR/commands.log"
+}
+
+@test "ad-hoc signed binaries inside .pkg are re-signed" {
+  touch "$SOURCE_DIR/installer.pkg"
+  # Set authority to ad-hoc (does not match SIGNING_IDENTITY)
+  echo "-" > "$TEST_TMPDIR/codesign_dvv_authority"
+
+  run "$ENTRYPOINT" --source-dir "$SOURCE_DIR" --target-dir "$TARGET_DIR" --no-notarize
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Codesigning:"* ]]
+  grep -q "codesign --deep --force" "$TEST_TMPDIR/commands.log"
+}
+
+@test "binaries signed with wrong identity cause error" {
+  touch "$SOURCE_DIR/installer.pkg"
+  # Set authority to a different Developer ID
+  echo "Developer ID Application: Other Corp (OTHERID)" > "$TEST_TMPDIR/codesign_dvv_authority"
+
+  run "$ENTRYPOINT" --source-dir "$SOURCE_DIR" --target-dir "$TARGET_DIR" --no-notarize
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"signed with a different identity"* ]]
+  [[ "$output" == *"custom entitlements"* ]]
 }
 
 # --- Notarization tests ---

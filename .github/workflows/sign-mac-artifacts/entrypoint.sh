@@ -226,13 +226,22 @@ codesign_pkg_contents() {
         while IFS= read -r binary; do
             if file "$binary" | grep -q "Mach-O"; then
                 local rel="${binary#"$payload_dir"/}"
-                if codesign --verify --deep --strict "$binary" 2>/dev/null; then
-                    echo "    Already signed, skipping: $rel"
-                else
-                    echo "    Codesigning: $rel"
+                local current_authority
+                current_authority=$(codesign -dvv "$binary" 2>&1 | grep "Authority=" | head -1 | sed 's/Authority=//' || true)
+                if [[ -n $current_authority && $current_authority == *"$SIGNING_IDENTITY"* ]]; then
+                    echo "    Already signed with correct identity, skipping: $rel"
+                elif [[ -z $current_authority || $current_authority == "-" ]]; then
+                    echo "    Codesigning: $rel (was ${current_authority:-unsigned})"
                     codesign --deep --force --options runtime --timestamp \
                         --sign "$SIGNING_IDENTITY" "$binary"
                     signed_any=true
+                else
+                    echo "ERROR: $rel is signed with a different identity: $current_authority" >&2
+                    echo "  Expected: $SIGNING_IDENTITY" >&2
+                    echo "  This binary may have custom entitlements. Re-sign it with the correct identity during your build step, or leave it unsigned." >&2
+                    rm -rf "$payload_dir"
+                    rm -rf "$expand_dir"
+                    return 1
                 fi
             fi
         done < <(find "$payload_dir" -type f)
