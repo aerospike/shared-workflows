@@ -217,7 +217,7 @@ codesign_pkg_contents() {
     echo "  Expanding .pkg to codesign embedded binaries"
     pkgutil --expand "$file" "$expand_dir/expanded"
 
-    local found_binary=false
+    local signed_any=false
     while IFS= read -r payload; do
         local payload_dir
         payload_dir=$(mktemp -d)
@@ -225,14 +225,19 @@ codesign_pkg_contents() {
 
         while IFS= read -r binary; do
             if file "$binary" | grep -q "Mach-O"; then
-                echo "    Codesigning: ${binary#"$payload_dir"/}"
-                codesign --deep --force --options runtime --timestamp \
-                    --sign "$SIGNING_IDENTITY" "$binary"
-                found_binary=true
+                local rel="${binary#"$payload_dir"/}"
+                if codesign --verify --deep --strict "$binary" 2>/dev/null; then
+                    echo "    Already signed, skipping: $rel"
+                else
+                    echo "    Codesigning: $rel"
+                    codesign --deep --force --options runtime --timestamp \
+                        --sign "$SIGNING_IDENTITY" "$binary"
+                    signed_any=true
+                fi
             fi
         done < <(find "$payload_dir" -type f)
 
-        if [[ $found_binary == "true" ]]; then
+        if [[ $signed_any == "true" ]]; then
             local payload_name
             payload_name=$(basename "$payload")
             (cd "$payload_dir" && find . -not -name '.' | cpio -o --format odc 2>/dev/null | gzip -c >"$(dirname "$payload")/$payload_name")
@@ -240,11 +245,11 @@ codesign_pkg_contents() {
         rm -rf "$payload_dir"
     done < <(find "$expand_dir/expanded" -name "Payload" -type f)
 
-    if [[ $found_binary == "true" ]]; then
+    if [[ $signed_any == "true" ]]; then
         pkgutil --flatten "$expand_dir/expanded" "$file"
         echo "  Repackaged .pkg with codesigned binaries"
     else
-        echo "  No Mach-O binaries found inside .pkg"
+        echo "  No unsigned Mach-O binaries found inside .pkg"
     fi
     rm -rf "$expand_dir"
 }
@@ -339,14 +344,15 @@ notarize_and_staple() {
 
     echo "  Notarization accepted, stapling ticket"
     local attempt
+    local staple_delay="${STAPLE_RETRY_DELAY:-30}"
     for attempt in 1 2 3 4 5 6; do
         if xcrun stapler staple "$file"; then
             return 0
         fi
-        echo "  Staple attempt $attempt/6 failed, retrying in 30s..." >&2
-        sleep 30
+        echo "  Staple attempt $attempt/6 failed, retrying in ${staple_delay}s..." >&2
+        sleep "$staple_delay"
     done
-    echo "ERROR: stapler staple failed after 6 attempts (3 min) for $file" >&2
+    echo "ERROR: stapler staple failed after 6 attempts for $file" >&2
     exit 1
 }
 

@@ -3,7 +3,8 @@
 #
 # These tests mock Apple signing tools (codesign, productsign, xcrun, security, pkgutil)
 # since they are only available on macOS and require real certificates.
-# Tests validate argument parsing, file type routing, glob filtering, and keychain lifecycle.
+# Tests validate argument parsing, file type routing, glob filtering, keychain lifecycle,
+# pkg content codesigning, notarization status checking, and staple retry.
 
 setup_file() {
   GIT_ROOT="$(git rev-parse --show-toplevel)"
@@ -11,19 +12,26 @@ setup_file() {
   ENTRYPOINT="$GIT_ROOT/.github/workflows/sign-mac-artifacts/entrypoint.sh"
   export ENTRYPOINT
 
-  # Create a temp directory for all tests
   TEST_TMPDIR="$(mktemp -d)"
   export TEST_TMPDIR
 
-  # Create mock bin directory and prepend to PATH
   MOCK_BIN="$TEST_TMPDIR/mock-bin"
   mkdir -p "$MOCK_BIN"
   export MOCK_BIN
 
-  # Mock: codesign (logs calls to a file)
+  # Mock: codesign
+  # --verify succeeds by default (for post-sign verification).
+  # Tests that need --verify to fail (simulating unsigned pkg contents)
+  # create $TEST_TMPDIR/codesign_verify_fail.
   cat > "$MOCK_BIN/codesign" <<'MOCK'
 #!/usr/bin/env bash
 echo "codesign $*" >> "$TEST_TMPDIR/commands.log"
+if [[ "$1" == "--verify" ]]; then
+  if [[ -f "$TEST_TMPDIR/codesign_verify_fail" ]]; then
+    exit 1
+  fi
+  exit 0
+fi
 MOCK
   chmod +x "$MOCK_BIN/codesign"
 
@@ -31,26 +39,54 @@ MOCK
   cat > "$MOCK_BIN/productsign" <<'MOCK'
 #!/usr/bin/env bash
 echo "productsign $*" >> "$TEST_TMPDIR/commands.log"
-# productsign --sign IDENTITY input output
-# The last arg is the output file
 output="${@: -1}"
 touch "$output"
 MOCK
   chmod +x "$MOCK_BIN/productsign"
 
-  # Mock: pkgutil
+  # Mock: pkgutil (handles --expand, --flatten, and --check-signature)
   cat > "$MOCK_BIN/pkgutil" <<'MOCK'
 #!/usr/bin/env bash
 echo "pkgutil $*" >> "$TEST_TMPDIR/commands.log"
+if [[ "$1" == "--expand" ]]; then
+  expanded_dir="$3"
+  mkdir -p "$expanded_dir/test.pkg"
+  # Create a tar.gz Payload with a mock binary (tar works on both Linux and macOS)
+  payload_tmp=$(mktemp -d)
+  mkdir -p "$payload_tmp/usr/local/bin"
+  echo "mock-binary-content" > "$payload_tmp/usr/local/bin/testapp"
+  tar -czf "$expanded_dir/test.pkg/Payload" -C "$payload_tmp" .
+  rm -rf "$payload_tmp"
+elif [[ "$1" == "--flatten" ]]; then
+  output="$3"
+  touch "$output"
+fi
 MOCK
   chmod +x "$MOCK_BIN/pkgutil"
 
-  # Mock: xcrun (handles notarytool and stapler subcommands)
+  # Mock: xcrun (handles notarytool and stapler)
   cat > "$MOCK_BIN/xcrun" <<'MOCK'
 #!/usr/bin/env bash
 echo "xcrun $*" >> "$TEST_TMPDIR/commands.log"
 if [[ "$1" == "notarytool" && "$2" == "submit" ]]; then
-  echo '{"id":"mock-submission-id","status":"Accepted"}'
+  # Check for override file to return non-Accepted status
+  if [[ -f "$TEST_TMPDIR/notary_status_override" ]]; then
+    cat "$TEST_TMPDIR/notary_status_override"
+  else
+    echo '{"id":"mock-submission-id","status":"Accepted"}'
+  fi
+elif [[ "$1" == "notarytool" && "$2" == "log" ]]; then
+  echo '{"status":"Invalid","statusSummary":"Mock rejection"}'
+elif [[ "$1" == "stapler" && "$2" == "staple" ]]; then
+  # Check for override file to simulate staple failures
+  if [[ -f "$TEST_TMPDIR/staple_fail_count" ]]; then
+    count=$(cat "$TEST_TMPDIR/staple_fail_count")
+    if [[ $count -gt 0 ]]; then
+      echo "$(( count - 1 ))" > "$TEST_TMPDIR/staple_fail_count"
+      echo "The staple and validate action failed! Error 65." >&2
+      exit 1
+    fi
+  fi
 fi
 MOCK
   chmod +x "$MOCK_BIN/xcrun"
@@ -62,11 +98,33 @@ echo "security $*" >> "$TEST_TMPDIR/commands.log"
 MOCK
   chmod +x "$MOCK_BIN/security"
 
-  # Mock: openssl (for keychain password generation)
+  # Mock: openssl (handles rand for keychain password and pkcs12 for cert import)
   cat > "$MOCK_BIN/openssl" <<'MOCK'
 #!/usr/bin/env bash
 if [[ "$1" == "rand" ]]; then
   echo "mock-keychain-password"
+elif [[ "$1" == "pkcs12" ]]; then
+  echo "openssl $*" >> "$TEST_TMPDIR/commands.log"
+  # Extract the -out argument and write fake PEM content
+  out_file=""
+  for i in $(seq 1 $#); do
+    if [[ "${!i}" == "-out" ]]; then
+      next=$((i + 1))
+      out_file="${!next}"
+      break
+    fi
+  done
+  if [[ -n "$out_file" ]]; then
+    if [[ "$*" == *"-clcerts"* ]]; then
+      echo "-----BEGIN CERTIFICATE-----
+bW9jay1jZXJ0LWRhdGE=
+-----END CERTIFICATE-----" > "$out_file"
+    elif [[ "$*" == *"-nocerts"* ]]; then
+      echo "-----BEGIN PRIVATE KEY-----
+bW9jay1rZXktZGF0YQ==
+-----END PRIVATE KEY-----" > "$out_file"
+    fi
+  fi
 else
   /usr/bin/openssl "$@"
 fi
@@ -77,13 +135,42 @@ MOCK
   cat > "$MOCK_BIN/file" <<'MOCK'
 #!/usr/bin/env bash
 f="$1"
-if [[ "$f" == *".macho" ]] || [[ "$f" == *"darwin"* && ! "$f" =~ \. ]]; then
+if [[ "$f" == *".macho" ]] || [[ "$f" == *"darwin"* && ! "$f" =~ \. ]] || [[ "$f" == *"testapp"* ]]; then
   echo "$f: Mach-O 64-bit executable arm64"
 else
   /usr/bin/file "$@"
 fi
 MOCK
   chmod +x "$MOCK_BIN/file"
+
+  # Mock: python3 (for notarization JSON parsing)
+  cat > "$MOCK_BIN/python3" <<'MOCK'
+#!/usr/bin/env bash
+/usr/bin/python3 "$@"
+MOCK
+  chmod +x "$MOCK_BIN/python3"
+
+  # Mock: base64 (handles -d for decoding fake cert data)
+  cat > "$MOCK_BIN/base64" <<'MOCK'
+#!/usr/bin/env bash
+if [[ "$1" == "-d" ]]; then
+  # Read stdin and write mock binary data
+  cat > /dev/null
+  echo -n "mock-p12-binary-data"
+else
+  /usr/bin/base64 "$@"
+fi
+MOCK
+  chmod +x "$MOCK_BIN/base64"
+
+  # Mock: cpio (passthrough for pkg repackaging)
+  cat > "$MOCK_BIN/cpio" <<'MOCK'
+#!/usr/bin/env bash
+echo "cpio $*" >> "$TEST_TMPDIR/commands.log"
+# Just consume stdin and produce minimal output
+cat > /dev/null
+MOCK
+  chmod +x "$MOCK_BIN/cpio"
 
   export PATH="$MOCK_BIN:$PATH"
 }
@@ -95,22 +182,23 @@ teardown_file() {
 }
 
 setup() {
-  # Clear command log and create fresh fixture directories before each test
   > "$TEST_TMPDIR/commands.log"
+  rm -f "$TEST_TMPDIR/codesign_verify_fail"
+  rm -f "$TEST_TMPDIR/notary_status_override"
+  rm -f "$TEST_TMPDIR/staple_fail_count"
 
   SOURCE_DIR="$TEST_TMPDIR/source-$$-$BATS_TEST_NUMBER"
   TARGET_DIR="$TEST_TMPDIR/target-$$-$BATS_TEST_NUMBER"
   mkdir -p "$SOURCE_DIR"
 
-  # Set required environment variables
   export SIGNING_IDENTITY="Developer ID Application: Test Corp (TESTID)"
   export INSTALLER_IDENTITY="Developer ID Installer: Test Corp (TESTID)"
-  export APPLE_APPLICATION_CERT="dGVzdC1jZXJ0LWRhdGE="  # base64 of "test-cert-data"
+  export APPLE_APPLICATION_CERT="dGVzdC1jZXJ0LWRhdGE="
   export APPLE_CERT_PASSWORD="test-cert-password"
   export APPLE_NOTARIZATION_PASSWORD="test-app-password"
   export APPLE_ID="test@example.com"
   export APPLE_TEAM_ID="TESTID"
-  export APPLE_INSTALLER_CERT="dGVzdC1pbnN0YWxsZXItY2VydA=="  # base64 of "test-installer-cert"
+  export APPLE_INSTALLER_CERT="dGVzdC1pbnN0YWxsZXItY2VydA=="
 }
 
 # --- Argument parsing tests ---
@@ -150,7 +238,6 @@ setup() {
 # --- Full tree copy tests ---
 
 @test "full artifact tree is copied even when glob is narrow" {
-  # Create mixed artifacts
   touch "$SOURCE_DIR/app.pkg"
   touch "$SOURCE_DIR/app.deb"
   touch "$SOURCE_DIR/app.rpm"
@@ -161,7 +248,6 @@ setup() {
     --artifact-glob '*.pkg' --no-notarize
 
   [ "$status" -eq 0 ]
-  # All files should be present in target (full tree copy)
   [ -f "$TARGET_DIR/app.pkg" ]
   [ -f "$TARGET_DIR/app.deb" ]
   [ -f "$TARGET_DIR/app.rpm" ]
@@ -176,9 +262,7 @@ setup() {
     --artifact-glob '*.pkg' --no-notarize
 
   [ "$status" -eq 0 ]
-  # productsign should be called for .pkg
   grep -q "productsign" "$TEST_TMPDIR/commands.log"
-  # No codesign calls for .deb
   ! grep -q "codesign.*app.deb" "$TEST_TMPDIR/commands.log"
 }
 
@@ -221,7 +305,6 @@ setup() {
 }
 
 @test "Mach-O binaries are detected and signed" {
-  # The mock 'file' command treats *.macho as Mach-O
   touch "$SOURCE_DIR/mybinary.macho"
 
   run "$ENTRYPOINT" --source-dir "$SOURCE_DIR" --target-dir "$TARGET_DIR" --no-notarize
@@ -237,8 +320,8 @@ setup() {
   run "$ENTRYPOINT" --source-dir "$SOURCE_DIR" --target-dir "$TARGET_DIR" --no-notarize
 
   [ "$status" -eq 0 ]
-  # No signing commands should be logged for these file types
-  [ ! -s "$TEST_TMPDIR/commands.log" ] || ! grep -q "codesign\|productsign" "$TEST_TMPDIR/commands.log"
+  ! grep -q "codesign.*--sign" "$TEST_TMPDIR/commands.log"
+  ! grep -q "productsign" "$TEST_TMPDIR/commands.log"
 }
 
 @test ".asc and .sha256 files are skipped" {
@@ -249,16 +332,45 @@ setup() {
   run "$ENTRYPOINT" --source-dir "$SOURCE_DIR" --target-dir "$TARGET_DIR" --no-notarize
 
   [ "$status" -eq 0 ]
-  # Only one productsign call (for app.pkg, not for .asc or .sha256)
   local sign_count
   sign_count=$(grep -c "productsign" "$TEST_TMPDIR/commands.log" || true)
   [ "$sign_count" -eq 1 ]
+}
+
+# --- Pkg contents codesigning tests ---
+
+@test "unsigned binaries inside .pkg are codesigned before productsign" {
+  touch "$SOURCE_DIR/installer.pkg"
+  # Make codesign --verify fail so binaries appear unsigned
+  touch "$TEST_TMPDIR/codesign_verify_fail"
+
+  run "$ENTRYPOINT" --source-dir "$SOURCE_DIR" --target-dir "$TARGET_DIR" --no-notarize
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Expanding .pkg to codesign embedded binaries"* ]]
+  [[ "$output" == *"Codesigning:"* ]]
+  local codesign_line productsign_line
+  codesign_line=$(grep -n "codesign --deep --force" "$TEST_TMPDIR/commands.log" | head -1 | cut -d: -f1)
+  productsign_line=$(grep -n "productsign" "$TEST_TMPDIR/commands.log" | head -1 | cut -d: -f1)
+  [ "$codesign_line" -lt "$productsign_line" ]
+}
+
+@test "already-signed binaries inside .pkg are skipped" {
+  touch "$SOURCE_DIR/installer.pkg"
+  # codesign --verify succeeds by default, so binaries appear already signed
+
+  run "$ENTRYPOINT" --source-dir "$SOURCE_DIR" --target-dir "$TARGET_DIR" --no-notarize
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Already signed, skipping"* ]]
+  ! grep -q "codesign --deep --force" "$TEST_TMPDIR/commands.log"
 }
 
 # --- Notarization tests ---
 
 @test "notarization is called for .pkg when enabled" {
   touch "$SOURCE_DIR/installer.pkg"
+  export STAPLE_RETRY_DELAY=0
 
   run "$ENTRYPOINT" --source-dir "$SOURCE_DIR" --target-dir "$TARGET_DIR" --notarize
 
@@ -279,11 +391,36 @@ setup() {
 
 @test "staple validation runs after notarization" {
   touch "$SOURCE_DIR/disk.dmg"
+  export STAPLE_RETRY_DELAY=0
 
   run "$ENTRYPOINT" --source-dir "$SOURCE_DIR" --target-dir "$TARGET_DIR" --notarize
 
   [ "$status" -eq 0 ]
   grep -q "xcrun stapler validate" "$TEST_TMPDIR/commands.log"
+}
+
+@test "notarization rejects non-Accepted status" {
+  touch "$SOURCE_DIR/installer.pkg"
+  echo '{"id":"mock-id","status":"Invalid"}' > "$TEST_TMPDIR/notary_status_override"
+  export STAPLE_RETRY_DELAY=0
+
+  run "$ENTRYPOINT" --source-dir "$SOURCE_DIR" --target-dir "$TARGET_DIR" --notarize
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"was not accepted"* ]]
+  [[ "$output" == *"status=Invalid"* ]]
+}
+
+@test "staple retries on transient failure then succeeds" {
+  touch "$SOURCE_DIR/installer.pkg"
+  echo "2" > "$TEST_TMPDIR/staple_fail_count"
+  export STAPLE_RETRY_DELAY=0
+
+  run "$ENTRYPOINT" --source-dir "$SOURCE_DIR" --target-dir "$TARGET_DIR" --notarize
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Staple attempt 1/6 failed"* ]]
+  [[ "$output" == *"Staple attempt 2/6 failed"* ]]
 }
 
 # --- Keychain tests ---
@@ -306,6 +443,22 @@ setup() {
 
   [ "$status" -eq 0 ]
   grep -q "security delete-keychain" "$TEST_TMPDIR/commands.log"
+}
+
+@test "PEM import chain calls openssl pkcs12 and security import" {
+  touch "$SOURCE_DIR/app.pkg"
+
+  run "$ENTRYPOINT" --source-dir "$SOURCE_DIR" --target-dir "$TARGET_DIR" --no-notarize
+
+  [ "$status" -eq 0 ]
+  # openssl pkcs12 called to extract cert and key PEM
+  grep -q "openssl pkcs12.*-clcerts.*-nokeys" "$TEST_TMPDIR/commands.log"
+  grep -q "openssl pkcs12.*-nocerts.*-nodes" "$TEST_TMPDIR/commands.log"
+  # security import called for cert and key PEM files
+  local import_count
+  import_count=$(grep -c "security import" "$TEST_TMPDIR/commands.log" || true)
+  # 2 certs (application + installer) x 2 files each (cert PEM + key PEM) = 4
+  [ "$import_count" -eq 4 ]
 }
 
 # --- Dry-run tests ---
