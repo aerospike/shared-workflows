@@ -154,7 +154,7 @@ setup_keychain() {
     app_p12=$(mktemp)
     printf '%s' "$APPLE_APPLICATION_CERT" | base64 -d >"$app_p12"
     echo "  Decoded app cert: $(wc -c <"$app_p12") bytes, $(file -b "$app_p12"), md5=$(md5sum <"$app_p12" | cut -c1-8)"
-    echo "  Cert password length: ${#APPLE_CERT_PASSWORD} chars"
+    echo "  Cert password length: ${#APPLE_CERT_PASSWORD} chars, sha256=$(printf '%s' "${APPLE_CERT_PASSWORD-}" | shasum -a 256 | cut -c1-8)"
     run security import "$app_p12" -k "$KEYCHAIN_NAME" -f pkcs12 -P "${APPLE_CERT_PASSWORD-}" -A
     rm -f "$app_p12"
 
