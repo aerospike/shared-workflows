@@ -307,7 +307,7 @@ jobs:
 
   sign:
     needs: sign-mac
-    if: always() && !cancelled()
+    if: always() && !cancelled() && needs.sign-mac.result != 'failure'
     uses: ./.github/workflows/reusable_sign-artifacts.yaml
     with:
       gh-workflows-ref: ${{ github.sha }}

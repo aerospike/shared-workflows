@@ -389,7 +389,7 @@ jobs:
 
   sign:
     needs: [resolve, collect-matrix-artifacts, sign-mac]
-    if: always() && !cancelled() && needs.collect-matrix-artifacts.result == 'success'
+    if: always() && !cancelled() && needs.collect-matrix-artifacts.result == 'success' && needs.sign-mac.result != 'failure'
     uses: ./.github/workflows/reusable_sign-artifacts.yaml
     with:
       gh-artifact-name: signed-artifacts
