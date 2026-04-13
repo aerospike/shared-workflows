@@ -49,57 +49,9 @@ jobs:
       gh-source-path: repo-source
       working-directory: repo-source/.github/workflows/execute-build/test_apps/hi
       gh-artifact-directory: packaged-artifacts
+      # TEMPORARY: mac-only matrix for debugging signing
       matrix-json: >-
         {"include":[
-          {"runs-on":"ubuntu-22.04","distro":"el9","arch":"x86_64", "build-env":"EMULATED=false"},
-          {"runs-on":"ubuntu-22.04","distro":"jammy","arch":"x86_64", "build-env":"EMULATED=false"},
-          {
-            "runs-on":"ubuntu-22.04",
-            "distro":"dotnet",
-            "arch":"x86_64",
-            "working-directory":"repo-source/.github/workflows/execute-build/test_apps/DotnetHelloWorld/AerospikeHelloWorld",
-            "gh-artifact-directory":"AerospikeHelloWorld/bin/Release/",
-            "build-script":"dotnet restore && dotnet build --configuration Release --no-restore && dotnet pack --no-build",
-            "build-env":"DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1",
-            "setup-dotnet":true,
-            "dotnet-version":"8.0.x"
-          },
-          {
-            "runs-on":"ubuntu-22.04",
-            "distro":"npm",
-            "arch":"x86_64",
-            "working-directory":"repo-source/.github/workflows/execute-build/test_apps/NpmHelloWorld",
-            "gh-artifact-directory":"output",
-            "build-script":"npm pack && mkdir -p output && mv *.tgz output/"
-          },
-          {
-            "runs-on":"ubuntu-22.04",
-            "distro":"java",
-            "arch":"x86_64",
-            "working-directory":"repo-source/.github/workflows/execute-build/test_apps/JavaHelloWorld",
-            "gh-artifact-directory":"output",
-            "build-script":"mvn package -q && mkdir -p output && cp target/*.jar output/ && cp pom.xml output/hello-world-1.0.0.pom",
-            "setup-java":true,
-            "java-version":"17"
-          },
-          {
-            "runs-on":"ubuntu-22.04",
-            "distro":"python",
-            "arch":"x86_64",
-            "working-directory":"repo-source/.github/workflows/execute-build/test_apps/PythonHelloWorld",
-            "gh-artifact-directory":"output",
-            "build-script":"python -m build && mkdir -p output && mv dist/*.whl dist/*.tar.gz output/",
-            "setup-python":true,
-            "python-version":"3.12"
-          },
-          {
-            "runs-on":"ubuntu-22.04",
-            "distro":"go",
-            "arch":"x86_64",
-            "working-directory":"repo-source/.github/workflows/execute-build/test_apps/GoHelloWorld",
-            "gh-artifact-directory":"dist",
-            "build-script":"VERSION=1.0.0 && read -r _ MODULE < go.mod && TMP=$(mktemp -d) && mkdir -p \"$TMP/$MODULE@v$VERSION\" dist && cp go.mod *.go \"$TMP/$MODULE@v$VERSION/\" && (cd \"$TMP\" && zip -qr \"$OLDPWD/dist/hello-v$VERSION.zip\" .) && rm -rf \"$TMP\""
-          },
           {
             "runs-on":"macos-14",
             "distro":"darwin",
