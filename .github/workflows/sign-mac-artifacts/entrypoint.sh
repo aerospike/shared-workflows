@@ -258,10 +258,9 @@ notarize_and_staple() {
         --team-id "$APPLE_TEAM_ID" \
         --wait \
         --output-format json 2>&1) || {
-        echo "ERROR: Notarization failed for $file" >&2
+        echo "ERROR: Notarization submission failed for $file" >&2
         echo "$submit_output" >&2
 
-        # Try to extract submission ID and fetch the log for diagnostics
         local submission_id
         submission_id=$(echo "$submit_output" | python3 -c "import sys,json; print(json.load(sys.stdin).get('id',''))" 2>/dev/null || true)
         if [[ -n $submission_id ]]; then
@@ -274,7 +273,27 @@ notarize_and_staple() {
         exit 1
     }
 
-    echo "  Notarization succeeded, stapling ticket"
+    # Log the notarization response and check actual status
+    local notary_status
+    notary_status=$(echo "$submit_output" | python3 -c "import sys,json; print(json.load(sys.stdin).get('status','unknown'))" 2>/dev/null || echo "unknown")
+    local submission_id
+    submission_id=$(echo "$submit_output" | python3 -c "import sys,json; print(json.load(sys.stdin).get('id',''))" 2>/dev/null || true)
+    echo "  Notarization response: status=$notary_status id=$submission_id"
+
+    if [[ $notary_status != "Accepted" ]]; then
+        echo "ERROR: Notarization completed but was not accepted (status=$notary_status)" >&2
+        echo "$submit_output" >&2
+        if [[ -n $submission_id ]]; then
+            echo "==> Fetching notarization log for submission $submission_id" >&2
+            xcrun notarytool log "$submission_id" \
+                --apple-id "$APPLE_ID" \
+                --password "$APPLE_NOTARIZATION_PASSWORD" \
+                --team-id "$APPLE_TEAM_ID" >&2 || true
+        fi
+        exit 1
+    fi
+
+    echo "  Notarization accepted, stapling ticket"
     local attempt
     for attempt in 1 2 3 4 5 6; do
         if xcrun stapler staple "$file"; then
