@@ -156,6 +156,8 @@ setup_keychain() {
     echo "  Decoded app cert: $(wc -c <"$app_p12") bytes, $(file -b "$app_p12"), md5=$(md5 -q "$app_p12" | cut -c1-8)"
     echo "  Base64 input length: ${#APPLE_APPLICATION_CERT} chars"
     echo "  Cert password length: ${#APPLE_CERT_PASSWORD} chars, sha256=$(printf '%s' "${APPLE_CERT_PASSWORD-}" | shasum -a 256 | cut -c1-8)"
+    echo "  OpenSSL verify:"
+    openssl pkcs12 -in "$app_p12" -nokeys -passin "pass:${APPLE_CERT_PASSWORD-}" -info 2>&1 | head -5 || echo "  OpenSSL verify FAILED"
     run security import "$app_p12" -k "$KEYCHAIN_NAME" -f pkcs12 -P "${APPLE_CERT_PASSWORD-}" -A
     rm -f "$app_p12"
 
