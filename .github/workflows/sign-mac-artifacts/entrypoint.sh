@@ -275,7 +275,16 @@ notarize_and_staple() {
     }
 
     echo "  Notarization succeeded, stapling ticket"
-    xcrun stapler staple "$file"
+    local attempt
+    for attempt in 1 2 3 4 5 6; do
+        if xcrun stapler staple "$file"; then
+            return 0
+        fi
+        echo "  Staple attempt $attempt/6 failed, retrying in 30s..." >&2
+        sleep 30
+    done
+    echo "ERROR: stapler staple failed after 6 attempts (3 min) for $file" >&2
+    exit 1
 }
 
 verify_staple() {
