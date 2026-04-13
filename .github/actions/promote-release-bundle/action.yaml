@@ -13,6 +13,14 @@ inputs:
   jf-project:
     description: JFrog project key
     required: true
+  include-repos:
+    description: Semicolon-separated list of target repos to include in promotion (limits scope)
+    required: false
+    default: ""
+  exclude-repos:
+    description: Semicolon-separated list of target repos to exclude from promotion
+    required: false
+    default: ""
 runs:
   using: composite
   steps:
@@ -29,5 +37,12 @@ runs:
       shell: bash
       run: |
         echo "Promoting ${{ inputs.bundle-name }} ${{ inputs.version }} to ${{ inputs.environment }}..."
-        jf release-bundle-promote "${{ inputs.bundle-name }}" "${{ inputs.version }}" \
-          "${{ inputs.environment }}" --project="${{ inputs.jf-project }}"
+        promote_args=("${{ inputs.bundle-name }}" "${{ inputs.version }}" "${{ inputs.environment }}")
+        promote_args+=(--project="${{ inputs.jf-project }}")
+        if [[ -n "${{ inputs.include-repos }}" ]]; then
+          promote_args+=(--include-repos="${{ inputs.include-repos }}")
+        fi
+        if [[ -n "${{ inputs.exclude-repos }}" ]]; then
+          promote_args+=(--exclude-repos="${{ inputs.exclude-repos }}")
+        fi
+        jf release-bundle-promote "${promote_args[@]}"

@@ -413,3 +413,4 @@ jobs:
           version: ${{ needs.extract-version.outputs.version }}
           environment: DEV
           jf-project: test
+          include-repos: test-deb-dev-local;test-rpm-dev-local;test-maven-dev-local;test-npm-dev-local;test-pypi-dev-local;test-go-dev-local;test-generic-dev-local
