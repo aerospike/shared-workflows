@@ -16,6 +16,6 @@ ENV ARCH=x86_64
 RUN --mount=type=secret,id=jfrog_token test -f /run/secrets/jfrog_token
 RUN make build && chmod a+x build/jammy/x86_64/hi
 
-FROM gcr.io/distroless/cc-debian12:debug-nonroot@sha256:641f055b21555d5e4f77b7f1f3caca80840a76c4f7ae5df36a159a436941d2c2
+FROM gcr.io/distroless/cc-debian12:debug-nonroot@sha256:78f0e748899b6f03259b13b362e82d7c4adc7211b1fb3f4e06deff716059e6cd
 COPY --from=builder /work/build/jammy/x86_64/hi /usr/local/bin/hi
 ENTRYPOINT ["/usr/local/bin/hi"]
