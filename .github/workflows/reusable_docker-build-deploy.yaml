@@ -86,6 +86,14 @@ on:
         type: boolean
         default: true
         description: Enable SBOM generation (pass-through to docker/build-push-action)
+      jf-go-repo:
+        type: string
+        required: false
+        description: >-
+          JFrog Go repository name for GOPROXY (e.g., "platforms-go-virtual").
+          When set, a "goproxy" build secret is injected with the authenticated
+          URL. Typically a virtual repo (aggregates private locals + public
+          remote cache), but can be any Go repo type.
       versions-override:
         type: string
         required: false
@@ -94,6 +102,12 @@ on:
           Format: comma separated list of versions eg "tag1,tag2,tag3"
           If not provided, the versions used in the tags (for app version 3.2.1) would be "3.2.1_20251202T021054Z, 3.2.1, 3, latest"
           Setting this value to "dev" would cause the versions to be "3.2.1_20251202T021054Z, dev". Only version is settable in this way. App name, repository scope, and app version are calculated.
+    secrets:
+      build-secrets-json:
+        required: false
+        description: >-
+          JSON object of additional build secrets {"name": "value", ...}.
+          Each is available in Dockerfile via: RUN --mount=type=secret,id=name
     outputs:
       digest:
         description: Image manifest digest
@@ -250,6 +264,44 @@ jobs:
             echo "EOF"
           } >> "$GITHUB_ENV"
 
+      - name: Prepare build secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/docker-secrets
+
+          # Delta 1: Always inject OIDC token as a build secret
+          echo -n '${{ steps.jf.outputs.oidc-token }}' > /tmp/docker-secrets/jfrog_token
+
+          # Delta 2: Construct authenticated GOPROXY URL when jf-go-repo is set
+          jf_go_repo='${{ inputs.jf-go-repo }}'
+          if [ -n "$jf_go_repo" ]; then
+            echo -n "https://${{ steps.jf.outputs.oidc-user }}:${{ steps.jf.outputs.oidc-token }}@${{ inputs.jf-registry-base }}/artifactory/api/go/${jf_go_repo}" \
+              > /tmp/docker-secrets/goproxy
+          fi
+
+          # Delta 3: Write consumer-provided secrets from JSON
+          secrets_json='${{ secrets.build-secrets-json }}'
+          if [ -n "$secrets_json" ] && [ "$secrets_json" != "{}" ]; then
+            echo "$secrets_json" | jq -r 'to_entries[] | "\(.key)\n\(.value)"' | \
+              while IFS= read -r key && IFS= read -r value; do
+                echo -n "$value" > "/tmp/docker-secrets/$key"
+              done
+          fi
+
+          # Generate secret-files lines (only file paths, not values)
+          secret_files=""
+          for f in /tmp/docker-secrets/*; do
+            [ -f "$f" ] || continue
+            name=$(basename "$f")
+            secret_files+="${name}=${f}"$'\n'
+          done
+          {
+            echo "BUILD_SECRET_FILES<<EOF"
+            echo -n "$secret_files"
+            echo "EOF"
+          } >> "$GITHUB_ENV"
+
       - name: Build and push
         id: build
         uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7.0.0
@@ -263,6 +315,11 @@ jobs:
           sbom: ${{ inputs.sbom }}
           build-args: ${{ env.BUILD_ARGS }}
           labels: ${{ env.LABELS }}
+          secret-files: ${{ env.BUILD_SECRET_FILES }}
+      - name: Cleanup build secrets
+        if: always()
+        shell: bash
+        run: rm -rf /tmp/docker-secrets
       # TODO: Uncomment this when xray scan is ready
       #   - name: xray scan
       #     shell: bash
