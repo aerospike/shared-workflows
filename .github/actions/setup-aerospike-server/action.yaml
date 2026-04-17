@@ -467,6 +467,8 @@ runs:
             bypass_entrypoint="true"
           elif [[ "$effective_security" == "true" ]]; then
             bypass_entrypoint="true"
+          elif [[ -n "$config_path" ]]; then
+            bypass_entrypoint="true"
           fi
 
           # Mount aerospike.conf (read-only when bypassing entrypoint)
