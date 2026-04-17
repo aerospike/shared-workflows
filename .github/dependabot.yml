@@ -48,3 +48,8 @@ updates:
     directory: /.github/workflows/execute-build/test_apps/JavaHelloWorld
     schedule:
       interval: daily
+
+  - package-ecosystem: gomod
+    directory: /.github/workflows/execute-build/test_apps/GoHelloWorld
+    schedule:
+      interval: daily
