@@ -487,6 +487,7 @@ runs:
           fi
 
           run_args+=("$image")
+          run_args+=("-e", "DEFAULT_TTL=2592000")
 
           # Pass --foreground since we bypassed the entrypoint
           if [[ "$bypass_entrypoint" == "true" ]]; then
