@@ -573,15 +573,32 @@ upload_generic_files() {
     _upload_generic_entry() {
         local file="$1"
         [[ -f $file ]] || return 0
-        echo "Uploading generic file: $file" >&2
 
+        local filename
+        filename=$(basename "$file")
         local props
         props=$(get_generic_props "$file")
 
-        jf_upload "$file" "$PROJECT-generic-dev-local" \
+        local target_path="${BUILD_NAME}/${VERSION}/${filename}"
+
+        echo "  Uploading generic file: $file" >&2
+        echo "    Target: $target_path" >&2
+        run jf rt upload "$file" "$PROJECT-generic-dev-local/${target_path}" \
+            --build-name="$BUILD_NAME" \
+            --build-number="$ARTIFACT_BUILD_NUMBER" \
+            --project="$PROJECT" \
             --target-props "$props"
 
-        upload_companions "$file" "$PROJECT-generic-dev-local" "generic"
+        local companions="${TYPE_COMPANIONS[generic]-}"
+        for suffix in $companions; do
+            if [[ -f "$file$suffix" ]]; then
+                echo "  Uploading companion: $file$suffix" >&2
+                run jf rt upload "$file$suffix" "$PROJECT-generic-dev-local/${target_path}${suffix}" \
+                    --build-name="$BUILD_NAME" \
+                    --build-number="$ARTIFACT_BUILD_NUMBER" \
+                    --project="$PROJECT"
+            fi
+        done
     }
 
     manifest_for_type "generic" _upload_generic_entry

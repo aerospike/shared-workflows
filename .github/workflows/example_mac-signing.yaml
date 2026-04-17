@@ -1,0 +1,95 @@
+name: "Example: Mac Artifact Signing"
+
+# Demonstrates using the artifacts-cicd orchestrator with Mac signing enabled.
+# This example builds a macOS .pkg on a Mac runner, then the orchestrator
+# handles: collect -> sign-mac (Apple) -> sign (GPG) -> deploy.
+#
+# For composable usage (calling sign-mac-artifacts directly), see CICD-composable.md.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: jfrog-test-deploy
+  cancel-in-progress: false
+
+jobs:
+  extract-version:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Extract Version
+        id: extract
+        uses: ./.github/actions/extract-version-from-tag
+        with:
+          version-file: .github/workflows/VERSION.example
+    outputs:
+      version: ${{ steps.extract.outputs.version }}
+
+  artifacts-cicd-with-mac:
+    needs: extract-version
+    uses: ./.github/workflows/reusable_artifacts-cicd.yaml
+    with:
+      gh-workflows-ref: ${{ github.sha }}
+      jf-project: test
+      jf-build-name: test-mac-build
+      version: ${{ needs.extract-version.outputs.version }}
+      gh-source-path: repo-source
+      gh-artifact-directory: dist
+      oidc-provider-name: gh-dev-test
+      oidc-audience: aerospike/testing
+
+      build-env: VERSION=${{ needs.extract-version.outputs.version }}
+
+      # The matrix includes a macOS build alongside Linux builds.
+      # The macOS entry produces a .pkg; Linux entries produce deb/rpm.
+      matrix-json: >-
+        {"include":[
+          {
+            "runs-on":"ubuntu-22.04",
+            "distro":"jammy",
+            "arch":"x86_64",
+            "working-directory":"repo-source/.github/workflows/execute-build/test_apps/hi",
+            "gh-artifact-directory":"packaged-artifacts",
+            "build-script":"make clean all && ./package.sh --target hi --version $VERSION --packages-dir build --output-dir packaged-artifacts",
+            "build-env":"EMULATED=false"
+          },
+          {
+            "runs-on":"macos-14",
+            "distro":"darwin",
+            "arch":"arm64",
+            "working-directory":"repo-source/.github/workflows/execute-build/test_apps/hi",
+            "gh-artifact-directory":"dist",
+            "build-script":"make clean build DISTRO=darwin ARCH=arm64 && mkdir -p dist && pkgbuild --root build/darwin/arm64 --identifier com.aerospike.test --version $VERSION --install-location /usr/local/bin dist/test-$VERSION-darwin-arm64.pkg"
+          }
+        ]}
+
+      # Mac signing configuration
+      sign-mac: true
+      mac-signing-identity: "Developer ID Application: Aerospike, Inc. (22224RFU67)"
+      mac-installer-identity: "Developer ID Installer: Aerospike, Inc. (22224RFU67)"
+      mac-artifact-glob: "*.pkg"
+      mac-notarize: true
+      mac-runs-on: macos-14
+
+      build-script: |
+        echo "Default build script (overridden per matrix entry)"
+
+    secrets:
+      gpg-private-key: ${{ secrets.GPG_SECRET_KEY }}
+      gpg-public-key: ${{ secrets.GPG_PUBLIC_KEY }}
+      gpg-key-pass: ${{ secrets.GPG_PASS }}
+      apple-application-cert: ${{ secrets.APPLE_APPLICATION_CERT }}
+      apple-id: ${{ secrets.APPLE_ID }}
+      apple-installer-cert: ${{ secrets.APPLE_INSTALLER_CERT }}
+      apple-cert-password: ${{ secrets.APPLE_CERT_PASSWORD }}
+      apple-notarization-password: ${{ secrets.APPLE_NOTARIZATION_PASSWORD }}
+      apple-team-id: ${{ secrets.APPLE_TEAM_ID }}

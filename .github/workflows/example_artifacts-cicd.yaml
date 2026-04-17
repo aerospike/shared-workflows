@@ -99,6 +99,15 @@ jobs:
             "working-directory":"repo-source/.github/workflows/execute-build/test_apps/GoHelloWorld",
             "gh-artifact-directory":"dist",
             "build-script":"VERSION=1.0.0 && read -r _ MODULE < go.mod && TMP=$(mktemp -d) && mkdir -p \"$TMP/$MODULE@v$VERSION\" dist && cp go.mod *.go \"$TMP/$MODULE@v$VERSION/\" && (cd \"$TMP\" && zip -qr \"$OLDPWD/dist/hello-v$VERSION.zip\" .) && rm -rf \"$TMP\""
+          },
+          {
+            "runs-on":"macos-14",
+            "distro":"darwin",
+            "arch":"arm64",
+            "working-directory":"repo-source/.github/workflows/execute-build/test_apps/hi",
+            "gh-artifact-directory":"dist",
+            "build-env":"VERSION=${{ needs.extract-version.outputs.version }}",
+            "build-script":"make clean build DISTRO=darwin ARCH=arm64 && mkdir -p dist && pkgbuild --root build/darwin/arm64 --identifier com.aerospike.test --version $VERSION --install-location /usr/local/bin dist/test-$VERSION-darwin-arm64.pkg"
           }
         ]}
       build-script: |
@@ -121,6 +130,11 @@ jobs:
       oidc-provider-name: gh-dev-test
       oidc-audience: aerospike/testing
       dry-run: false
+      sign-mac: true
+      mac-signing-identity: "Developer ID Application: Aerospike, Inc. (22224RFU67)"
+      mac-installer-identity: "Developer ID Installer: Aerospike, Inc. (22224RFU67)"
+      mac-artifact-glob: "*.pkg"
+      mac-notarize: true
     secrets:
       gpg-private-key: ${{ secrets.GPG_SECRET_KEY }}
       gpg-public-key: ${{ secrets.GPG_PUBLIC_KEY }}
@@ -129,6 +143,12 @@ jobs:
       es-password: ${{ secrets.ES_PASSWORD }}
       credential_id: ${{ secrets.CREDENTIAL_ID }}
       es-totp_secret: ${{ secrets.ES_TOTP_SECRET }}
+      apple-application-cert: ${{ secrets.APPLE_APPLICATION_CERT }}
+      apple-id: ${{ secrets.APPLE_ID }}
+      apple-installer-cert: ${{ secrets.APPLE_INSTALLER_CERT }}
+      apple-cert-password: ${{ secrets.APPLE_CERT_PASSWORD }}
+      apple-notarization-password: ${{ secrets.APPLE_NOTARIZATION_PASSWORD }}
+      apple-team-id: ${{ secrets.APPLE_TEAM_ID }}
 
   # ########################################################################################
   ########################################################

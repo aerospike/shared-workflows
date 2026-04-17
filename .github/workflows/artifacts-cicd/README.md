@@ -56,15 +56,16 @@ Companion files (`.asc` signatures, `.pom` files) are automatically gathered alo
 
 ## Testing
 
-Integration tests are split into three independent workflow files, each calling the orchestrator once and verifying the results with bats:
+A single integration test workflow (`test_artifacts-cicd.yaml`) calls the orchestrator with a 4-entry matrix:
 
-| Workflow                                 | Bats test                           | What it validates                                      |
-| ---------------------------------------- | ----------------------------------- | ------------------------------------------------------ |
-| `test_artifacts-cicd-multi-distro.yaml`  | `test_multi_distro_collection.bats` | Artifact collection from el9/jammy/noble matrix builds |
-| `test_artifacts-cicd-mixed-matrix.yaml`  | `test_mixed_artifacts.bats`         | Native (deb/rpm) + dotnet (nupkg) coexistence          |
-| `test_artifacts-cicd-full-workflow.yaml` | `test_artifact_signing.bats`        | End-to-end build + sign, signature file verification   |
+| Matrix entry | Runner        | Artifact type  |
+| ------------ | ------------- | -------------- |
+| el9 x86_64   | ubuntu-latest | RPM            |
+| jammy x86_64 | ubuntu-latest | DEB            |
+| dotnet any   | ubuntu-latest | NuGet (.nupkg) |
+| darwin arm64 | macos-14      | .pkg           |
 
-Tests are split into separate workflows so each gets its own artifact namespace (avoiding name collisions from the orchestrator's hardcoded artifact names).
+A verify job downloads `signed-artifacts` and runs `test_artifacts_cicd.bats` to validate presence, signatures, sizing, and naming.
 
 ### Running Tests
 

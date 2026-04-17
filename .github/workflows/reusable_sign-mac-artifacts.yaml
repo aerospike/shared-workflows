@@ -1,0 +1,160 @@
+name: Sign Mac Artifacts
+
+on:
+  workflow_call:
+    inputs:
+      # Required inputs
+      gh-workflows-ref:
+        description: |
+          Git reference for shared-workflows checkout. Should match the version in your 'uses:' line.
+          GitHub Actions doesn't expose the called workflow's ref, so this is required.
+          See: .github/workflows/docs/why-gh-workflows-ref.md
+        required: true
+        type: string
+      signing-identity:
+        description: "Apple codesign identity (e.g. 'Developer ID Application: Aerospike, Inc. (TEAMID)')"
+        required: true
+        type: string
+
+      # Optional inputs
+      artifact-glob:
+        description: Glob pattern to select which files to Apple-sign (controls signing scope, not download scope)
+        required: false
+        type: string
+        default: "**/*"
+      dry-run:
+        description: Run in dry-run mode (skip actual signing and notarization)
+        required: false
+        type: boolean
+        default: false
+      gh-checkout-path:
+        description: Directory to checkout the shared-workflows repository into
+        required: false
+        type: string
+        default: shared-workflows
+      gh-retention-days:
+        description: Retention days for the artifacts
+        required: false
+        type: number
+        default: 1
+      gh-unsigned-artifacts:
+        description: GitHub artifact name to download, sign, and overwrite
+        required: false
+        type: string
+        default: build-artifacts
+      installer-identity:
+        description: "Apple productsign identity (e.g. 'Developer ID Installer: Aerospike, Inc. (TEAMID)'). Required when signing .pkg files."
+        required: false
+        type: string
+        default: ""
+      notarize:
+        description: Whether to notarize artifacts after signing
+        required: false
+        type: boolean
+        default: true
+      runs-on:
+        description: macOS runner label
+        required: false
+        type: string
+        default: macos-14
+
+    secrets:
+      apple-application-cert:
+        description: Base64-encoded .p12 certificate for codesign (Developer ID Application)
+        required: false
+      apple-id:
+        description: Apple ID email for notarization
+        required: false
+      apple-installer-cert:
+        description: Base64-encoded .p12 certificate for productsign (Developer ID Installer). Required for .pkg signing.
+        required: false
+      apple-cert-password:
+        description: Password for .p12 certificate import (if cert is password-protected)
+        required: false
+      apple-notarization-password:
+        description: App-specific password for notarization (from appleid.apple.com)
+        required: false
+      apple-team-id:
+        description: Apple Developer Team ID (e.g. 22224RFU67)
+        required: false
+
+    outputs:
+      gh-artifact-name:
+        description: The name of the uploaded signed artifacts on GitHub
+        value: ${{ jobs.sign-mac.outputs.gh-artifact-name }}
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  sign-mac:
+    runs-on: ${{ inputs.runs-on }}
+    outputs:
+      gh-artifact-name: ${{ steps.sign-outputs.outputs.gh-artifact-name }}
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
+        with:
+          egress-policy: audit
+
+      - name: Download Unsigned Artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ${{ inputs.gh-unsigned-artifacts }}
+          path: unsigned-artifacts
+          merge-multiple: true
+
+      - name: Checkout shared-workflows repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: aerospike/shared-workflows
+          ref: ${{ inputs.gh-workflows-ref }}
+          path: ${{ inputs.gh-checkout-path }}
+          fetch-depth: 1
+
+      - name: Validate notarization secrets
+        if: inputs.notarize && !inputs.dry-run
+        run: |
+          missing=()
+          [ -z "${{ secrets.apple-id }}" ] && missing+=("apple-id")
+          [ -z "${{ secrets.apple-notarization-password }}" ] && missing+=("apple-notarization-password")
+          [ -z "${{ secrets.apple-team-id }}" ] && missing+=("apple-team-id")
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "Error: Notarization is enabled but required secrets are missing: ${missing[*]}" >&2
+            echo "Provide apple-id, apple-notarization-password, and apple-team-id, or set notarize: false" >&2
+            exit 1
+          fi
+
+      - name: Sign Mac Artifacts
+        env:
+          APPLE_APPLICATION_CERT: ${{ secrets.apple-application-cert }}
+          APPLE_INSTALLER_CERT: ${{ secrets.apple-installer-cert }}
+          APPLE_CERT_PASSWORD: ${{ secrets.apple-cert-password }}
+          APPLE_NOTARIZATION_PASSWORD: ${{ secrets.apple-notarization-password }}
+          APPLE_ID: ${{ secrets.apple-id }}
+          APPLE_TEAM_ID: ${{ secrets.apple-team-id }}
+          SIGNING_IDENTITY: ${{ inputs.signing-identity }}
+          INSTALLER_IDENTITY: ${{ inputs.installer-identity }}
+        run: |
+          entrypoint="${{ inputs.gh-checkout-path }}/.github/workflows/sign-mac-artifacts/entrypoint.sh"
+          chmod +x "$entrypoint"
+          "$entrypoint" \
+            --source-dir unsigned-artifacts \
+            --target-dir signed-mac-output \
+            --artifact-glob '${{ inputs.artifact-glob }}' \
+            ${{ inputs.notarize && '--notarize' || '--no-notarize' }} \
+            ${{ inputs.dry-run && '--dry-run' || '' }}
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: ${{ inputs.gh-unsigned-artifacts }}
+          path: signed-mac-output
+          overwrite: true
+          retention-days: ${{ inputs.gh-retention-days }}
+
+      - name: Set Outputs
+        id: sign-outputs
+        run: |
+          echo "gh-artifact-name=${{ inputs.gh-unsigned-artifacts }}" >> $GITHUB_OUTPUT

@@ -86,10 +86,41 @@ Notes:
 - `reusable_artifacts-cicd.yaml` generates a unique parent `jf-build-id` internally (`GITHUB_RUN_ID-GITHUB_RUN_ATTEMPT`) and uses a distinct metadata build-id (`{jf-build-id}-buildinfo`) for the build-info produced during the build.
 - Signing is always enabled; provide the required signing secrets (GPG, and SSL.com secrets if `.nupkg` files are present). Using `secrets: inherit` is simplest.
 - All artifacts get `version` and `package_name` target-props automatically. DEB/RPM also get distribution and architecture. Use `build-type` and `internal` for additional categorization.
+- **Mac signing** is optional. Set `sign-mac: true` and provide `mac-signing-identity` plus the Apple secrets to enable Apple code signing, package signing (productsign), and notarization for `.pkg`, `.dmg`, and Mach-O binaries. Mac signing runs before GPG signing in the pipeline. See [sign-mac-artifacts README](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/sign-mac-artifacts/README.md) for secret setup.
 - **Java/Maven:** Set `setup-java: true` to have Java installed before your build script runs. Optionally set `java-version` (default `"21"`), `java-distribution` (default `temurin`), and `java-cache` (default `maven`). Matrix entries can override all four fields per build.
 - **JAR artifacts:** Use `jar-group-id` to provide a Maven group ID fallback when the JAR metadata doesn't include one.
 - **Python/PyPI:** Set `setup-python: true` to install Python and build tools (`build`, `twine`) before your build script runs. Optionally set `python-version` (default `"3.12"`). The deploy stage auto-detects `.whl` and `.tar.gz` sdist files and routes them to the appropriate PyPI repository. Matrix entries can override `setup-python` and `python-version` per build.
 - **Go modules:** The deploy stage auto-detects Go module `.zip` archives (those containing `module@version/go.mod`) and routes them to the Go repository. At upload time, it extracts the `.mod` file and generates a `.info` JSON following the [GOPROXY protocol](https://go.dev/ref/mod#goproxy-protocol). No special setup inputs are needed. Your build script should produce a Go module zip with the standard `module@version/` prefix layout.
+
+### Mac signing (optional)
+
+To sign and notarize macOS artifacts (.pkg, .dmg, Mach-O binaries), add the `sign-mac` inputs:
+
+```yaml
+jobs:
+  ci:
+    uses: aerospike/shared-workflows/.github/workflows/reusable_artifacts-cicd.yaml@v3.2.0
+    with:
+      gh-workflows-ref: v3.2.0
+      jf-project: my-project
+      jf-build-name: my-app
+      version: 1.2.3
+      gh-artifact-directory: dist
+      build-script: make build
+
+      # Mac signing
+      sign-mac: true
+      mac-signing-identity: "Developer ID Application: Aerospike, Inc. (22224RFU67)"
+      mac-installer-identity: "Developer ID Installer: Aerospike, Inc. (22224RFU67)"
+      mac-artifact-glob: "*.pkg" # Only sign .pkg files; other artifacts pass through
+      mac-notarize: true # Default: true
+      mac-runs-on: macos-14 # Default: macos-14
+    secrets: inherit
+```
+
+The pipeline runs Mac signing before GPG signing: `collect -> sign-mac -> sign (GPG) -> deploy`. Apple signing modifies files in place, while GPG creates detached `.asc` signatures. Running Mac signing first ensures GPG signatures match the final file contents.
+
+Required secrets (set at org or repo level): `APPLE_APPLICATION_CERT`, `APPLE_CERT_PASSWORD`, `APPLE_ID`, `APPLE_INSTALLER_CERT`, `APPLE_NOTARIZATION_PASSWORD`, `APPLE_TEAM_ID`. See the [sign-mac-artifacts README](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/sign-mac-artifacts/README.md) for setup instructions.
 
 ### Build-info
 
