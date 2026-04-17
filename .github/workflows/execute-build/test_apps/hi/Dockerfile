@@ -1,5 +1,5 @@
 # checkov:skip=CKV_DOCKER_2: Simple hello world app doesn't need healthcheck
-FROM ubuntu:24.04@sha256:186072bba1b2f436cbb91ef2567abca677337cfc786c86e107d25b7072feef0c AS builder
+FROM ubuntu:24.04@sha256:c4a8d5503dfb2a3eb8ab5f807da5bc69a85730fb49b5cfca2330194ebcc41c7b AS builder
 
 # trunk-ignore(hadolint/DL3008)
 RUN apt-get update && apt-get install -y --no-install-recommends build-essential \
