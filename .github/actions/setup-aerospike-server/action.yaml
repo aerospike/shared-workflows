@@ -344,46 +344,46 @@ runs:
         tls_service_ports=""
 
         # Parse env-vars using escape-aware semicolon delimiter
-        env_flags=()
-        if [[ -n "${ENV_VARS:-}" ]]; then
-          current=""
-          escape="false"
-          pairs=()
-          for (( i=0; i<${#ENV_VARS}; i++ )); do
-            char="${ENV_VARS:i:1}"
-            if [[ "$escape" == "true" ]]; then
-              current+="$char"
-              escape="false"
-              continue
-            fi
-            if [[ "$char" == "\\" ]]; then
-              escape="true"
-              continue
-            fi
-            if [[ "$char" == ";" ]]; then
-              pairs+=("$current")
-              current=""
-              continue
-            fi
-            current+="$char"
-          done
-          pairs+=("$current")
+        env_flags=("-e" "DEFAULT_TTL=2592000")
+        # if [[ -n "${ENV_VARS:-}" ]]; then
+        #   current=""
+        #   escape="false"
+        #   pairs=()
+        #   for (( i=0; i<${#ENV_VARS}; i++ )); do
+        #     char="${ENV_VARS:i:1}"
+        #     if [[ "$escape" == "true" ]]; then
+        #       current+="$char"
+        #       escape="false"
+        #       continue
+        #     fi
+        #     if [[ "$char" == "\\" ]]; then
+        #       escape="true"
+        #       continue
+        #     fi
+        #     if [[ "$char" == ";" ]]; then
+        #       pairs+=("$current")
+        #       current=""
+        #       continue
+        #     fi
+        #     current+="$char"
+        #   done
+        #   pairs+=("$current")
 
-          for pair in "${pairs[@]}"; do
-            [[ -z "$pair" ]] && continue
-            if [[ "$pair" != *=* ]]; then
-              echo "Error: env-vars entries must be KEY=VALUE (got: $pair)" >&2
-              exit 1
-            fi
-            key="${pair%%=*}"
-            value="${pair#*=}"
-            if [[ -z "$key" || ! "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
-              echo "Error: invalid env var name '$key' in env-vars" >&2
-              exit 1
-            fi
-            env_flags+=("-e" "$key=$value")
-          done
-        fi
+        #   for pair in "${pairs[@]}"; do
+        #     [[ -z "$pair" ]] && continue
+        #     if [[ "$pair" != *=* ]]; then
+        #       echo "Error: env-vars entries must be KEY=VALUE (got: $pair)" >&2
+        #       exit 1
+        #     fi
+        #     key="${pair%%=*}"
+        #     value="${pair#*=}"
+        #     if [[ -z "$key" || ! "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+        #       echo "Error: invalid env var name '$key' in env-vars" >&2
+        #       exit 1
+        #     fi
+        #     env_flags+=("-e" "$key=$value")
+        #   done
+        # fi
 
         # For multi-node clusters, generate a config with mesh seed addresses
         # The entrypoint overwrites mounted configs, so we bypass it and run asd directly
