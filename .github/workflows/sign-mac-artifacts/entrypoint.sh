@@ -320,7 +320,7 @@ notarize_and_staple() {
         echo "$submit_output" >&2
 
         local submission_id
-        submission_id=$(echo "$submit_output" | python3 -c "import sys,json; print(json.load(sys.stdin).get('id',''))" 2>/dev/null || true)
+        submission_id=$(echo "$submit_output" | jq -r '.id // ""' 2>/dev/null || true)
         if [[ -n $submission_id ]]; then
             echo "==> Fetching notarization log for submission $submission_id" >&2
             xcrun notarytool log "$submission_id" \
@@ -333,9 +333,9 @@ notarize_and_staple() {
 
     # Log the notarization response and check actual status
     local notary_status
-    notary_status=$(echo "$submit_output" | python3 -c "import sys,json; print(json.load(sys.stdin).get('status','unknown'))" 2>/dev/null || echo "unknown")
+    notary_status=$(echo "$submit_output" | jq -r '.status // "unknown"' 2>/dev/null || echo "unknown")
     local submission_id
-    submission_id=$(echo "$submit_output" | python3 -c "import sys,json; print(json.load(sys.stdin).get('id',''))" 2>/dev/null || true)
+    submission_id=$(echo "$submit_output" | jq -r '.id // ""' 2>/dev/null || true)
     echo "  Notarization response: status=$notary_status id=$submission_id"
 
     if [[ $notary_status != "Accepted" ]]; then

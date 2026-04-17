@@ -148,13 +148,6 @@ fi
 MOCK
   chmod +x "$MOCK_BIN/file"
 
-  # Mock: python3 (for notarization JSON parsing)
-  cat > "$MOCK_BIN/python3" <<'MOCK'
-#!/usr/bin/env bash
-/usr/bin/python3 "$@"
-MOCK
-  chmod +x "$MOCK_BIN/python3"
-
   # Mock: base64 (handles -d for decoding fake cert data)
   cat > "$MOCK_BIN/base64" <<'MOCK'
 #!/usr/bin/env bash
