@@ -1,0 +1,93 @@
+name: Detect artifact types
+description: |
+  Run content-based artifact type detection (npm / PyPI sdist / Go module archives) via
+  deploy-artifacts/detect_types.sh. Intended after merged build artifacts are available
+  (e.g. collect-build-artifacts) and before downstream packaging such as create-release-bundle.
+inputs:
+  jf-project:
+    description: JFrog Artifactory project name (maps to --jf-project)
+    required: true
+  jf-build-name:
+    description: JFrog build name (maps to --jf-build-name)
+    required: true
+  version:
+    description: Artifact version string (maps to --version)
+    required: true
+  jf-build-id:
+    description: JFrog build ID / number used for structuring metadata (maps to --jf-build-id)
+    required: true
+  script-path:
+    description: Path to detect_types.sh (relative to workspace unless absolute)
+    required: false
+    default: .github/workflows/deploy-artifacts/detect_types.sh
+  artifacts-dir:
+    description: Directory containing merged build artifacts to scan (default matches collect-build-artifacts output)
+    required: false
+    default: build-artifacts
+  working-dir:
+    description: If set, passed as --working-dir (script runs after cd here)
+    required: false
+    default: ""
+  jar-group-id:
+    description: Maven group ID fallback for JAR metadata
+    required: false
+    default: ""
+  build-type:
+    description: Freeform build type label (target-props), maps to --build-type
+    required: false
+    default: ""
+  internal:
+    description: When true, passes --internal (internal-only target-props)
+    required: false
+    default: "false"
+  dry-run:
+    description: When true, passes --dry-run (structuring still uses cp; parity with deploy entrypoint)
+    required: false
+    default: "false"
+runs:
+  using: composite
+  steps:
+    - name: Detect content-based artifact types
+      shell: bash
+      run: |
+        set -euo pipefail
+        script="${{ inputs.script-path }}"
+        if [[ ! -f "$script" ]]; then
+          echo "Error: detect_types script not found at $script" >&2
+          echo "Checkout shared-workflows (or sparse-checkout deploy-artifacts) before this action." >&2
+          exit 1
+        fi
+        chmod +x "$script"
+
+        dry_run_arg=""
+        if [ "${{ inputs.dry-run }}" = "true" ]; then
+          dry_run_arg="--dry-run"
+        fi
+        internal_arg=""
+        if [ "${{ inputs.internal }}" = "true" ]; then
+          internal_arg="--internal"
+        fi
+        jar_arg=()
+        if [[ -n "${{ inputs.jar-group-id }}" ]]; then
+          jar_arg=(--jar-group-id "${{ inputs.jar-group-id }}")
+        fi
+        build_type_arg=()
+        if [[ -n "${{ inputs.build-type }}" ]]; then
+          build_type_arg=(--build-type "${{ inputs.build-type }}")
+        fi
+        workdir_arg=()
+        if [[ -n "${{ inputs.working-dir }}" ]]; then
+          workdir_arg=(--working-dir "${{ inputs.working-dir }}")
+        fi
+
+        "$script" \
+          --jf-project "${{ inputs.jf-project }}" \
+          --jf-build-name "${{ inputs.jf-build-name }}" \
+          --version "${{ inputs.version }}" \
+          --jf-build-id "${{ inputs.jf-build-id }}" \
+          --artifacts-dir "${{ inputs.artifacts-dir }}" \
+          "${jar_arg[@]}" \
+          "${build_type_arg[@]}" \
+          $internal_arg \
+          $dry_run_arg \
+          "${workdir_arg[@]}"
