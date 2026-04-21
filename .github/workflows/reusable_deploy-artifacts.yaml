@@ -156,6 +156,11 @@ jobs:
         run: |
           echo "Build artifacts: $(find ./build-artifacts)"
 
+      - name: Detect artifact types
+        uses: ./.github/actions/detect-artifacts
+        with:
+          artifacts-dir: build-artifacts
+
       - name: Deploy Artifacts
         id: deploy
         shell: bash

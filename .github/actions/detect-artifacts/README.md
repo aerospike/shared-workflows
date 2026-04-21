@@ -1,6 +1,6 @@
 # Detect artifact types
 
-Runs [`detect_types.sh`](../../workflows/deploy-artifacts/detect_types.sh): content-based detection for ambiguous archives (npm tarballs, PyPI sdists, Go module zips) and writes `structured_build_artifacts/` plus a manifest, matching the deploy entrypoint’s detection phase.
+Runs [`detect_types.sh`](../../workflows/deploy-artifacts/detect_types.sh): content-based detection for ambiguous archives (npm tarballs, PyPI sdists, Go module zips) and writes `structured_build_artifacts/` plus a manifest, matching the deploy entrypoint’s detection phase. JFrog/build metadata is not required because detection only inspects file contents and copies into the structured tree.
 
 ## Prerequisites
 
@@ -13,17 +13,18 @@ Runner tools used by detectors: `jq`, `tar`, `unzip` (typical GitHub-hosted Ubun
 
 | Input           | Required | Default                                              | Description                            |
 | --------------- | -------- | ---------------------------------------------------- | -------------------------------------- |
-| `jf-project`    | Yes      |                                                      | JFrog project                          |
-| `jf-build-name` | Yes      |                                                      | JFrog build name                       |
-| `version`       | Yes      |                                                      | Artifact version                       |
-| `jf-build-id`   | Yes      |                                                      | Build ID / number for structuring      |
 | `script-path`   | No       | `.github/workflows/deploy-artifacts/detect_types.sh` | Path to `detect_types.sh`              |
 | `artifacts-dir` | No       | `build-artifacts`                                    | Root directory to scan                 |
 | `working-dir`   | No       | _(empty)_                                            | If set, `--working-dir` for the script |
-| `jar-group-id`  | No       | _(empty)_                                            | Maven group ID fallback                |
-| `build-type`    | No       | _(empty)_                                            | `build.type` target-prop label         |
-| `internal`      | No       | `false`                                              | Set `true` to pass `--internal`        |
-| `dry-run`       | No       | `false`                                              | Pass `--dry-run`                       |
+
+## Outputs
+
+| Output                     | Description                                                                                                                                                                                       |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `structured-artifacts-dir` | Relative path to `structured_build_artifacts/` (per-type subdirs and copied files). If `working-dir` is set, this path is rooted under that directory (e.g. `my-job/structured_build_artifacts`). |
+| `manifest-path`            | Relative path to the TSV manifest (`.manifest`): one row per primary artifact with columns `path` and `type`. Companion files are gathered on disk but not listed here.                           |
+
+In the calling workflow, give the `uses` step an `id` (for example `id: detect-artifacts`), then reference `${{ steps.detect-artifacts.outputs.structured-artifacts-dir }}` and `${{ steps.detect-artifacts.outputs.manifest-path }}`. You can also forward them from `jobs.<job_id>.outputs`.
 
 ## Example (after collect, before release bundle)
 
@@ -38,13 +39,14 @@ steps:
     with:
       name: build-artifacts
       path: build-artifacts
-  - uses: aerospike/shared-workflows/.github/actions/detect-artifacts@v3
+  - id: detect-artifacts
+    uses: aerospike/shared-workflows/.github/actions/detect-artifacts@v3
     with:
-      jf-project: my-project
-      jf-build-name: my-build
-      version: 1.2.3
-      jf-build-id: ${{ github.run_id }}
       script-path: shared-workflows/.github/workflows/deploy-artifacts/detect_types.sh
+  - name: Detected artifacts
+    run: |
+      echo "Structured dir: ${{ steps.detect-artifacts.outputs.structured-artifacts-dir }}"
+      echo "Manifest: ${{ steps.detect-artifacts.outputs.manifest-path }}"
 ```
 
 See [`reusable_artifacts-cicd.yaml`](../../workflows/reusable_artifacts-cicd.yaml) for an integrated job between matrix collect and sign.

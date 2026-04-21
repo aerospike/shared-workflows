@@ -5,7 +5,9 @@
 #   CONTENT_DETECT_EXTENSIONS, CONTENT_DETECT_ORDER, TYPE_CONTENT_DETECT, TYPE_STRUCT_DIR
 #   gather_companions, manifest_add, process_* helpers from package_utils.sh
 #
-# Optional: BUILD_ARTIFACTS_DIR (default build-artifacts) — must match copy_to_structured() in package_utils.sh
+# structure_content_detected_files only reads BUILD_ARTIFACTS_DIR and the registry/helpers above
+# (no JFrog globals). Optional: BUILD_ARTIFACTS_DIR (default build-artifacts) — must match
+# copy_to_structured() in package_utils.sh
 
 structure_content_detected_files() {
     local artifacts_root="${BUILD_ARTIFACTS_DIR:-build-artifacts}"
