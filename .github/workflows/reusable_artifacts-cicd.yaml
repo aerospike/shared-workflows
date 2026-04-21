@@ -392,29 +392,20 @@ jobs:
         with:
           repository: aerospike/shared-workflows
           ref: ${{ inputs.gh-workflows-ref }}
-          path: ${{ inputs.gh-checkout-path }}
           fetch-depth: 1
 
       - name: Detect artifact types
-        shell: bash
-        run: |
-          set -euo pipefail
-          script="${{ inputs.gh-checkout-path }}/.github/workflows/deploy-artifacts/detect_types.sh"
-          chmod +x "$script"
-
-          args=(
-            --jf-project "${{ inputs.jf-project }}"
-            --jf-build-name "${{ inputs.jf-build-name }}"
-            --version "${{ inputs.version }}"
-            --jf-build-id "${{ needs.resolve.outputs.jf-build-id }}"
-            --artifacts-dir build-artifacts
-          )
-          [[ -n "${{ inputs.jar-group-id }}" ]] && args+=(--jar-group-id "${{ inputs.jar-group-id }}")
-          [[ -n "${{ inputs.build-type }}" ]] && args+=(--build-type "${{ inputs.build-type }}")
-          [[ "${{ inputs.internal }}" == "true" ]] && args+=(--internal)
-          [[ "${{ inputs.dry-run }}" == "true" ]] && args+=(--dry-run)
-
-          "$script" "${args[@]}"
+        uses: ./.github/actions/detect-artifacts
+        with:
+          jf-project: ${{ inputs.jf-project }}
+          jf-build-name: ${{ inputs.jf-build-name }}
+          version: ${{ inputs.version }}
+          jf-build-id: ${{ needs.resolve.outputs.jf-build-id }}
+          artifacts-dir: build-artifacts
+          jar-group-id: ${{ inputs.jar-group-id }}
+          build-type: ${{ inputs.build-type }}
+          internal: ${{ inputs.internal }}
+          dry-run: ${{ inputs.dry-run }}
 
   sign-mac:
     if: inputs.sign-mac
