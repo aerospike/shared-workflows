@@ -24,6 +24,11 @@ setup() {
     [[ "$result" == "noble" ]]
 }
 
+@test "get_codename_for_deb maps ubuntu26.04 to resolute" {
+    result=$(get_codename_for_deb "test-ubuntu26.04.deb")
+    [[ "$result" == "resolute" ]]
+}
+
 @test "get_codename_for_deb maps ubuntu20.04 to focal" {
     result=$(get_codename_for_deb "test-ubuntu20.04.deb")
     [[ "$result" == "focal" ]]
