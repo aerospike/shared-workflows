@@ -181,6 +181,7 @@ run() {
 }
 
 echo "Content-based type detection (artifacts root: $BUILD_ARTIFACTS_DIR)..." >&2
+mkdir -p structured_build_artifacts
 init_manifest
 for dir in "${TYPE_STRUCT_DIR[@]}"; do
     mkdir -p "structured_build_artifacts/$dir"
