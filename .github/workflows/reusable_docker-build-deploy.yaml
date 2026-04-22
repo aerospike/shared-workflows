@@ -190,6 +190,9 @@ jobs:
           # Extract major version (handle 'v' prefix, take first number before first dot)
           app_version="${{ inputs.app-version }}"
           app_version="${app_version#v}"  # Strip 'v' prefix if present
+          # OCI tags forbid '+' but SemVer build metadata uses it (e.g. 1.2.3+abc).
+          # Replace with '-' so SemVer inputs still produce valid image tags.
+          app_version="${app_version//+/-}"
           major_version="${app_version%%.*}"  # Extract first number before first dot
 
           # Build immutable tag (always included)
