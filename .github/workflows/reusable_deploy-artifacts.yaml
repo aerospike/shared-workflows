@@ -156,6 +156,32 @@ jobs:
         run: |
           echo "Build artifacts: $(find ./build-artifacts)"
 
+      # Inline logic from .github/actions/detect-artifacts (same outputs). A local
+      # uses: ./.github/actions/... resolves from the consumer repo when nested under
+      # reusable_artifacts-cicd, and uses: cannot reference workflow inputs (e.g. for
+      # @ref). GITHUB_ACTION_PATH only exists inside a composite step, not for resolving uses.
+      - name: Detect artifact types
+        id: detect-artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          script="${{ inputs.gh-checkout-path }}/.github/workflows/deploy-artifacts/detect_types.sh"
+          if [[ ! -f "$script" ]]; then
+            echo "Error: detect_types script not found at $script" >&2
+            echo "Checkout shared-workflows (or sparse-checkout deploy-artifacts) before this step." >&2
+            exit 1
+          fi
+          chmod +x "$script"
+          "$script" --artifacts-dir build-artifacts
+          struct_dir="structured_build_artifacts"
+          echo "structured-artifacts-dir=$struct_dir" >>"$GITHUB_OUTPUT"
+          echo "manifest-path=$struct_dir/.manifest" >>"$GITHUB_OUTPUT"
+
+      - name: Detected artifacts
+        run: |
+          echo "Structured dir: ${{ steps.detect-artifacts.outputs.structured-artifacts-dir }}"
+          echo "Manifest: ${{ steps.detect-artifacts.outputs.manifest-path }}"
+
       - name: Deploy Artifacts
         id: deploy
         shell: bash

@@ -208,17 +208,21 @@ get_nupkg_metadata() {
     echo "$pkgname $version"
 }
 
-# Copy a file to dest_dir, preserving its relative path within build-artifacts/.
+# Copy a file to dest_dir, preserving its relative path within the artifacts tree.
+# BUILD_ARTIFACTS_DIR (default: build-artifacts) must match the directory find uses as root.
 # Additional prefixes (e.g. "unsigned-artifacts") can be stripped via extra arguments.
 # Usage: copy_to_structured <file> <dest_dir> [prefix_to_strip ...]
 copy_to_structured() {
     local file="$1" dest_dir="$2"
     shift 2
 
+    local artifacts_root="${BUILD_ARTIFACTS_DIR:-build-artifacts}"
+    # Strip the slash, just in case
+    artifacts_root="${artifacts_root%/}"
     local dir
     dir=$(dirname "$file")
-    dir="${dir#build-artifacts/}"
-    dir="${dir#build-artifacts}"
+    dir="${dir#"$artifacts_root"/}"
+    dir="${dir#"$artifacts_root"}"
     for prefix in "$@"; do
         dir="${dir#"$prefix"/}"
         dir="${dir#"$prefix"}"

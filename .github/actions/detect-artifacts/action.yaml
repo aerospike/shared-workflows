@@ -1,0 +1,60 @@
+name: Detect artifact types
+description: |
+  Run content-based artifact type detection (npm / PyPI sdist / Go module archives) via
+  deploy-artifacts/detect_types.sh. Intended after merged build artifacts are available
+  (e.g. collect-build-artifacts) and before downstream packaging such as create-release-bundle.
+inputs:
+  script-path:
+    description: Path to detect_types.sh (relative to workspace unless absolute)
+    required: false
+    default: .github/workflows/deploy-artifacts/detect_types.sh
+  artifacts-dir:
+    description: Directory containing merged build artifacts to scan (default matches collect-build-artifacts output)
+    required: false
+    default: build-artifacts
+  working-dir:
+    description: If set, passed as --working-dir (script runs after cd here)
+    required: false
+    default: ""
+outputs:
+  structured-artifacts-dir:
+    description: |
+      Path to structured_build_artifacts/ (directory layout per type) relative to the job workspace,
+      or under working-dir when that input is set.
+    value: ${{ steps.detect.outputs.structured-artifacts-dir }}
+  manifest-path:
+    description: TSV manifest of structured primary files (path and type columns), under structured-artifacts-dir
+    value: ${{ steps.detect.outputs.manifest-path }}
+runs:
+  using: composite
+  steps:
+    - id: detect
+      name: Detect content-based artifact types
+      shell: bash
+      run: |
+        set -euo pipefail
+        script="${{ inputs.script-path }}"
+        if [[ ! -f "$script" ]]; then
+          echo "Error: detect_types script not found at $script" >&2
+          echo "Checkout shared-workflows (or sparse-checkout deploy-artifacts) before this action." >&2
+          exit 1
+        fi
+        chmod +x "$script"
+
+        workdir_arg=()
+        if [[ -n "${{ inputs.working-dir }}" ]]; then
+          workdir_arg=(--working-dir "${{ inputs.working-dir }}")
+        fi
+
+        "$script" \
+          --artifacts-dir "${{ inputs.artifacts-dir }}" \
+          "${workdir_arg[@]}"
+
+        workdir="${{ inputs.working-dir }}"
+        if [[ -n "$workdir" ]]; then
+          struct_dir="${workdir%/}/structured_build_artifacts"
+        else
+          struct_dir="structured_build_artifacts"
+        fi
+        echo "structured-artifacts-dir=$struct_dir" >>"$GITHUB_OUTPUT"
+        echo "manifest-path=$struct_dir/.manifest" >>"$GITHUB_OUTPUT"

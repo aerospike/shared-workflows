@@ -172,45 +172,6 @@ structure_standalone_poms() {
     done < <(find build-artifacts -name "*.pom" -print0)
 }
 
-structure_content_detected_files() {
-    # Build the find pattern from CONTENT_DETECT_EXTENSIONS
-    local -a find_args=()
-    for i in "${!CONTENT_DETECT_EXTENSIONS[@]}"; do
-        ((i > 0)) && find_args+=(-o)
-        find_args+=(-name "${CONTENT_DETECT_EXTENSIONS[$i]}")
-    done
-
-    while IFS= read -r -d '' file; do
-        [[ -f $file ]] || continue
-        local matched=false
-        for type in "${CONTENT_DETECT_ORDER[@]}"; do
-            local detector="${TYPE_CONTENT_DETECT[$type]}"
-            if "$detector" "$file"; then
-                echo "Processing ${type^^}: $file" >&2
-                local dest="./structured_build_artifacts/${TYPE_STRUCT_DIR[$type]}"
-                local processor="process_${type}"
-                local target_path
-                target_path=$("$processor" "$file" "$dest")
-                if [[ -n $target_path ]]; then
-                    gather_companions "$file" "$(dirname "$target_path")" "$type"
-                    manifest_add "$target_path" "$type"
-                fi
-                matched=true
-                break
-            fi
-        done
-        if [[ $matched == false ]]; then
-            echo "Processing generic tarball: $file" >&2
-            local target_path
-            target_path=$(process_generic "$file" "./structured_build_artifacts/generic")
-            if [[ -n $target_path ]]; then
-                gather_companions "$file" "$(dirname "$target_path")" "generic"
-                manifest_add "$target_path" "generic"
-            fi
-        fi
-    done < <(find build-artifacts \( "${find_args[@]}" \) -print0)
-}
-
 structure_generic_files() {
     local -a exclude_args=()
     while IFS= read -r ext; do
@@ -235,6 +196,8 @@ structure_generic_files() {
 
 structure_build_artifacts() {
     echo "Structuring build artifacts..." >&2
+    # The deploy step might be preceded by a step that runs detect_types.sh,
+    # so we do not need to flush the manifest here.
     init_manifest
 
     # Create all type directories from registry
@@ -253,7 +216,8 @@ structure_build_artifacts() {
     done
 
     # Content-detected types: ambiguous extensions need inspection to determine type
-    structure_content_detected_files
+    echo "Note: Content detection moved to separate step of 'Detect artifact types'" >&2
+    # structure_content_detected_files
 
     structure_standalone_poms
     structure_generic_files
@@ -689,6 +653,8 @@ main() {
     echo "Dry run: $DRY_RUN" >&2
     echo "Build number: $BUILD_NUMBER" >&2
     echo "Metadata build number: $METADATA_BUILD_NUMBER" >&2
+
+    echo "Note: for type detection use separate workflow step 'Detect artifact types'" >&2
 
     if [[ ! -d build-artifacts ]]; then
         error "build-artifacts directory does not exist. Artifacts must be downloaded before running this script."
