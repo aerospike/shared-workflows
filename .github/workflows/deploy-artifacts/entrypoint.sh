@@ -126,8 +126,6 @@ source "$SCRIPT_DIR/package_utils.sh"
 source "$SCRIPT_DIR/type_registry.sh"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/upload_utils.sh"
-# shellcheck disable=SC1091
-# source "$SCRIPT_DIR/type_detection.sh"
 
 # Wrapper function that either executes or echoes commands
 run() {
@@ -218,7 +216,7 @@ structure_build_artifacts() {
     done
 
     # Content-detected types: ambiguous extensions need inspection to determine type
-    echo "Note: Content detection moved to separate step of 'Detect artifact types'"
+    echo "Note: Content detection moved to separate step of 'Detect artifact types'" >&2
     # structure_content_detected_files
 
     structure_standalone_poms
@@ -656,7 +654,7 @@ main() {
     echo "Build number: $BUILD_NUMBER" >&2
     echo "Metadata build number: $METADATA_BUILD_NUMBER" >&2
 
-    echo "Note: for type detection use separate workflow step 'Detect artifact types'"
+    echo "Note: for type detection use separate workflow step 'Detect artifact types'" >&2
 
     if [[ ! -d build-artifacts ]]; then
         error "build-artifacts directory does not exist. Artifacts must be downloaded before running this script."

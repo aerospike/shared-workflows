@@ -217,6 +217,8 @@ copy_to_structured() {
     shift 2
 
     local artifacts_root="${BUILD_ARTIFACTS_DIR:-build-artifacts}"
+    # Strip the slash, just in case
+    artifacts_root="${artifacts_root%/}"
     local dir
     dir=$(dirname "$file")
     dir="${dir#"$artifacts_root"/}"
