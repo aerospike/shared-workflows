@@ -157,9 +157,16 @@ jobs:
           echo "Build artifacts: $(find ./build-artifacts)"
 
       - name: Detect artifact types
+        id: detect-artifacts
         uses: ./.github/actions/detect-artifacts
         with:
           artifacts-dir: build-artifacts
+          script-path: "${{ inputs.gh-checkout-path }}/.github/workflows/deploy-artifacts/detect_types.sh"
+
+      - name: Detected artifacts
+        run: |
+          echo "Structured dir: ${{ steps.detect-artifacts.outputs.structured-artifacts-dir }}"
+          echo "Manifest: ${{ steps.detect-artifacts.outputs.manifest-path }}"
 
       - name: Deploy Artifacts
         id: deploy
