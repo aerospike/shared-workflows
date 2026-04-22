@@ -219,7 +219,6 @@ copy_to_structured() {
     local artifacts_root="${BUILD_ARTIFACTS_DIR:-build-artifacts}"
     local dir
     dir=$(dirname "$file")
-    # TODO: mistake? Why are we stripping the artifacts_root twice?
     dir="${dir#"$artifacts_root"/}"
     dir="${dir#"$artifacts_root"}"
     for prefix in "$@"; do

@@ -89,6 +89,13 @@ run_entrypoint_dry_run() {
         local metadata_build_number="${5:-12345-metadata}"
 
         cd "$TEST_DIR" || exit 1
+
+        # Run detection script
+        "$DEPLOY_ARTIFACTS_DIR/detect_types.sh" \
+                --artifacts-dir "$BUILD_ARTIFACTS_DIR" \
+                2>&1
+
+        # Run deploy script
         # Set required environment variables for NuGet CLI
         export JF_URL="${JF_URL:-https://artifact.aerospike.io}"
         export OIDC_USER="${OIDC_USER:-test-user@aerospike.com}"
