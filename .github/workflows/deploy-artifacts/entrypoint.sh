@@ -198,6 +198,8 @@ structure_generic_files() {
 
 structure_build_artifacts() {
     echo "Structuring build artifacts..." >&2
+    # The deploy step might be preceded by a step that runs detect_types.sh,
+    # so we do not need to flush the manifest here.
     init_manifest
 
     # Create all type directories from registry

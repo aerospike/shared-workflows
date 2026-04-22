@@ -93,7 +93,8 @@ source "$SCRIPT_DIR/type_detection.sh"
 
 echo "Content-based type detection (artifacts root: $BUILD_ARTIFACTS_DIR)..." >&2
 mkdir -p structured_build_artifacts
-init_manifest
+# This step is running in a separate workflow step, so we need to flush the manifest
+init_manifest flush
 for dir in "${TYPE_STRUCT_DIR[@]}"; do
     mkdir -p "structured_build_artifacts/$dir"
 done

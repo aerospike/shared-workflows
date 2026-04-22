@@ -14,8 +14,11 @@
 MANIFEST_FILE=""
 
 init_manifest() {
+    # Usage: init_manifest [flush]
     MANIFEST_FILE="$(pwd)/structured_build_artifacts/.manifest"
-    : >"$MANIFEST_FILE"
+    if [[ ! -f $MANIFEST_FILE || ${1-} == "flush" ]]; then
+        : >"$MANIFEST_FILE"
+    fi
 }
 
 # Add a file to the manifest. Paths are stored as-is (as returned by process functions).
