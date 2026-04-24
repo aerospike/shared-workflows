@@ -33,7 +33,7 @@ The deploy pipeline uses a centralized type registry (`type_registry.sh`). To ad
 
 **Types with ambiguous extensions** (like npm and PyPI, which share `.tgz`/`.tar.gz` with generic tarballs) also need:
 
-- A content-detection function (e.g., `is_npm_package`, `is_pypi_sdist`) in `package_utils.sh`
+- A content-detection function (e.g., `is_npm_package`, `is_pypi_package`) in `type_detection.sh` (after `package_utils.sh` for shared helpers)
 - A detector entry in the unified tarball content-detection block in `entrypoint.sh`'s `structure_build_artifacts()`
 - The ambiguous extension added to `get_known_extensions()` if not already covered by `TYPE_EXTENSIONS`
 

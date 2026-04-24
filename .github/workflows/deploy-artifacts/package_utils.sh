@@ -261,16 +261,6 @@ _extract_npm_package_json() {
     tar -xOzf "$file" "$pkg_path" 2>/dev/null
 }
 
-# Check if a .tgz file is an npm package.
-# Validates that the tarball contains a root-level package.json with name and version fields.
-# Args: <tgz_file>
-# Returns: 0 if npm package, 1 otherwise.
-is_npm_package() {
-    local file="$1"
-    _extract_npm_package_json "$file" |
-        jq -e '.name and .version' >/dev/null 2>&1
-}
-
 # Validate an npm package name.
 # npm names must be lowercase, may be scoped (@scope/name), and contain only
 # alphanumerics, hyphens, dots, underscores, and tildes. Rejects names with
@@ -285,7 +275,7 @@ _validate_npm_name() {
 }
 
 # Extract npm package metadata (name and version).
-# Caller must ensure the file is a valid npm package (via is_npm_package).
+# Caller must ensure the file is a valid npm package (via is_npm_package in type_detection.sh).
 # Args: <tgz_file>
 # Returns: "name version" on stdout.
 get_npm_metadata() {
@@ -309,18 +299,6 @@ get_npm_metadata() {
 process_npm() { copy_to_structured "$1" "$2"; }
 
 # --- PyPI (Python) package functions ---
-
-# Check if a .tar.gz file is a Python source distribution.
-# Python sdists contain a root-level PKG-INFO file (mandatory per PEP 625).
-# Args: <tar_gz_file>
-# Returns: 0 if the tarball is an sdist, 1 otherwise.
-is_pypi_sdist() {
-    local file="$1"
-    # Capture full listing to avoid SIGPIPE from tar when grep matches early.
-    local listing
-    listing=$(tar -tzf "$file" 2>/dev/null) || return 1
-    echo "$listing" | grep -qE '^[^/]+/PKG-INFO$'
-}
 
 # Validate a Python package name against PEP 508 naming rules.
 # Rejects names that could inject JFrog target-props (semicolons, etc.).
@@ -434,17 +412,6 @@ process_pypi() { copy_to_structured "$1" "$2"; }
 
 # --- Go module functions ---
 
-# Check if a .zip file is a Go module archive.
-# Go module zips have files prefixed with module@version/ and contain go.mod.
-# Args: <zip_file>
-# Returns: 0 if Go module, 1 otherwise.
-is_go_module() {
-    local file="$1"
-    local listing
-    listing=$(unzip -Z1 "$file" 2>/dev/null) || return 1
-    echo "$listing" | grep -qE '^[^@]+@v[^/]+/go\.mod$'
-}
-
 # Validate a Go module path.
 # Go module paths are slash-separated, each element matching [a-zA-Z0-9._~-]+.
 # The first element must contain a dot (domain name). Rejects semicolons and other
@@ -464,6 +431,7 @@ _validate_go_module_path() {
 
 # Extract Go module metadata (module path and version) from a Go module zip.
 # Go module zips have entries prefixed with module@version/.
+# Use is_go_module (type_detection.sh) before treating a zip as a Go module for routing.
 # Args: <zip_file>
 # Returns: "module_path version" on stdout.
 get_go_metadata() {

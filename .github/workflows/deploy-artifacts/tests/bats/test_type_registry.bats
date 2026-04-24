@@ -57,7 +57,7 @@ setup() {
 
 @test "TYPE_CONTENT_DETECT maps types to detection functions" {
     [[ "${TYPE_CONTENT_DETECT[npm]}" == "is_npm_package" ]]
-    [[ "${TYPE_CONTENT_DETECT[pypi]}" == "is_pypi_sdist" ]]
+    [[ "${TYPE_CONTENT_DETECT[pypi]}" == "is_pypi_package" ]]
     [[ "${TYPE_CONTENT_DETECT[go]}" == "is_go_module" ]]
 }
 

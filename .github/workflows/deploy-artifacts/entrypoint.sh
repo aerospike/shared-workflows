@@ -163,6 +163,11 @@ structure_standalone_poms() {
         group_path="${group_id//./\/}"
 
         target="./structured_build_artifacts/jar/${group_path}/${artifact_id}/${version}"
+        # Safeguard against duplicate processing
+        if [[ -f "$target/$(basename "$pom")" ]]; then
+            echo "Skipping standalone POM (already structured): $pom" >&2
+            continue
+        fi
         mkdir -p "$target"
         cp "$pom" "$target/"
         manifest_add "$target/$(basename "$pom")" "jar"

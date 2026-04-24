@@ -22,9 +22,13 @@ init_manifest() {
 }
 
 # Add a file to the manifest. Paths are stored as-is (as returned by process functions).
+# Skips duplicate path+type lines (e.g. detect_types.sh then entrypoint both structure the same wheel).
 manifest_add() {
     local path="$1"
     local type="$2"
+    if [[ -f ${MANIFEST_FILE-} ]] && grep -Fxq "${path}"$'\t'"${type}" "$MANIFEST_FILE" 2>/dev/null; then
+        return 0
+    fi
     printf '%s\t%s\n' "$path" "$type" >>"$MANIFEST_FILE"
 }
 
