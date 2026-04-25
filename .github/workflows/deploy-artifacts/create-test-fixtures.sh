@@ -156,6 +156,19 @@ cd "$BUILD_ARTIFACTS_DIR/temp-gomod" && zip -q -r "../aeromod-v1.2.3.zip" "githu
 rm -rf "$BUILD_ARTIFACTS_DIR/temp-gomod"
 echo "  Created aeromod-v1.2.3.zip (Go module)"
 
+# Create a mixed-case Go module zip to exercise GOPROXY case-encoding.
+# The zip's internal root keeps the original case (github.com/Aerospike-DBaaS/api-docs@v0.1.0).
+mkdir -p "$BUILD_ARTIFACTS_DIR/temp-gomod-mixed/github.com/Aerospike-DBaaS/api-docs@v0.1.0"
+cat >"$BUILD_ARTIFACTS_DIR/temp-gomod-mixed/github.com/Aerospike-DBaaS/api-docs@v0.1.0/go.mod" <<'GOMOD'
+module github.com/Aerospike-DBaaS/api-docs
+
+go 1.21
+GOMOD
+echo 'package apidocs' >"$BUILD_ARTIFACTS_DIR/temp-gomod-mixed/github.com/Aerospike-DBaaS/api-docs@v0.1.0/doc.go"
+cd "$BUILD_ARTIFACTS_DIR/temp-gomod-mixed" && zip -q -r "../api-docs-v0.1.0.zip" "github.com/" && cd - >/dev/null
+rm -rf "$BUILD_ARTIFACTS_DIR/temp-gomod-mixed"
+echo "  Created api-docs-v0.1.0.zip (mixed-case Go module)"
+
 # Create some additional test files with valid formats
 # Create a valid JAR file (JAR is a ZIP with META-INF/MANIFEST.MF)
 mkdir -p "$BUILD_ARTIFACTS_DIR/temp-jar/META-INF"
@@ -212,6 +225,7 @@ echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/aerospike-hello-1.0.0.tar.gz.as
 echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/aerospike-utils-2.0.0.tgz.asc"
 echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/aerospike-targz-package-3.0.0.tar.gz.asc"
 echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/aeromod-v1.2.3.zip.asc"
+echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/api-docs-v0.1.0.zip.asc"
 
 # Create unsigned-artifacts/ prefix to simulate sign stage output
 # The sign stage uses cp --parents which creates: signed-artifacts/unsigned-artifacts/...

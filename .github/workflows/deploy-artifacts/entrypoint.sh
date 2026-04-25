@@ -473,7 +473,12 @@ upload_go_packages() {
         props=$(get_go_props "$pkg")
 
         # GOPROXY layout: <module>/@v/<version>.{zip,mod,info}
-        local base_target="${module_path}/@v/${module_version}"
+        # Module path must be case-encoded for the proxy/cache layout per
+        # Go's module.EscapePath. Zip contents and the go.module target-prop
+        # keep the original case.
+        local escaped_module_path
+        escaped_module_path=$(escape_go_path "$module_path")
+        local base_target="${escaped_module_path}/@v/${module_version}"
 
         echo "  Uploading Go module: $pkg" >&2
         echo "    Module: $module_path, Version: $module_version" >&2

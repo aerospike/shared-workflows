@@ -482,6 +482,28 @@ get_go_metadata() {
 # Returns: target path on stdout.
 process_go() { copy_to_structured "$1" "$2"; }
 
+# Encode a Go module path per Go's module.EscapePath: every uppercase ASCII
+# letter becomes "!" + lowercase letter. Required for paths used in the
+# GOPROXY / module-cache layout. Module metadata and zip contents keep the
+# original case.
+# Args: <module_path>
+# Returns: encoded path on stdout.
+escape_go_path() {
+    local input="$1"
+    local output=""
+    local i char lower
+    for ((i = 0; i < ${#input}; i++)); do
+        char="${input:i:1}"
+        if [[ $char =~ [A-Z] ]]; then
+            lower=$(printf '%s' "$char" | tr '[:upper:]' '[:lower:]')
+            output+="!$lower"
+        else
+            output+="$char"
+        fi
+    done
+    printf '%s\n' "$output"
+}
+
 # Structure a generic file into the destination directory.
 # Strips the "unsigned-artifacts" prefix leaked from the sign stage's cp --parents.
 # Args: <file> <dest_dir>

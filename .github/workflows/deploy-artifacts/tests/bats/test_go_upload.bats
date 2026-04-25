@@ -151,3 +151,30 @@ teardown_file() {
 
     [[ $found_in_generic == true ]] || (echo "test.zip not found in generic uploads" >&2 && return 1)
 }
+
+@test "mixed-case go module uploads use escaped GOPROXY target paths and unescaped props" {
+    local output
+    output=$(run_entrypoint_dry_run "test-project" "test-build" "v1.0.0" "12345" "12345-metadata")
+
+    local upload_commands
+    upload_commands=$(extract_upload_commands "$output")
+
+    local escaped_base="go-dev-local/github\.com/!aerospike-!d!baa!s/api-docs/@v/v0\.1\.0"
+    local found_zip=false found_mod=false found_info=false found_asc=false found_props=false
+
+    while IFS= read -r cmd; do
+        [[ $cmd =~ ${escaped_base}\.zip[[:space:]] ]] && found_zip=true
+        [[ $cmd =~ ${escaped_base}\.mod ]] && found_mod=true
+        [[ $cmd =~ ${escaped_base}\.info ]] && found_info=true
+        [[ $cmd =~ ${escaped_base}\.zip\.asc ]] && found_asc=true
+        if [[ $cmd =~ api-docs-v0\.1\.0\.zip[[:space:]] && $cmd =~ go-dev-local ]]; then
+            [[ $cmd =~ go\.module=github\.com/Aerospike-DBaaS/api-docs ]] && found_props=true
+        fi
+    done <<< "$upload_commands"
+
+    [[ $found_zip == true ]] || (echo "Missing escaped .zip upload" >&2 && return 1)
+    [[ $found_mod == true ]] || (echo "Missing escaped .mod upload" >&2 && return 1)
+    [[ $found_info == true ]] || (echo "Missing escaped .info upload" >&2 && return 1)
+    [[ $found_asc == true ]] || (echo "Missing escaped .zip.asc upload" >&2 && return 1)
+    [[ $found_props == true ]] || (echo "go.module prop must be unescaped" >&2 && return 1)
+}

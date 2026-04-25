@@ -329,3 +329,38 @@ setup() {
 @test "_validate_go_module_path accepts valid Go module path" {
     _validate_go_module_path "github.com/aerospike/aeromod"
 }
+
+# --- escape_go_path ---
+# Note: the file's setup() does `set +eu; trap - ERR`, which disables bats'
+# default errexit-based assertion checking. Re-enable `set -e` per test so
+# `[[ ... ]]` failures actually fail the test.
+
+@test "escape_go_path leaves all-lowercase module path unchanged" {
+    set -e
+    result=$(escape_go_path "github.com/aerospike/aeromod")
+    [[ "$result" == "github.com/aerospike/aeromod" ]]
+}
+
+@test "escape_go_path encodes uppercase letters with bang prefix" {
+    set -e
+    result=$(escape_go_path "github.com/Aerospike-DBaaS/api-docs")
+    [[ "$result" == "github.com/!aerospike-!d!baa!s/api-docs" ]]
+}
+
+@test "escape_go_path handles single uppercase letter" {
+    set -e
+    result=$(escape_go_path "example.com/A")
+    [[ "$result" == "example.com/!a" ]]
+}
+
+@test "escape_go_path handles empty string" {
+    set -e
+    result=$(escape_go_path "")
+    [[ "$result" == "" ]]
+}
+
+@test "escape_go_path leaves digits and dots unchanged" {
+    set -e
+    result=$(escape_go_path "example.com/v2/pkg.name")
+    [[ "$result" == "example.com/v2/pkg.name" ]]
+}

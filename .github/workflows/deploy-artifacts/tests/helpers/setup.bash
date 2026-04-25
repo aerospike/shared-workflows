@@ -61,6 +61,8 @@ setup_test_artifacts() {
                 "$BUILD_ARTIFACTS_DIR/aerospike-hello-1.0.0.tar.gz.asc"
                 "$BUILD_ARTIFACTS_DIR/aeromod-v1.2.3.zip"
                 "$BUILD_ARTIFACTS_DIR/aeromod-v1.2.3.zip.asc"
+                "$BUILD_ARTIFACTS_DIR/api-docs-v0.1.0.zip"
+                "$BUILD_ARTIFACTS_DIR/api-docs-v0.1.0.zip.asc"
         )
 
         for file in "${TEST_FILES[@]}"; do
