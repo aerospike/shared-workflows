@@ -482,6 +482,14 @@ get_go_metadata() {
 # Returns: target path on stdout.
 process_go() { copy_to_structured "$1" "$2"; }
 
+# Returns 0 if the argument is a full 40-char lowercase-hex Git commit SHA.
+# Abbreviated SHAs, pseudo-versions, semver, and branch names do not match.
+# Args: <string>
+is_git_sha() {
+    local s="$1"
+    [[ $s =~ ^[0-9a-f]{40}$ ]]
+}
+
 # Structure a generic file into the destination directory.
 # Strips the "unsigned-artifacts" prefix leaked from the sign stage's cp --parents.
 # Args: <file> <dest_dir>
