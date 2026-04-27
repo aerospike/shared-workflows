@@ -54,37 +54,37 @@ _require_nonempty_name_version() {
 }
 
 _identify_python_wheel() {
-    local f="$1"
-    [[ -n $f && -f $f && -r $f ]] || return 1
+    local file="$1"
+    [[ -n $file && -f $file && -r $file ]] || return 1
 
     local metadata_member
-    metadata_member=$(unzip -Z1 "$f" 2>/dev/null | awk '/\.dist-info\/METADATA$/ {print; exit}') || return 1
+    metadata_member=$(unzip -Z1 "$file" 2>/dev/null | awk '/\.dist-info\/METADATA$/ {print; exit}') || return 1
     if [[ -z $metadata_member ]]; then
-        echo "Not a Python wheel: $f (missing .dist-info/METADATA)" >&2
+        echo "Not a Python wheel: $file (missing .dist-info/METADATA)" >&2
         return 1
     fi
 
     local metadata
-    metadata=$(unzip -p "$f" "$metadata_member" 2>/dev/null) || return 1
+    metadata=$(unzip -p "$file" "$metadata_member" 2>/dev/null) || return 1
     if ! _require_nonempty_name_version "$metadata"; then
-        echo "Not a Python wheel: $f (METADATA missing Name/Version)" >&2
+        echo "Not a Python wheel: $file (METADATA missing Name/Version)" >&2
         return 1
     fi
     return 0
 }
 
 _identify_python_sdist() {
-    local f="$1"
-    [[ -n $f && -f $f && -r $f ]] || return 1
+    local file="$1"
+    [[ -n $file && -f $file && -r $file ]] || return 1
 
     local listing
-    listing=$(tar -tzf "$f" 2>/dev/null) || return 1
+    listing=$(tar -tzf "$file" 2>/dev/null) || return 1
 
     local metadata_member
     metadata_member=$(awk '/(^|\/)\.dist-info\/METADATA\r?$/ {print; exit}' <<<"$listing")
     if [[ -n $metadata_member ]]; then
         local metadata
-        metadata=$(tar -xzf "$f" -O "$metadata_member" 2>/dev/null) || return 1
+        metadata=$(tar -xzf "$file" -O "$metadata_member" 2>/dev/null) || return 1
         if _require_nonempty_name_version "$metadata"; then
             return 0
         fi
@@ -94,13 +94,13 @@ _identify_python_sdist() {
     pkg_info_member=$(awk '/(^|\/)PKG-INFO\r?$/ {print; exit}' <<<"$listing")
     if [[ -n $pkg_info_member ]]; then
         local pkg_info
-        pkg_info=$(tar -xzf "$f" -O "$pkg_info_member" 2>/dev/null) || return 1
+        pkg_info=$(tar -xzf "$file" -O "$pkg_info_member" 2>/dev/null) || return 1
         if _require_nonempty_name_version "$pkg_info"; then
             return 0
         fi
     fi
 
-    echo "Not a Python source dist: $f (PKG-INFO/METADATA missing Name/Version)" >&2
+    echo "Not a Python source dist: $file (PKG-INFO/METADATA missing Name/Version)" >&2
     return 1
 }
 
@@ -108,12 +108,12 @@ _identify_python_sdist() {
 # Returns 0 if the file is a Python package acceptable for PyPI publish (*.whl or *.tar.gz)
 # with non-empty Name/Version in metadata (artifact-publisher approach; replaces PKG-INFO-only sdist sniff).
 is_pypi_package() {
-    local f="$1"
-    case "${f,,}" in
-    *.whl) _identify_python_wheel "$f" ;;
-    *.tar.gz | *.tgz) _identify_python_sdist "$f" ;;
+    local file="$1"
+    case "${file,,}" in
+    *.whl) _identify_python_wheel "$file" ;;
+    *.tar.gz | *.tgz) _identify_python_sdist "$file" ;;
     *)
-        echo "Not a PyPI package: $f (expected *.whl or *.tar.gz / *.tgz)" >&2
+        echo "Not a PyPI package: $file (expected *.whl or *.tar.gz / *.tgz)" >&2
         return 1
         ;;
     esac
@@ -123,31 +123,31 @@ is_pypi_package() {
 # Returns 0 if the POM has resolvable coordinates (artifactId, groupId, version; parent fallbacks).
 # Uses xmllint (same stack as deploy entrypoint) instead of yq.
 is_maven_package() {
-    local f="$1"
-    [[ -n $f && -f $f && -r $f ]] || return 1
-    case "${f,,}" in
+    local file="$1"
+    [[ -n $file && -f $file && -r $file ]] || return 1
+    case "${file,,}" in
     *.pom) ;;
     *)
-        echo "Not a Maven POM: $f (expected *.pom)" >&2
+        echo "Not a Maven POM: $file (expected *.pom)" >&2
         return 1
         ;;
     esac
 
     local artifact_id group_id version
-    artifact_id=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='artifactId'])" "$f" 2>/dev/null || true)
-    group_id=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='groupId'])" "$f" 2>/dev/null || true)
+    artifact_id=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='artifactId'])" "$file" 2>/dev/null || true)
+    group_id=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='groupId'])" "$file" 2>/dev/null || true)
     if [[ -z $group_id ]]; then
-        group_id=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='parent']/*[local-name()='groupId'])" "$f" 2>/dev/null || true)
+        group_id=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='parent']/*[local-name()='groupId'])" "$file" 2>/dev/null || true)
     fi
-    version=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='version'])" "$f" 2>/dev/null || true)
+    version=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='version'])" "$file" 2>/dev/null || true)
     if [[ -z $version ]]; then
-        version=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='parent']/*[local-name()='version'])" "$f" 2>/dev/null || true)
+        version=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='parent']/*[local-name()='version'])" "$file" 2>/dev/null || true)
     fi
 
     if [[ -n $artifact_id && -n $group_id && -n $version ]]; then
         return 0
     fi
-    echo "Not a Maven POM: $f (missing coordinates)" >&2
+    echo "Not a Maven POM: $file (missing coordinates)" >&2
     return 1
 }
 
@@ -210,12 +210,12 @@ _detect_structure_maven_poms() {
 _detect_structure_docker_bundle_metadata() {
     local artifacts_root="$1"
     local dest="./structured_build_artifacts/generic/docker"
-    while IFS= read -r -d '' f; do
-        [[ -f $f ]] || continue
-        echo "Processing DOCKER (bundle metadata): $f" >&2
+    while IFS= read -r -d '' file; do
+        [[ -f $file ]] || continue
+        echo "Processing DOCKER (bundle metadata): $file" >&2
         mkdir -p "$dest"
-        cp -a "$f" "$dest/"
-        manifest_add "$dest/$(basename "$f")" "generic"
+        cp -a "$file" "$dest/"
+        manifest_add "$dest/$(basename "$file")" "generic"
     done < <(find "$artifacts_root" -name "docker-images.json" -type f -print0 2>/dev/null)
 }
 

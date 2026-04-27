@@ -182,16 +182,16 @@ jobs:
         run: |
           set -euo pipefail
           echo "Structured dir: ${{ steps.detect-artifacts.outputs.structured-artifacts-dir }}"
-          mf="${{ steps.detect-artifacts.outputs.manifest-path }}"
-          echo "Manifest: $mf"
-          if [[ -f "$mf" ]]; then
+          manifest_path="${{ steps.detect-artifacts.outputs.manifest-path }}"
+          echo "Manifest: $manifest_path"
+          if [[ -f "$manifest_path" ]]; then
             echo "Manifest packages (type: path):"
             while IFS=$'\t' read -r path type || [[ -n "$path" ]]; do
               [[ -z "${path:-}" && -z "${type:-}" ]] && continue
               printf '%s: %s\n' "$type" "$path"
-            done <"$mf"
+            done <"$manifest_path"
           else
-            echo "No manifest file at $mf" >&2
+            echo "No manifest file at $manifest_path" >&2
           fi
 
       - name: Deploy Artifacts
