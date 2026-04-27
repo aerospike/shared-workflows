@@ -7,6 +7,7 @@ DEPLOY_DIR="$GIT_ROOT/.github/workflows/deploy-artifacts"
 
 setup() {
     source "$DEPLOY_DIR/package_utils.sh"
+    source "$DEPLOY_DIR/type_detection.sh"
     # package_utils.sh sets strict mode and an ERR trap that interferes with bats assertions
     set +eu
     trap - ERR
@@ -184,26 +185,26 @@ setup() {
     _validate_npm_name "@aerospike/client"
 }
 
-# --- is_pypi_sdist ---
+# --- is_pypi_package (type_detection.sh; metadata-based sdist / wheel) ---
 
-@test "is_pypi_sdist returns true for sdist tarball" {
+@test "is_pypi_package returns true for sdist tarball with PKG-INFO Name/Version" {
     local test_dir
     test_dir=$(mktemp -d)
     mkdir -p "$test_dir/mypackage-1.0.0"
     echo -e "Metadata-Version: 2.1\nName: mypackage\nVersion: 1.0.0" > "$test_dir/mypackage-1.0.0/PKG-INFO"
     tar -czf "$test_dir/mypackage-1.0.0.tar.gz" -C "$test_dir" mypackage-1.0.0/
     rm -rf "$test_dir/mypackage-1.0.0"
-    is_pypi_sdist "$test_dir/mypackage-1.0.0.tar.gz"
+    is_pypi_package "$test_dir/mypackage-1.0.0.tar.gz"
     rm -rf "$test_dir"
 }
 
-@test "is_pypi_sdist returns false for non-sdist tarball" {
+@test "is_pypi_package returns false for tarball without Python package metadata" {
     local test_dir
     test_dir=$(mktemp -d)
     echo "not a python package" > "$test_dir/data.txt"
     tar -czf "$test_dir/plain.tar.gz" -C "$test_dir" data.txt
     rm -f "$test_dir/data.txt"
-    run is_pypi_sdist "$test_dir/plain.tar.gz"
+    run is_pypi_package "$test_dir/plain.tar.gz"
     [[ $status -ne 0 ]]
     rm -rf "$test_dir"
 }
@@ -274,7 +275,7 @@ setup() {
     [[ "$result" == "aerospike-hello" ]]
 }
 
-# --- is_go_module ---
+# --- is_go_module (type_detection.sh) ---
 
 @test "is_go_module returns true for Go module zip" {
     local test_dir

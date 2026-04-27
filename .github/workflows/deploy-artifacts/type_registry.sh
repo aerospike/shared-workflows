@@ -76,8 +76,11 @@ register_type rpm --extension "*.rpm" --repo "rpm-dev-local"
 register_type jar --extension "*.jar" --repo "maven-dev-local" --companions ".pom .asc .pom.asc"
 register_type nupkg --extension "*.nupkg" --repo "nuget-dev-local"
 register_type snupkg --extension "*.snupkg" --repo "nuget-dev-local" --struct-dir "nupkg"
+# is_npm_package is defined in type_detection.sh
 register_type npm --repo "npm-dev-local" --detect "is_npm_package"
-register_type pypi --extension "*.whl" --repo "pypi-dev-local" --detect "is_pypi_sdist"
+# Ambiguous archives: is_pypi_package is defined in type_detection.sh (wheel + sdist metadata checks).
+register_type pypi --extension "*.whl" --repo "pypi-dev-local" --detect "is_pypi_package"
+# is_go_module is defined in type_detection.sh
 register_type go --repo "go-dev-local" --detect "is_go_module"
 register_type generic --repo "generic-dev-local"
 
@@ -102,7 +105,7 @@ get_known_extensions() {
     # Content-detected extensions (ambiguous types like .tgz/.tar.gz)
     exts+=("${CONTENT_DETECT_EXTENSIONS[@]}")
     # Companion and build file extensions
-    exts+=("*.asc" "*.pom" "*.csproj")
+    exts+=("*.asc" "*.pom" "*.csproj" "docker-images.json")
     printf '%s\n' "${exts[@]}"
 }
 

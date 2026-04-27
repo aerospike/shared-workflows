@@ -177,10 +177,22 @@ jobs:
           echo "structured-artifacts-dir=$struct_dir" >>"$GITHUB_OUTPUT"
           echo "manifest-path=$struct_dir/.manifest" >>"$GITHUB_OUTPUT"
 
-      - name: Detected artifacts
+      - name: Detected Artifacts
+        shell: bash
         run: |
+          set -euo pipefail
           echo "Structured dir: ${{ steps.detect-artifacts.outputs.structured-artifacts-dir }}"
-          echo "Manifest: ${{ steps.detect-artifacts.outputs.manifest-path }}"
+          manifest_path="${{ steps.detect-artifacts.outputs.manifest-path }}"
+          echo "Manifest: $manifest_path"
+          if [[ -f "$manifest_path" ]]; then
+            echo "Manifest packages (type: path):"
+            while IFS=$'\t' read -r path type || [[ -n "$path" ]]; do
+              [[ -z "${path:-}" && -z "${type:-}" ]] && continue
+              printf '%s: %s\n' "$type" "$path"
+            done <"$manifest_path"
+          else
+            echo "No manifest file at $manifest_path" >&2
+          fi
 
       - name: Deploy Artifacts
         id: deploy
