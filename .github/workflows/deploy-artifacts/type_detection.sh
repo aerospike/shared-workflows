@@ -180,7 +180,7 @@ _detect_structure_maven_poms() {
         local base_name jar_file
         base_name=$(basename "$pom" .pom)
         jar_file="$(dirname "$pom")/$base_name.jar"
-        [[ -f $jar_file ]] && continue
+        [[ -f $jar_file ]] || continue
 
         is_maven_package "$pom" || continue
 
