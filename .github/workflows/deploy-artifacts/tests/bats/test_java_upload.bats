@@ -144,6 +144,29 @@ teardown_file() {
   done
 }
 
+@test "Maven sidecars (.md5, .sha1) do not leak into the generic repo" {
+  # Regression test: process_jar copies (not moves) checksum sidecars into the
+  # structured jar tree, so structure_generic_files would also pick them up
+  # from build-artifacts/ unless their extensions are claimed in
+  # get_known_extensions. If they leak into <project>-generic-dev-local, JFrog's
+  # checksum-deploy interception 404s because the base .jar/.pom isn't in the
+  # generic repo at the same path.
+  local output
+  output=$(run_entrypoint_dry_run "test-project" "test-build" "v1.0.0" "12345" "12345-metadata")
+
+  local upload_commands
+  upload_commands=$(extract_upload_commands "$output")
+
+  local generic_repo="test-project-generic-dev-local"
+  local f
+  for f in test.jar.md5 test.jar.sha1 test.pom.md5 test.pom.sha1; do
+    local generic_cmd
+    generic_cmd=$(echo "$upload_commands" | grep -E "[[:space:]]${f}[[:space:]]" | grep -F "$generic_repo" || true)
+    [[ -z $generic_cmd ]] || \
+      (echo "$f leaked into $generic_repo: $generic_cmd" >&2 && return 1)
+  done
+}
+
 @test "Maven companions upload base files before checksums" {
   # JFrog's checksum-deploy interception fires on .md5/.sha1/.sha256 uploads
   # and looks for the corresponding base file at the same path in the same
