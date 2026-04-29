@@ -278,8 +278,7 @@ upload_jar_packages() {
         if [[ -z ${group_id-} ]]; then
             echo "  Moving JAR without group_id to generic directory: $artifact" >&2
             for ext in jar pom jar.asc pom.asc \
-                jar.md5 jar.sha1 pom.md5 pom.sha1 \
-                jar.md5.asc jar.sha1.asc pom.md5.asc pom.sha1.asc; do
+                jar.md5 jar.sha1 pom.md5 pom.sha1; do
                 local artifact_file="$artifact_dir/${base_name}.${ext}"
                 if [[ -f $artifact_file ]]; then
                     mv "$artifact_file" "../generic/"
@@ -297,10 +296,12 @@ upload_jar_packages() {
         # .md5/.sha1/.sha256 uploads and looks for the base file at the same
         # path in the same repo. The base files (.jar, .pom) must be uploaded
         # first so the checksum sidecars find their target.
+        # .md5/.sha1 themselves are intentionally not signed (Maven Central
+        # convention); any .md5.asc/.sha1.asc produced by an indiscriminate
+        # sign step is excluded here so it does not reach JFrog.
         for ext in jar pom \
             jar.asc pom.asc \
-            jar.md5 jar.sha1 pom.md5 pom.sha1 \
-            jar.md5.asc jar.sha1.asc pom.md5.asc pom.sha1.asc; do
+            jar.md5 jar.sha1 pom.md5 pom.sha1; do
             local artifact_file="$artifact_dir/${base_name}.${ext}"
             if [[ -f $artifact_file ]]; then
                 echo "  Uploading $ext: $artifact_file" >&2

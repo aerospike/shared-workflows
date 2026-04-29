@@ -132,8 +132,7 @@ teardown_file() {
   local f
   for f in test.jar test.pom \
            test.jar.asc test.pom.asc \
-           test.jar.md5 test.jar.sha1 test.pom.md5 test.pom.sha1 \
-           test.jar.md5.asc test.jar.sha1.asc test.pom.md5.asc test.pom.sha1.asc; do
+           test.jar.md5 test.jar.sha1 test.pom.md5 test.pom.sha1; do
     local cmd
     # Match the file as the source argument to jf rt upload (whitespace-bounded)
     # so e.g. "test.jar" doesn't match "test.jar.asc".
@@ -141,6 +140,28 @@ teardown_file() {
     [[ -n $cmd ]] || (echo "Missing maven upload for $f" >&2 && return 1)
     [[ $cmd == *"$expected_repo"* ]] || \
       (echo "$f did not upload to $expected_repo: $cmd" >&2 && return 1)
+  done
+}
+
+@test "Signed checksums (.md5.asc, .sha1.asc) are NOT uploaded" {
+  # Maven Central convention: .md5 and .sha1 are not signed, so .md5.asc and
+  # .sha1.asc files must not appear in the deployed artifact set. The sign
+  # step in shared-workflows currently signs every file indiscriminately,
+  # producing these as a side effect. This test pins the deploy step's
+  # contract: it filters them out before upload regardless of what the sign
+  # step produced.
+  local output
+  output=$(run_entrypoint_dry_run "test-project" "test-build" "v1.0.0" "12345" "12345-metadata")
+
+  local upload_commands
+  upload_commands=$(extract_upload_commands "$output")
+
+  local f
+  for f in test.jar.md5.asc test.jar.sha1.asc test.pom.md5.asc test.pom.sha1.asc; do
+    local cmd
+    cmd=$(echo "$upload_commands" | grep -E "[[:space:]]${f}[[:space:]]" || true)
+    [[ -z $cmd ]] || \
+      (echo "$f must NOT be uploaded (Maven Central does not sign checksums): $cmd" >&2 && return 1)
   done
 }
 
