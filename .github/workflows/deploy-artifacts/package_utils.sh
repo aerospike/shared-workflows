@@ -123,11 +123,28 @@ process_jar() {
     echo "  Version: $version" >&2
     mkdir -p "$target"
 
-    local jar_name
+    local jar_name jar_dir base_name
     jar_name=$(basename "$jar")
+    jar_dir=$(dirname "$jar")
+    base_name="${jar_name%.jar}"
 
     echo "Copying JAR to: $target" >&2
     cp -v "$jar" "$target/" >&2
+
+    # Maven companions: pom and checksum sidecars share the JAR's stem (not its
+    # full filename), so the generic gather_companions cannot find them. Copy
+    # them here so they land in the same structured target as the JAR.
+    # Order isn't important during structuring; the upload step controls upload
+    # order so JFrog's checksum-deploy interception finds the base file first.
+    for ext in pom pom.asc \
+        jar.md5 jar.sha1 pom.md5 pom.sha1 \
+        jar.md5.asc jar.sha1.asc pom.md5.asc pom.sha1.asc; do
+        local sibling="$jar_dir/${base_name}.${ext}"
+        if [[ -f $sibling ]]; then
+            cp -v "$sibling" "$target/" >&2
+        fi
+    done
+
     # Return target path
     echo "$target/$jar_name"
 }

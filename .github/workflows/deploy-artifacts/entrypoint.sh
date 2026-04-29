@@ -277,7 +277,9 @@ upload_jar_packages() {
         # If no group_id is available, move to generic directory for generic upload
         if [[ -z ${group_id-} ]]; then
             echo "  Moving JAR without group_id to generic directory: $artifact" >&2
-            for ext in jar pom jar.asc pom.asc; do
+            for ext in jar pom jar.asc pom.asc \
+                jar.md5 jar.sha1 pom.md5 pom.sha1 \
+                jar.md5.asc jar.sha1.asc pom.md5.asc pom.sha1.asc; do
                 local artifact_file="$artifact_dir/${base_name}.${ext}"
                 if [[ -f $artifact_file ]]; then
                     mv "$artifact_file" "../generic/"
@@ -290,8 +292,15 @@ upload_jar_packages() {
         local props
         props=$(get_jar_props "$artifact" "$group_id" "$pkgname")
 
-        # Upload all related Maven artifact files (jar, pom, signatures)
-        for ext in jar pom jar.asc pom.asc; do
+        # Upload all related Maven artifact files (jar, pom, signatures, checksums).
+        # Order matters: JFrog's checksum-deploy interception triggers on
+        # .md5/.sha1/.sha256 uploads and looks for the base file at the same
+        # path in the same repo. The base files (.jar, .pom) must be uploaded
+        # first so the checksum sidecars find their target.
+        for ext in jar pom \
+            jar.asc pom.asc \
+            jar.md5 jar.sha1 pom.md5 pom.sha1 \
+            jar.md5.asc jar.sha1.asc pom.md5.asc pom.sha1.asc; do
             local artifact_file="$artifact_dir/${base_name}.${ext}"
             if [[ -f $artifact_file ]]; then
                 echo "  Uploading $ext: $artifact_file" >&2
