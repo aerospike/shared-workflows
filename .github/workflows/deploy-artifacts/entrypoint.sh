@@ -304,8 +304,25 @@ upload_jar_packages() {
             local artifact_file="$artifact_dir/${base_name}.${ext}"
             if [[ -f $artifact_file ]]; then
                 echo "  Uploading $ext: $artifact_file" >&2
-                jf_upload "$artifact_file" "$PROJECT-maven-dev-local" \
-                    --target-props "$props"
+                case "$ext" in
+                *.md5 | *.sha1)
+                    # JFrog absorbs .md5/.sha1 uploads as checksum metadata
+                    # on the parent artifact rather than storing them as
+                    # separate files. Adding them to the build-info would
+                    # create phantom entries that create-release-bundle
+                    # cannot resolve (422 Unprocessable Entity). Upload
+                    # without build-info; JFrog still serves them at the
+                    # canonical sibling URL.
+                    run jf rt upload "$artifact_file" "$PROJECT-maven-dev-local" \
+                        --flat=false \
+                        --project="$PROJECT" \
+                        --target-props "$props"
+                    ;;
+                *)
+                    jf_upload "$artifact_file" "$PROJECT-maven-dev-local" \
+                        --target-props "$props"
+                    ;;
+                esac
             fi
         done
     }

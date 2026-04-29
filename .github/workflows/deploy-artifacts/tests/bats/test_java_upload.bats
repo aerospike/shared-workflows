@@ -144,6 +144,53 @@ teardown_file() {
   done
 }
 
+@test "Maven sidecars (.md5, .sha1) upload without build-info" {
+  # JFrog's checksum-deploy interception absorbs .md5/.sha1 uploads as
+  # metadata on the parent artifact instead of storing them as files. If we
+  # record the upload in the build-info, create-release-bundle later fails
+  # with 422 Unprocessable Entity ("Unresolvable build artifact") because the
+  # sidecar isn't a real stored artifact. The fix omits --build-name and
+  # --build-number for these uploads.
+  local output
+  output=$(run_entrypoint_dry_run "test-project" "test-build" "v1.0.0" "12345" "12345-metadata")
+
+  local upload_commands
+  upload_commands=$(extract_upload_commands "$output")
+
+  local f
+  for f in test.jar.md5 test.jar.sha1 test.pom.md5 test.pom.sha1; do
+    local cmd
+    cmd=$(echo "$upload_commands" | grep -E "[[:space:]]${f}[[:space:]]" || true)
+    [[ -n $cmd ]] || (echo "Missing upload for $f" >&2 && return 1)
+    [[ $cmd != *"--build-name"* ]] || \
+      (echo "$f must not include --build-name in upload command: $cmd" >&2 && return 1)
+    [[ $cmd != *"--build-number"* ]] || \
+      (echo "$f must not include --build-number in upload command: $cmd" >&2 && return 1)
+  done
+}
+
+@test "JAR and POM uploads include build-info" {
+  # The base artifacts (.jar, .pom) and their .asc signatures must remain in
+  # the build-info so they are included in release bundles. This pairs with
+  # the previous test: only the .md5/.sha1 sidecars opt out.
+  local output
+  output=$(run_entrypoint_dry_run "test-project" "test-build" "v1.0.0" "12345" "12345-metadata")
+
+  local upload_commands
+  upload_commands=$(extract_upload_commands "$output")
+
+  local f
+  for f in test.jar test.pom test.jar.asc test.pom.asc; do
+    local cmd
+    cmd=$(echo "$upload_commands" | grep -E "[[:space:]]${f}[[:space:]]" || true)
+    [[ -n $cmd ]] || (echo "Missing upload for $f" >&2 && return 1)
+    [[ $cmd == *"--build-name"* ]] || \
+      (echo "$f must include --build-name in upload command: $cmd" >&2 && return 1)
+    [[ $cmd == *"--build-number"* ]] || \
+      (echo "$f must include --build-number in upload command: $cmd" >&2 && return 1)
+  done
+}
+
 @test "Maven sidecars (.md5, .sha1) do not leak into the generic repo" {
   # Regression test: process_jar copies (not moves) checksum sidecars into the
   # structured jar tree, so structure_generic_files would also pick them up
