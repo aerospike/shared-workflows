@@ -186,6 +186,25 @@ md5sum "$BUILD_ARTIFACTS_DIR/test.pom" >"$BUILD_ARTIFACTS_DIR/test.pom.md5"
 sha1sum "$BUILD_ARTIFACTS_DIR/test.pom" >"$BUILD_ARTIFACTS_DIR/test.pom.sha1"
 echo "  Created Maven sidecar checksums (test.{jar,pom}.{md5,sha1})"
 
+# Standalone POM (BOM/parent-only) — has no companion JAR. structure_standalone_poms
+# must still publish its sidecars; without that, the .md5/.sha1 fall through to
+# structure_generic_files and get skipped because *.md5/*.sha1 are reserved for
+# JAR processing in get_known_extensions.
+cat >"$BUILD_ARTIFACTS_DIR/standalone-bom.pom" <<'POM'
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>com.example.bom</groupId>
+  <artifactId>standalone-bom</artifactId>
+  <version>1.0.0</version>
+  <packaging>pom</packaging>
+</project>
+POM
+md5sum "$BUILD_ARTIFACTS_DIR/standalone-bom.pom" >"$BUILD_ARTIFACTS_DIR/standalone-bom.pom.md5"
+sha1sum "$BUILD_ARTIFACTS_DIR/standalone-bom.pom" >"$BUILD_ARTIFACTS_DIR/standalone-bom.pom.sha1"
+echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/standalone-bom.pom.asc"
+echo "  Created standalone POM (standalone-bom.pom + .md5/.sha1/.asc)"
+
 # Create a valid ZIP file
 echo "test zip content" >"$BUILD_ARTIFACTS_DIR/temp-zip-content.txt"
 cd "$BUILD_ARTIFACTS_DIR" && zip -q "test.zip" "temp-zip-content.txt" && cd - >/dev/null

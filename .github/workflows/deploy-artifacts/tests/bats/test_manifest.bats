@@ -87,8 +87,11 @@ get_manifest() {
 @test "manifest does not contain companion files" {
     local manifest
     manifest=$(get_manifest)
-    ! echo "$manifest" | grep -q '\.asc'
-    ! echo "$manifest" | grep -q '\.pom'
+    # Companion suffixes are .asc / .md5 / .sha1. Bare .pom is a primary for
+    # standalone POMs (BOM/parent releases) so it is intentionally not
+    # excluded — process_jar handles JAR-companion POMs without manifesting
+    # them, and structure_standalone_poms manifests JAR-less POMs as primaries.
+    ! echo "$manifest" | grep -qE '\.(asc|md5|sha1)([[:space:]]|$)'
 }
 
 # --- Content detection tests ---

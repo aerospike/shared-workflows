@@ -171,9 +171,16 @@ structure_standalone_poms() {
         mkdir -p "$target"
         cp "$pom" "$target/"
         manifest_add "$target/$(basename "$pom")" "jar"
-        if [[ -f "$pom.asc" ]]; then
-            cp "$pom.asc" "$target/"
-        fi
+        # Copy POM sidecars (signature + checksums) so a JAR-less Maven
+        # release (BOM/parent POM) still publishes its full file set. Without
+        # this, .pom.md5/.pom.sha1 fall through to structure_generic_files
+        # which excludes them via get_known_extensions, so they vanish.
+        local pom_dir
+        pom_dir="$(dirname "$pom")"
+        for ext in pom.asc pom.md5 pom.sha1; do
+            local sibling="$pom_dir/$base_name.$ext"
+            [[ -f $sibling ]] && cp "$sibling" "$target/"
+        done
     done < <(find build-artifacts -name "*.pom" -print0)
 }
 

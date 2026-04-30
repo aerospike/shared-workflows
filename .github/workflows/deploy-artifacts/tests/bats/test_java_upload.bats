@@ -270,3 +270,28 @@ teardown_file() {
     (echo "test.pom must upload before test.pom.sha1 (pom=$pom_pos, pom.sha1=$pom_sha1_pos)" >&2 && return 1)
 }
 
+@test "Standalone POM (no JAR) and its sidecars upload to maven repo" {
+  # BOM/parent POMs ship without a JAR. structure_standalone_poms must copy the
+  # .pom.md5/.pom.sha1/.pom.asc siblings into the structured tree so they reach
+  # the maven repo; otherwise they fall through to structure_generic_files which
+  # excludes *.md5/*.sha1 (reserved for JAR processing).
+  local output
+  output=$(run_entrypoint_dry_run "test-project" "test-build" "v1.0.0" "12345" "12345-metadata")
+
+  local upload_commands
+  upload_commands=$(extract_upload_commands "$output")
+
+  local expected_repo="test-project-maven-dev-local"
+  local f
+  for f in standalone-bom.pom \
+           standalone-bom.pom.asc \
+           standalone-bom.pom.md5 \
+           standalone-bom.pom.sha1; do
+    local cmd
+    cmd=$(echo "$upload_commands" | grep -E "[/[:space:]]${f}[[:space:]]" || true)
+    [[ -n $cmd ]] || (echo "Missing upload for $f" >&2 && return 1)
+    [[ $cmd == *"$expected_repo"* ]] || \
+      (echo "$f did not upload to $expected_repo: $cmd" >&2 && return 1)
+  done
+}
+
