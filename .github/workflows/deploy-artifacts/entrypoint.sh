@@ -150,8 +150,12 @@ structure_standalone_poms() {
         base_name=$(basename "$pom" .pom)
         jar_file="$(dirname "$pom")/$base_name.jar"
 
-        # Skip if a corresponding JAR exists (already handled by process_jar)
-        [[ -f $jar_file ]] && continue
+        # Skip if a corresponding JAR exists (already handled by process_jar).
+        # Use `if` rather than `[[ ... ]] && continue` because the latter's
+        # exit status (1 when the file is missing) trips set -e.
+        if [[ -f $jar_file ]]; then
+            continue
+        fi
 
         echo "Processing standalone POM: $pom" >&2
 
@@ -163,12 +167,14 @@ structure_standalone_poms() {
         group_path="${group_id//./\/}"
 
         target="./structured_build_artifacts/jar/${group_path}/${artifact_id}/${version}"
-        # Safeguard against duplicate processing
-        if [[ -f "$target/$(basename "$pom")" ]]; then
-            echo "Skipping standalone POM (already structured): $pom" >&2
-            continue
-        fi
         mkdir -p "$target"
+        # Always manifest_add and re-copy: the manifest is flushed at the
+        # start of each run by detect_types.sh (init_manifest flush), but the
+        # structured tree on disk persists across runs (e.g., between bats
+        # tests sharing fixtures). An "already structured" early-out skipped
+        # manifest_add and quietly dropped the standalone POM from later
+        # uploads. cp will overwrite which is the right behaviour here —
+        # source is the canonical artifact.
         cp "$pom" "$target/"
         manifest_add "$target/$(basename "$pom")" "jar"
         # Copy POM sidecars (signature + checksums) so a JAR-less Maven
@@ -179,7 +185,9 @@ structure_standalone_poms() {
         pom_dir="$(dirname "$pom")"
         for ext in pom.asc pom.md5 pom.sha1; do
             local sibling="$pom_dir/$base_name.$ext"
-            [[ -f $sibling ]] && cp "$sibling" "$target/"
+            if [[ -f $sibling ]]; then
+                cp "$sibling" "$target/"
+            fi
         done
     done < <(find build-artifacts -name "*.pom" -print0)
 }
