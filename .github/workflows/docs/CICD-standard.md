@@ -91,6 +91,7 @@ Notes:
 - **JAR artifacts:** Use `jar-group-id` to provide a Maven group ID fallback when the JAR metadata doesn't include one.
 - **Python/PyPI:** Set `setup-python: true` to install Python and build tools (`build`, `twine`) before your build script runs. Optionally set `python-version` (default `"3.12"`). The deploy stage auto-detects `.whl` and `.tar.gz` sdist files and routes them to the appropriate PyPI repository. Matrix entries can override `setup-python` and `python-version` per build.
 - **Go modules:** The deploy stage auto-detects Go module `.zip` archives (those containing `module@version/go.mod`) and routes them to the Go repository. At upload time, it extracts the `.mod` file and generates a `.info` JSON following the [GOPROXY protocol](https://go.dev/ref/mod#goproxy-protocol). No special setup inputs are needed. Your build script should produce a Go module zip with the standard `module@version/` prefix layout.
+- **Helm charts:** The deploy stage auto-detects packaged Helm chart `.tgz` files (those containing `<chart>/Chart.yaml` with `apiVersion`, `name`, and `version`) and routes them to the Helm OCI repository. Build script runs `helm package`; deploy ingests the resulting `.tgz`. Charts are published as OCI artifacts so consumers can `helm pull oci://artifact.aerospike.io/{project}-helm-dev-local/{chart}:{version}`. The companion `.prov` (helm-native provenance signature, produced by `helm package --sign`) rides alongside automatically. The orphan `.tgz.asc` produced by GPG sign-artifacts is intentionally not uploaded; chart signing should use the helm-native `.prov` mechanism. See [artifacts-cicd README](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/artifacts-cicd/README.md) for the full Helm section including chart-testing pointers and a signing example.
 
 ### Mac signing (optional)
 
@@ -267,6 +268,35 @@ jobs:
         rm -rf "$TMP"
     secrets: inherit
 ```
+
+#### Helm chart example
+
+Helm charts use `helm package` in the build script (optionally with `--sign` for `.prov` provenance). The deploy stage auto-detects the resulting `.tgz` and publishes it to a Helm OCI repository:
+
+```yaml
+jobs:
+  ci:
+    uses: aerospike/shared-workflows/.github/workflows/reusable_artifacts-cicd.yaml@v3.2.0
+    with:
+      gh-workflows-ref: v3.2.0
+      jf-project: my-project
+      jf-build-name: my-chart
+      version: 1.2.3
+      gh-artifact-directory: dist
+      build-env: VERSION=1.2.3
+      build-script: |
+        curl -fsSLO https://get.helm.sh/helm-v3.16.4-linux-amd64.tar.gz
+        tar -xzf helm-v3.16.4-linux-amd64.tar.gz --strip-components=1 linux-amd64/helm
+        mkdir -p dist
+        ./helm package charts/my-chart \
+          --version "$VERSION" --app-version "$VERSION" \
+          -d dist
+    secrets: inherit
+```
+
+To produce signed charts (`.prov` provenance), use `azure/setup-helm` plus the existing [setup-gpg shared action](https://github.com/aerospike/shared-workflows/blob/main/.github/actions/setup-gpg/) and pass `--sign --key <id> --keyring <path> --passphrase-file <path>` to `helm package`.
+
+For chart linting and unit tests in PRs, run [chart-testing (`ct`)](https://github.com/helm/chart-testing) via the [helm/chart-testing-action](https://github.com/helm/chart-testing-action) as a separate workflow gated on `pull_request`. See [aerospike/helm-aerospike-vector-search](https://github.com/aerospike/helm-aerospike-vector-search) for a working `lint.yaml` and `.ct.yaml` you can copy.
 
 ## Full examples
 

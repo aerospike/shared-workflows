@@ -44,9 +44,25 @@ The deploy stage automatically routes artifacts by file extension:
 | RPM     | `rpm-dev-local`     | `version`, `package_name`, `rpm.distribution`, `rpm.component`, `rpm.architecture` |
 | JAR     | `maven-dev-local`   | `version`, `group_id`, `package_name`                                              |
 | NuGet   | `nuget-dev-local`   | `version`, `package_name`                                                          |
+| npm     | `npm-dev-local`     | `version`, `package_name`                                                          |
+| PyPI    | `pypi-dev-local`    | `version`, `package_name`, `pypi.name`, `pypi.version`                             |
+| Go      | `go-dev-local`      | `version`, `package_name`, `go.module`, `go.version`                               |
+| Helm    | `helm-dev-local`    | `version`, `package_name`, `helm.name`, `helm.version`                             |
 | Generic | `generic-dev-local` | `version`, `package_name`                                                          |
 
-Companion files (`.asc` signatures, `.pom` files) are automatically gathered alongside their parent artifacts.
+Companion files (`.asc` signatures, `.pom` files, helm `.prov` provenance) are automatically gathered alongside their parent artifacts. Helm registers `.prov` (helm-native provenance signature) as its companion; the orphan `.tgz.asc` produced by GPG sign-artifacts is intentionally not gathered or uploaded for helm charts because `.prov` is the canonical chart signature.
+
+### Helm charts
+
+Helm charts publish as OCI artifacts to a JFrog Helm OCI repository. Consumers pull them via `helm pull oci://artifact.aerospike.io/{project}-helm-dev-local/{chart}:{version}`.
+
+Packaging is the consumer's build-script responsibility, mirroring the npm/pypi/go convention. Run `helm package charts/<name> -d <output-dir>` and the deploy stage auto-detects the resulting `.tgz` (sniffed via `<chart>/Chart.yaml` containing `apiVersion`, `name`, and `version`).
+
+To produce a signed chart, run `helm package --sign --key <id> --keyring <path> --passphrase-file <path>` after wiring up GPG keys via the existing [setup-gpg shared action](../../actions/setup-gpg/). The resulting `.prov` rides alongside the chart through the deploy stage and lands in the helm repo as a companion file.
+
+Chart linting and unit testing are out of scope for this orchestrator (publishing is a release-time concern, linting is a PR-time concern). Run [chart-testing (`ct`)](https://github.com/helm/chart-testing) via the [helm/chart-testing-action](https://github.com/helm/chart-testing-action) as a separate `pull_request`-triggered workflow. The [aerospike/helm-aerospike-vector-search](https://github.com/aerospike/helm-aerospike-vector-search) repo has a working `lint.yaml` + `.ct.yaml` you can copy verbatim.
+
+The target JFrog repo (`{project}-helm-dev-local`) must be configured as a Helm OCI repository (a one-time admin/terraform setting). With that in place, the standard `jf rt upload` from the deploy stage produces a chart that is consumer-pullable via the OCI registry API.
 
 ## Notes
 

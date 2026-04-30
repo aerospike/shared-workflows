@@ -86,7 +86,7 @@ The `reusable_artifacts-cicd.yaml` orchestrator runs 5 jobs. Understanding the a
 
 - Downloads `signed-artifacts` into `./build-artifacts`
 - `structure_build_artifacts()` uses recursive `find build-artifacts -name "*.{ext}"` to discover files
-- Routes by extension: deb/rpm/jar/nupkg/snupkg each to their JFrog repo, everything else to generic
+- Routes by extension: deb/rpm/jar/nupkg/snupkg each to their JFrog repo. Ambiguous archives (`.tgz`, `.tar.gz`, `.zip`) are content-detected (npm, pypi, go, helm) via `is_*` predicates in `type_detection.sh`. Anything that doesn't match falls back to generic.
 - Build-info aggregation: discovers child build-infos via AQL (`{metadata-build-id}*.json`), appends to parent build
 
 ## Running Tests
