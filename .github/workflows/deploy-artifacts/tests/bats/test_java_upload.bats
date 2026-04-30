@@ -270,6 +270,24 @@ teardown_file() {
     (echo "test.pom must upload before test.pom.sha1 (pom=$pom_pos, pom.sha1=$pom_sha1_pos)" >&2 && return 1)
 }
 
+@test "Standalone POM is structured and added to the manifest" {
+  # Diagnostic: confirms structure_standalone_poms ran for the no-JAR case
+  # before checking the upload step. Splits failure modes (structuring vs
+  # uploading) so a regression points to the right layer.
+  run_entrypoint_dry_run >/dev/null 2>&1 || true
+
+  local manifest_path="structured_build_artifacts/.manifest"
+  [[ -f $manifest_path ]] || (echo "Manifest not produced" >&2 && return 1)
+
+  grep -qE 'standalone-bom\.pom\b.*\bjar$' "$manifest_path" || \
+    (echo "standalone-bom.pom missing from manifest:" >&2 && cat "$manifest_path" >&2 && return 1)
+
+  local structured_pom
+  structured_pom=$(awk -F'\t' '$2=="jar" && $1 ~ /standalone-bom\.pom$/ {print $1; exit}' "$manifest_path")
+  [[ -f $structured_pom ]] || \
+    (echo "Manifest names $structured_pom but the file is missing" >&2 && return 1)
+}
+
 @test "Standalone POM (no JAR) and its sidecars upload to maven repo" {
   # BOM/parent POMs ship without a JAR. structure_standalone_poms must copy the
   # .pom.md5/.pom.sha1/.pom.asc siblings into the structured tree so they reach
@@ -289,7 +307,12 @@ teardown_file() {
            standalone-bom.pom.sha1; do
     local cmd
     cmd=$(echo "$upload_commands" | grep -E "[/[:space:]]${f}[[:space:]]" || true)
-    [[ -n $cmd ]] || (echo "Missing upload for $f" >&2 && return 1)
+    if [[ -z $cmd ]]; then
+      # Print all upload commands to make the failure self-diagnosing in CI logs.
+      echo "Missing upload for $f. Full upload command list:" >&2
+      echo "$upload_commands" >&2
+      return 1
+    fi
     [[ $cmd == *"$expected_repo"* ]] || \
       (echo "$f did not upload to $expected_repo: $cmd" >&2 && return 1)
   done
