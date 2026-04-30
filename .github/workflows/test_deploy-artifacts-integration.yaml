@@ -263,6 +263,58 @@ jobs:
           fi
           echo "PASS: non-sdist .tar.gz correctly excluded from pypi repo"
 
+      # --- helm verification ---
+
+      - name: Verify Helm chart exists in helm repo
+        if: needs.deploy.result == 'success'
+        run: |
+          result=$(jf rt search "test-helm-dev-local/aerospike-hello/0.4.2/aerospike-hello-0.4.2.tgz" --project=test)
+          echo "Search result: $result"
+          count=$(echo "$result" | jq 'length')
+          if [[ "$count" -lt 1 ]]; then
+            echo "FAIL: helm chart not found at aerospike-hello/0.4.2/"
+            exit 1
+          fi
+          echo "PASS: helm chart found at correct path ($count result(s))"
+
+      - name: Verify Helm .prov companion exists
+        if: needs.deploy.result == 'success'
+        run: |
+          result=$(jf rt search "test-helm-dev-local/aerospike-hello/0.4.2/aerospike-hello-0.4.2.tgz.prov" --project=test)
+          count=$(echo "$result" | jq 'length')
+          [[ "$count" -ge 1 ]] || { echo "FAIL: helm .prov companion not found"; exit 1; }
+          echo "PASS: helm .prov companion found"
+
+      - name: Verify Helm chart target-props
+        if: needs.deploy.result == 'success'
+        run: |
+          result=$(jf rt search "test-helm-dev-local/aerospike-hello/0.4.2/aerospike-hello-0.4.2.tgz" --project=test --include="property")
+          echo "Search result with props: $result"
+
+          echo "$result" | jq -e '.[0].props["helm.name"] | index("aerospike-hello")' || {
+            echo "FAIL: helm.name property not set correctly"
+            exit 1
+          }
+          echo "PASS: helm.name property correct"
+
+          echo "$result" | jq -e '.[0].props["helm.version"] | index("0.4.2")' || {
+            echo "FAIL: helm.version property not set correctly"
+            exit 1
+          }
+          echo "PASS: helm.version property correct"
+
+      - name: Verify Helm chart .asc orphan is NOT in helm repo
+        if: needs.deploy.result == 'success'
+        run: |
+          result=$(jf rt search "test-helm-dev-local/**/*.tgz.asc" --project=test)
+          count=$(echo "$result" | jq 'length')
+          if [[ "$count" -gt 0 ]]; then
+            echo "FAIL: helm chart .asc orphan was incorrectly uploaded"
+            echo "$result"
+            exit 1
+          fi
+          echo "PASS: helm .asc orphan correctly excluded from helm repo"
+
       # --- build-info verification ---
 
       - name: Verify build-info was published
@@ -291,6 +343,7 @@ jobs:
           jf rt delete "test-maven-dev-local/**/*" --project=test --quiet || true
           jf rt delete "test-nuget-dev-local/**/*" --project=test --quiet || true
           jf rt delete "test-pypi-dev-local/**/*" --project=test --quiet || true
+          jf rt delete "test-helm-dev-local/**/*" --project=test --quiet || true
           echo "Done"
 
       - name: Cleanup build-info
