@@ -58,21 +58,25 @@ teardown_file() {
   # Parse commands into array
   mapfile -t upload_cmd_array < <(echo "$upload_commands")
   
-  # Find Java artifact upload commands
+  # Find Java artifact upload commands.
+  # Skip .md5/.sha1 sidecar uploads: they intentionally omit --build-name and
+  # --build-number (JFrog absorbs them as parent metadata, and a build-info
+  # entry would later cause create-release-bundle to 422). Their build-info
+  # opt-out is asserted in a dedicated test below.
   local jar_found=false
   for cmd in "${upload_cmd_array[@]}"; do
-    if [[ $cmd =~ \.jar ]]; then
+    if [[ $cmd =~ \.jar ]] && [[ ! $cmd =~ \.jar\.(md5|sha1)([[:space:]]|$) ]]; then
       jar_found=true
-      
+
       # Java artifacts go to Maven repo
       local expected_repo="test-project-maven-dev-local"
-      
+
       # Extract filename from command
       local filename
       if [[ $cmd =~ ([^/]+\.jar) ]]; then
         filename="${BASH_REMATCH[1]}"
       fi
-      
+
       # Validate command structure with Maven target-props
       assert_upload_command_valid "$cmd" "$filename" "$expected_repo" \
         "version=v1.0.0;group_id=com.example.test;package_name=test" \
@@ -136,7 +140,7 @@ teardown_file() {
     local cmd
     # Match the file as the source argument to jf rt upload (whitespace-bounded)
     # so e.g. "test.jar" doesn't match "test.jar.asc".
-    cmd=$(echo "$upload_commands" | grep -E "[[:space:]]${f}[[:space:]]" || true)
+    cmd=$(echo "$upload_commands" | grep -E "[/[:space:]]${f}[[:space:]]" || true)
     [[ -n $cmd ]] || (echo "Missing maven upload for $f" >&2 && return 1)
     [[ $cmd == *"$expected_repo"* ]] || \
       (echo "$f did not upload to $expected_repo: $cmd" >&2 && return 1)
@@ -159,7 +163,7 @@ teardown_file() {
   local f
   for f in test.jar.md5.asc test.jar.sha1.asc test.pom.md5.asc test.pom.sha1.asc; do
     local cmd
-    cmd=$(echo "$upload_commands" | grep -E "[[:space:]]${f}[[:space:]]" || true)
+    cmd=$(echo "$upload_commands" | grep -E "[/[:space:]]${f}[[:space:]]" || true)
     [[ -z $cmd ]] || \
       (echo "$f must NOT be uploaded (Maven Central does not sign checksums): $cmd" >&2 && return 1)
   done
@@ -181,7 +185,7 @@ teardown_file() {
   local f
   for f in test.jar.md5 test.jar.sha1 test.pom.md5 test.pom.sha1; do
     local cmd
-    cmd=$(echo "$upload_commands" | grep -E "[[:space:]]${f}[[:space:]]" || true)
+    cmd=$(echo "$upload_commands" | grep -E "[/[:space:]]${f}[[:space:]]" || true)
     [[ -n $cmd ]] || (echo "Missing upload for $f" >&2 && return 1)
     [[ $cmd != *"--build-name"* ]] || \
       (echo "$f must not include --build-name in upload command: $cmd" >&2 && return 1)
@@ -203,7 +207,7 @@ teardown_file() {
   local f
   for f in test.jar test.pom test.jar.asc test.pom.asc; do
     local cmd
-    cmd=$(echo "$upload_commands" | grep -E "[[:space:]]${f}[[:space:]]" || true)
+    cmd=$(echo "$upload_commands" | grep -E "[/[:space:]]${f}[[:space:]]" || true)
     [[ -n $cmd ]] || (echo "Missing upload for $f" >&2 && return 1)
     [[ $cmd == *"--build-name"* ]] || \
       (echo "$f must include --build-name in upload command: $cmd" >&2 && return 1)
@@ -229,7 +233,7 @@ teardown_file() {
   local f
   for f in test.jar.md5 test.jar.sha1 test.pom.md5 test.pom.sha1; do
     local generic_cmd
-    generic_cmd=$(echo "$upload_commands" | grep -E "[[:space:]]${f}[[:space:]]" | grep -F "$generic_repo" || true)
+    generic_cmd=$(echo "$upload_commands" | grep -E "[/[:space:]]${f}[[:space:]]" | grep -F "$generic_repo" || true)
     [[ -z $generic_cmd ]] || \
       (echo "$f leaked into $generic_repo: $generic_cmd" >&2 && return 1)
   done
@@ -249,12 +253,12 @@ teardown_file() {
   # Position of each filename's first occurrence in the upload sequence.
   local jar_pos pom_pos
   local jar_md5_pos jar_sha1_pos pom_md5_pos pom_sha1_pos
-  jar_pos=$(echo "$upload_commands"      | grep -nE "[[:space:]]test\.jar[[:space:]]"      | head -1 | cut -d: -f1)
-  pom_pos=$(echo "$upload_commands"      | grep -nE "[[:space:]]test\.pom[[:space:]]"      | head -1 | cut -d: -f1)
-  jar_md5_pos=$(echo "$upload_commands"  | grep -nE "[[:space:]]test\.jar\.md5[[:space:]]"  | head -1 | cut -d: -f1)
-  jar_sha1_pos=$(echo "$upload_commands" | grep -nE "[[:space:]]test\.jar\.sha1[[:space:]]" | head -1 | cut -d: -f1)
-  pom_md5_pos=$(echo "$upload_commands"  | grep -nE "[[:space:]]test\.pom\.md5[[:space:]]"  | head -1 | cut -d: -f1)
-  pom_sha1_pos=$(echo "$upload_commands" | grep -nE "[[:space:]]test\.pom\.sha1[[:space:]]" | head -1 | cut -d: -f1)
+  jar_pos=$(echo "$upload_commands"      | grep -nE "[/[:space:]]test\.jar[[:space:]]"      | head -1 | cut -d: -f1)
+  pom_pos=$(echo "$upload_commands"      | grep -nE "[/[:space:]]test\.pom[[:space:]]"      | head -1 | cut -d: -f1)
+  jar_md5_pos=$(echo "$upload_commands"  | grep -nE "[/[:space:]]test\.jar\.md5[[:space:]]"  | head -1 | cut -d: -f1)
+  jar_sha1_pos=$(echo "$upload_commands" | grep -nE "[/[:space:]]test\.jar\.sha1[[:space:]]" | head -1 | cut -d: -f1)
+  pom_md5_pos=$(echo "$upload_commands"  | grep -nE "[/[:space:]]test\.pom\.md5[[:space:]]"  | head -1 | cut -d: -f1)
+  pom_sha1_pos=$(echo "$upload_commands" | grep -nE "[/[:space:]]test\.pom\.sha1[[:space:]]" | head -1 | cut -d: -f1)
 
   [[ -n $jar_pos && -n $jar_md5_pos  && $jar_pos -lt $jar_md5_pos  ]] || \
     (echo "test.jar must upload before test.jar.md5  (jar=$jar_pos, jar.md5=$jar_md5_pos)" >&2 && return 1)

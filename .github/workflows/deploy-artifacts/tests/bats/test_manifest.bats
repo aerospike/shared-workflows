@@ -138,12 +138,17 @@ get_manifest() {
     local manifest_paths
     manifest_paths=$(cut -f1 structured_build_artifacts/.manifest | sort)
 
-    # Find all primary files (exclude companions)
+    # Find all primary files (exclude companions).
+    # .md5/.sha1 are Maven sidecar checksums copied alongside the JAR by
+    # process_jar; they're companions, not primaries, and the upload step
+    # routes them off the manifest path.
     local structured_files
     structured_files=$(find structured_build_artifacts -type f \
         -not -name "*.asc" \
         -not -name "*.pom" \
         -not -name "*.pom.asc" \
+        -not -name "*.md5" \
+        -not -name "*.sha1" \
         -not -name "*.csproj" \
         -not -name ".manifest" \
         | sort)
