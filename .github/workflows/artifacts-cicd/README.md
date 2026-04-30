@@ -8,9 +8,7 @@ provides a small, opinionated input surface.
 
 This orchestrator is the simpler of two supported approaches: it handles the full build, sign, deploy lifecycle behind a small input surface so consumers only provide a build script and configuration. It is opinionated and trades flexibility for ergonomics.
 
-The other approach is the composable pipeline: call `reusable_execute-build.yaml`, `reusable_sign-artifacts.yaml`, and `reusable_deploy-artifacts.yaml` directly from your own job graph. That path is more flexible (custom steps between stages, per-stage overrides, non-standard layouts) at the cost of more wiring on your end. See [CICD-composable.md](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/docs/CICD-composable.md) for that workflow.
-
-Pick whichever fits. If the orchestrator covers your use case, prefer it because there's less boilerplate to maintain. If you need finer-grained control, the composable path is a first-class option, not a fallback.
+The other approach is the composable pipeline See [CICD-composable.md](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/docs/CICD-composable.md) for that workflow. (Hint if you want to integrate tests or custom steps between stages, the composable pipeline is the right choice rather than this one.)
 
 ## Usage
 
