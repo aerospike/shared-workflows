@@ -47,7 +47,7 @@ if [[ -f "fakesecrets.env" ]]; then
     KEY_FP=$(gpg --list-secret-keys --with-colons | grep '^fpr:' | cut -d: -f10 | head -n1)
 
     # Configure GPG with heredoc
-    cat > "$GNUPGHOME/gpg.conf" << EOF
+    cat >"$GNUPGHOME/gpg.conf" <<EOF
 default-key $KEY_FP
 use-agent
 pinentry-mode loopback
@@ -57,11 +57,11 @@ passphrase-file $GNUPGHOME/passphrase
 EOF
 
     # Create passphrase file
-    echo "$GPG_PASS" > "$GNUPGHOME/passphrase"
+    echo "$GPG_PASS" >"$GNUPGHOME/passphrase"
     chmod 600 "$GNUPGHOME/passphrase"
 
     # Configure RPM macros
-    cat > "$HOME/.rpmmacros" << EOF
+    cat >"$HOME/.rpmmacros" <<EOF
 %_signature gpg
 %_gpg_path $GNUPGHOME
 %_gpg_name $KEY_FP
@@ -83,6 +83,7 @@ declare -a TEST_FILES=(
     "$UNSIGNED_ARTIFACTS_DIR/test-1.0-2.noarch.rpm"
     "$UNSIGNED_ARTIFACTS_DIR/test.jar"
     "$UNSIGNED_ARTIFACTS_DIR/test.zip"
+    "$UNSIGNED_ARTIFACTS_DIR/aerospike-hello-0.4.2.tgz"
     "$UNSIGNED_ARTIFACTS_DIR/nested/dir/nested.deb"
     "$UNSIGNED_ARTIFACTS_DIR/nested/dir/nested.rpm"
 )
@@ -91,7 +92,7 @@ declare -a TEST_FILES=(
 verify_test_files() {
     local missing_files=()
     for file in "${TEST_FILES[@]}"; do
-        if [[ ! -f "$file" ]]; then
+        if [[ ! -f $file ]]; then
             missing_files+=("$file")
         fi
     done
@@ -125,7 +126,7 @@ find "$UNSIGNED_ARTIFACTS_DIR"
 echo ""
 echo "📋 Results for Test 1:"
 for file in "$SIGNED_ARTIFACTS_DIR"/*.{deb,rpm}; do
-    if [[ -f "$file" ]]; then
+    if [[ -f $file ]]; then
         echo "  ✅ $file"
         echo "    - Original: $(stat -c%s "$file" 2>/dev/null || echo "ERROR") bytes"
         echo "    - Signature: $(stat -c%s "$file.asc" 2>/dev/null || echo "MISSING") bytes"
@@ -141,7 +142,7 @@ echo " Test 2: Signing nested files"
 echo ""
 echo "📋 Results for Test 2:"
 for file in "$SIGNED_ARTIFACTS_DIR"/**/*.{deb,rpm}; do
-    if [[ -f "$file" ]]; then
+    if [[ -f $file ]]; then
         echo "  ✅ $file"
         echo "    - Original: $(stat -c%s "$file" 2>/dev/null || echo "ERROR") bytes"
         echo "    - Signature: $(stat -c%s "$file.asc" 2>/dev/null || echo "MISSING") bytes"
@@ -157,7 +158,7 @@ echo " Test 3: Signing all files"
 echo ""
 echo "📋 Results for Test 3:"
 for file in "$SIGNED_ARTIFACTS_DIR"/**/*; do
-    if [[ -f "$file" && ! "$file" =~ \.(asc|sha256)$ ]]; then
+    if [[ -f $file && ! $file =~ \.(asc|sha256)$ ]]; then
         echo "  ✅ $file"
         echo "    - Original: $(stat -c%s "$file" 2>/dev/null || echo "ERROR") bytes"
         echo "    - Signature: $(stat -c%s "$file.asc" 2>/dev/null || echo "MISSING") bytes"
@@ -168,9 +169,9 @@ done
 echo ""
 echo " Test 4: Validating signatures"
 for file in "$SIGNED_ARTIFACTS_DIR"/**/*.asc; do
-    if [[ -f "$file" ]]; then
+    if [[ -f $file ]]; then
         original_file="${file%.asc}"
-        if [[ -f "$original_file" ]]; then
+        if [[ -f $original_file ]]; then
             echo "  🔐 Validating signature for $original_file"
             if gpg --verify "$file" "$original_file" 2>/dev/null; then
                 echo "    ✅ Signature is valid"
@@ -180,6 +181,60 @@ for file in "$SIGNED_ARTIFACTS_DIR"/**/*.asc; do
         fi
     fi
 done
+
+# Test 5: Helm chart provenance
+echo ""
+echo " Test 5: Helm chart provenance"
+chart_tgz=$(find "$SIGNED_ARTIFACTS_DIR" -name "aerospike-hello-0.4.2.tgz" | head -n1)
+chart_prov=$(find "$SIGNED_ARTIFACTS_DIR" -name "aerospike-hello-0.4.2.tgz.prov" | head -n1)
+chart_asc=$(find "$SIGNED_ARTIFACTS_DIR" -name "aerospike-hello-0.4.2.tgz.asc" | head -n1)
+
+if [[ -z $chart_tgz ]]; then
+    echo "  ❌ Chart .tgz missing from signed artifacts"
+    exit 1
+fi
+echo "  ✅ Chart .tgz present: $chart_tgz"
+
+if [[ -z $chart_prov ]]; then
+    echo "  ❌ Chart .prov missing"
+    exit 1
+fi
+echo "  ✅ Chart .prov present: $chart_prov"
+
+if [[ -n $chart_asc ]]; then
+    echo "  ❌ Chart .asc should NOT be produced (helm uses .prov)"
+    exit 1
+fi
+echo "  ✅ Chart .asc correctly absent"
+
+# Validate the .prov is GPG-clearsigned and verifiable
+if ! gpg --verify "$chart_prov" 2>/dev/null; then
+    echo "  ❌ .prov GPG signature is not valid"
+    exit 1
+fi
+echo "  ✅ .prov GPG signature valid"
+
+# Validate the .prov references the .tgz with the correct sha256
+expected_sha=$(sha256sum "$chart_tgz" | awk '{print $1}')
+if ! grep -qF "aerospike-hello-0.4.2.tgz: sha256:$expected_sha" "$chart_prov"; then
+    echo "  ❌ .prov does not reference the chart's actual sha256"
+    echo "    Expected: aerospike-hello-0.4.2.tgz: sha256:$expected_sha"
+    echo "    .prov contents:"
+    sed -n '/^-----BEGIN PGP SIGNED MESSAGE/,/^-----BEGIN PGP SIGNATURE/p' "$chart_prov" | sed 's/^/      /'
+    exit 1
+fi
+echo "  ✅ .prov sha256 matches chart"
+
+# Validate the .prov contains Chart.yaml metadata
+if ! grep -qE '^name: aerospike-hello\b' "$chart_prov"; then
+    echo "  ❌ .prov missing chart name"
+    exit 1
+fi
+if ! grep -qE '^version: 0\.4\.2\b' "$chart_prov"; then
+    echo "  ❌ .prov missing chart version"
+    exit 1
+fi
+echo "  ✅ .prov includes chart metadata"
 
 # Summary
 echo ""

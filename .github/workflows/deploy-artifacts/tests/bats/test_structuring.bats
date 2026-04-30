@@ -184,14 +184,6 @@ teardown() {
     [[ -f "$chart_dir/aerospike-hello-0.4.2.tgz.prov" ]]
 }
 
-@test "Helm .asc orphan is NOT gathered (only .prov is registered as companion)" {
-    run_entrypoint_dry_run >/dev/null 2>&1 || true
-    local chart_dir
-    chart_dir=$(find structured_build_artifacts/helm -name "aerospike-hello-0.4.2.tgz" -printf '%h\n' 2>/dev/null | head -1)
-    [[ -n "$chart_dir" ]]
-    [[ ! -f "$chart_dir/aerospike-hello-0.4.2.tgz.asc" ]]
-}
-
 @test "No helm .tgz files leak into generic structured dir" {
     run_entrypoint_dry_run >/dev/null 2>&1 || true
     local helm_in_generic

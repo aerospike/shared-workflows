@@ -303,18 +303,6 @@ jobs:
           }
           echo "PASS: helm.version property correct"
 
-      - name: Verify Helm chart .asc orphan is NOT in helm repo
-        if: needs.deploy.result == 'success'
-        run: |
-          result=$(jf rt search "test-helm-dev-local/**/*.tgz.asc" --project=test)
-          count=$(echo "$result" | jq 'length')
-          if [[ "$count" -gt 0 ]]; then
-            echo "FAIL: helm chart .asc orphan was incorrectly uploaded"
-            echo "$result"
-            exit 1
-          fi
-          echo "PASS: helm .asc orphan correctly excluded from helm repo"
-
       # --- build-info verification ---
 
       - name: Verify build-info was published

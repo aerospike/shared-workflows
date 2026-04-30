@@ -228,10 +228,9 @@ echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/aerospike-hello-1.0.0.tar.gz.as
 echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/aerospike-utils-2.0.0.tgz.asc"
 echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/aerospike-targz-package-3.0.0.tar.gz.asc"
 echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/aeromod-v1.2.3.zip.asc"
-# helm gets a .asc from the sign stage too; it should be gathered NOT alongside the chart
-# (helm companions = ".prov" only). This .asc is intentionally orphaned at deploy time;
-# helm-native .prov is the canonical chart signature.
-echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/aerospike-hello-0.4.2.tgz.asc"
+# Note: no .asc for the helm chart. sign-artifacts produces a .prov for helm
+# charts (helm-native provenance signature), not a detached .asc. The .prov
+# fixture above is what arrives at deploy.
 
 # Create unsigned-artifacts/ prefix to simulate sign stage output
 # The sign stage uses cp --parents which creates: signed-artifacts/unsigned-artifacts/...

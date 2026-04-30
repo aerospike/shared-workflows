@@ -90,18 +90,3 @@ teardown_file() {
 
     [[ $found == true ]] || (echo "No helm .prov upload command found" >&2 && return 1)
 }
-
-@test "Helm chart .asc orphan is NOT uploaded" {
-    local output
-    output=$(run_entrypoint_dry_run "test-project" "test-build" "v1.0.0" "12345" "12345-metadata")
-
-    local upload_commands
-    upload_commands=$(extract_upload_commands "$output")
-
-    while IFS= read -r cmd; do
-        if [[ $cmd =~ aerospike-hello-0\.4\.2\.tgz\.asc[[:space:]] ]]; then
-            echo "Helm chart .asc should not be uploaded but was: $cmd" >&2
-            return 1
-        fi
-    done <<< "$upload_commands"
-}

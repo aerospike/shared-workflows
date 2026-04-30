@@ -17,22 +17,6 @@ teardown() {
 # The sign stage creates .asc files alongside every artifact. These must appear in
 # actual jf rt upload commands, not just structuring logs. This test is comprehensive:
 # if a new type is added with .asc fixtures but no upload handling, it will fail.
-#
-# Exception: Helm charts use a .prov sidecar (helm-native provenance signature) as
-# their canonical signature; the sign stage's .tgz.asc is intentionally orphaned.
-
-# Returns 0 if the given .asc basename corresponds to a Helm chart primary file.
-_is_helm_chart_asc() {
-    local basename="$1"
-    local primary="${basename%.asc}"
-    [[ -f "$BUILD_ARTIFACTS_DIR/$primary" ]] || return 1
-    bash -c "
-        source '$DEPLOY_ARTIFACTS_DIR/package_utils.sh'
-        source '$DEPLOY_ARTIFACTS_DIR/type_registry.sh'
-        source '$DEPLOY_ARTIFACTS_DIR/type_detection.sh'
-        is_helm_chart '$BUILD_ARTIFACTS_DIR/$primary'
-    " 2>/dev/null
-}
 
 @test "Every .asc fixture appears in a jf rt upload command" {
     local output
@@ -47,8 +31,6 @@ _is_helm_chart_asc() {
     while IFS= read -r -d '' asc_file; do
         local basename
         basename=$(basename "$asc_file")
-        # Helm chart .asc orphans are intentionally not uploaded; canonical sig is .prov.
-        _is_helm_chart_asc "$basename" && continue
         if ! echo "$upload_cmds" | grep -qF "$basename"; then
             missing+=("$basename")
         fi
@@ -68,8 +50,6 @@ _is_helm_chart_asc() {
     while IFS= read -r -d '' asc_file; do
         local basename
         basename=$(basename "$asc_file")
-        # Helm chart .asc orphans are intentionally dropped during structuring.
-        _is_helm_chart_asc "$basename" && continue
         # Search for the .asc in structured_build_artifacts
         if ! find structured_build_artifacts -name "$basename" -print -quit 2>/dev/null | grep -q .; then
             missing+=("$basename")
