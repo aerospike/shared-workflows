@@ -450,6 +450,74 @@ get_go_metadata() {
 # Returns: target path on stdout.
 process_go() { copy_to_structured "$1" "$2"; }
 
+# --- Helm chart functions ---
+
+# Validate a Helm chart name.
+# Helm chart names use DNS-1123-style identifiers (lowercase, alphanumeric, hyphens,
+# dots, underscores). Rejects names with semicolons or other characters that could
+# inject JFrog target-props.
+# Args: <name>
+# Exits with error if invalid.
+_validate_helm_name() {
+    local name="$1"
+    if [[ ! $name =~ ^[a-z0-9]([a-z0-9._-]*[a-z0-9])?$ ]]; then
+        error "Invalid Helm chart name: '$name'"
+    fi
+}
+
+# Extract Chart.yaml content from a packaged Helm chart .tgz.
+# Helm packages place Chart.yaml at the root of a single top-level directory
+# inside the tarball: <chart-name>/Chart.yaml.
+# Args: <tgz_file>
+# Returns: the Chart.yaml content on stdout, or returns 1 if not found.
+_extract_helm_chart_yaml() {
+    local file="$1"
+    local chart_path
+    chart_path=$(tar -tzf "$file" 2>/dev/null | grep -E '^[^/]+/Chart\.yaml$' | head -n1) || return 1
+    [ -z "$chart_path" ] && return 1
+    tar -xOzf "$file" "$chart_path" 2>/dev/null
+}
+
+# Extract a single top-level scalar field from Chart.yaml content.
+# Strips surrounding single/double quotes, trailing whitespace, inline comments, CRLF.
+# Args: <chart_yaml_content> <field_name>
+# Returns: the value on stdout, or empty string.
+_chart_yaml_field() {
+    local content="$1" field="$2"
+    awk -v f="^${field}:[[:space:]]*" '
+        $0 ~ f {
+            sub(f, "")
+            sub(/[[:space:]]+#.*$/, "")
+            sub(/[[:space:]]+$/, "")
+            sub(/^["'\'']/, "")
+            sub(/["'\'']$/, "")
+            sub(/\r$/, "")
+            print
+            exit
+        }
+    ' <<<"$content"
+}
+
+# Extract Helm chart metadata (name and version) from a packaged chart .tgz.
+# Caller must ensure the file is a valid Helm chart (via is_helm_chart in type_detection.sh).
+# Args: <tgz_file>
+# Returns: "name version" on stdout.
+get_helm_metadata() {
+    local tgz="$1"
+    local chart_yaml
+    chart_yaml=$(_extract_helm_chart_yaml "$tgz") || error "Failed to extract Chart.yaml from $tgz"
+    local pkgname version
+    pkgname=$(_chart_yaml_field "$chart_yaml" "name")
+    version=$(_chart_yaml_field "$chart_yaml" "version")
+    _validate_helm_name "$pkgname"
+    echo "$pkgname $version"
+}
+
+# Structure a Helm chart into the destination directory.
+# Args: <file> <dest_dir>
+# Returns: target path on stdout.
+process_helm() { copy_to_structured "$1" "$2"; }
+
 # Structure a generic file into the destination directory.
 # Strips the "unsigned-artifacts" prefix leaked from the sign stage's cp --parents.
 # Args: <file> <dest_dir>

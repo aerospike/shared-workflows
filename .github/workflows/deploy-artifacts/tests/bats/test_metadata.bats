@@ -330,3 +330,140 @@ setup() {
 @test "_validate_go_module_path accepts valid Go module path" {
     _validate_go_module_path "github.com/aerospike/aeromod"
 }
+
+# --- is_helm_chart (type_detection.sh) ---
+
+@test "is_helm_chart returns true for packaged Helm chart" {
+    local test_dir
+    test_dir=$(mktemp -d)
+    mkdir -p "$test_dir/mychart"
+    cat > "$test_dir/mychart/Chart.yaml" <<'YAML'
+apiVersion: v2
+name: mychart
+version: 0.1.0
+YAML
+    tar -czf "$test_dir/mychart-0.1.0.tgz" -C "$test_dir" mychart/
+    rm -rf "$test_dir/mychart"
+    is_helm_chart "$test_dir/mychart-0.1.0.tgz"
+    rm -rf "$test_dir"
+}
+
+@test "is_helm_chart accepts apiVersion v1" {
+    local test_dir
+    test_dir=$(mktemp -d)
+    mkdir -p "$test_dir/oldchart"
+    cat > "$test_dir/oldchart/Chart.yaml" <<'YAML'
+apiVersion: v1
+name: oldchart
+version: 0.0.1
+YAML
+    tar -czf "$test_dir/oldchart-0.0.1.tgz" -C "$test_dir" oldchart/
+    rm -rf "$test_dir/oldchart"
+    is_helm_chart "$test_dir/oldchart-0.0.1.tgz"
+    rm -rf "$test_dir"
+}
+
+@test "is_helm_chart returns false for npm tarball" {
+    local test_dir
+    test_dir=$(mktemp -d)
+    mkdir -p "$test_dir/package"
+    echo '{"name":"foo","version":"1.0.0"}' > "$test_dir/package/package.json"
+    tar -czf "$test_dir/foo-1.0.0.tgz" -C "$test_dir" package/
+    rm -rf "$test_dir/package"
+    run is_helm_chart "$test_dir/foo-1.0.0.tgz"
+    [[ $status -ne 0 ]]
+    rm -rf "$test_dir"
+}
+
+@test "is_helm_chart returns false for plain tarball" {
+    local test_dir
+    test_dir=$(mktemp -d)
+    echo "plain content" > "$test_dir/data.txt"
+    tar -czf "$test_dir/plain.tgz" -C "$test_dir" data.txt
+    rm -f "$test_dir/data.txt"
+    run is_helm_chart "$test_dir/plain.tgz"
+    [[ $status -ne 0 ]]
+    rm -rf "$test_dir"
+}
+
+@test "is_helm_chart returns false when Chart.yaml has no apiVersion" {
+    local test_dir
+    test_dir=$(mktemp -d)
+    mkdir -p "$test_dir/badchart"
+    cat > "$test_dir/badchart/Chart.yaml" <<'YAML'
+name: badchart
+version: 0.0.1
+YAML
+    tar -czf "$test_dir/badchart-0.0.1.tgz" -C "$test_dir" badchart/
+    rm -rf "$test_dir/badchart"
+    run is_helm_chart "$test_dir/badchart-0.0.1.tgz"
+    [[ $status -ne 0 ]]
+    rm -rf "$test_dir"
+}
+
+# --- get_helm_metadata ---
+
+@test "get_helm_metadata extracts name and version from packaged chart" {
+    local test_dir
+    test_dir=$(mktemp -d)
+    mkdir -p "$test_dir/aerospike-vector-search"
+    cat > "$test_dir/aerospike-vector-search/Chart.yaml" <<'YAML'
+apiVersion: v2
+name: aerospike-vector-search
+description: AVS chart
+type: application
+version: 0.0.1
+appVersion: "0.0.1"
+YAML
+    tar -czf "$test_dir/aerospike-vector-search-0.0.1.tgz" -C "$test_dir" aerospike-vector-search/
+    rm -rf "$test_dir/aerospike-vector-search"
+    read -r -a meta < <(get_helm_metadata "$test_dir/aerospike-vector-search-0.0.1.tgz")
+    [[ "${meta[0]}" == "aerospike-vector-search" ]]
+    [[ "${meta[1]}" == "0.0.1" ]]
+    rm -rf "$test_dir"
+}
+
+@test "get_helm_metadata strips quotes from version field" {
+    local test_dir
+    test_dir=$(mktemp -d)
+    mkdir -p "$test_dir/quoted"
+    cat > "$test_dir/quoted/Chart.yaml" <<'YAML'
+apiVersion: v2
+name: quoted
+version: "2.5.0"
+YAML
+    tar -czf "$test_dir/quoted-2.5.0.tgz" -C "$test_dir" quoted/
+    rm -rf "$test_dir/quoted"
+    read -r -a meta < <(get_helm_metadata "$test_dir/quoted-2.5.0.tgz")
+    [[ "${meta[0]}" == "quoted" ]]
+    [[ "${meta[1]}" == "2.5.0" ]]
+    rm -rf "$test_dir"
+}
+
+# --- _validate_helm_name ---
+
+@test "_validate_helm_name rejects name with semicolons (property injection)" {
+    export DEPLOY_DIR
+    run bash -c 'source "$DEPLOY_DIR/package_utils.sh" && _validate_helm_name "evil;injected=bar"'
+    [[ $status -ne 0 ]]
+}
+
+@test "_validate_helm_name rejects uppercase names" {
+    export DEPLOY_DIR
+    run bash -c 'source "$DEPLOY_DIR/package_utils.sh" && _validate_helm_name "BadName"'
+    [[ $status -ne 0 ]]
+}
+
+@test "_validate_helm_name rejects name with spaces" {
+    export DEPLOY_DIR
+    run bash -c 'source "$DEPLOY_DIR/package_utils.sh" && _validate_helm_name "has spaces"'
+    [[ $status -ne 0 ]]
+}
+
+@test "_validate_helm_name accepts hyphenated lowercase name" {
+    _validate_helm_name "aerospike-vector-search"
+}
+
+@test "_validate_helm_name accepts name with dots" {
+    _validate_helm_name "my.chart"
+}

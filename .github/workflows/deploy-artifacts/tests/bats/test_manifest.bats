@@ -144,6 +144,7 @@ get_manifest() {
         -not -name "*.asc" \
         -not -name "*.pom" \
         -not -name "*.pom.asc" \
+        -not -name "*.prov" \
         -not -name "*.csproj" \
         -not -name ".manifest" \
         | sort)

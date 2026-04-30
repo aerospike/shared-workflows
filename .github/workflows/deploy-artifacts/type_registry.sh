@@ -82,6 +82,10 @@ register_type npm --repo "npm-dev-local" --detect "is_npm_package"
 register_type pypi --extension "*.whl" --repo "pypi-dev-local" --detect "is_pypi_package"
 # is_go_module is defined in type_detection.sh
 register_type go --repo "go-dev-local" --detect "is_go_module"
+# is_helm_chart is defined in type_detection.sh.
+# Helm publishes as OCI; companions=".prov" rides the helm-native provenance signature
+# along the helm push (helm 3.10+ pushes the .prov sidecar automatically).
+register_type helm --repo "helm-dev-local" --detect "is_helm_chart" --companions ".prov"
 register_type generic --repo "generic-dev-local"
 
 # Ambiguous extensions that trigger content-based detection.
@@ -91,7 +95,7 @@ register_type generic --repo "generic-dev-local"
 CONTENT_DETECT_EXTENSIONS=("*.tgz" "*.tar.gz" "*.zip")
 
 # Upload order matters: jar before generic (jar can move files to generic)
-UPLOAD_ORDER=(rpm deb jar nupkg npm pypi go generic)
+UPLOAD_ORDER=(rpm deb jar nupkg npm pypi go helm generic)
 
 # --- helpers ---
 
@@ -200,6 +204,16 @@ get_go_props() {
     local module_version="${metadata[1]}"
     echo "  Module: $module_path, Version: $module_version" >&2
     echo "$(get_base_props);package_name=$module_path;go.module=$module_path;go.version=$module_version"
+}
+
+get_helm_props() {
+    local file="$1"
+    local -a metadata
+    read -r -a metadata < <(get_helm_metadata "$file")
+    local pkgname="${metadata[0]}"
+    local pkgversion="${metadata[1]}"
+    echo "  Chart: $pkgname, Version: $pkgversion" >&2
+    echo "$(get_base_props);package_name=$pkgname;helm.name=$pkgname;helm.version=$pkgversion"
 }
 
 get_generic_props() {
