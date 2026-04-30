@@ -178,9 +178,14 @@ sign_one_file() {
             *) cst="CodeSignTool.sh" ;;
             esac
         fi
-    else
-        cst=$(resolve_codesigntool)
+        echo "[DRY-RUN] $cst sign -username=*** -password=*** -credential_id=*** -input_file_path=$file -totp_secret=*** -output_dir_path=<tmpdir>"
+        if [[ $ext == "msi" && -n ${ESIGNER_PROGRAM_NAME-} ]]; then
+            echo "[DRY-RUN]   -program_name=$ESIGNER_PROGRAM_NAME"
+        fi
+        return 0
     fi
+
+    cst=$(resolve_codesigntool)
 
     local -a cmd
     cmd=(
@@ -193,14 +198,6 @@ sign_one_file() {
     )
     if [[ $ext == "msi" && -n ${ESIGNER_PROGRAM_NAME-} ]]; then
         cmd+=("-program_name=$ESIGNER_PROGRAM_NAME")
-    fi
-
-    if [[ $DRY_RUN == "true" ]]; then
-        echo "[DRY-RUN] $cst sign -username=*** -password=*** -credential_id=*** -input_file_path=$file -totp_secret=*** -output_dir_path=<tmpdir>"
-        if [[ $ext == "msi" && -n ${ESIGNER_PROGRAM_NAME-} ]]; then
-            echo "[DRY-RUN]   -program_name=$ESIGNER_PROGRAM_NAME"
-        fi
-        return 0
     fi
 
     local outdir
