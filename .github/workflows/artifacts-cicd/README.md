@@ -54,15 +54,20 @@ Companion files (`.asc` signatures, `.pom` files, helm `.prov` provenance) are a
 
 ### Helm charts
 
-Helm charts publish as OCI artifacts to a JFrog Helm OCI repository. Consumers pull them via `helm pull oci://artifact.aerospike.io/{project}-helm-dev-local/{chart}:{version}`.
+Helm charts publish to a JFrog classic Helm repository (`{project}-helm-dev-local`, a `artifactory_local_helm_repository` resource in tf-artifactory). JFrog auto-generates `index.yaml` from uploaded `.tgz` files, so consumers add the repo and install with the standard helm CLI:
+
+```bash
+helm repo add aerospike-helm \
+  https://artifact.aerospike.io/artifactory/api/helm/{project}-helm-dev-local
+helm repo update
+helm install my-release aerospike-helm/<chart-name>
+```
 
 Packaging is the consumer's build-script responsibility, mirroring the npm/pypi/go convention. Run `helm package charts/<name> -d <output-dir>` and the deploy stage auto-detects the resulting `.tgz` (sniffed via `<chart>/Chart.yaml` containing `apiVersion`, `name`, and `version`).
 
-Signing happens automatically in the sign stage. `sign-artifacts` recognises chart `.tgz` files and produces a helm-native `.prov` (GPG-clearsigned Chart.yaml plus a sha256 of the tarball) using the same GPG key it uses for deb/rpm/`.asc`. Build-scripts should run plain `helm package` (no `--sign`) and let the workflow handle provenance. The `.prov` rides alongside the chart through deploy and lands as a companion in the helm repo.
+Signing happens automatically in the sign stage. `sign-artifacts` recognises chart `.tgz` files and produces a helm-native `.prov` (GPG-clearsigned Chart.yaml plus a sha256 of the tarball) using the same GPG key it uses for deb/rpm/`.asc`. Build-scripts should run plain `helm package` (no `--sign`) and let the workflow handle provenance. The `.prov` rides alongside the chart through deploy and lands as a companion in the helm repo. Consumers verify with `helm install --verify` or `helm verify chart.tgz`.
 
 Chart linting and unit testing are out of scope for this orchestrator (publishing is a release-time concern, linting is a PR-time concern). Run [chart-testing (`ct`)](https://github.com/helm/chart-testing) via the [helm/chart-testing-action](https://github.com/helm/chart-testing-action) as a separate `pull_request`-triggered workflow. The [aerospike/helm-aerospike-vector-search](https://github.com/aerospike/helm-aerospike-vector-search) repo has a working `lint.yaml` + `.ct.yaml` you can copy verbatim.
-
-The target JFrog repo (`{project}-helm-dev-local`) must be configured as a Helm OCI repository (a one-time admin/terraform setting). With that in place, the standard `jf rt upload` from the deploy stage produces a chart that is consumer-pullable via the OCI registry API.
 
 ## Notes
 

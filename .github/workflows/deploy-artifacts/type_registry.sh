@@ -83,7 +83,7 @@ register_type pypi --extension "*.whl" --repo "pypi-dev-local" --detect "is_pypi
 # is_go_module is defined in type_detection.sh
 register_type go --repo "go-dev-local" --detect "is_go_module"
 # is_helm_chart is defined in type_detection.sh.
-# Helm publishes as OCI; companions=".prov" carries the helm-native provenance signature
+# companions=".prov" carries the helm-native provenance signature
 # (GPG-clearsigned Chart.yaml + sha256) produced by sign-artifacts.
 register_type helm --repo "helm-dev-local" --detect "is_helm_chart" --companions ".prov"
 register_type generic --repo "generic-dev-local"

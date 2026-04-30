@@ -37,7 +37,7 @@ teardown_file() {
     while IFS= read -r cmd; do
         if [[ $cmd =~ aerospike-hello-0\.4\.2\.tgz[[:space:]] && $cmd =~ helm-dev-local ]]; then
             found=true
-            # Verify target path follows Helm OCI layout: {chart}/{version}/{filename}
+            # Verify target path follows classic Helm repo layout: {chart}/{version}/{filename}
             [[ $cmd =~ helm-dev-local/aerospike-hello/0\.4\.2/aerospike-hello-0\.4\.2\.tgz ]] || \
                 (echo "Wrong target path for chart: $cmd" >&2 && return 1)
             [[ $cmd =~ --build-name=test-build ]] || (echo "Missing --build-name: $cmd" >&2 && return 1)

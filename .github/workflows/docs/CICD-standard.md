@@ -91,7 +91,7 @@ Notes:
 - **JAR artifacts:** Use `jar-group-id` to provide a Maven group ID fallback when the JAR metadata doesn't include one.
 - **Python/PyPI:** Set `setup-python: true` to install Python and build tools (`build`, `twine`) before your build script runs. Optionally set `python-version` (default `"3.12"`). The deploy stage auto-detects `.whl` and `.tar.gz` sdist files and routes them to the appropriate PyPI repository. Matrix entries can override `setup-python` and `python-version` per build.
 - **Go modules:** The deploy stage auto-detects Go module `.zip` archives (those containing `module@version/go.mod`) and routes them to the Go repository. At upload time, it extracts the `.mod` file and generates a `.info` JSON following the [GOPROXY protocol](https://go.dev/ref/mod#goproxy-protocol). No special setup inputs are needed. Your build script should produce a Go module zip with the standard `module@version/` prefix layout.
-- **Helm charts:** The deploy stage auto-detects packaged Helm chart `.tgz` files (those containing `<chart>/Chart.yaml` with `apiVersion`, `name`, and `version`) and routes them to the Helm OCI repository. Build script runs `helm package`; deploy ingests the resulting `.tgz`. Charts are published as OCI artifacts so consumers can `helm pull oci://artifact.aerospike.io/{project}-helm-dev-local/{chart}:{version}`. Signing is automatic: `sign-artifacts` produces a helm-native `.prov` (GPG-clearsigned Chart.yaml plus the chart's sha256) for every chart, and the `.prov` rides alongside the chart through deploy. Build scripts should use plain `helm package` (no `--sign`). See [artifacts-cicd README](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/artifacts-cicd/README.md) for the full Helm section including chart-testing pointers.
+- **Helm charts:** The deploy stage auto-detects packaged Helm chart `.tgz` files (those containing `<chart>/Chart.yaml` with `apiVersion`, `name`, and `version`) and routes them to the project's classic Helm repository (`{project}-helm-dev-local`). Build script runs `helm package`; deploy ingests the resulting `.tgz`. JFrog auto-generates `index.yaml` from uploaded charts, so consumers `helm repo add` the repo URL and `helm install` from it. Signing is automatic: `sign-artifacts` produces a helm-native `.prov` (GPG-clearsigned Chart.yaml plus the chart's sha256) for every chart, and the `.prov` rides alongside the chart through deploy. Build scripts should use plain `helm package` (no `--sign`). See [artifacts-cicd README](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/artifacts-cicd/README.md) for the full Helm section including chart-testing pointers.
 
 ### Mac signing (optional)
 
@@ -271,7 +271,7 @@ jobs:
 
 #### Helm chart example
 
-Helm charts use `helm package` in the build script. The sign stage automatically produces the `.prov` provenance signature, and the deploy stage auto-detects the resulting `.tgz` + `.prov` and publishes them to a Helm OCI repository:
+Helm charts use `helm package` in the build script. The sign stage automatically produces the `.prov` provenance signature, and the deploy stage auto-detects the resulting `.tgz` + `.prov` and publishes them to the project's Helm repository:
 
 ```yaml
 jobs:

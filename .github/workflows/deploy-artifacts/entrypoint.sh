@@ -558,9 +558,9 @@ upload_helm_packages() {
         local props
         props=$(get_helm_props "$pkg")
 
-        # JFrog Helm OCI layout: {chart}/{version}/{filename}.
-        # Repo must be configured as a Helm OCI repository so the upload produces
-        # a consumer-pullable OCI artifact (helm pull oci://...).
+        # JFrog classic Helm repo layout: {chart}/{version}/{filename}.
+        # JFrog auto-generates index.yaml from uploaded .tgz files; consumers
+        # then `helm repo add` the repo URL and `helm install` from it.
         local target_path
         target_path="${pkgname}/${pkgversion}/${pkg_filename}"
 
