@@ -155,6 +155,18 @@ on:
         type: string
         default: "3.12"
 
+      # Helm setup
+      setup-helm:
+        description: Whether to install the Helm CLI for builds
+        required: false
+        type: boolean
+        default: false
+      helm-version:
+        description: Helm version to set up (e.g., "v3.16.4"). "latest" by default.
+        required: false
+        type: string
+        default: latest
+
     outputs:
       gh-artifact-name:
         description: The name of the uploaded artifacts on github
@@ -224,6 +236,12 @@ jobs:
       - name: Install Python build tools
         if: inputs.setup-python
         run: pip install build
+
+      - name: Set up Helm
+        if: inputs.setup-helm
+        uses: azure/setup-helm@b9e51907a09c216f16ebe8536097933489208112 # v4.3.0
+        with:
+          version: ${{ inputs.helm-version }}
 
       - name: Set up JFrog CLI
         uses: step-security/setup-jfrog-cli@893a92f96c7727242adf0e603c77b1f2a22390e1 # v4.9.1

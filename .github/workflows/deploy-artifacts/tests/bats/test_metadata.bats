@@ -6,6 +6,7 @@ GIT_ROOT="$(git rev-parse --show-toplevel)"
 DEPLOY_DIR="$GIT_ROOT/.github/workflows/deploy-artifacts"
 
 setup() {
+    source "$DEPLOY_DIR/../lib/helm-helpers.sh"
     source "$DEPLOY_DIR/package_utils.sh"
     source "$DEPLOY_DIR/type_detection.sh"
     # package_utils.sh sets strict mode and an ERR trap that interferes with bats assertions

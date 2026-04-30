@@ -451,6 +451,9 @@ get_go_metadata() {
 process_go() { copy_to_structured "$1" "$2"; }
 
 # --- Helm chart functions ---
+# is_helm_chart and _extract_helm_chart_yaml are defined in ../lib/helm-helpers.sh,
+# sourced by entrypoint.sh (and by sign-artifacts/entrypoint.sh) so the two stages
+# stay in sync.
 
 # Validate a Helm chart name.
 # Helm chart names use DNS-1123-style identifiers (lowercase, alphanumeric, hyphens,
@@ -463,19 +466,6 @@ _validate_helm_name() {
     if [[ ! $name =~ ^[a-z0-9]([a-z0-9._-]*[a-z0-9])?$ ]]; then
         error "Invalid Helm chart name: '$name'"
     fi
-}
-
-# Extract Chart.yaml content from a packaged Helm chart .tgz.
-# Helm packages place Chart.yaml at the root of a single top-level directory
-# inside the tarball: <chart-name>/Chart.yaml.
-# Args: <tgz_file>
-# Returns: the Chart.yaml content on stdout, or returns 1 if not found.
-_extract_helm_chart_yaml() {
-    local file="$1"
-    local chart_path
-    chart_path=$(tar -tzf "$file" 2>/dev/null | grep -E '^[^/]+/Chart\.yaml$' | head -n1) || return 1
-    [ -z "$chart_path" ] && return 1
-    tar -xOzf "$file" "$chart_path" 2>/dev/null
 }
 
 # Extract a single top-level scalar field from Chart.yaml content.

@@ -263,6 +263,7 @@ jobs:
       gh-artifact-name: build-artifacts-helm-x86_64
       oidc-provider-name: gh-dev-test
       oidc-audience: aerospike/testing
+      setup-helm: true
     secrets: inherit
 
   # Merge all per-matrix artifacts into a single github artifact for downstream jobs.

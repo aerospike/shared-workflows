@@ -177,6 +177,17 @@ on:
         required: false
         type: string
         default: "3.12"
+      # Helm setup (passed through to execute-build)
+      setup-helm:
+        description: Whether to install the Helm CLI for builds
+        required: false
+        type: boolean
+        default: false
+      helm-version:
+        description: Helm version to set up (e.g., "v3.16.4"). "latest" by default.
+        required: false
+        type: string
+        default: latest
       working-directory:
         description: |
           Working directory for build script execution. Defaults to gh-source-path (so builds run inside the checked out source repo).
@@ -341,6 +352,8 @@ jobs:
       java-cache: ${{ matrix['java-cache'] || inputs.java-cache }}
       setup-python: ${{ matrix['setup-python'] != null && matrix['setup-python'] || matrix['setup-python'] == null && inputs.setup-python }}
       python-version: ${{ matrix['python-version'] || inputs.python-version }}
+      setup-helm: ${{ matrix['setup-helm'] != null && matrix['setup-helm'] || matrix['setup-helm'] == null && inputs.setup-helm }}
+      helm-version: ${{ matrix['helm-version'] || inputs.helm-version }}
       working-directory: ${{ matrix['working-directory'] || needs.resolve.outputs.resolved-working-directory }}
     secrets: inherit
 

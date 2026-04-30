@@ -41,35 +41,17 @@ for file in "${FILES[@]}"; do
 
 done
 
-# --- Helm chart helpers ---
+# --- Helm chart provenance ---
 # Helm charts use a native provenance file (.prov) as their canonical signature
 # instead of a detached .asc. The .prov is a GPG clearsigned message containing
 # the Chart.yaml metadata plus a sha256 of the .tgz, exactly what
 # `helm package --sign` produces.
 
-# Extract Chart.yaml content from a packaged helm chart .tgz.
-# Helm packages have <chart-name>/Chart.yaml at the root of the tarball.
-_extract_helm_chart_yaml() {
-    local file="$1"
-    local chart_path
-    chart_path=$(tar -tzf "$file" 2>/dev/null | grep -E '^[^/]+/Chart\.yaml$' | head -n1) || return 1
-    [ -z "$chart_path" ] && return 1
-    tar -xOzf "$file" "$chart_path" 2>/dev/null
-}
-
-# Returns 0 if the given .tgz/.tar.gz is a packaged helm chart.
-is_helm_chart() {
-    local file="$1"
-    case "$file" in
-    *.tgz | *.tar.gz) ;;
-    *) return 1 ;;
-    esac
-    local chart_yaml
-    chart_yaml=$(_extract_helm_chart_yaml "$file") || return 1
-    grep -qE '^apiVersion:[[:space:]]*v[12]\b' <<<"$chart_yaml" || return 1
-    grep -qE '^name:[[:space:]]*[^[:space:]]' <<<"$chart_yaml" || return 1
-    grep -qE '^version:[[:space:]]*[^[:space:]]' <<<"$chart_yaml" || return 1
-}
+# Source shared helm helpers (is_helm_chart + _extract_helm_chart_yaml).
+# Same file is sourced by deploy-artifacts/package_utils.sh so detection stays in sync.
+HELM_HELPERS_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC1091
+source "$HELM_HELPERS_SCRIPT_DIR/../lib/helm-helpers.sh"
 
 # Produce a helm-native provenance file (<file>.prov) for a packaged chart.
 # The .prov is a GPG clearsigned YAML containing the Chart.yaml content plus a

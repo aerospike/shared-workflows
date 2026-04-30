@@ -121,6 +121,8 @@ ARTIFACT_BUILD_NUMBER="$BUILD_NUMBER-artifacts"
 # Source utilities
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
+source "$SCRIPT_DIR/../lib/helm-helpers.sh"
+# shellcheck disable=SC1091
 source "$SCRIPT_DIR/package_utils.sh"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/type_registry.sh"

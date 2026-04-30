@@ -109,7 +109,7 @@ get_known_extensions() {
     # Content-detected extensions (ambiguous types like .tgz/.tar.gz)
     exts+=("${CONTENT_DETECT_EXTENSIONS[@]}")
     # Companion and build file extensions
-    exts+=("*.asc" "*.pom" "*.csproj" "docker-images.json")
+    exts+=("*.asc" "*.prov" "*.pom" "*.csproj" "docker-images.json")
     printf '%s\n' "${exts[@]}"
 }
 

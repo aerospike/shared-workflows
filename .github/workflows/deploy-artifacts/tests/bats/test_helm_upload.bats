@@ -90,3 +90,25 @@ teardown_file() {
 
     [[ $found == true ]] || (echo "No helm .prov upload command found" >&2 && return 1)
 }
+
+@test "Helm chart and .prov are NOT uploaded to the generic repo" {
+    local output
+    output=$(run_entrypoint_dry_run "test-project" "test-build" "v1.0.0" "12345" "12345-metadata")
+
+    local upload_commands
+    upload_commands=$(extract_upload_commands "$output")
+
+    while IFS= read -r cmd; do
+        if [[ $cmd =~ aerospike-hello-0\.4\.2\.tgz(\.prov)?[[:space:]] && $cmd =~ generic-dev-local ]]; then
+            echo "Helm chart or .prov leaked into generic-dev-local: $cmd" >&2
+            return 1
+        fi
+    done <<< "$upload_commands"
+}
+
+@test "Helm chart and .prov are NOT in the generic structured dir" {
+    run_entrypoint_dry_run >/dev/null 2>&1 || true
+    local leaks
+    leaks=$(find structured_build_artifacts/generic -name "aerospike-hello-0.4.2.tgz*" 2>/dev/null | wc -l)
+    [[ $leaks -eq 0 ]] || { echo "Helm chart/.prov leaked into structured_build_artifacts/generic" >&2; return 1; }
+}

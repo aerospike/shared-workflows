@@ -106,7 +106,9 @@ jobs:
             "arch":"x86_64",
             "working-directory":"repo-source/.github/workflows/execute-build/test_apps/HelmHelloWorld",
             "gh-artifact-directory":"dist",
-            "build-script":"mkdir -p dist && helm package . -d dist"
+            "build-env":"VERSION=${{ needs.extract-version.outputs.version }}",
+            "build-script":"mkdir -p dist && helm package . --version \"$VERSION\" --app-version \"$VERSION\" -d dist",
+            "setup-helm":true
           },
           {
             "runs-on":"macos-14",

@@ -44,23 +44,9 @@ is_go_module() {
 }
 
 # --- Helm -------------------------------------------------------------------------------------
-
-# Check if a .tgz/.tar.gz is a packaged Helm chart.
-# A packaged Helm chart is a tarball containing a single top-level directory with
-# Chart.yaml at its root, declaring apiVersion (v1 or v2) plus non-empty name and version.
-# Uses _extract_helm_chart_yaml and _chart_yaml_field from package_utils.sh.
-# Args: <tgz_file>
-# Returns: 0 if Helm chart, 1 otherwise.
-is_helm_chart() {
-    local file="$1"
-    local chart_yaml
-    chart_yaml=$(_extract_helm_chart_yaml "$file") || return 1
-    grep -qE '^apiVersion:[[:space:]]*v[12]\b' <<<"$chart_yaml" || return 1
-    local name version
-    name=$(_chart_yaml_field "$chart_yaml" "name")
-    version=$(_chart_yaml_field "$chart_yaml" "version")
-    [[ -n $name && -n $version ]]
-}
+# is_helm_chart and _extract_helm_chart_yaml live in ../lib/helm-helpers.sh and
+# are sourced by entrypoint.sh + detect_types.sh. Same file is sourced by
+# sign-artifacts/entrypoint.sh so detection stays consistent across stages.
 
 # --- PyPI (artifact-publisher / artifact-identification.sh style) -----------------------------
 
