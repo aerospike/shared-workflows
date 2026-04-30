@@ -243,13 +243,16 @@ setup() {
 
 @test "_validate_pypi_name rejects name with semicolons (property injection)" {
     export DEPLOY_DIR
-    run bash -c 'source "$DEPLOY_DIR/package_utils.sh" && _validate_pypi_name "evil;injected=bar"'
+    # Inline `error` because package_utils.sh's error() lives in entrypoint.sh /
+    # detect_types.sh — without this stub, validation failure becomes "command
+    # not found" (127) and bats flags BW01.
+    run bash -c 'error() { echo "$@" >&2; return 1; }; source "$DEPLOY_DIR/package_utils.sh" && _validate_pypi_name "evil;injected=bar"'
     [[ $status -ne 0 ]]
 }
 
 @test "_validate_pypi_name rejects name with spaces" {
     export DEPLOY_DIR
-    run bash -c 'source "$DEPLOY_DIR/package_utils.sh" && _validate_pypi_name "has spaces"'
+    run bash -c 'error() { echo "$@" >&2; return 1; }; source "$DEPLOY_DIR/package_utils.sh" && _validate_pypi_name "has spaces"'
     [[ $status -ne 0 ]]
 }
 
@@ -317,13 +320,14 @@ setup() {
 
 @test "_validate_go_module_path rejects path with semicolons (property injection)" {
     export DEPLOY_DIR
-    run bash -c 'source "$DEPLOY_DIR/package_utils.sh" && _validate_go_module_path "evil;injected=bar"'
+    # See _validate_pypi_name tests above for the error() stub rationale.
+    run bash -c 'error() { echo "$@" >&2; return 1; }; source "$DEPLOY_DIR/package_utils.sh" && _validate_go_module_path "evil;injected=bar"'
     [[ $status -ne 0 ]]
 }
 
 @test "_validate_go_module_path rejects path without domain dot" {
     export DEPLOY_DIR
-    run bash -c 'source "$DEPLOY_DIR/package_utils.sh" && _validate_go_module_path "noDomain/pkg"'
+    run bash -c 'error() { echo "$@" >&2; return 1; }; source "$DEPLOY_DIR/package_utils.sh" && _validate_go_module_path "noDomain/pkg"'
     [[ $status -ne 0 ]]
 }
 
