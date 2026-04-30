@@ -26,18 +26,21 @@ This is `aerospike/shared-workflows`, a centralized collection of reusable GitHu
 
 ## Core Workflows
 
-Consumers should use the **orchestrated workflows** (`reusable_artifacts-cicd.yaml`, `reusable_docker-build-deploy.yaml`) as their entry points. These are opinionated pipelines with good defaults that handle the full lifecycle (build -> sign -> deploy). They trade flexibility for simplicity and correctness.
+Two approaches are supported as first-class consumer paths:
 
-The lower-level composable workflows (`reusable_execute-build.yaml`, `reusable_sign-artifacts.yaml`, `reusable_deploy-artifacts.yaml`) exist primarily as implementation details of the orchestrators. Direct use of these should be rare — if a consumer needs to call them directly, that's a smell indicating either the orchestrator is missing a needed capability or the consumer's build process needs to be restructured. Avoid adding escape hatches to the orchestrators unless there is a clear production need; instead, prefer making the standard path work.
+- **Orchestrated** (`reusable_artifacts-cicd.yaml`, `reusable_docker-build-deploy.yaml`): opinionated pipelines with good defaults that handle the full lifecycle (build, sign, deploy). Smaller input surface, less wiring, less flexibility.
+- **Composable** (`reusable_execute-build.yaml`, `reusable_sign-artifacts.yaml`, `reusable_deploy-artifacts.yaml`): call the per-stage workflows directly from your own job graph when you need custom steps between stages, per-stage overrides, or non-standard layouts. More wiring, more flexibility.
 
-| Workflow                              | Purpose                                                          |
-| ------------------------------------- | ---------------------------------------------------------------- |
-| `reusable_artifacts-cicd.yaml`        | **Primary entry point.** Orchestrates build -> sign -> deploy    |
-| `reusable_docker-build-deploy.yaml`   | **Primary entry point.** Multi-arch OCI images with attestations |
-| `reusable_create-release-bundle.yaml` | JFrog release bundles (combines artifact + docker outputs)       |
-| `reusable_execute-build.yaml`         | _Internal._ Run arbitrary build script, upload artifacts         |
-| `reusable_sign-artifacts.yaml`        | _Internal._ GPG sign deb/rpm/generic, SSL.com sign nupkg         |
-| `reusable_deploy-artifacts.yaml`      | _Internal._ Upload to JFrog Artifactory (auto-routes by type)    |
+Pick whichever fits the use case. The orchestrated path is generally lower-maintenance for new consumers; the composable path is the right answer when the orchestrator's opinions don't match. Both are supported, neither is a fallback.
+
+| Workflow                              | Purpose                                                       |
+| ------------------------------------- | ------------------------------------------------------------- |
+| `reusable_artifacts-cicd.yaml`        | Orchestrated build, sign, deploy                              |
+| `reusable_docker-build-deploy.yaml`   | Multi-arch OCI images with attestations                       |
+| `reusable_create-release-bundle.yaml` | JFrog release bundles (combines artifact + docker outputs)    |
+| `reusable_execute-build.yaml`         | Composable. Run arbitrary build script, upload artifacts      |
+| `reusable_sign-artifacts.yaml`        | Composable. GPG sign deb/rpm/generic/.tgz, SSL.com sign nupkg |
+| `reusable_deploy-artifacts.yaml`      | Composable. Upload to JFrog Artifactory (auto-routes by type) |
 
 ## Naming Convention (v2.0.0+)
 
