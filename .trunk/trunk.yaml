@@ -29,6 +29,12 @@ lint:
     - trufflehog@3.91.1
     - actionlint@1.7.9
     - shellcheck@0.11.0
+  ignore:
+    # test_apps/ holds source fixtures (Helm charts, etc.), not workflow files.
+    # actionlint/yamllint/prettier shouldn't scan them as if they were CI YAML.
+    - linters: [actionlint, yamllint, prettier]
+      paths:
+        - .github/workflows/execute-build/test_apps/**
 actions:
   disabled:
     - trunk-announce

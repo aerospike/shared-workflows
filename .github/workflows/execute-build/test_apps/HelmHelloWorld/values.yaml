@@ -1,0 +1,10 @@
+replicaCount: 1
+
+image:
+  repository: artifact.aerospike.io/test-docker-dev-local/aerospike-hello
+  tag: ""
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 8080

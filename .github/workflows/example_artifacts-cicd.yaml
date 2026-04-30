@@ -101,6 +101,14 @@ jobs:
             "build-script":"VERSION=1.0.0 && read -r _ MODULE < go.mod && TMP=$(mktemp -d) && mkdir -p \"$TMP/$MODULE@v$VERSION\" dist && cp go.mod *.go \"$TMP/$MODULE@v$VERSION/\" && (cd \"$TMP\" && zip -qr \"$OLDPWD/dist/hello-v$VERSION.zip\" .) && rm -rf \"$TMP\""
           },
           {
+            "runs-on":"ubuntu-22.04",
+            "distro":"helm",
+            "arch":"x86_64",
+            "working-directory":"repo-source/.github/workflows/execute-build/test_apps/HelmHelloWorld",
+            "gh-artifact-directory":"dist",
+            "build-script":"mkdir -p dist && helm package . -d dist"
+          },
+          {
             "runs-on":"macos-14",
             "distro":"darwin",
             "arch":"arm64",
