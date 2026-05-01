@@ -150,8 +150,12 @@ structure_standalone_poms() {
         base_name=$(basename "$pom" .pom)
         jar_file="$(dirname "$pom")/$base_name.jar"
 
-        # Skip if a corresponding JAR exists (already handled by process_jar)
-        [[ -f $jar_file ]] && continue
+        # Skip if a corresponding JAR exists (already handled by process_jar).
+        # Use `if` rather than `[[ ... ]] && continue` because the latter's
+        # exit status (1 when the file is missing) trips set -e.
+        if [[ -f $jar_file ]]; then
+            continue
+        fi
 
         echo "Processing standalone POM: $pom" >&2
 
@@ -163,17 +167,28 @@ structure_standalone_poms() {
         group_path="${group_id//./\/}"
 
         target="./structured_build_artifacts/jar/${group_path}/${artifact_id}/${version}"
-        # Safeguard against duplicate processing
-        if [[ -f "$target/$(basename "$pom")" ]]; then
-            echo "Skipping standalone POM (already structured): $pom" >&2
-            continue
-        fi
         mkdir -p "$target"
+        # Always manifest_add and re-copy: the manifest is flushed at the
+        # start of each run by detect_types.sh (init_manifest flush), but the
+        # structured tree on disk persists across runs (e.g., between bats
+        # tests sharing fixtures). An "already structured" early-out skipped
+        # manifest_add and quietly dropped the standalone POM from later
+        # uploads. cp will overwrite which is the right behaviour here —
+        # source is the canonical artifact.
         cp "$pom" "$target/"
         manifest_add "$target/$(basename "$pom")" "jar"
-        if [[ -f "$pom.asc" ]]; then
-            cp "$pom.asc" "$target/"
-        fi
+        # Copy POM sidecars (signature + checksums) so a JAR-less Maven
+        # release (BOM/parent POM) still publishes its full file set. Without
+        # this, .pom.md5/.pom.sha1 fall through to structure_generic_files
+        # which excludes them via get_known_extensions, so they vanish.
+        local pom_dir
+        pom_dir="$(dirname "$pom")"
+        for ext in pom.asc pom.md5 pom.sha1; do
+            local sibling="$pom_dir/$base_name.$ext"
+            if [[ -f $sibling ]]; then
+                cp "$sibling" "$target/"
+            fi
+        done
     done < <(find build-artifacts -name "*.pom" -print0)
 }
 
@@ -277,7 +292,8 @@ upload_jar_packages() {
         # If no group_id is available, move to generic directory for generic upload
         if [[ -z ${group_id-} ]]; then
             echo "  Moving JAR without group_id to generic directory: $artifact" >&2
-            for ext in jar pom jar.asc pom.asc; do
+            for ext in jar pom jar.asc pom.asc \
+                jar.md5 jar.sha1 pom.md5 pom.sha1; do
                 local artifact_file="$artifact_dir/${base_name}.${ext}"
                 if [[ -f $artifact_file ]]; then
                     mv "$artifact_file" "../generic/"
@@ -290,13 +306,39 @@ upload_jar_packages() {
         local props
         props=$(get_jar_props "$artifact" "$group_id" "$pkgname")
 
-        # Upload all related Maven artifact files (jar, pom, signatures)
-        for ext in jar pom jar.asc pom.asc; do
+        # Upload all related Maven artifact files (jar, pom, signatures, checksums).
+        # Order matters: JFrog's checksum-deploy interception triggers on
+        # .md5/.sha1/.sha256 uploads and looks for the base file at the same
+        # path in the same repo. The base files (.jar, .pom) must be uploaded
+        # first so the checksum sidecars find their target.
+        # .md5/.sha1 themselves are intentionally not signed (Maven Central
+        # convention); any .md5.asc/.sha1.asc produced by an indiscriminate
+        # sign step is excluded here so it does not reach JFrog.
+        for ext in jar pom \
+            jar.asc pom.asc \
+            jar.md5 jar.sha1 pom.md5 pom.sha1; do
             local artifact_file="$artifact_dir/${base_name}.${ext}"
             if [[ -f $artifact_file ]]; then
                 echo "  Uploading $ext: $artifact_file" >&2
-                jf_upload "$artifact_file" "$PROJECT-maven-dev-local" \
-                    --target-props "$props"
+                case "$ext" in
+                *.md5 | *.sha1)
+                    # JFrog absorbs .md5/.sha1 uploads as checksum metadata
+                    # on the parent artifact rather than storing them as
+                    # separate files. Adding them to the build-info would
+                    # create phantom entries that create-release-bundle
+                    # cannot resolve (422 Unprocessable Entity). Upload
+                    # without build-info; JFrog still serves them at the
+                    # canonical sibling URL.
+                    run jf rt upload "$artifact_file" "$PROJECT-maven-dev-local" \
+                        --flat=false \
+                        --project="$PROJECT" \
+                        --target-props "$props"
+                    ;;
+                *)
+                    jf_upload "$artifact_file" "$PROJECT-maven-dev-local" \
+                        --target-props "$props"
+                    ;;
+                esac
             fi
         done
     }

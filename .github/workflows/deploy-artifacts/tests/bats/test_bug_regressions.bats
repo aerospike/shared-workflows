@@ -26,7 +26,10 @@ teardown() {
     local upload_cmds
     upload_cmds=$(echo "$output" | sed 's/\x1b\[[0-9;]*m//g' | grep -E "^\s*jf rt upload" || true)
 
-    # Find all .asc files in the fixture directory
+    # Find all .asc files in the fixture directory.
+    # Exclude .md5.asc/.sha1.asc: Maven Central convention is that checksums
+    # are not signed, so the deploy step intentionally drops them. They're
+    # kept as fixtures for the negative-test cases in test_java_upload.bats.
     local missing=()
     while IFS= read -r -d '' asc_file; do
         local basename
@@ -34,7 +37,8 @@ teardown() {
         if ! echo "$upload_cmds" | grep -qF "$basename"; then
             missing+=("$basename")
         fi
-    done < <(find "$BUILD_ARTIFACTS_DIR" -name "*.asc" -print0)
+    done < <(find "$BUILD_ARTIFACTS_DIR" -name "*.asc" \
+        -not -name "*.md5.asc" -not -name "*.sha1.asc" -print0)
 
     if [[ ${#missing[@]} -gt 0 ]]; then
         echo "FAIL: .asc files not found in any upload command:" >&2
@@ -46,6 +50,7 @@ teardown() {
 @test "Every .asc fixture is structured alongside its primary file" {
     run_entrypoint_dry_run >/dev/null 2>&1 || true
 
+    # Exclude .md5.asc/.sha1.asc: see comment in the previous test.
     local missing=()
     while IFS= read -r -d '' asc_file; do
         local basename
@@ -54,7 +59,8 @@ teardown() {
         if ! find structured_build_artifacts -name "$basename" -print -quit 2>/dev/null | grep -q .; then
             missing+=("$basename")
         fi
-    done < <(find "$BUILD_ARTIFACTS_DIR" -name "*.asc" -print0)
+    done < <(find "$BUILD_ARTIFACTS_DIR" -name "*.asc" \
+        -not -name "*.md5.asc" -not -name "*.sha1.asc" -print0)
 
     if [[ ${#missing[@]} -gt 0 ]]; then
         echo "FAIL: .asc files not found in structured_build_artifacts:" >&2

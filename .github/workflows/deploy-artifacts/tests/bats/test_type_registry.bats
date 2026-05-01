@@ -108,6 +108,12 @@ setup() {
     [[ "$exts" == *"*.asc"* ]]
     [[ "$exts" == *"*.pom"* ]]
     [[ "$exts" == *"*.csproj"* ]]
+    # Maven sidecar checksums must be excluded from generic structuring,
+    # otherwise structure_generic_files double-structures them and JFrog's
+    # checksum-deploy interception 404s on the generic-repo upload (the .jar
+    # base file lives in maven-dev-local, not generic-dev-local).
+    [[ "$exts" == *"*.md5"* ]]
+    [[ "$exts" == *"*.sha1"* ]]
 }
 
 # --- get_base_props ---
