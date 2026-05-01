@@ -118,6 +118,14 @@ jobs:
             "gh-artifact-directory":"dist",
             "build-env":"VERSION=${{ needs.extract-version.outputs.version }}",
             "build-script":"make clean build DISTRO=darwin ARCH=arm64 && mkdir -p dist && pkgbuild --root build/darwin/arm64 --identifier com.aerospike.test --version $VERSION --install-location /usr/local/bin dist/test-$VERSION-darwin-arm64.pkg"
+          },
+          {
+            "runs-on":"ubuntu-22.04",
+            "distro":"win10",
+            "arch":"x64",
+            "working-directory":"repo-source/.github/workflows/execute-build/test_apps/hi",
+            "gh-artifact-directory":"packaged-artifacts",
+            "build-script":"mkdir -p packaged-artifacts && head -c 2048 /dev/zero > packaged-artifacts/example-win-ci.exe && head -c 2048 /dev/zero > packaged-artifacts/example-win-ci.msi && head -c 2048 /dev/zero > packaged-artifacts/example-win-ci.msix"
           }
         ]}
       build-script: |
@@ -145,6 +153,9 @@ jobs:
       mac-installer-identity: "Developer ID Installer: Aerospike, Inc. (22224RFU67)"
       mac-artifact-glob: "*.pkg"
       mac-notarize: true
+      sign-windows: true
+      win-artifact-glob: "*.exe"
+      win-runs-on: windows-2025
     secrets:
       gpg-private-key: ${{ secrets.GPG_SECRET_KEY }}
       gpg-public-key: ${{ secrets.GPG_PUBLIC_KEY }}

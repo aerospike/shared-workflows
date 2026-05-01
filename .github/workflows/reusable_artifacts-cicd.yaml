@@ -234,6 +234,21 @@ on:
         required: false
         type: boolean
         default: false
+      win-artifact-glob:
+        description: Glob for Windows signing scope (passed to sign-win-artifacts)
+        required: false
+        type: string
+        default: "**/*"
+      win-runs-on:
+        description: Runner for the sign-windows job
+        required: false
+        type: string
+        default: windows-2025
+      win-signing-identity:
+        description: Optional display name for signed installers (CodeSignTool -program_name)
+        required: false
+        type: string
+        default: ""
 
     secrets:
       gpg-private-key:
@@ -412,11 +427,14 @@ jobs:
     needs: [resolve, collect-matrix-artifacts, sign-mac]
     uses: ./.github/workflows/reusable_sign-win-artifacts.yaml
     with:
+      artifact-glob: ${{ inputs.win-artifact-glob }}
       dry-run: ${{ inputs.dry-run }}
       gh-checkout-path: ${{ inputs.gh-checkout-path }}
       gh-retention-days: ${{ inputs.gh-retention-days }}
       gh-unsigned-artifacts: build-artifacts
       gh-workflows-ref: ${{ inputs.gh-workflows-ref }}
+      runs-on: ${{ inputs.win-runs-on }}
+      signing-identity: ${{ inputs.win-signing-identity }}
     secrets: inherit
 
   sign:

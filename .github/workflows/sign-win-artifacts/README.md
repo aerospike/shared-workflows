@@ -68,4 +68,5 @@ Same requirement as other reusable workflows; see [Why gh-workflows-ref is requi
 ## Testing
 
 - **Bats tests** (mocked CodeSignTool): `bats .github/workflows/sign-win-artifacts/tests/bats/`
-- **CI**: `test_sign-win-artifacts-workflow.yaml` runs on PRs touching these paths
+- **CI dry-run**: `test_sign-win-artifacts-workflow.yaml` runs on PRs touching `reusable_sign-win-artifacts.yaml` or `sign-win-artifacts/**`
+- **Manual smoke test**: `test_sign-win-artifacts-smoke.yaml` (`workflow_dispatch`) for end-to-end signing with real eSigner secrets; optional repo variable `WIN_SIGNING_PROGRAM_NAME` for `signing-identity`

@@ -62,6 +62,9 @@ jobs:
       sign-mac: true
       mac-signing-identity: "Developer ID Application: Test (TESTID)"
       mac-installer-identity: "Developer ID Installer: Test (TESTID)"
+      sign-windows: true
+      win-artifact-glob: "*.exe"
+      win-runs-on: windows-2025
     secrets:
       gpg-private-key: ${{ secrets.GPG_SECRET_KEY }}
       gpg-public-key: ${{ secrets.GPG_PUBLIC_KEY }}

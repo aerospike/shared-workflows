@@ -1,0 +1,80 @@
+name: "Smoke Test: Sign Windows Artifacts (Manual)"
+
+# End-to-end smoke test for Windows Authenticode with real SSL.com eSigner secrets.
+# Requires repository secrets (same as NuGet signing in reusable_sign-artifacts):
+#   ES_USERNAME, ES_PASSWORD, CREDENTIAL_ID, ES_TOTP_SECRET
+#
+# Optional repository variable:
+#   WIN_SIGNING_PROGRAM_NAME — passed to sign-win-artifacts signing-identity (MSI display name)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  create-test-binaries:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@8d3c67de8e2fe68ef647c8db1e6a09f647780f40 # v2.19.0
+        with:
+          egress-policy: audit
+
+      - name: Create minimal unsigned Windows binaries
+        env:
+          TEST_VERSION: 0.0.0-smoke
+        run: |
+          set -euo pipefail
+          mkdir -p test-artifacts
+          head -c 2048 /dev/zero > "test-artifacts/smoke-win-${TEST_VERSION}.exe"
+          head -c 2048 /dev/zero > "test-artifacts/smoke-win-${TEST_VERSION}.msi"
+
+      - name: Upload unsigned artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: build-artifacts
+          path: test-artifacts
+
+  sign-win:
+    needs: create-test-binaries
+    uses: ./.github/workflows/reusable_sign-win-artifacts.yaml
+    with:
+      gh-unsigned-artifacts: build-artifacts
+      gh-workflows-ref: ${{ github.sha }}
+      signing-identity: ${{ vars.WIN_SIGNING_PROGRAM_NAME }}
+      artifact-glob: "*.exe"
+      dry-run: false
+      runs-on: windows-2025
+    secrets:
+      es-username: ${{ secrets.ES_USERNAME }}
+      es-password: ${{ secrets.ES_PASSWORD }}
+      credential_id: ${{ secrets.CREDENTIAL_ID }}
+      es-totp_secret: ${{ secrets.ES_TOTP_SECRET }}
+
+  verify:
+    needs: sign-win
+    runs-on: windows-2025
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@8d3c67de8e2fe68ef647c8db1e6a09f647780f40 # v2.19.0
+        with:
+          egress-policy: audit
+
+      - name: Download signed artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: build-artifacts
+          path: signed
+
+      - name: Verify Authenticode signature on .exe
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exe = Get-ChildItem -Path signed -Recurse -Filter 'smoke-win-*.exe' | Select-Object -First 1
+          if (-not $exe) { throw "Signed .exe not found under signed/" }
+          $sig = Get-AuthenticodeSignature -FilePath $exe.FullName
+          Write-Host "Signature status: $($sig.Status) - $($exe.FullName)"
+          if ($sig.Status -eq 'NotSigned') { throw "File is not signed" }
