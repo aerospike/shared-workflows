@@ -559,6 +559,17 @@ upload_go_packages() {
             --build-number="$ARTIFACT_BUILD_NUMBER" \
             --project="$PROJECT" \
             --target-props "$props"
+
+        # Upload SHA alias .info when workflow VERSION is a Git SHA.
+        # Reuses the same tmpfile so alias content is byte-identical to canonical.
+        if is_git_sha "$VERSION"; then
+            echo "  Uploading SHA alias .info: ${module_path}/@v/${VERSION}.info" >&2
+            run jf rt upload "$info_tmpfile" "$PROJECT-go-dev-local/${module_path}/@v/${VERSION}.info" \
+                --build-name="$BUILD_NAME" \
+                --build-number="$ARTIFACT_BUILD_NUMBER" \
+                --project="$PROJECT" \
+                --target-props "$props"
+        fi
         rm -f "$info_tmpfile"
 
         # Upload .asc companion for the zip
