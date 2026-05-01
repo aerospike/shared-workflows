@@ -281,6 +281,14 @@ echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/aeromod-v1.2.3.zip.asc"
 # charts (helm-native provenance signature), not a detached .asc. The .prov
 # fixture above is what arrives at deploy.
 
+# Windows installer payloads (win type: .exe / .msi / .msix)
+head -c 2048 /dev/zero >"$BUILD_ARTIFACTS_DIR/ci-win-fixture.exe"
+echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/ci-win-fixture.exe.asc"
+head -c 2048 /dev/zero >"$BUILD_ARTIFACTS_DIR/ci-win-fixture.msi"
+echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/ci-win-fixture.msi.asc"
+head -c 2048 /dev/zero >"$BUILD_ARTIFACTS_DIR/ci-win-fixture.msix"
+echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/ci-win-fixture.msix.asc"
+
 # Create unsigned-artifacts/ prefix to simulate sign stage output
 # The sign stage uses cp --parents which creates: signed-artifacts/unsigned-artifacts/...
 # Deploy receives this as: build-artifacts/unsigned-artifacts/...

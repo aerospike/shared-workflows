@@ -77,6 +77,12 @@ setup_test_artifacts() {
                 "$BUILD_ARTIFACTS_DIR/aeromod-v1.2.3.zip.asc"
                 "$BUILD_ARTIFACTS_DIR/aerospike-hello-0.4.2.tgz"
                 "$BUILD_ARTIFACTS_DIR/aerospike-hello-0.4.2.tgz.prov"
+                "$BUILD_ARTIFACTS_DIR/ci-win-fixture.exe"
+                "$BUILD_ARTIFACTS_DIR/ci-win-fixture.exe.asc"
+                "$BUILD_ARTIFACTS_DIR/ci-win-fixture.msi"
+                "$BUILD_ARTIFACTS_DIR/ci-win-fixture.msi.asc"
+                "$BUILD_ARTIFACTS_DIR/ci-win-fixture.msix"
+                "$BUILD_ARTIFACTS_DIR/ci-win-fixture.msix.asc"
         )
 
         for file in "${TEST_FILES[@]}"; do

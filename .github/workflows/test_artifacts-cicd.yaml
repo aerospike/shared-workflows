@@ -50,6 +50,12 @@ jobs:
             "arch":"arm64",
             "runs-on":"macos-14",
             "build-script":"mkdir -p packaged && echo 'test-pkg-payload' > /tmp/test-binary && pkgbuild --root /tmp --identifier com.aerospike.test --version 1.0.0-test --install-location /usr/local/bin packaged/test-1.0.0-test-darwin-arm64.pkg"
+          },
+          {
+            "distro":"win10",
+            "arch":"x64",
+            "runs-on":"ubuntu-latest",
+            "build-script":"mkdir -p packaged && for f in ci-win-upload-artifact.exe ci-win-upload-artifact.msi ci-win-upload-artifact.msix; do head -c 2048 /dev/zero > packaged/$f; done"
           }
         ]}
       dry-run: true

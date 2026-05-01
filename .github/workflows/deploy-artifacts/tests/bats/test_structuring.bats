@@ -69,19 +69,22 @@ teardown() {
     [[ "$nupkg_count" -eq 0 ]]
 }
 
-@test "Windows .exe routes to win dir not generic; dry-run upload targets generic-dev-local" {
-    echo "fake-exe-payload" >"$BUILD_ARTIFACTS_DIR/ci-win-routing-test.exe"
+@test "Windows .exe .msi .msix route to win dir not generic; dry-run upload targets generic-dev-local" {
     local output
     output=$(run_entrypoint_dry_run "test-project" "test-build" "v1.0.0" "12345" "12345-metadata")
 
-    [[ -f "structured_build_artifacts/win/ci-win-routing-test.exe" ]]
-    local generic_exe_count
-    generic_exe_count=$(find structured_build_artifacts/generic -name "*.exe" 2>/dev/null | wc -l | tr -d ' ')
-    [[ "$generic_exe_count" -eq 0 ]]
+    [[ -f "structured_build_artifacts/win/ci-win-fixture.exe" ]]
+    [[ -f "structured_build_artifacts/win/ci-win-fixture.msi" ]]
+    [[ -f "structured_build_artifacts/win/ci-win-fixture.msix" ]]
+    local generic_win_count
+    generic_win_count=$(find structured_build_artifacts/generic \( -name "*.exe" -o -name "*.msi" -o -name "*.msix" \) 2>/dev/null | wc -l | tr -d ' ')
+    [[ "$generic_win_count" -eq 0 ]]
 
     local cmds
     cmds=$(extract_upload_commands "$output")
-    echo "$cmds" | grep -qF "ci-win-routing-test.exe"
+    echo "$cmds" | grep -qF "ci-win-fixture.exe"
+    echo "$cmds" | grep -qF "ci-win-fixture.msi"
+    echo "$cmds" | grep -qF "ci-win-fixture.msix"
     echo "$cmds" | grep -qF "generic-dev-local"
     [[ "$cmds" != *win-dev-local* ]]
 }

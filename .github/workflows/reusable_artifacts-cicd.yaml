@@ -228,6 +228,13 @@ on:
         type: string
         default: ""
 
+      # Windows signing (optional; runs after sign-mac; uses SSL.com eSigner / CodeSignTool)
+      sign-windows:
+        description: Enable Windows code signing (.exe, .msi, .msix)
+        required: false
+        type: boolean
+        default: false
+
     secrets:
       gpg-private-key:
         required: true
@@ -400,9 +407,21 @@ jobs:
       dry-run: ${{ inputs.dry-run }}
     secrets: inherit
 
-  sign:
+  sign-windows:
+    if: inputs.sign-windows && always() && !cancelled() && needs.collect-matrix-artifacts.result == 'success' && needs.sign-mac.result != 'failure'
     needs: [resolve, collect-matrix-artifacts, sign-mac]
-    if: always() && !cancelled() && needs.collect-matrix-artifacts.result == 'success' && needs.sign-mac.result != 'failure'
+    uses: ./.github/workflows/reusable_sign-win-artifacts.yaml
+    with:
+      dry-run: ${{ inputs.dry-run }}
+      gh-checkout-path: ${{ inputs.gh-checkout-path }}
+      gh-retention-days: ${{ inputs.gh-retention-days }}
+      gh-unsigned-artifacts: build-artifacts
+      gh-workflows-ref: ${{ inputs.gh-workflows-ref }}
+    secrets: inherit
+
+  sign:
+    needs: [resolve, collect-matrix-artifacts, sign-mac, sign-windows]
+    if: always() && !cancelled() && needs.collect-matrix-artifacts.result == 'success' && needs.sign-mac.result != 'failure' && needs.sign-windows.result != 'failure'
     uses: ./.github/workflows/reusable_sign-artifacts.yaml
     with:
       gh-artifact-name: signed-artifacts
