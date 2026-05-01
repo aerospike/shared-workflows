@@ -23,7 +23,7 @@ All types also include `build.type` and `internal` properties when those inputs 
 
 The deploy pipeline uses a centralized type registry (`type_registry.sh`). To add a new type:
 
-1. Add entries to the config arrays in `type_registry.sh` (`TYPE_EXTENSIONS`, `TYPE_REPO`, `TYPE_COMPANIONS`, `TYPE_STRUCT_DIR`)
+1. Call `register_type` in `type_registry.sh` with `--extension` (single `find -name` glob) or `--extensions` (comma-separated globs, e.g. `*.whl,*.tar.gz`), plus `--repo`, companions, etc.
 2. Add `type` to `UPLOAD_ORDER` (before `generic`)
 3. Add a `get_TYPE_props()` function in `type_registry.sh`
 4. Add a `process_TYPE()` function in `package_utils.sh` (or reuse `process_generic`)

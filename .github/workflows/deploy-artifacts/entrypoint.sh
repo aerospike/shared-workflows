@@ -239,7 +239,11 @@ structure_build_artifacts() {
         local processor="process_${type}"
         # snupkg uses process_nupkg
         [[ $type == "snupkg" ]] && processor="process_nupkg"
-        discover_and_process "${TYPE_EXTENSIONS[$type]}" "$label" "$processor" "$dest" "$type"
+        local pat
+        while IFS= read -r pat; do
+            [[ -z $pat ]] && continue
+            discover_and_process "$pat" "$label" "$processor" "$dest" "$type"
+        done < <(emit_type_extension_globs "${TYPE_EXTENSIONS[$type]}")
     done
 
     # Content-detected types: ambiguous extensions need inspection to determine type

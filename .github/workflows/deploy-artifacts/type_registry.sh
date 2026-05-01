@@ -7,6 +7,9 @@
 #   3. Add a process_TYPE() function in package_utils.sh (or reuse process_generic)
 #   4. Add tests
 #
+# Extension globs: use --extension for a single find -name pattern, or --extensions for
+# several comma-separated patterns (e.g. "*.whl,*.tar.gz"). Spaces after commas are trimmed.
+#
 # Required globals (set by entrypoint.sh before sourcing):
 #   VERSION, BUILD_NAME, PROJECT, BUILD_TYPE, INTERNAL
 
@@ -25,11 +28,16 @@ CONTENT_DETECT_ORDER=()
 register_type() {
     local type="$1"
     shift
+    # extension: single glob (--extension) or comma-separated globs (--extensions); stored in TYPE_EXTENSIONS
     local extension="" repo="" companions=".asc" struct_dir="$type" detect=""
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
         --extension)
+            extension="$2"
+            shift 2
+            ;;
+        --extensions)
             extension="$2"
             shift 2
             ;;
@@ -99,12 +107,29 @@ UPLOAD_ORDER=(rpm deb jar nupkg npm pypi go helm generic)
 
 # --- helpers ---
 
+# Emit one line per find -name glob. TYPE_EXTENSIONS values may be comma-separated (--extensions).
+emit_type_extension_globs() {
+    local csv="$1"
+    [[ -z $csv ]] && return 0
+    local IFS=,
+    read -ra parts <<<"$csv" || true
+    local p
+    for p in "${parts[@]}"; do
+        p="${p#"${p%%[![:space:]]*}"}"
+        p="${p%"${p##*[![:space:]]}"}"
+        [[ -n $p ]] && printf '%s\n' "$p"
+    done
+}
+
 # Returns the list of all known file extensions (primary + content-detected + companion + build).
 # Used to build the negated find pattern for generic file discovery.
 get_known_extensions() {
     local -a exts=()
-    for ext_pattern in "${TYPE_EXTENSIONS[@]}"; do
-        exts+=("$ext_pattern")
+    local ext_group line
+    for ext_group in "${TYPE_EXTENSIONS[@]}"; do
+        while IFS= read -r line; do
+            [[ -n $line ]] && exts+=("$line")
+        done < <(emit_type_extension_globs "$ext_group")
     done
     # Content-detected extensions (ambiguous types like .tgz/.tar.gz)
     exts+=("${CONTENT_DETECT_EXTENSIONS[@]}")

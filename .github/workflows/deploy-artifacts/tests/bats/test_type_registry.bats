@@ -106,6 +106,23 @@ setup() {
     [[ "$exts" == *"*.whl"* ]]
 }
 
+@test "emit_type_extension_globs splits on comma and trims spaces" {
+    local out
+    out=$(emit_type_extension_globs "*.a, *.b ,*.c")
+    [[ $(echo "$out" | wc -l | tr -d ' ') -eq 3 ]]
+    echo "$out" | grep -qxF '*.a'
+    echo "$out" | grep -qxF '*.b'
+    echo "$out" | grep -qxF '*.c'
+}
+
+@test "get_known_extensions emits one line per glob for comma-separated TYPE_EXTENSIONS" {
+    TYPE_EXTENSIONS[multitype]="*.one, *.two"
+    local exts
+    exts=$(get_known_extensions)
+    [[ $(echo "$exts" | grep -cF '*.one') -eq 1 ]]
+    echo "$exts" | grep -qF '*.two'
+}
+
 @test "get_known_extensions includes content-detected, companion, and build file extensions" {
     local exts
     exts=$(get_known_extensions)
