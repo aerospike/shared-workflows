@@ -4,7 +4,8 @@
 # Required globals (set by entrypoint.sh before sourcing):
 #   BUILD_NAME, ARTIFACT_BUILD_NUMBER, PROJECT, DRY_RUN
 #   run() must be defined before this file is sourced (entrypoint defines it first).
-#   Call jf_upload only as: run jf_upload <file> <repo> [extra-flags...] so dry-run skips real uploads.
+#   Call jf_upload only as: run jf_upload <file> <repo> [extra-flags...] so dry-run invokes
+#   jf_upload (which logs the real `jf rt upload …` line) instead of calling jf.
 #   TYPE_EXTENSIONS, TYPE_COMPANIONS, TYPE_REPO, TYPE_STRUCT_DIR arrays from type_registry.sh
 
 # --- Manifest helpers ---
@@ -54,11 +55,24 @@ manifest_for_type() {
 # Wraps `jf rt upload` with the standard flags that every upload needs.
 # Usage: run jf_upload <file> <repo> [extra-flags...]
 # Automatically adds: --flat=false --build-name --build-number --project
-# Must be invoked through run() so --dry-run does not call the real CLI.
+# Must be invoked through run() so dry-run dispatches here instead of echoing `jf_upload …`.
 jf_upload() {
     local file="$1"
     local repo="$2"
     shift 2
+    if [[ ${DRY_RUN-} == "true" ]]; then
+        # Use %s (not %q): %q escapes semicolons in --target-props and breaks bats parsers.
+        {
+            printf 'Would run: '
+            printf '%s ' jf rt upload "$file" "$repo" --flat=false \
+                "--build-name=$BUILD_NAME" \
+                "--build-number=$ARTIFACT_BUILD_NUMBER" \
+                "--project=$PROJECT"
+            (($# > 0)) && printf '%s ' "$@"
+            printf '\n'
+        } >&2
+        return 0
+    fi
     jf rt upload "$file" "$repo" --flat=false \
         --build-name="$BUILD_NAME" \
         --build-number="$ARTIFACT_BUILD_NUMBER" \

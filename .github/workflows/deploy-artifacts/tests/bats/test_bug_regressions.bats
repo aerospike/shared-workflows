@@ -24,7 +24,7 @@ teardown() {
 
     # Extract only actual upload commands (strip ANSI codes)
     local upload_cmds
-    upload_cmds=$(echo "$output" | sed 's/\x1b\[[0-9;]*m//g' | grep -E "^\s*jf rt upload" || true)
+    upload_cmds=$(echo "$output" | sed 's/\x1b\[[0-9;]*m//g' | grep -E "jf rt upload" || true)
 
     # Find all .asc files in the fixture directory.
     # Exclude .md5.asc/.sha1.asc: Maven Central convention is that checksums

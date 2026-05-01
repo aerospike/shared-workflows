@@ -118,38 +118,24 @@ fi
 
 ARTIFACT_BUILD_NUMBER="$BUILD_NUMBER-artifacts"
 
-# Source utilities (run must exist before upload_utils.sh — it wraps jf_upload for dry-run)
+# Source utilities (run must exist before upload_utils.sh)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Wrapper function that either executes or echoes commands
+# Wrapper: execute, or in dry-run log what would run (`Would run: …`). jf_upload is a
+# shell function, so dry-run must invoke it (jf_upload prints the same prefix + `jf rt upload …`);
+# printing "$*" would only show `jf_upload …`.
 run() {
-    if [[ $DRY_RUN == "true" ]]; then
-        # Define color variables
-        local green='\033[0;32m'
-        local reset='\033[0m'
-
-        # run jf_upload … prints jf_upload to stderr; tests and parse_jf_upload_command expect
-        # the real CLI line (same as jf_upload invokes in non-dry-run).
-        if [[ ${1-} == jf_upload ]]; then
-            shift
-            local file="$1" repo="$2"
-            shift 2
-            {
-                printf '%s' "$green   "
-                printf '%q ' jf rt upload "$file" "$repo" --flat=false \
-                    "--build-name=$BUILD_NAME" \
-                    "--build-number=$ARTIFACT_BUILD_NUMBER" \
-                    "--project=$PROJECT"
-                (($# > 0)) && printf '%q ' "$@"
-                printf '%s\n' "$reset"
-            } >&2
-            return 0
-        fi
-
-        echo -e "${green}   $*${reset}" >&2
-    else
+    if [[ $DRY_RUN != "true" ]]; then
         "$@"
+        return
     fi
+    # jf_upload is a shell function, so dry-run must invoke it (jf_upload prints the same prefix + `jf rt upload …`);
+    # printing "$*" would only show `jf_upload …`.
+    if [[ ${1-} == jf_upload ]]; then
+        "$@"
+        return
+    fi
+    printf 'Would run: %s\n' "$*" >&2
 }
 
 run_optional() {

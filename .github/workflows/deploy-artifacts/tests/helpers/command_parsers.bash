@@ -264,6 +264,7 @@ extract_nuget_commands() {
 # Returns: array of commands (one per line)
 extract_build_commands() {
         local output="$1"
-        # Strip ANSI color codes and extract commands with leading spaces
-        echo "$output" | sed 's/\x1b\[[0-9;]*m//g' | grep -E "^\s+jf rt build-" | sed 's/^\s*//'
+        # Strip ANSI; match build lines (dry-run prefixes with "Would run: ")
+        echo "$output" | sed 's/\x1b\[[0-9;]*m//g' | grep -E "jf rt build-" |
+                sed -e 's/^Would run: //' -e 's/^[[:space:]]*//'
 }
