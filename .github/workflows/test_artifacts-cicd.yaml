@@ -55,7 +55,7 @@ jobs:
             "distro":"win10",
             "arch":"x64",
             "runs-on":"ubuntu-latest",
-            "build-script":"mkdir -p packaged && for f in ci-win-upload-artifact.exe ci-win-upload-artifact.msi ci-win-upload-artifact.msix; do head -c 2048 /dev/zero > packaged/$f; done"
+            "build-script":"mkdir -p packaged && head -c 2048 /dev/zero > packaged/ci-win-upload-artifact.exe && head -c 2048 /dev/zero > packaged/ci-win-upload-artifact.msi && head -c 2048 /dev/zero > packaged/ci-win-upload-artifact.msix"
           }
         ]}
       dry-run: true
