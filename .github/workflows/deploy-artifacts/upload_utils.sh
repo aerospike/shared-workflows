@@ -3,7 +3,8 @@
 #
 # Required globals (set by entrypoint.sh before sourcing):
 #   BUILD_NAME, ARTIFACT_BUILD_NUMBER, PROJECT, DRY_RUN
-#   run() function must be defined
+#   run() must be defined before this file is sourced (entrypoint defines it first).
+#   Call jf_upload only as: run jf_upload <file> <repo> [extra-flags...] so dry-run skips real uploads.
 #   TYPE_EXTENSIONS, TYPE_COMPANIONS, TYPE_REPO, TYPE_STRUCT_DIR arrays from type_registry.sh
 
 # --- Manifest helpers ---
@@ -51,13 +52,14 @@ manifest_for_type() {
 # --- Upload helpers ---
 
 # Wraps `jf rt upload` with the standard flags that every upload needs.
-# Usage: jf_upload <file> <repo> [extra-flags...]
+# Usage: run jf_upload <file> <repo> [extra-flags...]
 # Automatically adds: --flat=false --build-name --build-number --project
+# Must be invoked through run() so --dry-run does not call the real CLI.
 jf_upload() {
     local file="$1"
     local repo="$2"
     shift 2
-    run jf rt upload "$file" "$repo" --flat=false \
+    jf rt upload "$file" "$repo" --flat=false \
         --build-name="$BUILD_NAME" \
         --build-number="$ARTIFACT_BUILD_NUMBER" \
         --project="$PROJECT" \
@@ -76,7 +78,7 @@ upload_companions() {
     for suffix in $companions; do
         if [[ -f "$file$suffix" ]]; then
             echo "  Uploading companion: $file$suffix" >&2
-            jf_upload "$file$suffix" "$repo"
+            run jf_upload "$file$suffix" "$repo"
         fi
     done
 }
@@ -174,7 +176,7 @@ upload_type() {
             extra_flags+=("${ef[@]}")
         fi
 
-        jf_upload "$file" "$repo" "${extra_flags[@]}"
+        run jf_upload "$file" "$repo" "${extra_flags[@]}"
         upload_companions "$file" "$repo" "$type"
     }
 

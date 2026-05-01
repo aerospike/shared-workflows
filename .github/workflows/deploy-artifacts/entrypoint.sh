@@ -118,14 +118,8 @@ fi
 
 ARTIFACT_BUILD_NUMBER="$BUILD_NUMBER-artifacts"
 
-# Source utilities
+# Source utilities (run must exist before upload_utils.sh — it wraps jf_upload for dry-run)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck disable=SC1091
-source "$SCRIPT_DIR/package_utils.sh"
-# shellcheck disable=SC1091
-source "$SCRIPT_DIR/type_registry.sh"
-# shellcheck disable=SC1091
-source "$SCRIPT_DIR/upload_utils.sh"
 
 # Wrapper function that either executes or echoes commands
 run() {
@@ -133,6 +127,24 @@ run() {
         # Define color variables
         local green='\033[0;32m'
         local reset='\033[0m'
+
+        # run jf_upload … prints jf_upload to stderr; tests and parse_jf_upload_command expect
+        # the real CLI line (same as jf_upload invokes in non-dry-run).
+        if [[ ${1-} == jf_upload ]]; then
+            shift
+            local file="$1" repo="$2"
+            shift 2
+            {
+                printf '%s' "$green   "
+                printf '%q ' jf rt upload "$file" "$repo" --flat=false \
+                    "--build-name=$BUILD_NAME" \
+                    "--build-number=$ARTIFACT_BUILD_NUMBER" \
+                    "--project=$PROJECT"
+                (($# > 0)) && printf '%q ' "$@"
+                printf '%s\n' "$reset"
+            } >&2
+            return 0
+        fi
 
         echo -e "${green}   $*${reset}" >&2
     else
@@ -143,6 +155,13 @@ run() {
 run_optional() {
     run "$@" || echo "Warning: $*" >&2
 }
+
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/package_utils.sh"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/type_registry.sh"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/upload_utils.sh"
 
 structure_standalone_poms() {
     while IFS= read -r -d '' pom; do
@@ -335,7 +354,7 @@ upload_jar_packages() {
                         --target-props "$props"
                     ;;
                 *)
-                    jf_upload "$artifact_file" "$PROJECT-maven-dev-local" \
+                    run jf_upload "$artifact_file" "$PROJECT-maven-dev-local" \
                         --target-props "$props"
                     ;;
                 esac

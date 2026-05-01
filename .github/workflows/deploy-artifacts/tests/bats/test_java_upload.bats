@@ -318,3 +318,11 @@ teardown_file() {
   done
 }
 
+@test "parse_jf_upload_command tolerates ANSI and leading spaces before jf rt upload" {
+  local cmd parse_output
+  cmd=$'\033[0;32m   jf rt upload ./pkg.deb myrepo --flat=false --build-name=b --build-number=1-artifacts --project=p'
+  parse_output=$(parse_jf_upload_command "$cmd")
+  echo "$parse_output" | grep -q '^file_path=./pkg.deb$'
+  echo "$parse_output" | grep -q '^repo=myrepo$'
+}
+
