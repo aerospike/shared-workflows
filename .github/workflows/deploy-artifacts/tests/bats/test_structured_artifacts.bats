@@ -40,6 +40,7 @@ teardown_file() {
   # this list will grow as we have more types such as nupkg, etc.
   [[ -d "$TEST_DIR/structured_build_artifacts/deb" ]]
   [[ -d "$TEST_DIR/structured_build_artifacts/rpm" ]]
+  [[ -d "$TEST_DIR/structured_build_artifacts/win" ]]
   [[ -d "$TEST_DIR/structured_build_artifacts/generic" ]]
 }
 

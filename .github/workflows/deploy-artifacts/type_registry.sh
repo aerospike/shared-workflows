@@ -94,6 +94,8 @@ register_type go --repo "go-dev-local" --detect "is_go_module"
 # companions=".prov" carries the helm-native provenance signature
 # (GPG-clearsigned Chart.yaml + sha256) produced by sign-artifacts.
 register_type helm --repo "helm-dev-local" --detect "is_helm_chart" --companions ".prov"
+# Windows installers / packages (exe, msi, msix); structured and uploaded like generic.
+register_type win --extensions "*.exe,*.msi,*.msix" --repo "generic-dev-local"
 register_type generic --repo "generic-dev-local"
 
 # Ambiguous extensions that trigger content-based detection.
@@ -103,7 +105,7 @@ register_type generic --repo "generic-dev-local"
 CONTENT_DETECT_EXTENSIONS=("*.tgz" "*.tar.gz" "*.zip")
 
 # Upload order matters: jar before generic (jar can move files to generic)
-UPLOAD_ORDER=(rpm deb jar nupkg npm pypi go helm generic)
+UPLOAD_ORDER=(rpm deb jar nupkg npm pypi go win helm generic)
 
 # --- helpers ---
 
@@ -249,4 +251,8 @@ get_generic_props() {
     local filename
     filename=$(basename "$file")
     echo "$(get_base_props);package_name=$filename"
+}
+
+get_win_props() {
+    get_generic_props "$1"
 }
