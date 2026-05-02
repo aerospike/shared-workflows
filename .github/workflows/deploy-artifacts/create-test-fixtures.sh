@@ -179,6 +179,48 @@ echo "Manifest-Version: 1.0" >"$BUILD_ARTIFACTS_DIR/temp-jar/META-INF/MANIFEST.M
 cd "$BUILD_ARTIFACTS_DIR/temp-jar" && zip -q -r "../test.jar" . && cd - >/dev/null
 rm -rf "$BUILD_ARTIFACTS_DIR/temp-jar"
 
+# Create a Maven POM next to the JAR. Maven publishes artifacts as a
+# (jar, pom, .md5, .sha1, .asc) bundle that share the same stem; this fixture
+# exercises that grouping in the deploy-artifacts logic.
+cat >"$BUILD_ARTIFACTS_DIR/test.pom" <<'POM'
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>com.example.test</groupId>
+  <artifactId>test</artifactId>
+  <version>1.0.0</version>
+</project>
+POM
+echo "  Created test.pom (Maven POM companion)"
+
+# Maven sidecar checksums (.md5, .sha1) computed from the actual files —
+# JFrog Artifactory rejects checksum sidecars whose content isn't a valid
+# hash format, so empty placeholders won't survive an end-to-end upload.
+md5sum "$BUILD_ARTIFACTS_DIR/test.jar" >"$BUILD_ARTIFACTS_DIR/test.jar.md5"
+sha1sum "$BUILD_ARTIFACTS_DIR/test.jar" >"$BUILD_ARTIFACTS_DIR/test.jar.sha1"
+md5sum "$BUILD_ARTIFACTS_DIR/test.pom" >"$BUILD_ARTIFACTS_DIR/test.pom.md5"
+sha1sum "$BUILD_ARTIFACTS_DIR/test.pom" >"$BUILD_ARTIFACTS_DIR/test.pom.sha1"
+echo "  Created Maven sidecar checksums (test.{jar,pom}.{md5,sha1})"
+
+# Standalone POM (BOM/parent-only) — has no companion JAR. structure_standalone_poms
+# must still publish its sidecars; without that, the .md5/.sha1 fall through to
+# structure_generic_files and get skipped because *.md5/*.sha1 are reserved for
+# JAR processing in get_known_extensions.
+cat >"$BUILD_ARTIFACTS_DIR/standalone-bom.pom" <<'POM'
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>com.example.bom</groupId>
+  <artifactId>standalone-bom</artifactId>
+  <version>1.0.0</version>
+  <packaging>pom</packaging>
+</project>
+POM
+md5sum "$BUILD_ARTIFACTS_DIR/standalone-bom.pom" >"$BUILD_ARTIFACTS_DIR/standalone-bom.pom.md5"
+sha1sum "$BUILD_ARTIFACTS_DIR/standalone-bom.pom" >"$BUILD_ARTIFACTS_DIR/standalone-bom.pom.sha1"
+echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/standalone-bom.pom.asc"
+echo "  Created standalone POM (standalone-bom.pom + .md5/.sha1/.asc)"
+
 # Create a valid ZIP file
 echo "test zip content" >"$BUILD_ARTIFACTS_DIR/temp-zip-content.txt"
 cd "$BUILD_ARTIFACTS_DIR" && zip -q "test.zip" "temp-zip-content.txt" && cd - >/dev/null
@@ -213,6 +255,13 @@ fi
 # In production, the sign stage creates these alongside every artifact
 echo "Creating .asc companion files..."
 echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/test.jar.asc"
+echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/test.pom.asc"
+# Signed Maven sidecar checksums: the sign stage GPG-signs every non-.asc file,
+# which includes .md5/.sha1, producing .md5.asc/.sha1.asc companions.
+echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/test.jar.md5.asc"
+echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/test.jar.sha1.asc"
+echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/test.pom.md5.asc"
+echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/test.pom.sha1.asc"
 echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/test-ubuntu22.04.deb.asc"
 echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/test-1.0-2.el9.noarch.rpm.asc"
 echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/test-all-arch_1.0.0-1ubuntu22.04_all.deb.asc"

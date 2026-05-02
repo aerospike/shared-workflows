@@ -87,8 +87,11 @@ get_manifest() {
 @test "manifest does not contain companion files" {
     local manifest
     manifest=$(get_manifest)
-    ! echo "$manifest" | grep -q '\.asc'
-    ! echo "$manifest" | grep -q '\.pom'
+    # Companion suffixes are .asc / .md5 / .sha1. Bare .pom is a primary for
+    # standalone POMs (BOM/parent releases) so it is intentionally not
+    # excluded — process_jar handles JAR-companion POMs without manifesting
+    # them, and structure_standalone_poms manifests JAR-less POMs as primaries.
+    ! echo "$manifest" | grep -qE '\.(asc|md5|sha1)([[:space:]]|$)'
 }
 
 # --- Content detection tests ---
@@ -138,13 +141,18 @@ get_manifest() {
     local manifest_paths
     manifest_paths=$(cut -f1 structured_build_artifacts/.manifest | sort)
 
-    # Find all primary files (exclude companions)
+    # Find all primary files (exclude companions).
+    # .md5/.sha1 are Maven sidecar checksums copied alongside the JAR by
+    # process_jar; they're companions, not primaries, and the upload step
+    # routes them off the manifest path.
     local structured_files
     structured_files=$(find structured_build_artifacts -type f \
         -not -name "*.asc" \
         -not -name "*.pom" \
         -not -name "*.pom.asc" \
         -not -name "*.prov" \
+        -not -name "*.md5" \
+        -not -name "*.sha1" \
         -not -name "*.csproj" \
         -not -name ".manifest" \
         | sort)

@@ -109,7 +109,10 @@ get_known_extensions() {
     # Content-detected extensions (ambiguous types like .tgz/.tar.gz)
     exts+=("${CONTENT_DETECT_EXTENSIONS[@]}")
     # Companion and build file extensions
-    exts+=("*.asc" "*.prov" "*.pom" "*.csproj" "docker-images.json")
+    # Maven sidecar checksums (.md5/.sha1) belong to JAR processing: exclude them
+    # from the generic find pass so they aren't double-structured into the
+    # generic repo. process_jar copies them into the structured jar tree.
+    exts+=("*.asc" "*.prov" "*.pom" "*.csproj" "docker-images.json" "*.md5" "*.sha1")
     printf '%s\n' "${exts[@]}"
 }
 
