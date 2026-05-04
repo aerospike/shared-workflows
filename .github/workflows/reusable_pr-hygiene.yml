@@ -127,7 +127,7 @@ jobs:
             exit 0
           fi
 
-          JIRA_TICKET=$(echo "$PR_TITLE" | grep -oP '^[a-z]+(\([a-z0-9-]+\))?: \[\K[A-Z]{2,10}-[0-9]+(?=\] )' | head -1)
+          JIRA_TICKET=$(echo "$PR_TITLE" | grep -oP '^[a-z]+(\([a-z0-9-_]+\))?: \[\K[A-Z]{2,10}-[0-9]+(?=\] )' | head -1)
           if [ -z "$JIRA_TICKET" ]; then
             echo "❌ ERROR: No JIRA ticket found in PR title!"
             echo "PR title must follow: type(scope): [JIRA-123] description"
