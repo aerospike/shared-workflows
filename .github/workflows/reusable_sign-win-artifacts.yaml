@@ -14,7 +14,9 @@ on:
 
       # Optional inputs
       artifact-glob:
-        description: Glob pattern to select which files CodeSignTool may sign (.exe, .msi, .msix; controls signing scope, not download scope)
+        description: |
+          Glob pattern(s) for files CodeSignTool may sign (.exe, .msi, .msix). Single pattern or comma-separated
+          list (optional spaces), e.g. "*.exe,*.msi,*.msix". Default **/* signs all supported extensions under the tree.
         required: false
         type: string
         default: "**/*"

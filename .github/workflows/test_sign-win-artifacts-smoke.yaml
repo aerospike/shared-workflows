@@ -45,7 +45,7 @@ jobs:
       gh-unsigned-artifacts: build-artifacts
       gh-workflows-ref: ${{ github.sha }}
       signing-identity: ${{ vars.WIN_SIGNING_PROGRAM_NAME }}
-      artifact-glob: "*.exe"
+      artifact-glob: "*.exe,*.msi"
       dry-run: false
       runs-on: windows-2025
     secrets:

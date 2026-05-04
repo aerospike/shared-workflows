@@ -10,17 +10,17 @@ The default runner is **`windows-2025`** (Git Bash) so **CodeSignTool.bat** from
 
 ## Inputs
 
-| Name                    | Type      | Required | Description                                                                                    |
-| ----------------------- | --------- | -------- | ---------------------------------------------------------------------------------------------- |
-| `gh-workflows-ref`      | `string`  | Yes      | Git ref for shared-workflows (**must match your `uses:` version**)                             |
-| `artifact-glob`         | `string`  | No       | Glob for files considered for signing (default: `**/*`). Full tree is always copied.           |
-| `codesigntool-version`  | `string`  | No       | CodeSignTool release to install from GitHub (default: `1.3.2`). Ignored when `dry-run: true`.  |
-| `dry-run`               | `boolean` | No       | Skip CodeSignTool and eSigner secret requirements. Default: `false`                            |
-| `gh-checkout-path`      | `string`  | No       | Checkout path for shared-workflows. Default: `shared-workflows`                                |
-| `gh-retention-days`     | `number`  | No       | Artifact retention days. Default: `1`                                                          |
-| `gh-unsigned-artifacts` | `string`  | No       | GitHub artifact name to download and overwrite. Default: `build-artifacts`                     |
-| `runs-on`               | `string`  | No       | Runner label. Default: `windows-2025` (Git Bash; Linux values still install `CodeSignTool.sh`) |
-| `signing-identity`      | `string`  | No       | Optional MSI display name (CodeSignTool `-program_name`). Often your product name.             |
+| Name                    | Type      | Required | Description                                                                                                                                                         |
+| ----------------------- | --------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `gh-workflows-ref`      | `string`  | Yes      | Git ref for shared-workflows (**must match your `uses:` version**)                                                                                                  |
+| `artifact-glob`         | `string`  | No       | Glob for signing scope (default: `**/*`). Use one pattern or **comma-separated** patterns (spaces optional), e.g. `*.exe,*.msi,*.msix`. Full tree is always copied. |
+| `codesigntool-version`  | `string`  | No       | CodeSignTool release to install from GitHub (default: `1.3.2`). Ignored when `dry-run: true`.                                                                       |
+| `dry-run`               | `boolean` | No       | Skip CodeSignTool and eSigner secret requirements. Default: `false`                                                                                                 |
+| `gh-checkout-path`      | `string`  | No       | Checkout path for shared-workflows. Default: `shared-workflows`                                                                                                     |
+| `gh-retention-days`     | `number`  | No       | Artifact retention days. Default: `1`                                                                                                                               |
+| `gh-unsigned-artifacts` | `string`  | No       | GitHub artifact name to download and overwrite. Default: `build-artifacts`                                                                                          |
+| `runs-on`               | `string`  | No       | Runner label. Default: `windows-2025` (Git Bash; Linux values still install `CodeSignTool.sh`)                                                                      |
+| `signing-identity`      | `string`  | No       | Optional MSI display name (CodeSignTool `-program_name`). Often your product name.                                                                                  |
 
 ## Secrets
 
@@ -47,7 +47,7 @@ jobs:
       gh-unsigned-artifacts: build-artifacts
       gh-workflows-ref: v4.0.0
       signing-identity: "My Product Installer"
-      artifact-glob: "*.msi"
+      artifact-glob: "*.exe,*.msi,*.msix"
     secrets:
       es-username: ${{ secrets.ES_USERNAME }}
       es-password: ${{ secrets.ES_PASSWORD }}

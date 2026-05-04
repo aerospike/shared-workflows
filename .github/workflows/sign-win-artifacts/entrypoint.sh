@@ -37,7 +37,8 @@ Options:
   --source-dir DIR       Directory containing unsigned artifacts (required)
   --target-dir DIR       Output directory for signed artifacts (required)
   --artifact-glob GLOB   Glob pattern for files to consider for signing (default: **/*).
-                         Controls signing scope only; the full tree is always copied.
+                         Use a single pattern, or several comma-separated patterns (optional spaces),
+                         e.g. '*.exe,*.msi,*.msix'. Controls signing scope only; the full tree is always copied.
   --dry-run              Print commands without executing
   --help                 Show this help message
 
@@ -53,7 +54,7 @@ Environment variables (optional):
 
 Examples:
   entrypoint.sh --source-dir unsigned-artifacts --target-dir signed-output
-  entrypoint.sh --source-dir unsigned-artifacts --target-dir signed-output --artifact-glob '*.exe'
+  entrypoint.sh --source-dir unsigned-artifacts --target-dir signed-output --artifact-glob '*.exe,*.msi,*.msix'
   entrypoint.sh --source-dir unsigned-artifacts --target-dir signed-output --dry-run
 EOF
 }
@@ -129,14 +130,10 @@ resolve_codesigntool() {
     exit 1
 }
 
-# --- Glob matching (same semantics as sign-mac-artifacts) ---
-matches_glob() {
+# --- Glob matching (same semantics as sign-mac-artifacts, plus comma-separated alternates) ---
+_matches_single_glob() {
     local file="$1"
     local pattern="$2"
-
-    if [[ $pattern == "**/*" ]]; then
-        return 0
-    fi
 
     local filename
     filename=$(basename "$file")
@@ -152,6 +149,34 @@ matches_glob() {
     esac
 
     return 1
+}
+
+matches_glob() {
+    local file="$1"
+    local pattern="$2"
+
+    if [[ $pattern == "**/*" ]]; then
+        return 0
+    fi
+
+    # Multiple patterns: comma-separated (e.g. "*.exe,*.msi,*.msix")
+    if [[ $pattern == *","* ]]; then
+        local IFS=,
+        local -a parts
+        read -ra parts <<<"$pattern"
+        local p trimmed
+        for p in "${parts[@]}"; do
+            trimmed="${p#"${p%%[![:space:]]*}"}"
+            trimmed="${trimmed%"${trimmed##*[![:space:]]}"}"
+            [[ -z $trimmed ]] && continue
+            if matches_glob "$file" "$trimmed"; then
+                return 0
+            fi
+        done
+        return 1
+    fi
+
+    _matches_single_glob "$file" "$pattern"
 }
 
 lower_ext() {

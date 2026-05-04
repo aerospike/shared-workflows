@@ -235,7 +235,9 @@ on:
         type: boolean
         default: false
       win-artifact-glob:
-        description: Glob for Windows signing scope (passed to sign-win-artifacts)
+        description: |
+          Glob(s) for Windows signing scope (passed to sign-win-artifacts artifact-glob). One pattern or comma-separated,
+          e.g. "*.exe,*.msi,*.msix". Default **/*
         required: false
         type: string
         default: "**/*"

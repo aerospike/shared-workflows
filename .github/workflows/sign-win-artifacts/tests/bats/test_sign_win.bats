@@ -126,6 +126,22 @@ setup() {
   [[ "$(cat "$TARGET_DIR/app.exe")" == "fake-exe" ]]
 }
 
+@test "comma-separated artifact-glob signs multiple Windows types" {
+  echo "fake-exe" > "$SOURCE_DIR/app.exe"
+  echo "fake-msi" > "$SOURCE_DIR/setup.msi"
+  echo "fake-msix" > "$SOURCE_DIR/bundle.msix"
+  echo "fake-deb" > "$SOURCE_DIR/app.deb"
+
+  run "$ENTRYPOINT" --source-dir "$SOURCE_DIR" --target-dir "$TARGET_DIR" \
+    --artifact-glob '*.exe, *.msi, *.msix'
+
+  [ "$status" -eq 0 ]
+  grep -q "app.exe" "$TEST_TMPDIR/commands.log"
+  grep -q "setup.msi" "$TEST_TMPDIR/commands.log"
+  grep -q "bundle.msix" "$TEST_TMPDIR/commands.log"
+  ! grep -q "app.deb" "$TEST_TMPDIR/commands.log"
+}
+
 @test ".exe is signed with CodeSignTool" {
   echo "payload" > "$SOURCE_DIR/tool.exe"
 

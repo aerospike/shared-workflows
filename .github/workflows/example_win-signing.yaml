@@ -71,7 +71,7 @@ jobs:
 
       sign-mac: false
       sign-windows: true
-      win-artifact-glob: "*.exe"
+      win-artifact-glob: "*.exe,*.msi,*.msix"
       win-runs-on: windows-2025
 
       build-script: |
