@@ -17,7 +17,7 @@ concurrency:
   group: jfrog-test-deploy
   cancel-in-progress: false
 
-# This workflow demonstrates a drop-in artifacts pipeline using reusable_artifacts-cicd.yaml.
+# This workflow demonstrates a drop-in artifacts pipeline using reusable_artifacts-cicd.yaml
 
 jobs:
   extract-version:
