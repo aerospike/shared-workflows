@@ -1,0 +1,7 @@
+apiVersion: v2
+name: aerospike-hello
+description: A minimal Aerospike hello-world Helm chart for shared-workflows examples.
+type: application
+# Placeholder; overridden at build time via `helm package --version $VERSION`.
+version: 0.0.0
+appVersion: "0.0.0"

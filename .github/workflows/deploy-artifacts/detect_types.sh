@@ -83,6 +83,8 @@ fi
 [[ -d $BUILD_ARTIFACTS_DIR ]] || error "artifacts directory not found: $BUILD_ARTIFACTS_DIR (cwd: $(pwd))"
 
 # shellcheck disable=SC1091
+source "$SCRIPT_DIR/../lib/helm-helpers.sh"
+# shellcheck disable=SC1091
 source "$SCRIPT_DIR/package_utils.sh"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/type_registry.sh"

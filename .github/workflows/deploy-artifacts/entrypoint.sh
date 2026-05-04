@@ -143,6 +143,8 @@ run_optional() {
 }
 
 # shellcheck disable=SC1091
+source "$SCRIPT_DIR/../lib/helm-helpers.sh"
+# shellcheck disable=SC1091
 source "$SCRIPT_DIR/package_utils.sh"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/type_registry.sh"
@@ -580,6 +582,60 @@ upload_go_packages() {
     }
 
     manifest_for_type "go" _upload_go_entry
+}
+
+upload_helm_packages() {
+    echo "Uploading Helm chart packages to JFrog..." >&2
+
+    # shellcheck disable=SC2329  # invoked indirectly via manifest_for_type
+    _upload_helm_entry() {
+        local pkg="$1"
+        [[ -f $pkg ]] || return 0
+
+        local -a metadata
+        read -r -a metadata < <(get_helm_metadata "$pkg")
+        local pkgname="${metadata[0]}"
+        local pkgversion="${metadata[1]}"
+        local pkg_filename
+        pkg_filename=$(basename "$pkg")
+
+        if [[ -z $pkgname ]] || [[ -z $pkgversion ]]; then
+            echo "Warning: Failed to extract metadata from $pkg, skipping" >&2
+            return 0
+        fi
+
+        local props
+        props=$(get_helm_props "$pkg")
+
+        # JFrog classic Helm repo layout: {chart}/{version}/{filename}.
+        # JFrog auto-generates index.yaml from uploaded .tgz files; consumers
+        # then `helm repo add` the repo URL and `helm install` from it.
+        local target_path
+        target_path="${pkgname}/${pkgversion}/${pkg_filename}"
+
+        echo "  Uploading Helm chart: $pkg" >&2
+        echo "    Chart: $pkgname, Version: $pkgversion" >&2
+        echo "    Target: $target_path" >&2
+        run jf rt upload "$pkg" "$PROJECT-helm-dev-local/${target_path}" \
+            --build-name="$BUILD_NAME" \
+            --build-number="$ARTIFACT_BUILD_NUMBER" \
+            --project="$PROJECT" \
+            --target-props "$props"
+
+        # Upload companions (.prov, helm-native provenance signature) alongside the chart.
+        local companions="${TYPE_COMPANIONS[helm]-}"
+        for suffix in $companions; do
+            if [[ -f "$pkg$suffix" ]]; then
+                echo "  Uploading companion: $pkg$suffix" >&2
+                run jf rt upload "$pkg$suffix" "$PROJECT-helm-dev-local/${target_path}${suffix}" \
+                    --build-name="$BUILD_NAME" \
+                    --build-number="$ARTIFACT_BUILD_NUMBER" \
+                    --project="$PROJECT"
+            fi
+        done
+    }
+
+    manifest_for_type "helm" _upload_helm_entry
 }
 
 upload_generic_files() {

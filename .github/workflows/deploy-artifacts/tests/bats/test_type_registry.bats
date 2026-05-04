@@ -7,6 +7,7 @@ DEPLOY_DIR="$GIT_ROOT/.github/workflows/deploy-artifacts"
 
 setup() {
     # Need package_utils.sh for metadata extraction used by props functions
+    source "$DEPLOY_DIR/../lib/helm-helpers.sh"
     source "$DEPLOY_DIR/package_utils.sh"
     source "$DEPLOY_DIR/type_registry.sh"
     # package_utils.sh sets strict mode and an ERR trap that interferes with bats assertions
@@ -37,6 +38,7 @@ setup() {
     [[ "${TYPE_REPO[npm]}" == "npm-dev-local" ]]
     [[ "${TYPE_REPO[pypi]}" == "pypi-dev-local" ]]
     [[ "${TYPE_REPO[go]}" == "go-dev-local" ]]
+    [[ "${TYPE_REPO[helm]}" == "helm-dev-local" ]]
     [[ "${TYPE_REPO[generic]}" == "generic-dev-local" ]]
 }
 
@@ -46,6 +48,7 @@ setup() {
     [[ "${TYPE_COMPANIONS[jar]}" == ".pom .asc .pom.asc" ]]
     [[ "${TYPE_COMPANIONS[npm]}" == ".asc" ]]
     [[ "${TYPE_COMPANIONS[pypi]}" == ".asc" ]]
+    [[ "${TYPE_COMPANIONS[helm]}" == ".prov" ]]
     [[ "${TYPE_COMPANIONS[generic]}" == ".asc" ]]
 }
 
@@ -59,28 +62,33 @@ setup() {
     [[ "${TYPE_CONTENT_DETECT[npm]}" == "is_npm_package" ]]
     [[ "${TYPE_CONTENT_DETECT[pypi]}" == "is_pypi_package" ]]
     [[ "${TYPE_CONTENT_DETECT[go]}" == "is_go_module" ]]
+    [[ "${TYPE_CONTENT_DETECT[helm]}" == "is_helm_chart" ]]
 }
 
 @test "CONTENT_DETECT_ORDER defines detection priority" {
     [[ "${CONTENT_DETECT_ORDER[0]}" == "npm" ]]
     [[ "${CONTENT_DETECT_ORDER[1]}" == "pypi" ]]
     [[ "${CONTENT_DETECT_ORDER[2]}" == "go" ]]
+    [[ "${CONTENT_DETECT_ORDER[3]}" == "helm" ]]
 }
 
-@test "UPLOAD_ORDER has jar, pypi, and go before generic" {
+@test "UPLOAD_ORDER has jar, pypi, go, and helm before generic" {
     local jar_idx=-1
     local pypi_idx=-1
     local go_idx=-1
+    local helm_idx=-1
     local generic_idx=-1
     for i in "${!UPLOAD_ORDER[@]}"; do
         [[ "${UPLOAD_ORDER[$i]}" == "jar" ]] && jar_idx=$i
         [[ "${UPLOAD_ORDER[$i]}" == "pypi" ]] && pypi_idx=$i
         [[ "${UPLOAD_ORDER[$i]}" == "go" ]] && go_idx=$i
+        [[ "${UPLOAD_ORDER[$i]}" == "helm" ]] && helm_idx=$i
         [[ "${UPLOAD_ORDER[$i]}" == "generic" ]] && generic_idx=$i
     done
     [[ $jar_idx -lt $generic_idx ]]
     [[ $pypi_idx -lt $generic_idx ]]
     [[ $go_idx -lt $generic_idx ]]
+    [[ $helm_idx -lt $generic_idx ]]
     [[ $pypi_idx -gt 0 ]]
 }
 
@@ -106,6 +114,7 @@ setup() {
     [[ "$exts" == *"*.tar.gz"* ]]
     # Companion and build file extensions
     [[ "$exts" == *"*.asc"* ]]
+    [[ "$exts" == *"*.prov"* ]]
     [[ "$exts" == *"*.pom"* ]]
     [[ "$exts" == *"*.csproj"* ]]
     # Maven sidecar checksums must be excluded from generic structuring,
@@ -242,5 +251,33 @@ setup() {
     props=$(get_npm_props "$test_dir/test-pkg-2.0.0.tgz" 2>/dev/null)
     [[ "$props" == *"version=2.0.0"* ]]
     [[ "$props" == *"package_name=@aerospike/test-pkg"* ]]
+    rm -rf "$test_dir"
+}
+
+# --- get_helm_props ---
+
+@test "get_helm_props returns correct props for Helm chart" {
+    local test_dir
+    test_dir=$(mktemp -d)
+    mkdir -p "$test_dir/hello"
+    cat > "$test_dir/hello/Chart.yaml" <<'YAML'
+apiVersion: v2
+name: hello
+description: Test chart
+type: application
+version: 1.2.3
+appVersion: "1.2.3"
+YAML
+    tar -czf "$test_dir/hello-1.2.3.tgz" -C "$test_dir" hello/
+    rm -rf "$test_dir/hello"
+    VERSION="1.2.3"
+    BUILD_TYPE=""
+    INTERNAL="false"
+    local props
+    props=$(get_helm_props "$test_dir/hello-1.2.3.tgz" 2>/dev/null)
+    [[ "$props" == *"version=1.2.3"* ]]
+    [[ "$props" == *"package_name=hello"* ]]
+    [[ "$props" == *"helm.name=hello"* ]]
+    [[ "$props" == *"helm.version=1.2.3"* ]]
     rm -rf "$test_dir"
 }

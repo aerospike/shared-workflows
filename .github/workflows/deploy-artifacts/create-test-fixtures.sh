@@ -156,6 +156,22 @@ cd "$BUILD_ARTIFACTS_DIR/temp-gomod" && zip -q -r "../aeromod-v1.2.3.zip" "githu
 rm -rf "$BUILD_ARTIFACTS_DIR/temp-gomod"
 echo "  Created aeromod-v1.2.3.zip (Go module)"
 
+# Create a valid packaged Helm chart .tgz with Chart.yaml and a fake .prov sidecar.
+# Real chart packages have a single top-level dir named after the chart with Chart.yaml at root.
+mkdir -p "$BUILD_ARTIFACTS_DIR/temp-helm/aerospike-hello"
+cat >"$BUILD_ARTIFACTS_DIR/temp-helm/aerospike-hello/Chart.yaml" <<'CHART'
+apiVersion: v2
+name: aerospike-hello
+description: A test helm chart
+type: application
+version: 0.4.2
+appVersion: "0.4.2"
+CHART
+cd "$BUILD_ARTIFACTS_DIR/temp-helm" && tar -czf "../aerospike-hello-0.4.2.tgz" "aerospike-hello/" && cd - >/dev/null
+rm -rf "$BUILD_ARTIFACTS_DIR/temp-helm"
+echo "FAKE-HELM-PROVENANCE" >"$BUILD_ARTIFACTS_DIR/aerospike-hello-0.4.2.tgz.prov"
+echo "  Created aerospike-hello-0.4.2.tgz (Helm chart) + .prov"
+
 # Create some additional test files with valid formats
 # Create a valid JAR file (JAR is a ZIP with META-INF/MANIFEST.MF)
 mkdir -p "$BUILD_ARTIFACTS_DIR/temp-jar/META-INF"
@@ -261,6 +277,9 @@ echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/aerospike-hello-1.0.0.tar.gz.as
 echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/aerospike-utils-2.0.0.tgz.asc"
 echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/aerospike-targz-package-3.0.0.tar.gz.asc"
 echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/aeromod-v1.2.3.zip.asc"
+# Note: no .asc for the helm chart. sign-artifacts produces a .prov for helm
+# charts (helm-native provenance signature), not a detached .asc. The .prov
+# fixture above is what arrives at deploy.
 
 # Create unsigned-artifacts/ prefix to simulate sign stage output
 # The sign stage uses cp --parents which creates: signed-artifacts/unsigned-artifacts/...

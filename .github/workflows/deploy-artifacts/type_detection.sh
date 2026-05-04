@@ -43,6 +43,11 @@ is_go_module() {
     echo "$listing" | grep -qE '^[^@]+@v[^/]+/go\.mod$'
 }
 
+# --- Helm -------------------------------------------------------------------------------------
+# is_helm_chart and _extract_helm_chart_yaml live in ../lib/helm-helpers.sh and
+# are sourced by entrypoint.sh + detect_types.sh. Same file is sourced by
+# sign-artifacts/entrypoint.sh so detection stays consistent across stages.
+
 # --- PyPI (artifact-publisher / artifact-identification.sh style) -----------------------------
 
 _require_nonempty_name_version() {

@@ -166,3 +166,27 @@ teardown() {
     whl_in_generic=$(find structured_build_artifacts/generic -name "*.whl" 2>/dev/null | wc -l)
     [[ "$whl_in_generic" -eq 0 ]]
 }
+
+# --- Helm structuring ---
+
+@test "Helm chart .tgz routes to helm dir" {
+    run_entrypoint_dry_run >/dev/null 2>&1 || true
+    local chart
+    chart=$(find structured_build_artifacts/helm -name "aerospike-hello-0.4.2.tgz" 2>/dev/null | head -1)
+    [[ -n "$chart" ]]
+}
+
+@test "Helm .prov companion is co-located with chart after structuring" {
+    run_entrypoint_dry_run >/dev/null 2>&1 || true
+    local chart_dir
+    chart_dir=$(find structured_build_artifacts/helm -name "aerospike-hello-0.4.2.tgz" -printf '%h\n' 2>/dev/null | head -1)
+    [[ -n "$chart_dir" ]]
+    [[ -f "$chart_dir/aerospike-hello-0.4.2.tgz.prov" ]]
+}
+
+@test "No helm .tgz files leak into generic structured dir" {
+    run_entrypoint_dry_run >/dev/null 2>&1 || true
+    local helm_in_generic
+    helm_in_generic=$(find structured_build_artifacts/generic -name "aerospike-hello-*.tgz" 2>/dev/null | wc -l)
+    [[ "$helm_in_generic" -eq 0 ]]
+}

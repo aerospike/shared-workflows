@@ -91,6 +91,7 @@ Notes:
 - **JAR artifacts:** Use `jar-group-id` to provide a Maven group ID fallback when the JAR metadata doesn't include one.
 - **Python/PyPI:** Set `setup-python: true` to install Python and build tools (`build`, `twine`) before your build script runs. Optionally set `python-version` (default `"3.12"`). The deploy stage auto-detects `.whl` and `.tar.gz` sdist files and routes them to the appropriate PyPI repository. Matrix entries can override `setup-python` and `python-version` per build.
 - **Go modules:** The deploy stage auto-detects Go module `.zip` archives (those containing `module@version/go.mod`) and routes them to the Go repository. At upload time, it extracts the `.mod` file and generates a `.info` JSON following the [GOPROXY protocol](https://go.dev/ref/mod#goproxy-protocol). No special setup inputs are needed. Your build script should produce a Go module zip with the standard `module@version/` prefix layout.
+- **Helm charts:** Set `setup-helm: true` (and optionally `helm-version`, default `latest`) to install the Helm CLI before the build script runs. Matrix entries can override per build. The deploy stage auto-detects packaged Helm chart `.tgz` files (those containing `<chart>/Chart.yaml` with `apiVersion`, `name`, and `version`) and routes them to the project's classic Helm repository (`{project}-helm-dev-local`). Build script runs `helm package`; deploy ingests the resulting `.tgz`. JFrog auto-generates `index.yaml` from uploaded charts, so consumers `helm repo add` the repo URL and `helm install` from it. Signing is automatic: `sign-artifacts` produces a helm-native `.prov` (GPG-clearsigned Chart.yaml plus the chart's sha256) for every chart, and the `.prov` rides alongside the chart through deploy. Build scripts should use plain `helm package` (no `--sign`). See [artifacts-cicd README](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/artifacts-cicd/README.md) for the full Helm section including chart-testing pointers.
 
 ### Mac signing (optional)
 
@@ -268,9 +269,38 @@ jobs:
     secrets: inherit
 ```
 
+#### Helm chart example
+
+Helm charts use `helm package` in the build script. The sign stage automatically produces the `.prov` provenance signature, and the deploy stage auto-detects the resulting `.tgz` + `.prov` and publishes them to the project's Helm repository:
+
+```yaml
+jobs:
+  ci:
+    uses: aerospike/shared-workflows/.github/workflows/reusable_artifacts-cicd.yaml@v3.2.0
+    with:
+      gh-workflows-ref: v3.2.0
+      jf-project: my-project
+      jf-build-name: my-chart
+      version: 1.2.3
+      gh-artifact-directory: dist
+      build-env: VERSION=1.2.3
+      build-script: |
+        mkdir -p dist
+        helm package charts/my-chart \
+          --version "$VERSION" --app-version "$VERSION" \
+          -d dist
+      setup-helm: true
+      # helm-version: "v3.16.4" # optional, defaults to latest
+    secrets: inherit
+```
+
+`setup-helm: true` installs the Helm CLI via [azure/setup-helm](https://github.com/Azure/setup-helm) (SHA-pinned in the orchestrator) before the build script runs. The version defaults to `latest`; pin with `helm-version`. Matrix entries can set `setup-helm` and `helm-version` per build, mirroring the `setup-python`/`setup-java` pattern.
+
+For chart linting and unit tests in PRs, run [chart-testing (`ct`)](https://github.com/helm/chart-testing) via the [helm/chart-testing-action](https://github.com/helm/chart-testing-action) as a separate workflow gated on `pull_request`. See [aerospike/helm-aerospike-vector-search](https://github.com/aerospike/helm-aerospike-vector-search) for a working `lint.yaml` and `.ct.yaml` you can copy.
+
 ## Full examples
 
-- [example_artifacts-cicd.yaml](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/example_artifacts-cicd.yaml): drop-in orchestrated pipeline with multi-ecosystem matrix (C, .NET, npm, Java, Python, Go)
+- [example_artifacts-cicd.yaml](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/example_artifacts-cicd.yaml): drop-in orchestrated pipeline with multi-ecosystem matrix (C, .NET, npm, Java, Python, Go, Helm)
 
 ---
 

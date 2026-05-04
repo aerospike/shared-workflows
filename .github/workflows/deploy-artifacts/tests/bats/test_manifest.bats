@@ -150,6 +150,7 @@ get_manifest() {
         -not -name "*.asc" \
         -not -name "*.pom" \
         -not -name "*.pom.asc" \
+        -not -name "*.prov" \
         -not -name "*.md5" \
         -not -name "*.sha1" \
         -not -name "*.csproj" \

@@ -1,8 +1,9 @@
 name: Example Composable Matrix CI/CD
 # Demonstrates the composable artifact pipeline: calling the underlying shared
 # workflows individually with custom steps between them. Builds DEB, RPM, npm,
-# Java, Python, Go module, and macOS .pkg artifacts across a matrix, then
-# signs (Apple + GPG), deploys, and creates a release bundle with promotion.
+# Java, Python, Go module, Helm chart, and macOS .pkg artifacts across a matrix,
+# then signs (Apple + GPG + .prov for helm), deploys, and creates a release
+# bundle with promotion.
 #
 # The full pipeline runs on workflow_dispatch, including the release bundle
 # lifecycle.
@@ -21,6 +22,7 @@ name: Example Composable Matrix CI/CD
 #     build-python           - Python wheel + sdist build
 #     build-go               - Go module zip build
 #     build-mac              - macOS .pkg build
+#     build-helm             - Helm chart .tgz build
 #  3. collect                - merge per-matrix artifacts into one (collect-build-artifacts action)
 #  4. test                   - INSERT YOUR TESTS HERE
 #  5. sign-mac               - Apple codesign + notarize (reusable_sign-mac-artifacts.yaml, optional)
@@ -243,9 +245,39 @@ jobs:
       oidc-audience: aerospike/testing
     secrets: inherit
 
+  build-helm:
+    needs: extract-version
+    uses: ./.github/workflows/reusable_execute-build.yaml
+    with:
+      gh-workflows-ref: ${{ github.sha }}
+      jf-project: test
+      jf-build-name: test-build
+      jf-build-id: ${{ github.run_id }}-${{ github.run_attempt }}-buildinfo-helm-x86_64
+      gh-source-path: repo-source
+      working-directory: repo-source/.github/workflows/execute-build/test_apps/HelmHelloWorld
+      build-env: VERSION=${{ needs.extract-version.outputs.version }}
+      build-script: |
+        mkdir -p dist
+        helm package . --version "$VERSION" --app-version "$VERSION" -d dist
+      gh-artifact-directory: dist
+      gh-artifact-name: build-artifacts-helm-x86_64
+      oidc-provider-name: gh-dev-test
+      oidc-audience: aerospike/testing
+      setup-helm: true
+    secrets: inherit
+
   # Merge all per-matrix artifacts into a single github artifact for downstream jobs.
   collect:
-    needs: [build, build-npm, build-java, build-python, build-go, build-mac]
+    needs:
+      [
+        build,
+        build-npm,
+        build-java,
+        build-python,
+        build-go,
+        build-mac,
+        build-helm,
+      ]
     runs-on: ubuntu-22.04
     steps:
       - name: Harden the runner (Audit all outbound calls)
@@ -413,4 +445,4 @@ jobs:
           version: ${{ needs.extract-version.outputs.version }}
           environment: DEV
           jf-project: test
-          include-repos: test-deb-dev-local;test-rpm-dev-local;test-maven-dev-local;test-npm-dev-local;test-pypi-dev-local;test-go-dev-local;test-generic-dev-local
+          include-repos: test-deb-dev-local;test-rpm-dev-local;test-maven-dev-local;test-npm-dev-local;test-pypi-dev-local;test-go-dev-local;test-helm-dev-local;test-generic-dev-local

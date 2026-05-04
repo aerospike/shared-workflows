@@ -30,8 +30,21 @@ else
 fi
 
 # Create some additional test files
-echo "test jar content" > "$UNSIGNED_ARTIFACTS_DIR/test.jar"
-echo "test zip content" > "$UNSIGNED_ARTIFACTS_DIR/test.zip"
+echo "test jar content" >"$UNSIGNED_ARTIFACTS_DIR/test.jar"
+echo "test zip content" >"$UNSIGNED_ARTIFACTS_DIR/test.zip"
+
+# Create a packaged helm chart .tgz (single top-level dir with Chart.yaml at root).
+mkdir -p "$UNSIGNED_ARTIFACTS_DIR/temp-helm/aerospike-hello"
+cat >"$UNSIGNED_ARTIFACTS_DIR/temp-helm/aerospike-hello/Chart.yaml" <<'CHART'
+apiVersion: v2
+name: aerospike-hello
+description: A test helm chart
+type: application
+version: 0.4.2
+appVersion: "0.4.2"
+CHART
+(cd "$UNSIGNED_ARTIFACTS_DIR/temp-helm" && tar -czf "../aerospike-hello-0.4.2.tgz" "aerospike-hello/")
+rm -rf "$UNSIGNED_ARTIFACTS_DIR/temp-helm"
 
 # Create nested directory structure
 mkdir -p "$UNSIGNED_ARTIFACTS_DIR/nested/dir"
