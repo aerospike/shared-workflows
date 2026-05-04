@@ -6,6 +6,8 @@ Apple certificates and identities from Mac signing **do not apply** here. Use th
 
 The default runner is **`windows-2025`** (Git Bash) so **CodeSignTool.bat** from the official Windows bundle is used. If CodeSignTool rejects a specific MSIX payload, SSL.com also documents **eSigner CKA + Microsoft SignTool** as an alternative.
 
+When this job runs **before** [`reusable_sign-artifacts.yaml`](../reusable_sign-artifacts.yaml) in [`reusable_artifacts-cicd.yaml`](../reusable_artifacts-cicd.yaml), the **Sign Artifacts** step **does not** GPG-sign `.exe`, `.msi`, or `.msix` (they are moved aside and merged back, same idea as `.nupkg` vs SSL.com-only).
+
 ---
 
 ## Inputs

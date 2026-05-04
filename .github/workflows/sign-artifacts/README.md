@@ -2,10 +2,15 @@
 
 > **Note:** This workflow is used internally by [`reusable_artifacts-cicd.yaml`](../artifacts-cicd/README.md). Most consumers should use the orchestrator rather than calling this directly.
 
-This is a reusable GitHub Actions workflow that signs binary artifacts using GPG. It supports `.deb`, `.rpm`, `.nupkg` (NuGet via SSL.com), and any other file type passed via a glob pattern. It produces:
+This is a reusable GitHub Actions workflow that signs binary artifacts using GPG. It supports `.deb`, `.rpm`, `.nupkg` (NuGet via SSL.com), and other file types passed via a glob pattern. It produces:
 
-- GPG detached signature (`.asc`) for any file
+- GPG detached signature (`.asc`) for files that pass through the GPG stage
 - Native signing for `.deb` and `.rpm` using `dpkg-sig` and `rpm --addsign`
+
+**Not** GPG-signed here (same pattern as NuGet, which is moved out before GPG):
+
+- **`.nupkg`** — handled only by SSL.com eSigner in this workflow
+- **`.exe`, `.msi`, `.msix`** — reserved for **Windows Authenticode** (e.g. `reusable_sign-win-artifacts` in the orchestrator). They are moved aside before GPG and copied back into the signed artifact tree afterward so deploy still sees the same paths. Optional existing `*.asc` sidecars next to those files move with them.
 
 ---
 
@@ -37,6 +42,7 @@ Notes:
 
 - NuGet signing runs only if `.nupkg` files are present in the unsigned artifacts.
 - If `.nupkg` files are found, all four SSL.com secrets above must be provided or the workflow fails.
+- **macOS `.pkg` / `.dmg`** are not isolated by this workflow; they still receive GPG detached signatures if present under `unsigned-artifacts`. Use the orchestrator’s `sign-mac` job for Apple signing before this job when you need Apple-only treatment.
 
 ---
 
