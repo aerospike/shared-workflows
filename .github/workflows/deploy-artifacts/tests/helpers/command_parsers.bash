@@ -6,6 +6,16 @@
 # Returns: associative array with keys: file_path, repo, build_name, build_number, project, target_props, deb_path, flat
 parse_jf_upload_command() {
         local cmd="$1"
+        # Normalize: strip ANSI, trim whitespace, isolate "jf rt upload ..." if prefixed (dry-run / log lines)
+        cmd=$(printf '%s' "$cmd" | LC_ALL=C sed 's/\x1b\[[0-9;]*m//g')
+        cmd="${cmd#"${cmd%%[![:space:]]*}"}"
+        cmd="${cmd%"${cmd##*[![:space:]]}"}"
+        if [[ $cmd != jf[[:space:]]* ]]; then
+                if [[ $cmd =~ (jf[[:space:]]+rt[[:space:]]+upload[[:space:]].*) ]]; then
+                        cmd="${BASH_REMATCH[1]}"
+                fi
+        fi
+
         local -A result=()
 
         # Extract file path (first argument after "jf rt upload")
@@ -214,8 +224,20 @@ parse_nuget_setapikey_command() {
 # Returns: array of commands (one per line)
 extract_upload_commands() {
         local output="$1"
-        # Strip ANSI color codes and extract commands with leading spaces
-        echo "$output" | sed 's/\x1b\[[0-9;]*m//g' | grep -E "^\s+(jf rt upload|jf nuget push)" | sed 's/^\s*//'
+        local line stripped
+        while IFS= read -r line || [[ -n $line ]]; do
+                [[ -z $line ]] && continue
+                stripped=$(printf '%s' "$line" | LC_ALL=C sed 's/\x1b\[[0-9;]*m//g')
+                if [[ $stripped =~ jf[[:space:]]+rt[[:space:]]+upload ]]; then
+                        if [[ $stripped =~ (jf[[:space:]]+rt[[:space:]]+upload[[:space:]].*) ]]; then
+                                echo "${BASH_REMATCH[1]}"
+                        fi
+                elif [[ $stripped =~ jf[[:space:]]+nuget[[:space:]]+push ]]; then
+                        if [[ $stripped =~ (jf[[:space:]]+nuget[[:space:]]+push[[:space:]].*) ]]; then
+                                echo "${BASH_REMATCH[1]}"
+                        fi
+                fi
+        done < <(printf '%s\n' "$output")
 }
 
 # Extract all nuget upload commands from output
@@ -223,8 +245,18 @@ extract_upload_commands() {
 # Returns: array of commands (one per line)
 extract_nuget_commands() {
         local output="$1"
-        # Strip ANSI color codes and extract jf rt upload commands targeting nuget repositories
-        echo "$output" | sed 's/\x1b\[[0-9;]*m//g' | grep -E "^\s+jf rt upload.*\.(nupkg|snupkg).*-nuget-dev-local" | sed 's/^\s*//'
+        local line stripped
+        while IFS= read -r line || [[ -n $line ]]; do
+                [[ -z $line ]] && continue
+                stripped=$(printf '%s' "$line" | LC_ALL=C sed 's/\x1b\[[0-9;]*m//g')
+                if [[ $stripped =~ jf[[:space:]]+rt[[:space:]]+upload ]] &&
+                        [[ $stripped =~ \.(nupkg|snupkg) ]] &&
+                        [[ $stripped =~ -nuget-dev-local ]]; then
+                        if [[ $stripped =~ (jf[[:space:]]+rt[[:space:]]+upload[[:space:]].*) ]]; then
+                                echo "${BASH_REMATCH[1]}"
+                        fi
+                fi
+        done < <(printf '%s\n' "$output")
 }
 
 # Extract all jf rt build-* commands from output
@@ -232,6 +264,7 @@ extract_nuget_commands() {
 # Returns: array of commands (one per line)
 extract_build_commands() {
         local output="$1"
-        # Strip ANSI color codes and extract commands with leading spaces
-        echo "$output" | sed 's/\x1b\[[0-9;]*m//g' | grep -E "^\s+jf rt build-" | sed 's/^\s*//'
+        # Strip ANSI; match build lines (dry-run prefixes with "Would run: ")
+        echo "$output" | sed 's/\x1b\[[0-9;]*m//g' | grep -E "jf rt build-" |
+                sed -e 's/^Would run: //' -e 's/^[[:space:]]*//'
 }

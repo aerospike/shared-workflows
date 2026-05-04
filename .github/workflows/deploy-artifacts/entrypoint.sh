@@ -118,31 +118,36 @@ fi
 
 ARTIFACT_BUILD_NUMBER="$BUILD_NUMBER-artifacts"
 
-# Source utilities
+# Source utilities (run must exist before upload_utils.sh)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Wrapper: execute, or in dry-run log what would run (`Would run: …`). jf_upload is a
+# shell function, so dry-run must invoke it (jf_upload prints the same prefix + `jf rt upload …`);
+# printing "$*" would only show `jf_upload …`.
+run() {
+    if [[ $DRY_RUN != "true" ]]; then
+        "$@"
+        return
+    fi
+    # jf_upload is a shell function, so dry-run must invoke it (jf_upload prints the same prefix + `jf rt upload …`);
+    # printing "$*" would only show `jf_upload …`.
+    if [[ ${1-} == jf_upload ]]; then
+        "$@"
+        return
+    fi
+    printf 'Would run: %s\n' "$*" >&2
+}
+
+run_optional() {
+    run "$@" || echo "Warning: $*" >&2
+}
+
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/package_utils.sh"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/type_registry.sh"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/upload_utils.sh"
-
-# Wrapper function that either executes or echoes commands
-run() {
-    if [[ $DRY_RUN == "true" ]]; then
-        # Define color variables
-        local green='\033[0;32m'
-        local reset='\033[0m'
-
-        echo -e "${green}   $*${reset}" >&2
-    else
-        "$@"
-    fi
-}
-
-run_optional() {
-    run "$@" || echo "Warning: $*" >&2
-}
 
 structure_standalone_poms() {
     while IFS= read -r -d '' pom; do
@@ -335,7 +340,7 @@ upload_jar_packages() {
                         --target-props "$props"
                     ;;
                 *)
-                    jf_upload "$artifact_file" "$PROJECT-maven-dev-local" \
+                    run jf_upload "$artifact_file" "$PROJECT-maven-dev-local" \
                         --target-props "$props"
                     ;;
                 esac
