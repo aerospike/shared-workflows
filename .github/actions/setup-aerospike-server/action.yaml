@@ -308,7 +308,7 @@ runs:
 
     - name: Create Docker network
       id: create-network
-      shell: bash -x {0}
+      shell: bash
       run: |
         network="${{ inputs.network-name }}"
         if ! docker network inspect "$network" >/dev/null 2>&1; then
@@ -321,7 +321,7 @@ runs:
 
     - name: Start Aerospike Server containers
       id: start-containers
-      shell: bash
+      shell: bash -x {0}
       env:
         ENV_VARS: ${{ inputs.env-vars }}
       run: |
