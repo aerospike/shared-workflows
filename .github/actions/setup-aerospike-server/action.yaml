@@ -308,7 +308,7 @@ runs:
 
     - name: Create Docker network
       id: create-network
-      shell: bash
+      shell: bash -x
       run: |
         network="${{ inputs.network-name }}"
         if ! docker network inspect "$network" >/dev/null 2>&1; then
