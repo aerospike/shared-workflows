@@ -1,11 +1,11 @@
-# Setup Aerospike Enterprise Server
+# Setup Aerospike Server
 
-GitHub Action that starts one or more Aerospike Enterprise Server containers with optional clustering, TLS, security, strong consistency, and custom configuration.
+GitHub Action that starts one or more Aerospike Server containers with optional clustering, TLS, security, strong consistency, and custom configuration.
 
 ## Prerequisites
 
 - JFrog OIDC credentials (`oidc-provider` and `oidc-audience`) for pulling the Aerospike Server Docker image
-- A valid `features.conf` for enterprise features (e.g., multi-node clustering requires `asdb-cluster-nodes-limit 0`)
+- A valid `features.conf` for Enterprise-only features (e.g., Enterprise multi-node clustering requires `asdb-cluster-nodes-limit 0`)
 
 ## Quick Start
 
@@ -20,7 +20,7 @@ GitHub Action that starts one or more Aerospike Enterprise Server containers wit
 
 ### Multi-node cluster
 
-A features file with `asdb-cluster-nodes-limit 0` is required for clustering.
+A features file with `asdb-cluster-nodes-limit 0` is required for Enterprise clustering.
 
 ```yaml
 - uses: ./.github/actions/setup-aerospike-server
@@ -77,6 +77,18 @@ A features file with `asdb-cluster-nodes-limit 0` is required for clustering.
     oidc-audience: ${{ vars.JFROG_OIDC_AUDIENCE }}
 ```
 
+### Community edition
+
+Set `server-container-repo` to the Community image repository. The action will omit Enterprise-only `feature-key-file` config and ignore `features-file` / `features-content`.
+
+```yaml
+- uses: ./.github/actions/setup-aerospike-server
+  with:
+    server-container-repo: database-docker-virtual/aerospike-server
+    oidc-provider: ${{ vars.JFROG_OIDC_PROVIDER }}
+    oidc-audience: ${{ vars.JFROG_OIDC_AUDIENCE }}
+```
+
 ## Inputs
 
 | Input                          | Required | Default                                                 | Description                                                                                 |
@@ -102,7 +114,8 @@ A features file with `asdb-cluster-nodes-limit 0` is required for clustering.
 | `sc-stability-timeout-seconds` | No       | `30`                                                    | Seconds to wait for SC cluster stability after roster setup                                 |
 | `tools-tag`                    | No       | `12.1.1_2`                                              | Aerospike tools Docker image tag                                                            |
 | `container-repo-url`           | No       | `aerospike.jfrog.io`                                    | Docker registry hostname                                                                    |
-| `server-container-repo`        | No       | `database-docker-dev-local/aerospike-server-enterprise` | Image repository path                                                                       |
+| `server-container-repo`        | No       | `database-docker-virtual/aerospike-server-enterprise`   | Image repository path                                                                       |
+| `server-edition`               | No       | `auto`                                                  | Server edition: `auto`, `enterprise`, or `community`                                        |
 | `jfrog-platform-url`           | No       | `https://aerospike.jfrog.io`                            | JFrog platform URL                                                                          |
 
 ## Outputs
@@ -124,6 +137,8 @@ For clusters (`num-nodes > 1`), the action:
 - Waits for all nodes to be ready, the cluster to form, and migrations to complete
 
 If you provide a custom config via `config-file` or `config-content`, it must include a `heartbeat` section with `mode mesh`. The action will inject `mesh-seed-address-port` entries automatically.
+
+For `server-edition: enterprise`, the action requires `features-file` or `features-content` for multi-node clusters. For `server-edition: community`, it does not render or mount a features file because `feature-key-file` is Enterprise-only.
 
 ## TLS
 
