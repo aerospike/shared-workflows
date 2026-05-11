@@ -169,7 +169,7 @@ runs:
     - name: Generate TLS certificates
       id: generate-tls-certs
       if: inputs.enable-tls == 'true'
-      shell: bash
+      shell: bash -x {0}
       run: |
         cert_dir="$(mktemp -d)"
         cd "$cert_dir"
