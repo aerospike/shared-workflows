@@ -195,4 +195,4 @@ else
 fi
 echo "All nodes are stable."
 
-echo "Aerospike Enterprise Server is ready."
+echo "Aerospike Server is ready."
