@@ -55,6 +55,13 @@ render_multi_node_config() {
     [ "$output" = "community" ]
 }
 
+@test "auto edition rejects ambiguous image repositories" {
+    run --separate-stderr resolve_server_edition auto database-docker-virtual/aerospike-server-custom
+
+    [ "$status" -ne 0 ]
+    [[ "$stderr" == *"server-edition auto cannot infer edition"* ]]
+}
+
 @test "explicit edition overrides auto detection" {
     run resolve_server_edition community database-docker-virtual/aerospike-server-enterprise
 

@@ -81,6 +81,8 @@ A features file with `asdb-cluster-nodes-limit 0` is required for Enterprise clu
 
 Set `server-container-repo` to the Community image repository. The action will omit Enterprise-only `feature-key-file` config and ignore `features-file` / `features-content`.
 
+With `server-edition: auto`, the action infers `enterprise` from repositories named `aerospike-server-enterprise` and `community` from repositories named `aerospike-server`. If you use a mirror or custom repository name, set `server-edition` explicitly.
+
 ```yaml
 - uses: ./.github/actions/setup-aerospike-server
   with:
@@ -115,7 +117,7 @@ Set `server-container-repo` to the Community image repository. The action will o
 | `tools-tag`                    | No       | `12.1.1_2`                                              | Aerospike tools Docker image tag                                                            |
 | `container-repo-url`           | No       | `aerospike.jfrog.io`                                    | Docker registry hostname                                                                    |
 | `server-container-repo`        | No       | `database-docker-virtual/aerospike-server-enterprise`   | Image repository path                                                                       |
-| `server-edition`               | No       | `auto`                                                  | Server edition: `auto`, `enterprise`, or `community`                                        |
+| `server-edition`               | No       | `auto`                                                  | Server edition: `auto`, `enterprise`, or `community`; set explicitly for custom repo names  |
 | `jfrog-platform-url`           | No       | `https://aerospike.jfrog.io`                            | JFrog platform URL                                                                          |
 
 ## Outputs

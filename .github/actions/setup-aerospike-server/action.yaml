@@ -145,7 +145,7 @@ runs:
 
         effective_security="${{ inputs.enable-security }}"
         server_edition=$(resolve_server_edition "${{ inputs.server-edition }}" "${{ inputs.server-container-repo }}") \
-          || error "server-edition must be one of: auto, enterprise, community"
+          || error "server-edition must be one of: auto, enterprise, community; use enterprise or community when auto cannot infer from server-container-repo"
 
         if [[ "${{ inputs.num-nodes }}" -gt 1 && "$server_edition" == "enterprise" ]]; then
           [[ -n "${{ inputs.features-file }}" || -n "${{ inputs.features-content }}" ]] \
@@ -271,18 +271,22 @@ runs:
           export NAMESPACE=$("$render_tpl" "$tpl_dir/namespace-memory.conf")
         fi
 
-        # Write features-content to temp file if no file path was given
-        if [[ -z "$features_path" && -n "${FEATURES_CONTENT}" ]]; then
-          features_path="$(mktemp)"
-          printf '%s' "${FEATURES_CONTENT}" > "$features_path"
-          echo "Wrote features-content to $features_path"
-        fi
-
-        if ! should_use_features_file "$server_edition" "$features_path"; then
-          if [[ -n "$features_path" ]]; then
+        if [[ "$server_edition" == "community" ]]; then
+          if [[ -n "$features_path" || -n "${FEATURES_CONTENT}" ]]; then
             echo "::notice::Ignoring features-file/features-content for Aerospike Server Community"
           fi
           features_path=""
+        else
+          # Write features-content to temp file only when the edition can use it.
+          if [[ -z "$features_path" && -n "${FEATURES_CONTENT}" ]]; then
+            features_path="$(mktemp)"
+            printf '%s' "${FEATURES_CONTENT}" > "$features_path"
+            echo "Wrote features-content to $features_path"
+          fi
+
+          if ! should_use_features_file "$server_edition" "$features_path"; then
+            features_path=""
+          fi
         fi
 
         # Write config-content to temp file if no file path was given

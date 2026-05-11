@@ -3,16 +3,20 @@
 resolve_server_edition() {
     local requested=$1
     local server_repo=$2
+    local repo_name=${server_repo##*/}
 
     case "$requested" in
     enterprise | community)
         printf '%s\n' "$requested"
         ;;
     auto)
-        if [[ $server_repo == *enterprise* ]]; then
+        if [[ $repo_name == "aerospike-server-enterprise" ]]; then
             printf '%s\n' "enterprise"
-        else
+        elif [[ $repo_name == "aerospike-server" ]]; then
             printf '%s\n' "community"
+        else
+            printf 'Error: server-edition auto cannot infer edition from server-container-repo %q; set server-edition explicitly\n' "$server_repo" >&2
+            return 1
         fi
         ;;
     *)
