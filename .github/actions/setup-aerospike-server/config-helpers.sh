@@ -52,5 +52,5 @@ strip_feature_key_file_directive() {
     local source_config=$1
     local target_config=$2
 
-    sed '/^[[:space:]]*feature-key-file[[:space:]]/d' "$source_config" > "$target_config"
+    sed '/^[[:space:]]*feature-key-file[[:space:]]/d' "$source_config" >"$target_config"
 }
