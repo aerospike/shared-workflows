@@ -515,7 +515,7 @@ runs:
 
           # Bypass entrypoint to prevent config overwrite
           if [[ "$bypass_entrypoint" == "true" ]]; then
-            run_args+=("--entrypoint" "asd" "--config-file" "$volume_dest_folder/aerospike.conf")
+            run_args+=("--entrypoint" "asd")
           fi
 
           run_args+=("$image")
@@ -524,6 +524,8 @@ runs:
           if [[ "$bypass_entrypoint" == "true" ]]; then
             run_args+=("--foreground")
           fi
+
+          run_args+=("--config-file" "$volume_dest_folder/aerospike.conf")
 
           # No longer need this
           docker stop ${{ steps.server-volume.outputs.container_name_to_load_volume }}
