@@ -248,7 +248,7 @@ runs:
         ls -la "$cert_dir"
         echo "tls-cert-dir=$cert_dir" >> "$GITHUB_OUTPUT"
 
-        docker cp $cert_dir "${{ steps.server-volume.outputs.container_name_to_load_volume }}:${{ steps.server-volume.outputs.volume_dest_dir }}/tls/"
+        docker cp "$cert_dir/" "${{ steps.server-volume.outputs.container_name_to_load_volume }}:${{ steps.server-volume.outputs.volume_dest_dir }}/tls/"
 
     - name: Prepare config files
       id: prepare-config
