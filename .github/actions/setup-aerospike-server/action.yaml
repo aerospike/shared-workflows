@@ -178,6 +178,20 @@ runs:
         username: ${{ steps.jf.outputs.oidc-user }}
         password: ${{ steps.jf.outputs.oidc-token }}
 
+    - name: Create named volume to send TLS and config files to the server
+      id: server-volume
+      run: |
+        VOLUME_NAME="server_volume"
+        echo volume_name="$VOLUME_NAME" >> $GITHUB_OUTPUT
+        docker volume create "$VOLUME_NAME"
+
+        CONTAINER_NAME_TO_LOAD_VOLUME="container_to_load_volume"
+        echo container_name_to_load_volume="$CONTAINER_NAME_TO_LOAD_VOLUME" >> $GITHUB_OUTPUT
+        VOLUME_DEST_DIR=/etc/aerospike
+        echo volume_dest_dir=$VOLUME_DEST_DIR >> $GITHUB_OUTPUT
+        docker run --name "$CONTAINER_NAME_TO_LOAD_VOLUME" -d alpine -v "$VOLUME_NAME:$VOLUME_DEST_DIR" tail -f /dev/null
+      shell: bash
+
     - name: Generate TLS certificates
       id: generate-tls-certs
       if: inputs.enable-tls == 'true'
@@ -233,6 +247,8 @@ runs:
         echo "Generated TLS certificates in $cert_dir"
         ls -la "$cert_dir"
         echo "tls-cert-dir=$cert_dir" >> "$GITHUB_OUTPUT"
+
+        docker cp -r "$cert_dir/*" "$CONTAINER_NAME_TO_LOAD_VOLUME:$VOLUME_DEST_DIR/tls/"
 
     - name: Prepare config files
       id: prepare-config
@@ -328,6 +344,8 @@ runs:
 
         echo "features-path=$features_path" >> "$GITHUB_OUTPUT"
         echo "config-path=$config_path" >> "$GITHUB_OUTPUT"
+
+        docker cp "$config_path" "$features_path" "$CONTAINER_NAME_TO_LOAD_VOLUME:$VOLUME_DEST_DIR"
 
     - name: Create Docker network
       id: create-network
@@ -470,12 +488,6 @@ runs:
           # TLS port mapping and cert mounting
           if [[ "$enable_tls" == "true" ]]; then
             run_args+=("-p" "${tls_host_port}:4333")
-            run_args+=("-v" "${tls_cert_dir}:/etc/aerospike/tls:ro")
-          fi
-
-          # Mount features.conf if provided
-          if [[ -n "$features_path" ]]; then
-            run_args+=("-v" "$(realpath "$features_path"):/etc/aerospike/features.conf:ro")
           fi
 
           # Decide whether to bypass the entrypoint. The Aerospike Docker entrypoint
@@ -494,21 +506,13 @@ runs:
             bypass_entrypoint="true"
           fi
 
-          # Mount aerospike.conf (read-only when bypassing entrypoint)
-          if [[ -n "$config_path" ]]; then
-            if [[ "$bypass_entrypoint" == "true" ]]; then
-              run_args+=("-v" "$(realpath "$config_path"):/etc/aerospike/aerospike.conf:ro")
-            else
-              run_args+=("-v" "$(realpath "$config_path"):/etc/aerospike/aerospike.conf")
-            fi
-          fi
-
           # User-supplied env vars
           run_args+=("${env_flags[@]}")
+          run_args+=("-v" "${{ steps.server-volume.outputs.volume_name }}:${{ steps.server-volume.outputs.volume_dest_dir }}")
 
           # Bypass entrypoint to prevent config overwrite
           if [[ "$bypass_entrypoint" == "true" ]]; then
-            run_args+=("--entrypoint" "asd")
+            run_args+=("--entrypoint" "asd" "--config-file" "$volume_dest_folder/aerospike.conf")
           fi
 
           run_args+=("$image")
@@ -517,6 +521,9 @@ runs:
           if [[ "$bypass_entrypoint" == "true" ]]; then
             run_args+=("--foreground")
           fi
+
+          # No longer need this
+          docker stop ${{ steps.server-volume.outputs.container_name_to_load_volume }}
 
           echo "Starting container: $name (host port: $host_port)"
           docker run "${run_args[@]}"
