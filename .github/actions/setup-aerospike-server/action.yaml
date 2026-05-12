@@ -190,7 +190,7 @@ runs:
         VOLUME_DEST_DIR=/etc/aerospike
         echo "volume_dest_dir=$VOLUME_DEST_DIR" >> "$GITHUB_OUTPUT"
         docker run --name "$CONTAINER_NAME_TO_LOAD_VOLUME" -d -v "$VOLUME_NAME:$VOLUME_DEST_DIR" alpine tail -f /dev/null
-      shell: bash
+      shell: bash -x {0}
 
     - name: Generate TLS certificates
       id: generate-tls-certs
@@ -252,7 +252,7 @@ runs:
 
     - name: Prepare config files
       id: prepare-config
-      shell: bash
+      shell: bash -x {0}
       env:
         FEATURES_CONTENT: ${{ inputs.features-content }}
         CONFIG_CONTENT: ${{ inputs.config-content }}
@@ -352,7 +352,7 @@ runs:
 
     - name: Create Docker network
       id: create-network
-      shell: bash
+      shell: bash -x {0}
       run: |
         network="${{ inputs.network-name }}"
         if ! docker network inspect "$network" >/dev/null 2>&1; then
