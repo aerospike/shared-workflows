@@ -298,6 +298,13 @@ runs:
 
         # If user provided a custom config, handle security/SC injection
         if [[ -n "$config_path" ]]; then
+          if [[ "$server_edition" == "community" ]] && config_declares_feature_key_file "$config_path"; then
+            sanitized_config_path="$(mktemp)"
+            strip_feature_key_file_directive "$config_path" "$sanitized_config_path"
+            config_path="$sanitized_config_path"
+            echo "::notice::Removed enterprise-only feature-key-file directive from Aerospike Server Community config"
+          fi
+
           if [[ "$effective_security" == "true" ]]; then
             # Append security stanza if not already present
             if ! grep -q 'security {' "$config_path" 2>/dev/null; then

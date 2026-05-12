@@ -79,7 +79,7 @@ A features file with `asdb-cluster-nodes-limit 0` is required for Enterprise clu
 
 ### Community edition
 
-Set `server-container-repo` to the Community image repository. The action will omit Enterprise-only `feature-key-file` config and ignore `features-file` / `features-content`.
+Set `server-container-repo` to the Community image repository. The action will omit Enterprise-only `feature-key-file` config, remove that directive from custom configs, and ignore `features-file` / `features-content`.
 
 With `server-edition: auto`, the action infers `enterprise` from repositories named `aerospike-server-enterprise` and `community` from repositories named `aerospike-server`. If you use a mirror or custom repository name, set `server-edition` explicitly.
 
