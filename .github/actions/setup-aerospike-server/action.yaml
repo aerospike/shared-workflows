@@ -346,7 +346,7 @@ runs:
         echo "config-path=$config_path" >> "$GITHUB_OUTPUT"
 
         files_to_upload=("$features_path" "$config_path")
-        for file in "${files_to_upload[@]}"; then
+        for file in "${files_to_upload[@]}"; do
           docker cp "$file" "${{ steps.server-volume.outputs.container_name_to_load_volume }}:${{ steps.server-volume.outputs.volume_dest_dir }}"
         done
 
