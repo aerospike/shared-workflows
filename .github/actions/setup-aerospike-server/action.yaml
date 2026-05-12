@@ -345,7 +345,10 @@ runs:
         echo "features-path=$features_path" >> "$GITHUB_OUTPUT"
         echo "config-path=$config_path" >> "$GITHUB_OUTPUT"
 
-        docker cp "$config_path" "$features_path" "${{ steps.server-volume.outputs.container_name_to_load_volume }}:${{ steps.server-volume.outputs.volume_dest_dir }}"
+        files_to_upload=("$features_path" "$config_path")
+        for file in "${files_to_upload[@]}"; then
+          docker cp "$file" "${{ steps.server-volume.outputs.container_name_to_load_volume }}:${{ steps.server-volume.outputs.volume_dest_dir }}"
+        done
 
     - name: Create Docker network
       id: create-network
