@@ -189,7 +189,7 @@ runs:
         echo container_name_to_load_volume="$CONTAINER_NAME_TO_LOAD_VOLUME" >> $GITHUB_OUTPUT
         VOLUME_DEST_DIR=/etc/aerospike
         echo volume_dest_dir=$VOLUME_DEST_DIR >> $GITHUB_OUTPUT
-        docker run --name "$CONTAINER_NAME_TO_LOAD_VOLUME" -d alpine -v "$VOLUME_NAME:$VOLUME_DEST_DIR" tail -f /dev/null
+        docker run --name "$CONTAINER_NAME_TO_LOAD_VOLUME" -d -v "$VOLUME_NAME:$VOLUME_DEST_DIR" alpine tail -f /dev/null
       shell: bash
 
     - name: Generate TLS certificates
