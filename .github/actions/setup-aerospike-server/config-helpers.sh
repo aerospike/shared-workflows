@@ -37,7 +37,20 @@ build_feature_key_file_directive() {
     local features_path=$2
     local features_content=$3
 
-    if [[ $server_edition == "enterprise" && ( -n $features_path || -n $features_content ) ]]; then
+    if [[ $server_edition == "enterprise" && (-n $features_path || -n $features_content) ]]; then
         printf '%s\n' "feature-key-file /etc/aerospike/features.conf"
     fi
+}
+
+config_declares_feature_key_file() {
+    local config_path=$1
+
+    grep -Eq '^[[:space:]]*feature-key-file[[:space:]]+' "$config_path"
+}
+
+strip_feature_key_file_directive() {
+    local source_config=$1
+    local target_config=$2
+
+    sed '/^[[:space:]]*feature-key-file[[:space:]]/d' "$source_config" >"$target_config"
 }

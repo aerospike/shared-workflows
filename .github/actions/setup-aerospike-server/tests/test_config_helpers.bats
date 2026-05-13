@@ -107,6 +107,35 @@ render_multi_node_config() {
     [ "$status" -ne 0 ]
 }
 
+@test "custom config feature-key-file directive can be detected" {
+    config_path="$TEST_TMPDIR/aerospike.conf"
+    cat > "$config_path" <<'EOF'
+service {
+    cluster-name docker
+    feature-key-file /etc/aerospike/features.conf
+}
+EOF
+
+    config_declares_feature_key_file "$config_path"
+}
+
+@test "custom community config can strip feature-key-file directive" {
+    config_path="$TEST_TMPDIR/aerospike.conf"
+    sanitized_path="$TEST_TMPDIR/aerospike-community.conf"
+    cat > "$config_path" <<'EOF'
+service {
+    cluster-name docker
+    feature-key-file /etc/aerospike/features.conf
+}
+EOF
+
+    strip_feature_key_file_directive "$config_path" "$sanitized_path"
+
+    run grep -q "feature-key-file" "$sanitized_path"
+    [ "$status" -ne 0 ]
+    grep -q "cluster-name docker" "$sanitized_path"
+}
+
 @test "community does not mount features file" {
     run should_use_features_file community "$TEST_TMPDIR/features.conf"
 
