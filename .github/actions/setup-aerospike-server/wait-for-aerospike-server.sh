@@ -78,6 +78,7 @@ for container in "${containers[@]}"; do
     echo "  Waiting for $container..."
     elapsed=0
     ready="false"
+    # Prevent the /dev/tcp* command from being expanded
     export MSYS_NO_PATHCONV=1
     while ((elapsed < TIMEOUT)); do
         if docker exec "$container" bash -c "</dev/tcp/localhost/${SERVICE_PORT}" 2>/dev/null; then
