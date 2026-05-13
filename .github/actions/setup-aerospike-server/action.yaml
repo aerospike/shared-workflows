@@ -120,10 +120,6 @@ outputs:
 runs:
   using: composite
   steps:
-    # TODO: this is a side effect that needs to be documented
-    - run: echo "MSYS2_ARG_CONV_EXCL='/tmp*'" >> $GITHUB_ENV
-      shell: bash
-
     - name: Validate inputs
       id: validate
       shell: bash
@@ -191,11 +187,12 @@ runs:
 
         CONTAINER_NAME_TO_LOAD_VOLUME="container_to_load_volume"
         echo "container_name_to_load_volume=$CONTAINER_NAME_TO_LOAD_VOLUME" >> "$GITHUB_OUTPUT"
-
         VOLUME_DEST_DIR=/etc/aerospike
         echo "volume_dest_dir=$VOLUME_DEST_DIR" >> "$GITHUB_OUTPUT"
         docker run --name "$CONTAINER_NAME_TO_LOAD_VOLUME" -d -v "$VOLUME_NAME:$VOLUME_DEST_DIR" alpine tail -f /dev/null
       shell: bash -x {0}
+      env:
+        MSYS_NO_PATHCONV: 1
 
     - name: Generate TLS certificates
       id: generate-tls-certs
