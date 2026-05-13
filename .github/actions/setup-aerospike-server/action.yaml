@@ -540,7 +540,9 @@ runs:
           docker stop ${{ steps.server-volume.outputs.container_name_to_load_volume }}
 
           echo "Starting container: $name (host port: $host_port)"
-          docker run "${run_args[@]}"
+
+          # Prevent UNIX to windows path conversions here to prevent the aerospike.conf path from being wrongly converted
+          MSYS_NO_PATHCONV=1 docker run "${run_args[@]}"
 
           # Build CSV outputs
           if [[ -n "$container_names" ]]; then
