@@ -190,14 +190,16 @@ runs:
         VOLUME_DEST_DIR=/etc/aerospike
         echo "volume_dest_dir=$VOLUME_DEST_DIR" >> "$GITHUB_OUTPUT"
         docker run --name "$CONTAINER_NAME_TO_LOAD_VOLUME" -d -v "$VOLUME_NAME:$VOLUME_DEST_DIR" alpine tail -f /dev/null
-      shell: bash -x {0}
+      shell: bash -ex {0}
       env:
         MSYS_NO_PATHCONV: 1
 
     - name: Generate TLS certificates
       id: generate-tls-certs
       if: inputs.enable-tls == 'true'
-      shell: bash -x {0}
+      shell: bash -ex {0}
+      env:
+        MSYS_NO_PATHCONV: 1
       run: |
         cert_dir="$(mktemp -d)"
         cd "$cert_dir"
@@ -254,7 +256,7 @@ runs:
 
     - name: Prepare config files
       id: prepare-config
-      shell: bash -x {0}
+      shell: bash -ex {0}
       env:
         FEATURES_CONTENT: ${{ inputs.features-content }}
         CONFIG_CONTENT: ${{ inputs.config-content }}
@@ -361,7 +363,7 @@ runs:
 
     - name: Create Docker network
       id: create-network
-      shell: bash -x {0}
+      shell: bash -ex {0}
       run: |
         network="${{ inputs.network-name }}"
         if ! docker network inspect "$network" >/dev/null 2>&1; then
@@ -374,7 +376,7 @@ runs:
 
     - name: Start Aerospike Server containers
       id: start-containers
-      shell: bash -x {0}
+      shell: bash -ex {0}
       env:
         ENV_VARS: ${{ inputs.env-vars }}
       run: |
