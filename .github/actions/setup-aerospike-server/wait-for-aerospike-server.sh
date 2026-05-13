@@ -78,6 +78,7 @@ for container in "${containers[@]}"; do
     echo "  Waiting for $container..."
     elapsed=0
     ready="false"
+    export MSYS_NO_PATHCONV=1
     while ((elapsed < TIMEOUT)); do
         if docker exec "$container" bash -c "</dev/tcp/localhost/${SERVICE_PORT}" 2>/dev/null; then
             echo "  $container is ready (${elapsed}s)"
@@ -87,6 +88,7 @@ for container in "${containers[@]}"; do
         sleep 2
         elapsed=$((elapsed + 2))
     done
+    unset MSYS_NO_PATHCONV
 
     if [[ $ready != "true" ]]; then
         echo "Error: $container did not become ready within ${TIMEOUT}s" >&2
