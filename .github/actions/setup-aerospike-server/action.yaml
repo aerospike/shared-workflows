@@ -527,6 +527,7 @@ runs:
           # User-supplied env vars
           run_args+=("${env_flags[@]}")
           run_args+=("-v" "${{ steps.server-volume.outputs.volume_name }}:${{ steps.server-volume.outputs.volume_dest_dir }}")
+          run_args+=("--ulimit" "nofile=15000")
 
           # Bypass entrypoint to prevent config overwrite
           if [[ "$bypass_entrypoint" == "true" ]]; then
