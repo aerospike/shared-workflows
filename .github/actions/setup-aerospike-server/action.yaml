@@ -1,6 +1,6 @@
-name: Setup Aerospike Server Enterprise
+name: Setup Aerospike Server
 description: >
-  Starts one or more Aerospike Server Enterprise containers, optionally forming
+  Starts one or more Aerospike Server containers, optionally forming
   a cluster, with support for custom config, feature files, and environment
   variable passthrough.
 
@@ -45,6 +45,10 @@ inputs:
     description: Image repository path within the registry
     required: false
     default: database-docker-virtual/aerospike-server-enterprise
+  server-edition:
+    description: Server edition. Use auto to infer from server-container-repo.
+    required: false
+    default: auto
   jfrog-platform-url:
     description: JFrog platform URL
     required: false
@@ -120,6 +124,9 @@ runs:
       id: validate
       shell: bash
       run: |
+        # shellcheck source=/dev/null
+        source "${{ github.action_path }}/config-helpers.sh"
+
         error() { echo "Error: $1" >&2; exit 1; }
 
         [[ "${{ inputs.num-nodes }}" =~ ^[1-9][0-9]*$ ]] \
@@ -131,24 +138,29 @@ runs:
         [[ "${{ inputs.service-port }}" =~ ^[1-9][0-9]*$ ]] \
           || error "service-port must be a positive integer (got: '${{ inputs.service-port }}')"
 
-        if [[ "${{ inputs.num-nodes }}" -gt 1 ]]; then
-          [[ -n "${{ inputs.features-file }}" || -n "${{ inputs.features-content }}" ]] \
-            || error "features-file or features-content is required for multi-node clusters (asdb-cluster-nodes-limit 0 must be set)"
-        fi
-
         if [[ "${{ inputs.enable-tls }}" == "true" ]]; then
           [[ "${{ inputs.tls-base-port }}" =~ ^[1-9][0-9]*$ ]] \
             || error "tls-base-port must be a positive integer (got: '${{ inputs.tls-base-port }}')"
         fi
 
         effective_security="${{ inputs.enable-security }}"
+        server_edition=$(resolve_server_edition "${{ inputs.server-edition }}" "${{ inputs.server-container-repo }}") \
+          || error "server-edition must be one of: auto, enterprise, community; use enterprise or community when auto cannot infer from server-container-repo"
+
+        if [[ "${{ inputs.num-nodes }}" -gt 1 && "$server_edition" == "enterprise" ]]; then
+          [[ -n "${{ inputs.features-file }}" || -n "${{ inputs.features-content }}" ]] \
+            || error "features-file or features-content is required for multi-node enterprise clusters (asdb-cluster-nodes-limit 0 must be set)"
+        fi
 
         if [[ "${{ inputs.enable-strong-consistency }}" == "true" ]]; then
+          [[ "$server_edition" == "enterprise" ]] \
+            || error "enable-strong-consistency requires Aerospike Server Enterprise"
           [[ -n "${{ inputs.features-file }}" || -n "${{ inputs.features-content }}" ]] \
             || error "features-file or features-content is required for strong consistency"
         fi
 
         echo "effective-security=$effective_security" >> "$GITHUB_OUTPUT"
+        echo "server-edition=$server_edition" >> "$GITHUB_OUTPUT"
 
     - name: Set up JFrog CLI
       id: jf
@@ -232,17 +244,17 @@ runs:
         features_path="${{ inputs.features-file }}"
         config_path="${{ inputs.config-file }}"
         effective_security="${{ steps.validate.outputs.effective-security }}"
+        server_edition="${{ steps.validate.outputs.server-edition }}"
         enable_sc="${{ inputs.enable-strong-consistency }}"
         num_nodes=${{ inputs.num-nodes }}
         tpl_dir="${{ github.action_path }}/templates"
 
         render_tpl="${{ github.action_path }}/render-template.sh"
+        # shellcheck source=/dev/null
+        source "${{ github.action_path }}/config-helpers.sh"
 
-        # Build feature-key-file directive (omitted from config when no features file is provided)
-        export FEATURE_KEY_FILE=""
-        if [[ -n "${{ inputs.features-file }}" || -n "${FEATURES_CONTENT}" ]]; then
-          FEATURE_KEY_FILE="feature-key-file /etc/aerospike/features.conf"
-        fi
+        export FEATURE_KEY_FILE
+        FEATURE_KEY_FILE=$(build_feature_key_file_directive "$server_edition" "${{ inputs.features-file }}" "${FEATURES_CONTENT}")
 
         # Build security stanza from template
         export SECURITY=""
@@ -259,11 +271,22 @@ runs:
           export NAMESPACE=$("$render_tpl" "$tpl_dir/namespace-memory.conf")
         fi
 
-        # Write features-content to temp file if no file path was given
-        if [[ -z "$features_path" && -n "${FEATURES_CONTENT}" ]]; then
-          features_path="$(mktemp)"
-          printf '%s' "${FEATURES_CONTENT}" > "$features_path"
-          echo "Wrote features-content to $features_path"
+        if [[ "$server_edition" == "community" ]]; then
+          if [[ -n "$features_path" || -n "${FEATURES_CONTENT}" ]]; then
+            echo "::notice::Ignoring features-file/features-content for Aerospike Server Community"
+          fi
+          features_path=""
+        else
+          # Write features-content to temp file only when the edition can use it.
+          if [[ -z "$features_path" && -n "${FEATURES_CONTENT}" ]]; then
+            features_path="$(mktemp)"
+            printf '%s' "${FEATURES_CONTENT}" > "$features_path"
+            echo "Wrote features-content to $features_path"
+          fi
+
+          if ! should_use_features_file "$server_edition" "$features_path"; then
+            features_path=""
+          fi
         fi
 
         # Write config-content to temp file if no file path was given
@@ -275,6 +298,13 @@ runs:
 
         # If user provided a custom config, handle security/SC injection
         if [[ -n "$config_path" ]]; then
+          if [[ "$server_edition" == "community" ]] && config_declares_feature_key_file "$config_path"; then
+            sanitized_config_path="$(mktemp)"
+            strip_feature_key_file_directive "$config_path" "$sanitized_config_path"
+            config_path="$sanitized_config_path"
+            echo "::notice::Removed enterprise-only feature-key-file directive from Aerospike Server Community config"
+          fi
+
           if [[ "$effective_security" == "true" ]]; then
             # Append security stanza if not already present
             if ! grep -q 'security {' "$config_path" 2>/dev/null; then
@@ -338,6 +368,7 @@ runs:
         tls_cert_dir="${{ steps.generate-tls-certs.outputs.tls-cert-dir }}"
         effective_security="${{ steps.validate.outputs.effective-security }}"
         enable_sc="${{ inputs.enable-strong-consistency }}"
+        server_edition="${{ steps.validate.outputs.server-edition }}"
 
         container_names=""
         service_ports=""
@@ -396,12 +427,11 @@ runs:
           if [[ -z "$config_path" ]]; then
             tpl_dir="${{ github.action_path }}/templates"
             render_tpl="${{ github.action_path }}/render-template.sh"
+            # shellcheck source=/dev/null
+            source "${{ github.action_path }}/config-helpers.sh"
 
-            # Build feature-key-file directive
-            export FEATURE_KEY_FILE=""
-            if [[ -n "$features_path" ]]; then
-              FEATURE_KEY_FILE="feature-key-file /etc/aerospike/features.conf"
-            fi
+            export FEATURE_KEY_FILE
+            FEATURE_KEY_FILE=$(build_feature_key_file_directive "$server_edition" "$features_path" "")
 
             # Build security stanza from template
             export SECURITY=""

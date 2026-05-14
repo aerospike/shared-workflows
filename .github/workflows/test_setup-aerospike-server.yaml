@@ -12,6 +12,32 @@ permissions:
   id-token: write
 
 jobs:
+  test-config-helpers:
+    name: Config helper unit tests
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@8d3c67de8e2fe68ef647c8db1e6a09f647780f40 # v2.19.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install bats
+        run: |
+          git init bats-core
+          cd bats-core
+          git remote add origin https://github.com/bats-core/bats-core.git
+          git fetch --depth 1 origin cf931b7b7c79998ded0f364126dbc9d46739a76f # v1.12.0
+          git checkout --detach FETCH_HEAD
+          sudo ./install.sh /usr/local
+          cd ..
+          rm -rf bats-core
+
+      - name: Run bats tests
+        run: bats .github/actions/setup-aerospike-server/tests/
+
   test-single-node:
     name: Single node (defaults)
     runs-on: ubuntu-22.04
@@ -145,6 +171,64 @@ jobs:
           echo "Exit code: $rc"
           echo "asinfo status: $result"
           [[ $rc -eq 0 && "$result" == *"ok"* ]] || { echo "Expected status=ok"; exit 1; }
+
+  test-community-multi-node:
+    name: Community multi-node cluster (2 nodes)
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@8d3c67de8e2fe68ef647c8db1e6a09f647780f40 # v2.19.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup Aerospike Server Community (2 nodes)
+        id: setup-aerospike-server
+        uses: ./.github/actions/setup-aerospike-server
+        with:
+          server-container-repo: database-docker-virtual/aerospike-server
+          num-nodes: "2"
+          features-content: |
+            feature-key-version 2
+          startup-timeout: "60"
+          oidc-provider: ${{ vars.JFROG_OIDC_PROVIDER }}
+          oidc-audience: ${{ vars.JFROG_OIDC_AUDIENCE }}
+
+      - name: Verify outputs
+        run: |
+          echo "container-names: ${{ steps.setup-aerospike-server.outputs.container-names }}"
+          echo "service-ports: ${{ steps.setup-aerospike-server.outputs.service-ports }}"
+
+          [[ "${{ steps.setup-aerospike-server.outputs.container-names }}" == "aerospike-1,aerospike-2" ]] \
+            || { echo "Unexpected container-names"; exit 1; }
+          [[ "${{ steps.setup-aerospike-server.outputs.service-ports }}" == "3000,3001" ]] \
+            || { echo "Unexpected service-ports"; exit 1; }
+
+      - name: Verify features file was not mounted
+        run: |
+          mounts=$(docker inspect aerospike-1 --format '{{range .Mounts}}{{println .Destination}}{{end}}')
+          echo "$mounts"
+          if grep -q "/etc/aerospike/features.conf" <<< "$mounts"; then
+            echo "Community container should not mount features.conf"
+            exit 1
+          fi
+
+      - name: Verify cluster formation via asinfo
+        run: |
+          tools_image="aerospike.jfrog.io/database-docker-virtual/aerospike-tools:12.1.1_2"
+          network="${{ steps.setup-aerospike-server.outputs.network-name }}"
+          for container in aerospike-1 aerospike-2; do
+            echo "Checking cluster_size on $container..."
+            rc=0
+            stats=$(docker run --rm --network "$network" "$tools_image" \
+              asinfo -h "$container" -p 3000 -v "statistics" 2>&1) || rc=$?
+            cluster_size=$(echo "$stats" | tr ';' '\n' | grep -oP 'cluster_size=\K\d+' || echo "N/A")
+            echo "$container cluster_size: $cluster_size (exit code: $rc)"
+            [[ $rc -eq 0 && "$cluster_size" == "2" ]] \
+              || { echo "Expected cluster_size=2 on $container, got $cluster_size"; exit 1; }
+          done
 
   test-env-vars:
     name: Custom env-vars passthrough

@@ -1,11 +1,11 @@
-# Setup Aerospike Enterprise Server
+# Setup Aerospike Server
 
-GitHub Action that starts one or more Aerospike Enterprise Server containers with optional clustering, TLS, security, strong consistency, and custom configuration.
+GitHub Action that starts one or more Aerospike Server containers with optional clustering, TLS, security, strong consistency, and custom configuration.
 
 ## Prerequisites
 
 - JFrog OIDC credentials (`oidc-provider` and `oidc-audience`) for pulling the Aerospike Server Docker image
-- A valid `features.conf` for enterprise features (e.g., multi-node clustering requires `asdb-cluster-nodes-limit 0`)
+- A valid `features.conf` for Enterprise-only features (e.g., Enterprise multi-node clustering requires `asdb-cluster-nodes-limit 0`)
 
 ## Quick Start
 
@@ -20,7 +20,7 @@ GitHub Action that starts one or more Aerospike Enterprise Server containers wit
 
 ### Multi-node cluster
 
-A features file with `asdb-cluster-nodes-limit 0` is required for clustering.
+A features file with `asdb-cluster-nodes-limit 0` is required for Enterprise clustering.
 
 ```yaml
 - uses: ./.github/actions/setup-aerospike-server
@@ -77,33 +77,48 @@ A features file with `asdb-cluster-nodes-limit 0` is required for clustering.
     oidc-audience: ${{ vars.JFROG_OIDC_AUDIENCE }}
 ```
 
+### Community edition
+
+Set `server-container-repo` to the Community image repository. The action will omit Enterprise-only `feature-key-file` config, remove that directive from custom configs, and ignore `features-file` / `features-content`.
+
+With `server-edition: auto`, the action infers `enterprise` from repositories named `aerospike-server-enterprise` and `community` from repositories named `aerospike-server`. If you use a mirror or custom repository name, set `server-edition` explicitly.
+
+```yaml
+- uses: ./.github/actions/setup-aerospike-server
+  with:
+    server-container-repo: database-docker-virtual/aerospike-server
+    oidc-provider: ${{ vars.JFROG_OIDC_PROVIDER }}
+    oidc-audience: ${{ vars.JFROG_OIDC_AUDIENCE }}
+```
+
 ## Inputs
 
-| Input                          | Required | Default                                                 | Description                                                                                 |
-| ------------------------------ | -------- | ------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `oidc-provider`                | Yes      |                                                         | JFrog OIDC provider name                                                                    |
-| `oidc-audience`                | Yes      |                                                         | JFrog OIDC audience                                                                         |
-| `server-tag`                   | No       | `latest`                                                | Aerospike Server Docker image tag                                                           |
-| `num-nodes`                    | No       | `1`                                                     | Number of cluster nodes                                                                     |
-| `container-name-prefix`        | No       | `aerospike`                                             | Container name prefix (nodes: `prefix-1`, `prefix-2`, ...)                                  |
-| `features-file`                | No       |                                                         | Path to `features.conf` on the runner                                                       |
-| `features-content`             | No       |                                                         | Raw `features.conf` content (e.g., from a secret). Ignored if `features-file` is set        |
-| `config-file`                  | No       |                                                         | Path to `aerospike.conf` on the runner                                                      |
-| `config-content`               | No       |                                                         | Raw `aerospike.conf` content. Ignored if `config-file` is set                               |
-| `env-vars`                     | No       |                                                         | Semicolon-delimited `KEY=VALUE` pairs passed as `-e` flags. Use `\;` for literal semicolons |
-| `network-name`                 | No       | `aerospike-net`                                         | Docker network name                                                                         |
-| `base-port`                    | No       | `3000`                                                  | Base host port (node N maps to `base-port + N - 1`)                                         |
-| `service-port`                 | No       | `3000`                                                  | Aerospike service port inside the container (must match `aerospike.conf`)                   |
-| `startup-timeout`              | No       | `30`                                                    | Seconds to wait for node readiness and cluster formation                                    |
-| `enable-tls`                   | No       | `false`                                                 | Enable TLS on Aerospike Server containers                                                   |
-| `tls-base-port`                | No       | `4333`                                                  | Base host TLS port (node N maps to `tls-base-port + N - 1`)                                 |
-| `enable-security`              | No       | `false`                                                 | Enable Aerospike security (authentication with default admin/admin credentials)             |
-| `enable-strong-consistency`    | No       | `false`                                                 | Enable strong consistency on the `test` namespace. Requires a features file                 |
-| `sc-stability-timeout-seconds` | No       | `30`                                                    | Seconds to wait for SC cluster stability after roster setup                                 |
-| `tools-tag`                    | No       | `12.1.1_2`                                              | Aerospike tools Docker image tag                                                            |
-| `container-repo-url`           | No       | `aerospike.jfrog.io`                                    | Docker registry hostname                                                                    |
-| `server-container-repo`        | No       | `database-docker-dev-local/aerospike-server-enterprise` | Image repository path                                                                       |
-| `jfrog-platform-url`           | No       | `https://aerospike.jfrog.io`                            | JFrog platform URL                                                                          |
+| Input                          | Required | Default                                               | Description                                                                                 |
+| ------------------------------ | -------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `oidc-provider`                | Yes      |                                                       | JFrog OIDC provider name                                                                    |
+| `oidc-audience`                | Yes      |                                                       | JFrog OIDC audience                                                                         |
+| `server-tag`                   | No       | `latest`                                              | Aerospike Server Docker image tag                                                           |
+| `num-nodes`                    | No       | `1`                                                   | Number of cluster nodes                                                                     |
+| `container-name-prefix`        | No       | `aerospike`                                           | Container name prefix (nodes: `prefix-1`, `prefix-2`, ...)                                  |
+| `features-file`                | No       |                                                       | Path to `features.conf` on the runner                                                       |
+| `features-content`             | No       |                                                       | Raw `features.conf` content (e.g., from a secret). Ignored if `features-file` is set        |
+| `config-file`                  | No       |                                                       | Path to `aerospike.conf` on the runner                                                      |
+| `config-content`               | No       |                                                       | Raw `aerospike.conf` content. Ignored if `config-file` is set                               |
+| `env-vars`                     | No       |                                                       | Semicolon-delimited `KEY=VALUE` pairs passed as `-e` flags. Use `\;` for literal semicolons |
+| `network-name`                 | No       | `aerospike-net`                                       | Docker network name                                                                         |
+| `base-port`                    | No       | `3000`                                                | Base host port (node N maps to `base-port + N - 1`)                                         |
+| `service-port`                 | No       | `3000`                                                | Aerospike service port inside the container (must match `aerospike.conf`)                   |
+| `startup-timeout`              | No       | `30`                                                  | Seconds to wait for node readiness and cluster formation                                    |
+| `enable-tls`                   | No       | `false`                                               | Enable TLS on Aerospike Server containers                                                   |
+| `tls-base-port`                | No       | `4333`                                                | Base host TLS port (node N maps to `tls-base-port + N - 1`)                                 |
+| `enable-security`              | No       | `false`                                               | Enable Aerospike security (authentication with default admin/admin credentials)             |
+| `enable-strong-consistency`    | No       | `false`                                               | Enable strong consistency on the `test` namespace. Requires a features file                 |
+| `sc-stability-timeout-seconds` | No       | `30`                                                  | Seconds to wait for SC cluster stability after roster setup                                 |
+| `tools-tag`                    | No       | `12.1.1_2`                                            | Aerospike tools Docker image tag                                                            |
+| `container-repo-url`           | No       | `aerospike.jfrog.io`                                  | Docker registry hostname                                                                    |
+| `server-container-repo`        | No       | `database-docker-virtual/aerospike-server-enterprise` | Image repository path                                                                       |
+| `server-edition`               | No       | `auto`                                                | Server edition: `auto`, `enterprise`, or `community`; set explicitly for custom repo names  |
+| `jfrog-platform-url`           | No       | `https://aerospike.jfrog.io`                          | JFrog platform URL                                                                          |
 
 ## Outputs
 
@@ -124,6 +139,8 @@ For clusters (`num-nodes > 1`), the action:
 - Waits for all nodes to be ready, the cluster to form, and migrations to complete
 
 If you provide a custom config via `config-file` or `config-content`, it must include a `heartbeat` section with `mode mesh`. The action will inject `mesh-seed-address-port` entries automatically.
+
+For `server-edition: enterprise`, the action requires `features-file` or `features-content` for multi-node clusters. For `server-edition: community`, it does not render or mount a features file because `feature-key-file` is Enterprise-only.
 
 ## TLS
 
