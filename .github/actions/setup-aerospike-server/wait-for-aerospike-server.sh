@@ -122,6 +122,7 @@ if ((NUM_NODES > 1)); then
         for container in "${containers[@]}"; do
             size=$(docker logs "$container" 2>&1 | grep -oP 'CLUSTER-SIZE \K\d+' | tail -1 || echo "N/A")
             echo "  $container: cluster-size=$size" >&2
+            docker logs "$container" 2>&1
         done
         exit 1
     fi
