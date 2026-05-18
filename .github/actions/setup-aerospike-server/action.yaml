@@ -264,6 +264,7 @@ runs:
       env:
         FEATURES_CONTENT: ${{ inputs.features-content }}
         CONFIG_CONTENT: ${{ inputs.config-content }}
+        SERVER_EDITION: ${{ inputs.server-edition }}
       run: |
         features_path="${{ inputs.features-file }}"
         config_path="${{ inputs.config-file }}"
@@ -360,7 +361,12 @@ runs:
         echo "features-path=$features_path" >> "$GITHUB_OUTPUT"
         echo "config-path=$config_path" >> "$GITHUB_OUTPUT"
 
-        files_to_upload=("$features_path" "$config_path")
+        files_to_upload=("$config_path")
+
+        if [[ "$SERVER_EDITION" == "enterprise" ]]; then
+          files_to_upload+=("$features_path")
+        fi
+
         for file in "${files_to_upload[@]}"; do
           docker cp "$file" "${{ steps.server-volume.outputs.container_name_to_load_volume }}:${{ steps.server-volume.outputs.volume_dest_dir }}"
         done
