@@ -144,13 +144,15 @@ echo "  Tools image: $TOOLS_IMAGE"
 echo "  Network: $NETWORK"
 echo "  Auth flags: ${auth_flags:-(none)}"
 
+docker pull "$TOOLS_IMAGE"
+
 # shellcheck disable=SC2086
 for container in "${containers[@]}"; do
     echo "  Waiting for $container to stabilize..."
     elapsed=0
     stable="false"
     while ((elapsed < TIMEOUT)); do
-        echo "    [${elapsed}s] Running: docker run --rm --network $NETWORK $TOOLS_IMAGE asinfo -h $container -p $SERVICE_PORT $auth_flags -v cluster-stable:ignore-migrations=$ignore_migrations"
+        echo "Elapsed:" "$elapsed"
         rc=0
         result=$(docker run --rm --network "$NETWORK" "$TOOLS_IMAGE" \
             asinfo -h "$container" -p "$SERVICE_PORT" $auth_flags \
