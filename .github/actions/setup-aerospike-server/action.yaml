@@ -139,7 +139,7 @@ runs:
           || error "service-port must be a positive integer (got: '${{ inputs.service-port }}')"
 
         if [[ "${{ inputs.enable-tls }}" == "true" ]]; then
-          [[ "${{ inputs.tls-base-port }}" resolve_server_edition=~ ^[1-9][0-9]*$ ]] \
+          [[ "${{ inputs.tls-base-port }}" =~ ^[1-9][0-9]*$ ]] \
             || error "tls-base-port must be a positive integer (got: '${{ inputs.tls-base-port }}')"
         fi
 
