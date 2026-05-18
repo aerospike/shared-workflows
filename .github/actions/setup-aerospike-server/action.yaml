@@ -190,7 +190,15 @@ runs:
         # Avoid overriding the default config files in /etc/aerospike
         VOLUME_DEST_DIR=/etc/aerospike-custom
         echo "volume_dest_dir=$VOLUME_DEST_DIR" >> "$GITHUB_OUTPUT"
-        docker run --name "$CONTAINER_NAME_TO_LOAD_VOLUME" -d -v "$VOLUME_NAME:$VOLUME_DEST_DIR" alpine tail -f /dev/null
+
+        TLS_VOLUME_NAME="tls_server_volume"
+        echo "tls_volume_name=$TLS_VOLUME_NAME" >> "$GITHUB_OUTPUT"
+        docker volume create "$TLS_VOLUME_NAME"
+
+        TLS_VOLUME_DEST_DIR=/etc/aerospike/tls
+        echo "tls_volume_dest_dir=$TLS_VOLUME_DEST_DIR" >> "$GITHUB_OUTPUT"
+
+        docker run --name "$CONTAINER_NAME_TO_LOAD_VOLUME" -d -v "$VOLUME_NAME:$VOLUME_DEST_DIR" -v "$TLS_VOLUME_NAME:$TLS_VOLUME_DEST_DIR" alpine tail -f /dev/null
       shell: bash -ex {0}
       env:
         # Prevents VOLUME_DEST_DIR from being expanded since it starts with /
@@ -257,7 +265,7 @@ runs:
 
         # Make sure that docker gets the actual Windows path of the user's temp folder in order to copy properly
         unset MSYS_NO_PATHCONV
-        docker cp "$cert_dir" "${{ steps.server-volume.outputs.container_name_to_load_volume }}:/etc/aerospike/tls/"
+        docker cp "$cert_dir" "${{ steps.server-volume.outputs.container_name_to_load_volume }}:$TLS_VOLUME_DEST_DIR"
 
     - name: Prepare config files
       id: prepare-config
@@ -527,7 +535,15 @@ runs:
 
           # User-supplied env vars
           run_args+=("${env_flags[@]}")
-          run_args+=("-v" "${{ steps.server-volume.outputs.volume_name }}:${{ steps.server-volume.outputs.volume_dest_dir }}")
+
+          if [[ -n "$config_path" ]]; then
+            run_args+=("-v" "${{ steps.server-volume.outputs.volume_name }}:${{ steps.server-volume.outputs.volume_dest_dir }}")
+          fi
+
+          if [[ -n "$tls_cert_dir" ]]; then
+            run_args+=("-v" "${{ steps.server-volume.outputs.tls_volume_name }}:$tls_cert_dir")
+          fi
+
           run_args+=("--ulimit" "nofile=15000")
 
           # Bypass entrypoint to prevent config overwrite
