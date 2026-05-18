@@ -168,7 +168,7 @@ if [[ $ENABLE_SC == "true" ]]; then
         if [[ $stable != "true" ]]; then
             echo "Error: $container did not stabilize within ${TIMEOUT}s (SC mode)" >&2
             echo "Last 20 lines of container logs:" >&2
-            docker logs --tail 20 "$container" >&2
+            docker logs "$container" >&2
             exit 1
         fi
     done
@@ -191,7 +191,7 @@ else
         if [[ $stable != "true" ]]; then
             echo "Error: $container did not stabilize within ${TIMEOUT}s" >&2
             echo "Last 20 lines of container logs:" >&2
-            docker logs --tail 20 "$container" >&2
+            docker logs "$container" >&2
             exit 1
         fi
     done
