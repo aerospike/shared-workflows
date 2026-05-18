@@ -139,7 +139,7 @@ runs:
           || error "service-port must be a positive integer (got: '${{ inputs.service-port }}')"
 
         if [[ "${{ inputs.enable-tls }}" == "true" ]]; then
-          [[ "${{ inputs.tls-base-port }}" =~ ^[1-9][0-9]*$ ]] \
+          [[ "${{ inputs.tls-base-port }}" resolve_server_edition=~ ^[1-9][0-9]*$ ]] \
             || error "tls-base-port must be a positive integer (got: '${{ inputs.tls-base-port }}')"
         fi
 
@@ -264,7 +264,6 @@ runs:
       env:
         FEATURES_CONTENT: ${{ inputs.features-content }}
         CONFIG_CONTENT: ${{ inputs.config-content }}
-        SERVER_EDITION: ${{ inputs.server-edition }}
       run: |
         features_path="${{ inputs.features-file }}"
         config_path="${{ inputs.config-file }}"
@@ -363,7 +362,7 @@ runs:
 
         files_to_upload=("$config_path")
 
-        if [[ "$SERVER_EDITION" == "enterprise" ]]; then
+        if [[ "$server_edition" == "enterprise" ]]; then
           files_to_upload+=("$features_path")
         fi
 
