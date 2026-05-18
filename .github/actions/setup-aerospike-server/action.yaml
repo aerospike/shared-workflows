@@ -549,7 +549,7 @@ runs:
             run_args+=("--foreground")
           fi
 
-          if [[ -n "$config_path" ]];
+          if [[ -n "$config_path" ]]; then
             aerospike_conf_filename=$(basename "$config_path")
             run_args+=("--config-file" "${{ steps.server-volume.outputs.volume_dest_dir }}/$aerospike_conf_filename")
           fi
