@@ -360,7 +360,10 @@ runs:
         echo "features-path=$features_path" >> "$GITHUB_OUTPUT"
         echo "config-path=$config_path" >> "$GITHUB_OUTPUT"
 
-        files_to_upload=("$config_path")
+        files_to_upload=()
+        if [[ -z "$config_path" ]]; then
+          files_to_upload+=("$config_path")
+        fi
 
         if [[ "$server_edition" == "enterprise" ]]; then
           files_to_upload+=("$features_path")
@@ -546,8 +549,10 @@ runs:
             run_args+=("--foreground")
           fi
 
-          aerospike_conf_filename=$(basename "$config_path")
-          run_args+=("--config-file" "${{ steps.server-volume.outputs.volume_dest_dir }}/$aerospike_conf_filename")
+          if [[ -n "$config_path" ]];
+            aerospike_conf_filename=$(basename "$config_path")
+            run_args+=("--config-file" "${{ steps.server-volume.outputs.volume_dest_dir }}/$aerospike_conf_filename")
+          fi
 
           # No longer need this
           docker stop ${{ steps.server-volume.outputs.container_name_to_load_volume }}
