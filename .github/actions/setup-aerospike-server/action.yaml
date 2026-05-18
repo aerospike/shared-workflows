@@ -365,7 +365,7 @@ runs:
           files_to_upload+=("$config_path")
         fi
 
-        if [[ "$server_edition" == "enterprise" ]]; then
+        if [[ "$server_edition" == "enterprise" && -n "$features_path" ]]; then
           files_to_upload+=("$features_path")
         fi
 
