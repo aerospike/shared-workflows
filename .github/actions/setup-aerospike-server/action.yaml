@@ -361,7 +361,7 @@ runs:
         echo "config-path=$config_path" >> "$GITHUB_OUTPUT"
 
         files_to_upload=()
-        if [[ -z "$config_path" ]]; then
+        if [[ -n "$config_path" ]]; then
           files_to_upload+=("$config_path")
         fi
 
