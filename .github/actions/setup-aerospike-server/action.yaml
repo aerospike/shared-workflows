@@ -187,7 +187,8 @@ runs:
 
         CONTAINER_NAME_TO_LOAD_VOLUME="container_to_load_volume"
         echo "container_name_to_load_volume=$CONTAINER_NAME_TO_LOAD_VOLUME" >> "$GITHUB_OUTPUT"
-        VOLUME_DEST_DIR=/etc/aerospike
+        # Avoid overriding the default config files in /etc/aerospike
+        VOLUME_DEST_DIR=/etc/aerospike-custom
         echo "volume_dest_dir=$VOLUME_DEST_DIR" >> "$GITHUB_OUTPUT"
         docker run --name "$CONTAINER_NAME_TO_LOAD_VOLUME" -d -v "$VOLUME_NAME:$VOLUME_DEST_DIR" alpine tail -f /dev/null
       shell: bash -ex {0}
@@ -256,7 +257,7 @@ runs:
 
         # Make sure that docker gets the actual Windows path of the user's temp folder in order to copy properly
         unset MSYS_NO_PATHCONV
-        docker cp "$cert_dir" "${{ steps.server-volume.outputs.container_name_to_load_volume }}:${{ steps.server-volume.outputs.volume_dest_dir }}/tls/"
+        docker cp "$cert_dir" "${{ steps.server-volume.outputs.container_name_to_load_volume }}:/etc/aerospike/tls/"
 
     - name: Prepare config files
       id: prepare-config
@@ -360,18 +361,9 @@ runs:
         echo "features-path=$features_path" >> "$GITHUB_OUTPUT"
         echo "config-path=$config_path" >> "$GITHUB_OUTPUT"
 
-        files_to_upload=()
         if [[ -n "$config_path" ]]; then
-          files_to_upload+=("$config_path")
+          docker cp "$config_path" "${{ steps.server-volume.outputs.container_name_to_load_volume }}:${{ steps.server-volume.outputs.volume_dest_dir }}"
         fi
-
-        if [[ "$server_edition" == "enterprise" && -n "$features_path" ]]; then
-          files_to_upload+=("$features_path")
-        fi
-
-        for file in "${files_to_upload[@]}"; do
-          docker cp "$file" "${{ steps.server-volume.outputs.container_name_to_load_volume }}:${{ steps.server-volume.outputs.volume_dest_dir }}"
-        done
 
     - name: Create Docker network
       id: create-network
