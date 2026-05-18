@@ -547,7 +547,8 @@ runs:
             run_args+=("--foreground")
           fi
 
-          run_args+=("--config-file" "${{ steps.server-volume.outputs.volume_dest_dir }}/aerospike.conf")
+          aerospike_conf_filename=$(basename "$config_path")
+          run_args+=("--config-file" "${{ steps.server-volume.outputs.volume_dest_dir }}/$aerospike_conf_filename")
 
           # No longer need this
           docker stop ${{ steps.server-volume.outputs.container_name_to_load_volume }}
