@@ -288,7 +288,7 @@ runs:
         source "${{ github.action_path }}/config-helpers.sh"
 
         export FEATURE_KEY_FILE
-        FEATURE_KEY_FILE=$(build_feature_key_file_directive "$server_edition" "${{ inputs.features-file }}" "${FEATURES_CONTENT}")
+        FEATURE_KEY_FILE=$(build_feature_key_file_directive "$server_edition" "${{ inputs.features-file }}" "${FEATURES_CONTENT}" "${{ steps.server-volume.outputs.volume_dest_dir }}/features.conf")
 
         # Build security stanza from template
         export SECURITY=""
@@ -372,6 +372,10 @@ runs:
 
         if [[ -n "$config_path" ]]; then
           docker cp "$config_path" "${{ steps.server-volume.outputs.container_name_to_load_volume }}:${{ steps.server-volume.outputs.volume_dest_dir }}"
+        fi
+
+        if [[ "$server_edition" == "enterprise" && -n "$features_path" ]]; then
+          docker cp "$features_path" "${{ steps.server-volume.outputs.container_name_to_load_volume }}:${{ steps.server-volume.outputs.volume_dest_dir }}"
         fi
 
     - name: Create Docker network
@@ -469,7 +473,7 @@ runs:
             source "${{ github.action_path }}/config-helpers.sh"
 
             export FEATURE_KEY_FILE
-            FEATURE_KEY_FILE=$(build_feature_key_file_directive "$server_edition" "$features_path" "")
+            FEATURE_KEY_FILE=$(build_feature_key_file_directive "$server_edition" "$features_path" "" "${{ steps.server-volume.outputs.volume_dest_dir }}/features.conf")
 
             # Build security stanza from template
             export SECURITY=""
