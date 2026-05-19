@@ -59,13 +59,13 @@ on:
         default: ""
 
     secrets:
-      credential_id:
+      es_credential_ov_id:
         description: eSigner credential ID (SSL.com)
         required: false
       es-password:
         description: SSL.com account password
         required: false
-      es-totp_secret:
+      es-totp_ov_secret:
         description: TOTP secret for automated OTP (same as NuGet signing in reusable_sign-artifacts)
         required: false
       es-username:
@@ -116,8 +116,8 @@ jobs:
           missing=()
           [ -z "${{ secrets.es-username }}" ] && missing+=("es-username")
           [ -z "${{ secrets.es-password }}" ] && missing+=("es-password")
-          [ -z "${{ secrets.credential_id }}" ] && missing+=("credential_id")
-          [ -z "${{ secrets.es-totp_secret }}" ] && missing+=("es-totp_secret")
+          [ -z "${{ secrets.es_credential_ov_id }}" ] && missing+=("es_credential_ov_id")
+          [ -z "${{ secrets.es-totp_ov_secret }}" ] && missing+=("es-totp_ov_secret")
           if [ ${#missing[@]} -gt 0 ]; then
             echo "Error: Windows signing requires SSL.com eSigner secrets: ${missing[*]}" >&2
             echo "Use the same secrets as NuGet signing (reusable_sign-artifacts), or pass --dry-run." >&2
@@ -162,8 +162,8 @@ jobs:
         env:
           ES_USERNAME: ${{ secrets.es-username }}
           ES_PASSWORD: ${{ secrets.es-password }}
-          CREDENTIAL_ID: ${{ secrets.credential_id }}
-          ES_TOTP_SECRET: ${{ secrets.es-totp_secret }}
+          CREDENTIAL_ID: ${{ secrets.es_credential_ov_id }}
+          ES_TOTP_SECRET: ${{ secrets.es-totp_ov_secret }}
           ESIGNER_PROGRAM_NAME: ${{ inputs.signing-identity }}
         run: |
           entrypoint="${{ inputs.gh-checkout-path }}/.github/workflows/sign-win-artifacts/entrypoint.sh"
