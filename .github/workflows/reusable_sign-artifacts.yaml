@@ -74,7 +74,7 @@ jobs:
       gh-artifact-name: ${{ steps.sign-outputs.outputs.gh-artifact-name }}
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@9ca718d3bf646d6534007c269a635b3e54cadf99 # v2.19.2
+        uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
         with:
           egress-policy: audit
 
@@ -100,7 +100,7 @@ jobs:
           fetch-depth: 1
 
       - name: Set up GPG
-        uses: aerospike/shared-workflows/.github/actions/setup-gpg@f6bb565e7d31fa3013a1a75c5f80aed44c3bde5c # v3.4.1
+        uses: aerospike/shared-workflows/.github/actions/setup-gpg@8ec712eafbec26c8db8d1183688a5fd806560a95 # v3.5.0
         with:
           gpg-private-key: ${{ secrets.gpg-private-key }}
           gpg-public-key: ${{ secrets.gpg-public-key }}
@@ -114,7 +114,7 @@ jobs:
           fi
           mkdir -p ${{ inputs.gh-artifact-name }}/nuget
       - name: Sign NuGet Packages with SSL.com
-        uses: step-security/esigner-codesign@8ff3d1cc0f91d52f5641fe33f81efed2aa0823d6 # v1.0.0
+        uses: step-security/esigner-codesign@389e3735dd2b2a0b6c3daa02fac03723ac17ffe0 # v1.0.1
         if: steps.nuget-packages.outputs.count > 0
         with:
           command: batch_sign
