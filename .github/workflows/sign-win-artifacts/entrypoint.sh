@@ -273,18 +273,18 @@ sign_one_file() {
 
     local -a cmd
     cmd=(
-        "$cst" sign
-        "-username=$ES_OV_USERNAME"
-        "-password=$ES_OV_PASSWORD"
-        "-credential_id=$ES_OV_CREDENTIAL_ID"
-        "-input_file_path=$win_file"
-        "-totp_secret=$ES_OV_TOTP_SECRET"
+        "$cst" "sign"
+        "-username=${ES_OV_USERNAME}"
+        "-password=${ES_OV_PASSWORD}"
+        "-credential_id=${ES_OV_CREDENTIAL_ID}"
+        "-input_file_path=${win_file}"
+        "-totp_secret=${ES_OV_TOTP_SECRET}"
     )
     if [[ $ext == "msi" && -n ${ESIGNER_PROGRAM_NAME-} ]]; then
-        cmd+=("-program_name=$ESIGNER_PROGRAM_NAME")
+        cmd+=("-program_name=${ESIGNER_PROGRAM_NAME}")
     fi
 
-    cmd+=("-output_dir_path=$win_outdir")
+    cmd+=("-output_dir_path=${win_outdir}")
 
     # CodeSignTool.bat runs .\jdk-11...\java when CODE_SIGN_TOOL_PATH is unset; cwd is usually the repo root.
     case "$(uname -s 2>/dev/null)" in
