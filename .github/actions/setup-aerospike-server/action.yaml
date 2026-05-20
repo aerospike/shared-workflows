@@ -548,7 +548,7 @@ runs:
             run_args+=("-v" "${{ steps.server-volume.outputs.conf_volume_name }}:${{ steps.server-volume.outputs.conf_volume_dest_dir }}")
           fi
 
-          if [[ "${{ inputs.enable_tls }}" == "true" ]]; then
+          if [[ "$enable_tls" == "true" ]]; then
             run_args+=("-v" "${{ steps.server-volume.outputs.tls_volume_name }}:${{ steps.server-volume.outputs.tls_volume_dest_dir }}")
           fi
 
