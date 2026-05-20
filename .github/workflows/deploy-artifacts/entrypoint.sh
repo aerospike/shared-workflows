@@ -624,7 +624,7 @@ upload_helm_packages() {
             --build-name="$BUILD_NAME" \
             --build-number="$ARTIFACT_BUILD_NUMBER" \
             --project="$PROJECT" \
-            --target-props "$props"        
+            --target-props "$props"
 
         # Upload companions (.prov, helm-native provenance signature) alongside the chart.
         local companions="${TYPE_COMPANIONS[helm]-}"
@@ -637,6 +637,8 @@ upload_helm_packages() {
                     --project="$PROJECT"
             fi
         done
+    }
+
     manifest_for_type "helm" _upload_helm_entry
 }
 

@@ -62,13 +62,13 @@ on:
       es_credential_ov_id:
         description: eSigner credential ID (SSL.com)
         required: false
-      es-password:
+      es_ov_password:
         description: SSL.com account password
         required: false
-      es-totp_ov_secret:
+      es_totp_ov_secret:
         description: TOTP secret for automated OTP (same as NuGet signing in reusable_sign-artifacts)
         required: false
-      es-username:
+      es_ov_username:
         description: SSL.com account username
         required: false
 
@@ -114,10 +114,10 @@ jobs:
         if: ${{ !inputs.dry-run }}
         run: |
           missing=()
-          [ -z "${{ secrets.es-username }}" ] && missing+=("es-username")
-          [ -z "${{ secrets.es-password }}" ] && missing+=("es-password")
+          [ -z "${{ secrets.es_ov_username }}" ] && missing+=("es_ov_username")
+          [ -z "${{ secrets.es_ov_password }}" ] && missing+=("es_ov_password")
           [ -z "${{ secrets.es_credential_ov_id }}" ] && missing+=("es_credential_ov_id")
-          [ -z "${{ secrets.es-totp_ov_secret }}" ] && missing+=("es-totp_ov_secret")
+          [ -z "${{ secrets.es_totp_ov_secret }}" ] && missing+=("es_totp_ov_secret")
           if [ ${#missing[@]} -gt 0 ]; then
             echo "Error: Windows signing requires SSL.com eSigner secrets: ${missing[*]}" >&2
             echo "Use the same secrets as NuGet signing (reusable_sign-artifacts), or pass --dry-run." >&2
@@ -160,10 +160,10 @@ jobs:
 
       - name: Sign Windows Artifacts
         env:
-          ES_USERNAME: ${{ secrets.es-username }}
-          ES_PASSWORD: ${{ secrets.es-password }}
+          ES_USERNAME: ${{ secrets.es_ov_username }}
+          ES_PASSWORD: ${{ secrets.es_ov_password }}
           CREDENTIAL_ID: ${{ secrets.es_credential_ov_id }}
-          ES_TOTP_SECRET: ${{ secrets.es-totp_ov_secret }}
+          ES_TOTP_SECRET: ${{ secrets.es_totp_ov_secret }}
           ESIGNER_PROGRAM_NAME: ${{ inputs.signing-identity }}
         run: |
           entrypoint="${{ inputs.gh-checkout-path }}/.github/workflows/sign-win-artifacts/entrypoint.sh"
