@@ -1,8 +1,8 @@
 name: "Smoke Test: Sign Windows Artifacts (Manual)"
 
 # End-to-end smoke test for Windows Authenticode with real SSL.com eSigner secrets.
-# Requires repository secrets (same as NuGet signing in reusable_sign-artifacts):
-#   ES_OV_USERNAME, ES_OV_PASSWORD, ES_CREDENTIAL_OV_ID, ES_TOTP_OV_SECRET
+# Requires repository secrets for Windows OV signing:
+#   ES_OV_USERNAME, ES_OV_PASSWORD, ES_OV_CREDENTIAL_ID, ES_OV_TOTP_SECRET
 #
 # Optional repository variable:
 #   WIN_SIGNING_PROGRAM_NAME — passed to sign-win-artifacts signing-identity (MSI display name)
@@ -51,8 +51,8 @@ jobs:
     secrets:
       es_ov_username: ${{ secrets.ES_OV_USERNAME }}
       es_ov_password: ${{ secrets.ES_OV_PASSWORD }}
-      es_credential_ov_id: ${{ secrets.ES_CREDENTIAL_OV_ID }}
-      es_totp_ov_secret: ${{ secrets.ES_OV_TOTP_SECRET }}
+      es_ov_credential_id: ${{ secrets.ES_OV_CREDENTIAL_ID }}
+      es_ov_totp_secret: ${{ secrets.ES_OV_TOTP_SECRET }}
 
   verify:
     needs: sign-win

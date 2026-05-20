@@ -10,7 +10,7 @@ This is a reusable GitHub Actions workflow that signs binary artifacts using GPG
 **Not** GPG-signed here (same pattern as NuGet, which is moved out before GPG):
 
 - **`.nupkg`** — handled only by SSL.com eSigner in this workflow
-- **`.exe`, `.msi`, `.msix`** — reserved for **Windows Authenticode** (e.g. `reusable_sign-win-artifacts` in the orchestrator). They are moved aside before GPG and copied back into the signed artifact tree afterward so deploy still sees the same paths. Optional existing `*.asc` sidecars next to those files move with them.
+- **`.exe`, `.msi`, `.msix`** — reserved for **Windows Authenticode** (e.g. `reusable_sign-win-artifacts` in the orchestrator), which uses SSL.com secrets **`ES_OV_USERNAME`**, **`ES_OV_PASSWORD`**, **`ES_OV_CREDENTIAL_ID`**, and **`ES_OV_TOTP_SECRET`** (see [`sign-win-artifacts/README.md`](../sign-win-artifacts/README.md)). They are moved aside before GPG and copied back into the signed artifact tree afterward so deploy still sees the same paths. Optional existing `*.asc` sidecars next to those files move with them.
 
 ---
 

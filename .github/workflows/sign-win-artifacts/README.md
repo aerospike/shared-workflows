@@ -2,7 +2,7 @@
 
 This reusable workflow signs **Windows Authenticode** artifacts (`.exe`, `.msi`, `.msix`) using **SSL.com eSigner CodeSignTool**, mirroring the layout of [`reusable_sign-mac-artifacts.yaml`](../reusable_sign-mac-artifacts.yaml): download artifact tree, sign selected files, re-upload with `overwrite: true`.
 
-Apple certificates and identities from Mac signing **do not apply** here. Use the **same SSL.com eSigner secrets** as [`reusable_sign-artifacts.yaml`](../reusable_sign-artifacts.yaml) NuGet signing (`es-username`, `es-password`, `credential_id`, `es-totp_secret`) so one account can cover NuGet and Windows binaries.
+Apple certificates and identities from Mac signing **do not apply** here. Windows signing uses **OV**-scoped workflow secrets (`es_ov_username`, `es_ov_password`, `es_ov_credential_id`, `es_ov_totp_secret`), typically mapped from repository secrets **`ES_OV_USERNAME`**, **`ES_OV_PASSWORD`**, **`ES_OV_CREDENTIAL_ID`**, and **`ES_OV_TOTP_SECRET`**. NuGet signing in [`reusable_sign-artifacts.yaml`](../reusable_sign-artifacts.yaml) still uses the separate `es-username` / `es-password` / `credential_id` / `es-totp_secret` inputs (often backed by different repo secret names); you can map both sets from the same SSL.com account if you choose.
 
 The default runner is **`windows-2025`** (Git Bash) so **CodeSignTool.bat** from the official Windows bundle is used. If CodeSignTool rejects a specific MSIX payload, SSL.com also documents **eSigner CKA + Microsoft SignTool** as an alternative.
 
@@ -26,12 +26,14 @@ When this job runs **before** [`reusable_sign-artifacts.yaml`](../reusable_sign-
 
 ## Secrets
 
-| Name             | Required     | Description                   |
-| ---------------- | ------------ | ----------------------------- |
-| `es-username`    | When signing | SSL.com account username      |
-| `es-password`    | When signing | SSL.com account password      |
-| `credential_id`  | When signing | eSigner credential ID         |
-| `es-totp_secret` | When signing | TOTP secret for automated OTP |
+| Name                  | Required     | Description                   |
+| --------------------- | ------------ | ----------------------------- |
+| `es_ov_username`      | When signing | SSL.com account username      |
+| `es_ov_password`      | When signing | SSL.com account password      |
+| `es_ov_credential_id` | When signing | eSigner credential ID         |
+| `es_ov_totp_secret`   | When signing | TOTP secret for automated OTP |
+
+The signing step sets environment variables **`ES_OV_USERNAME`**, **`ES_OV_PASSWORD`**, **`ES_OV_CREDENTIAL_ID`**, and **`ES_OV_TOTP_SECRET`** for [`entrypoint.sh`](./entrypoint.sh).
 
 When `dry-run: true`, these secrets may be omitted.
 
@@ -51,10 +53,10 @@ jobs:
       signing-identity: "My Product Installer"
       artifact-glob: "*.exe,*.msi,*.msix"
     secrets:
-      es-username: ${{ secrets.ES_USERNAME }}
-      es-password: ${{ secrets.ES_PASSWORD }}
-      credential_id: ${{ secrets.CREDENTIAL_ID }}
-      es-totp_secret: ${{ secrets.ES_TOTP_SECRET }}
+      es_ov_username: ${{ secrets.ES_OV_USERNAME }}
+      es_ov_password: ${{ secrets.ES_OV_PASSWORD }}
+      es_ov_credential_id: ${{ secrets.ES_OV_CREDENTIAL_ID }}
+      es_ov_totp_secret: ${{ secrets.ES_OV_TOTP_SECRET }}
 ```
 
 ## Required: gh-workflows-ref

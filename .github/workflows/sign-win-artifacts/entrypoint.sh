@@ -43,10 +43,10 @@ Options:
   --help                 Show this help message
 
 Environment variables (required when not dry-run):
-  ES_USERNAME       SSL.com account username
-  ES_PASSWORD       SSL.com account password
-  CREDENTIAL_ID     eSigner credential ID
-  ES_TOTP_SECRET    TOTP secret for automated OTP
+  ES_OV_USERNAME       SSL.com account username (OV / Authenticode signing)
+  ES_OV_PASSWORD       SSL.com account password
+  ES_OV_CREDENTIAL_ID  eSigner credential ID
+  ES_OV_TOTP_SECRET    TOTP secret for automated OTP
 
 Environment variables (optional):
   ESIGNER_PROGRAM_NAME   Passed to CodeSignTool as -program_name for MSI (UAC display name)
@@ -105,7 +105,7 @@ if [[ ! -d $SOURCE_DIR ]]; then
 fi
 
 if [[ $DRY_RUN != "true" ]]; then
-    for var in ES_USERNAME ES_PASSWORD CREDENTIAL_ID ES_TOTP_SECRET; do
+    for var in ES_OV_USERNAME ES_OV_PASSWORD ES_OV_CREDENTIAL_ID ES_OV_TOTP_SECRET; do
         if [[ -z ${!var-} ]]; then
             echo "ERROR: $var environment variable is required (or use --dry-run)" >&2
             exit 1
@@ -215,11 +215,11 @@ sign_one_file() {
     local -a cmd
     cmd=(
         "$cst" sign
-        "-username=$ES_USERNAME"
-        "-password=$ES_PASSWORD"
-        "-credential_id=$CREDENTIAL_ID"
+        "-username=$ES_OV_USERNAME"
+        "-password=$ES_OV_PASSWORD"
+        "-credential_id=$ES_OV_CREDENTIAL_ID"
         "-input_file_path=$file"
-        "-totp_secret=$ES_TOTP_SECRET"
+        "-totp_secret=$ES_OV_TOTP_SECRET"
     )
     if [[ $ext == "msi" && -n ${ESIGNER_PROGRAM_NAME-} ]]; then
         cmd+=("-program_name=$ESIGNER_PROGRAM_NAME")

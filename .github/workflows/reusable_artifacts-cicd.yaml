@@ -267,6 +267,18 @@ on:
         required: false
       es-totp_secret:
         required: false
+      es_ov_credential_id:
+        description: eSigner credential ID for Windows Authenticode (OV signing)
+        required: false
+      es_ov_password:
+        description: SSL.com account password for Windows Authenticode (OV signing)
+        required: false
+      es_ov_totp_secret:
+        description: TOTP secret for Windows Authenticode (OV signing)
+        required: false
+      es_ov_username:
+        description: SSL.com account username for Windows Authenticode (OV signing)
+        required: false
       apple-application-cert:
         required: false
       apple-id:
@@ -437,7 +449,11 @@ jobs:
       gh-workflows-ref: ${{ inputs.gh-workflows-ref }}
       runs-on: ${{ inputs.win-runs-on }}
       signing-identity: ${{ inputs.win-signing-identity }}
-    secrets: inherit
+    secrets:
+      es_ov_username: ${{ secrets.es_ov_username }}
+      es_ov_password: ${{ secrets.es_ov_password }}
+      es_ov_credential_id: ${{ secrets.es_ov_credential_id }}
+      es_ov_totp_secret: ${{ secrets.es_ov_totp_secret }}
 
   sign:
     needs: [resolve, collect-matrix-artifacts, sign-mac, sign-windows]

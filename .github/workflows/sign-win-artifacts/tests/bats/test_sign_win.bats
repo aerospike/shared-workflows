@@ -54,10 +54,10 @@ setup() {
   TARGET_DIR="$TEST_TMPDIR/target-$$-$BATS_TEST_NUMBER"
   mkdir -p "$SOURCE_DIR"
 
-  export ES_USERNAME="user@example.com"
-  export ES_PASSWORD="secret-pass"
-  export CREDENTIAL_ID="cred-uuid-test"
-  export ES_TOTP_SECRET="totp-secret-test"
+  export ES_OV_USERNAME="user@example.com"
+  export ES_OV_PASSWORD="secret-pass"
+  export ES_OV_CREDENTIAL_ID="cred-uuid-test"
+  export ES_OV_TOTP_SECRET="totp-secret-test"
   export CODESIGNTOOL="$MOCK_BIN/CodeSignTool.sh"
 }
 
@@ -88,12 +88,12 @@ setup() {
 }
 
 @test "entrypoint fails without eSigner secrets when not dry-run" {
-  unset ES_USERNAME
+  unset ES_OV_USERNAME
   touch "$SOURCE_DIR/app.exe"
 
   run "$ENTRYPOINT" --source-dir "$SOURCE_DIR" --target-dir "$TARGET_DIR"
   [ "$status" -ne 0 ]
-  [[ "$output" == *"ES_USERNAME"* ]]
+  [[ "$output" == *"ES_OV_USERNAME"* ]]
 }
 
 # --- Full tree copy tests ---
@@ -212,7 +212,7 @@ setup() {
 }
 
 @test "dry-run does not require eSigner secrets" {
-  unset ES_USERNAME ES_PASSWORD CREDENTIAL_ID ES_TOTP_SECRET
+  unset ES_OV_USERNAME ES_OV_PASSWORD ES_OV_CREDENTIAL_ID ES_OV_TOTP_SECRET
   echo "x" > "$SOURCE_DIR/a.exe"
 
   run "$ENTRYPOINT" --source-dir "$SOURCE_DIR" --target-dir "$TARGET_DIR" --dry-run
