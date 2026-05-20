@@ -143,6 +143,9 @@ jobs:
               echo "ERROR: CodeSignTool.bat not found in zip" >&2
               exit 1
             fi
+            if command -v cygpath >/dev/null 2>&1; then
+              cst=$(cygpath -u "$cst")
+            fi
           else
             sudo apt-get update -qq
             sudo apt-get install -y -qq default-jre-headless curl unzip

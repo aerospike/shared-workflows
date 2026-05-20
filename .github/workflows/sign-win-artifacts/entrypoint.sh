@@ -113,21 +113,56 @@ if [[ $DRY_RUN != "true" ]]; then
     done
 fi
 
+# CodeSignTool.bat runs a Windows JVM: -input_file_path / -output_dir_path must be
+# absolute Windows paths. cygpath -w alone keeps relative paths relative; the JVM
+# then resolves them against the wrong working directory ("path not specified").
+codesigntool_path_for_args() {
+    local p="$1"
+    case "$(uname -s 2>/dev/null)" in
+    MINGW* | MSYS* | CYGWIN*)
+        if command -v cygpath >/dev/null 2>&1; then
+            cygpath -wa "$p" 2>/dev/null || cygpath -w "$p" 2>/dev/null || echo "$p"
+        else
+            echo "$p"
+        fi
+        ;;
+    *)
+        echo "$p"
+        ;;
+    esac
+}
+
+# Prefer MSYS-style path so bash can exec CodeSignTool.bat without mixed D:\.../... segments.
+normalize_codesigntool_exe() {
+    local c="$1"
+    case "$(uname -s 2>/dev/null)" in
+    MINGW* | MSYS* | CYGWIN*)
+        if command -v cygpath >/dev/null 2>&1 && [[ -f $c ]]; then
+            cygpath -u "$c" 2>/dev/null || echo "$c"
+        else
+            echo "$c"
+        fi
+        ;;
+    *)
+        echo "$c"
+        ;;
+    esac
+}
+
 resolve_codesigntool() {
+    local c=""
     if [[ -n ${CODESIGNTOOL-} ]]; then
-        echo "$CODESIGNTOOL"
-        return
+        c="$CODESIGNTOOL"
+    elif command -v CodeSignTool.bat >/dev/null 2>&1; then
+        c=$(command -v CodeSignTool.bat)
+    elif command -v CodeSignTool.sh >/dev/null 2>&1; then
+        c=$(command -v CodeSignTool.sh)
+    else
+        echo "ERROR: CodeSignTool not found. Set CODESIGNTOOL or install CodeSignTool.bat / CodeSignTool.sh on PATH." >&2
+        exit 1
     fi
-    if command -v CodeSignTool.bat >/dev/null 2>&1; then
-        command -v CodeSignTool.bat
-        return
-    fi
-    if command -v CodeSignTool.sh >/dev/null 2>&1; then
-        command -v CodeSignTool.sh
-        return
-    fi
-    echo "ERROR: CodeSignTool not found. Set CODESIGNTOOL or install CodeSignTool.bat / CodeSignTool.sh on PATH." >&2
-    exit 1
+
+    normalize_codesigntool_exe "$c"
 }
 
 # --- Glob matching (same semantics as sign-mac-artifacts, plus comma-separated alternates) ---
@@ -212,26 +247,44 @@ sign_one_file() {
 
     cst=$(resolve_codesigntool)
 
+    local outdir
+    case "$(uname -s 2>/dev/null)" in
+    MINGW* | MSYS* | CYGWIN*)
+        if [[ -n ${RUNNER_TEMP-} ]]; then
+            outdir="${RUNNER_TEMP}/signwin-out-$$-${RANDOM}"
+            mkdir -p "$outdir"
+        else
+            outdir=$(mktemp -d)
+        fi
+        ;;
+    *)
+        outdir=$(mktemp -d)
+        ;;
+    esac
+    # shellcheck disable=SC2064
+    trap "rm -rf '$outdir'" RETURN
+
+    local win_file win_outdir
+    win_file=$(codesigntool_path_for_args "$file")
+    win_outdir=$(codesigntool_path_for_args "$outdir")
+
     local -a cmd
     cmd=(
         "$cst" sign
         "-username=$ES_OV_USERNAME"
         "-password=$ES_OV_PASSWORD"
         "-credential_id=$ES_OV_CREDENTIAL_ID"
-        "-input_file_path=$file"
+        "-input_file_path=$win_file"
         "-totp_secret=$ES_OV_TOTP_SECRET"
     )
     if [[ $ext == "msi" && -n ${ESIGNER_PROGRAM_NAME-} ]]; then
         cmd+=("-program_name=$ESIGNER_PROGRAM_NAME")
     fi
 
-    local outdir
-    outdir=$(mktemp -d)
-    # shellcheck disable=SC2064
-    trap "rm -rf '$outdir'" RETURN
-    cmd+=("-output_dir_path=$outdir")
+    cmd+=("-output_dir_path=$win_outdir")
 
     echo "  Running CodeSignTool sign for: $file"
+    echo "  ...debug '${cmd[*]}'"
     run "${cmd[@]}"
 
     local base outpath
