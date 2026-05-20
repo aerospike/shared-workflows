@@ -1,0 +1,188 @@
+name: Sign Windows Artifacts
+
+on:
+  workflow_call:
+    inputs:
+      # Required inputs
+      gh-workflows-ref:
+        description: |
+          Git reference for shared-workflows checkout. Should match the version in your 'uses:' line.
+          GitHub Actions doesn't expose the called workflow's ref, so this is required.
+          See: .github/workflows/docs/why-gh-workflows-ref.md
+        required: true
+        type: string
+
+      # Optional inputs
+      artifact-glob:
+        description: |
+          Glob pattern(s) for files CodeSignTool may sign (.exe, .msi, .msix). Single pattern or comma-separated
+          list (optional spaces), e.g. "*.exe,*.msi,*.msix". Default **/* signs all supported extensions under the tree.
+        required: false
+        type: string
+        default: "**/*"
+      codesigntool-version:
+        description: SSL.com CodeSignTool release to install from SSLcom/CodeSignTool (Windows zip on Windows runners, Linux/mac zip elsewhere)
+        required: false
+        type: string
+        default: 1.3.2
+      dry-run:
+        description: Run in dry-run mode (skip CodeSignTool and secret requirements)
+        required: false
+        type: boolean
+        default: false
+      gh-checkout-path:
+        description: Directory to checkout the shared-workflows repository into
+        required: false
+        type: string
+        default: shared-workflows
+      gh-retention-days:
+        description: Retention days for the artifacts
+        required: false
+        type: number
+        default: 1
+      gh-unsigned-artifacts:
+        description: GitHub artifact name to download, sign, and overwrite
+        required: false
+        type: string
+        default: build-artifacts
+      runs-on:
+        description: Runner label (default windows-2025 for .msix and Windows CodeSignTool.bat; Linux runners use CodeSignTool.sh)
+        required: false
+        type: string
+        default: windows-2025
+      signing-identity:
+        description: |
+          Optional display name for MSI installs (CodeSignTool -program_name).
+          Often matches your product line; analogous to passing a human-readable identity alongside Mac signing.
+        required: false
+        type: string
+        default: ""
+
+    secrets:
+      es_ov_credential_id:
+        description: eSigner credential ID (SSL.com)
+        required: false
+      es_ov_password:
+        description: SSL.com account password
+        required: false
+      es_ov_totp_secret:
+        description: TOTP secret for automated OTP (same as NuGet signing in reusable_sign-artifacts)
+        required: false
+      es_ov_username:
+        description: SSL.com account username
+        required: false
+
+    outputs:
+      gh-artifact-name:
+        description: The name of the uploaded signed artifacts on GitHub
+        value: ${{ jobs.sign-win.outputs.gh-artifact-name }}
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  sign-win:
+    runs-on: ${{ inputs.runs-on }}
+    defaults:
+      run:
+        shell: bash
+    outputs:
+      gh-artifact-name: ${{ steps.sign-outputs.outputs.gh-artifact-name }}
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@8d3c67de8e2fe68ef647c8db1e6a09f647780f40 # v2.19.0
+        with:
+          egress-policy: audit
+
+      - name: Download Unsigned Artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ${{ inputs.gh-unsigned-artifacts }}
+          path: unsigned-artifacts
+          merge-multiple: true
+
+      - name: Checkout shared-workflows repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: aerospike/shared-workflows
+          ref: ${{ inputs.gh-workflows-ref }}
+          path: ${{ inputs.gh-checkout-path }}
+          fetch-depth: 1
+
+      - name: Validate eSigner secrets
+        if: ${{ !inputs.dry-run }}
+        run: |
+          missing=()
+          [ -z "${{ secrets.es_ov_username }}" ] && missing+=("es_ov_username")
+          [ -z "${{ secrets.es_ov_password }}" ] && missing+=("es_ov_password")
+          [ -z "${{ secrets.es_ov_credential_id }}" ] && missing+=("es_ov_credential_id")
+          [ -z "${{ secrets.es_ov_totp_secret }}" ] && missing+=("es_ov_totp_secret")
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "Error: Windows signing requires SSL.com eSigner secrets: ${missing[*]}" >&2
+            echo "Pass workflow_call secrets es_ov_username, es_ov_password, es_ov_credential_id, es_ov_totp_secret (typically from repo secrets ES_OV_USERNAME, ES_OV_PASSWORD, ES_OV_CREDENTIAL_ID, ES_OV_TOTP_SECRET), or use dry-run." >&2
+            exit 1
+          fi
+
+      - name: Install CodeSignTool
+        if: ${{ !inputs.dry-run }}
+        env:
+          CST_VER: ${{ inputs.codesigntool-version }}
+        run: |
+          set -euo pipefail
+          os=$(uname -s)
+          dest="${RUNNER_TEMP}/codesigntool"
+          rm -rf "$dest"
+          mkdir -p "$dest"
+          if [[ "$os" == MINGW* || "$os" == MSYS* || "$os" == CYGWIN* ]]; then
+            curl -fsSL -o "$RUNNER_TEMP/cst.zip" \
+              "https://github.com/SSLcom/CodeSignTool/releases/download/v${CST_VER}/CodeSignTool-v${CST_VER}-windows.zip"
+            unzip -qo "$RUNNER_TEMP/cst.zip" -d "$dest"
+            cst=$(find "$dest" -name 'CodeSignTool.bat' -type f | head -1)
+            if [[ -z "$cst" ]]; then
+              echo "ERROR: CodeSignTool.bat not found in zip" >&2
+              exit 1
+            fi
+          else
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq default-jre-headless curl unzip
+            curl -fsSL -o "$RUNNER_TEMP/cst.zip" \
+              "https://github.com/SSLcom/CodeSignTool/releases/download/v${CST_VER}/CodeSignTool-v${CST_VER}.zip"
+            unzip -qo "$RUNNER_TEMP/cst.zip" -d "$dest"
+            cst=$(find "$dest" -name 'CodeSignTool.sh' -type f | head -1)
+            if [[ -z "$cst" ]]; then
+              echo "ERROR: CodeSignTool.sh not found in zip" >&2
+              exit 1
+            fi
+            chmod +x "$cst"
+          fi
+          echo "CODESIGNTOOL=$cst" >> "$GITHUB_ENV"
+
+      - name: Sign Windows Artifacts
+        env:
+          ES_OV_USERNAME: ${{ secrets.es_ov_username }}
+          ES_OV_PASSWORD: ${{ secrets.es_ov_password }}
+          ES_OV_CREDENTIAL_ID: ${{ secrets.es_ov_credential_id }}
+          ES_OV_TOTP_SECRET: ${{ secrets.es_ov_totp_secret }}
+          ESIGNER_PROGRAM_NAME: ${{ inputs.signing-identity }}
+        run: |
+          entrypoint="${{ inputs.gh-checkout-path }}/.github/workflows/sign-win-artifacts/entrypoint.sh"
+          chmod +x "$entrypoint"
+          "$entrypoint" \
+            --source-dir unsigned-artifacts \
+            --target-dir signed-win-output \
+            --artifact-glob '${{ inputs.artifact-glob }}' \
+            ${{ inputs.dry-run && '--dry-run' || '' }}
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ inputs.gh-unsigned-artifacts }}
+          path: signed-win-output
+          overwrite: true
+          retention-days: ${{ inputs.gh-retention-days }}
+
+      - name: Set Outputs
+        id: sign-outputs
+        run: |
+          echo "gh-artifact-name=${{ inputs.gh-unsigned-artifacts }}" >> $GITHUB_OUTPUT

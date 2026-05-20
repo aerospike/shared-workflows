@@ -71,6 +71,7 @@ Chart linting and unit testing are the user's responsibility. Suggestion is to r
 
 ## Notes
 
+- When **`sign-windows: true`**, pass **`es_ov_username`**, **`es_ov_password`**, **`es_ov_credential_id`**, and **`es_ov_totp_secret`** into this workflow (for example from repository secrets **`ES_OV_USERNAME`**, **`ES_OV_PASSWORD`**, **`ES_OV_CREDENTIAL_ID`**, **`ES_OV_TOTP_SECRET`**). NuGet signing in the same pipeline still uses **`es-username`**, **`es-password`**, **`credential_id`**, and **`es-totp_secret`**.
 - The workflow generates a parent build-id automatically.
 - All artifacts get `version` and `package_name` target-props. Use `build-type` and `internal` for additional categorization.
 - **Java/Maven:** Set `setup-java: true` and optionally `java-version` (e.g. `"8"`, `"17"`), `java-distribution` (default `temurin`), and `java-cache` (default `maven`). These are passed through to the build step so Java is set up before your `build-script` runs. Matrix entries can override them per build (e.g. `setup-java: true`, `java-version: "17"`).

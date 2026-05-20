@@ -1,11 +1,9 @@
-name: "Example: Mac Artifact Signing"
+name: "Example: Windows Artifact Signing"
 
-# Demonstrates using the artifacts-cicd orchestrator with Mac signing enabled.
-# This example builds a macOS .pkg on a Mac runner, then the orchestrator
-# handles: collect -> sign-mac (Apple) -> sign (GPG) -> deploy.
+# Demonstrates reusable_artifacts-cicd with Windows Authenticode (SSL.com eSigner / CodeSignTool).
+# Flow: collect -> sign-mac (skipped when false) -> sign-windows -> sign (GPG + NuGet) -> deploy.
 #
-# For composable usage (calling sign-mac-artifacts directly), see CICD-composable.md.
-# For Windows (SSL.com / CodeSignTool) with the same orchestrator, see example_win-signing.yaml.
+# For a direct call to reusable_sign-win-artifacts.yaml, see sign-win-artifacts/README.md.
 
 on:
   workflow_dispatch:
@@ -15,7 +13,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: jfrog-test-deploy
+  group: jfrog-test-deploy-win
   cancel-in-progress: false
 
 jobs:
@@ -23,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
+        uses: step-security/harden-runner@8d3c67de8e2fe68ef647c8db1e6a09f647780f40 # v2.19.0
         with:
           egress-policy: audit
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -35,23 +33,21 @@ jobs:
     outputs:
       version: ${{ steps.extract.outputs.version }}
 
-  artifacts-cicd-with-mac:
+  artifacts-cicd-with-win:
     needs: extract-version
     uses: ./.github/workflows/reusable_artifacts-cicd.yaml
     with:
       gh-workflows-ref: ${{ github.sha }}
       jf-project: test
-      jf-build-name: test-mac-build
+      jf-build-name: test-win-build
       version: ${{ needs.extract-version.outputs.version }}
       gh-source-path: repo-source
-      gh-artifact-directory: dist
+      gh-artifact-directory: packaged-artifacts
       oidc-provider-name: gh-dev-test
       oidc-audience: aerospike/testing
-
+      dry-run: true
       build-env: VERSION=${{ needs.extract-version.outputs.version }}
 
-      # The matrix includes a macOS build alongside Linux builds.
-      # The macOS entry produces a .pkg; Linux entries produce deb/rpm.
       matrix-json: >-
         {"include":[
           {
@@ -64,22 +60,19 @@ jobs:
             "build-env":"EMULATED=false"
           },
           {
-            "runs-on":"macos-14",
-            "distro":"darwin",
-            "arch":"arm64",
+            "runs-on":"ubuntu-22.04",
+            "distro":"win10",
+            "arch":"x64",
             "working-directory":"repo-source/.github/workflows/execute-build/test_apps/hi",
-            "gh-artifact-directory":"dist",
-            "build-script":"make clean build DISTRO=darwin ARCH=arm64 && mkdir -p dist && pkgbuild --root build/darwin/arm64 --identifier com.aerospike.test --version $VERSION --install-location /usr/local/bin dist/test-$VERSION-darwin-arm64.pkg"
+            "gh-artifact-directory":"packaged-artifacts",
+            "build-script":"mkdir -p packaged-artifacts && head -c 2048 /dev/zero > packaged-artifacts/example-win-test.exe && head -c 2048 /dev/zero > packaged-artifacts/example-win-test.msi && head -c 2048 /dev/zero > packaged-artifacts/example-win-test.msix"
           }
         ]}
 
-      # Mac signing configuration
-      sign-mac: true
-      mac-signing-identity: "Developer ID Application: Aerospike, Inc. (22224RFU67)"
-      mac-installer-identity: "Developer ID Installer: Aerospike, Inc. (22224RFU67)"
-      mac-artifact-glob: "*.pkg"
-      mac-notarize: true
-      mac-runs-on: macos-14
+      sign-mac: false
+      sign-windows: true
+      win-artifact-glob: "*.exe,*.msi,*.msix"
+      win-runs-on: windows-2025
 
       build-script: |
         echo "Default build script (overridden per matrix entry)"
@@ -88,9 +81,11 @@ jobs:
       gpg-private-key: ${{ secrets.GPG_SECRET_KEY }}
       gpg-public-key: ${{ secrets.GPG_PUBLIC_KEY }}
       gpg-key-pass: ${{ secrets.GPG_PASS }}
-      apple-application-cert: ${{ secrets.APPLE_APPLICATION_CERT }}
-      apple-id: ${{ secrets.APPLE_ID }}
-      apple-installer-cert: ${{ secrets.APPLE_INSTALLER_CERT }}
-      apple-cert-password: ${{ secrets.APPLE_CERT_PASSWORD }}
-      apple-notarization-password: ${{ secrets.APPLE_NOTARIZATION_PASSWORD }}
-      apple-team-id: ${{ secrets.APPLE_TEAM_ID }}
+      es-username: ${{ secrets.ES_USERNAME }}
+      es-password: ${{ secrets.ES_PASSWORD }}
+      credential_id: ${{ secrets.CREDENTIAL_ID }}
+      es-totp_secret: ${{ secrets.ES_TOTP_SECRET }}
+      es_ov_username: ${{ secrets.ES_OV_USERNAME }}
+      es_ov_password: ${{ secrets.ES_OV_PASSWORD }}
+      es_ov_credential_id: ${{ secrets.ES_OV_CREDENTIAL_ID }}
+      es_ov_totp_secret: ${{ secrets.ES_OV_TOTP_SECRET }}

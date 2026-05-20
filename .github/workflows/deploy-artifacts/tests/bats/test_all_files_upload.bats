@@ -65,6 +65,11 @@ teardown_file() {
   # Python sdist should go to pypi repo, not generic
   [[ "$upload_commands" == *"aerospike-hello-1.0.0.tar.gz"*"pypi-dev-local"* ]]
 
+  # Windows win type uploads via generic-dev-local (not a separate win-dev-local repo)
+  [[ "$upload_commands" == *"ci-win-fixture.exe"*"generic-dev-local"* ]]
+  [[ "$upload_commands" == *"ci-win-fixture.msi"*"generic-dev-local"* ]]
+  [[ "$upload_commands" == *"ci-win-fixture.msix"*"generic-dev-local"* ]]
+
   # NuGet packages should ONLY go to nuget-dev-local, never generic-dev-local
   local nupkg_in_generic_found=false
   mapfile -t upload_cmd_array < <(echo "$upload_commands")

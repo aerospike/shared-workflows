@@ -32,6 +32,23 @@ teardown_file() {
   assert_processing_message "$output" "RPM"
 }
 
+@test "WIN processing messages appear" {
+  local output
+  output=$(run_entrypoint_dry_run "test-project" "test-build" "v1.0.0" "12345" "12345-metadata")
+
+  assert_processing_message "$output" "WIN"
+}
+
+@test "Deploy dry-run logs Windows upload for win type (generic-dev-local)" {
+  local output
+  output=$(run_entrypoint_dry_run "test-project" "test-build" "v1.0.0" "12345" "12345-metadata")
+
+  [[ "$output" == *"Uploading Windows artifacts"* ]]
+  [[ "$output" == *"Uploading Windows file:"*"ci-win-fixture.exe"* ]]
+  [[ "$output" == *"Uploading Windows file:"*"ci-win-fixture.msi"* ]]
+  [[ "$output" == *"Uploading Windows file:"*"ci-win-fixture.msix"* ]]
+}
+
 @test "Structured artifact directories are created" {
   local output
   output=$(run_entrypoint_dry_run "test-project" "test-build" "v1.0.0" "12345" "12345-metadata")
@@ -40,6 +57,7 @@ teardown_file() {
   # this list will grow as we have more types such as nupkg, etc.
   [[ -d "$TEST_DIR/structured_build_artifacts/deb" ]]
   [[ -d "$TEST_DIR/structured_build_artifacts/rpm" ]]
+  [[ -d "$TEST_DIR/structured_build_artifacts/win" ]]
   [[ -d "$TEST_DIR/structured_build_artifacts/generic" ]]
 }
 

@@ -128,6 +128,27 @@ setup() {
   find "$ARTIFACTS_DIR" -name "*.pkg" | grep -q .
 }
 
+@test "Windows .exe from matrix job upload-artifact (build-artifacts-win10-x64) survives pipeline" {
+  if [ "${LOCAL_SIGNING:-}" = "true" ]; then
+    skip "CI-only: win10 matrix produces ci-win-upload-artifact.exe"
+  fi
+  find "$ARTIFACTS_DIR" -name "ci-win-upload-artifact.exe" | grep -q .
+}
+
+@test "Windows .msi from matrix job upload-artifact (build-artifacts-win10-x64) survives pipeline" {
+  if [ "${LOCAL_SIGNING:-}" = "true" ]; then
+    skip "CI-only: win10 matrix produces ci-win-upload-artifact.msi"
+  fi
+  find "$ARTIFACTS_DIR" -name "ci-win-upload-artifact.msi" | grep -q .
+}
+
+@test "Windows .msix from matrix job upload-artifact (build-artifacts-win10-x64) survives pipeline" {
+  if [ "${LOCAL_SIGNING:-}" = "true" ]; then
+    skip "CI-only: win10 matrix produces ci-win-upload-artifact.msix"
+  fi
+  find "$ARTIFACTS_DIR" -name "ci-win-upload-artifact.msix" | grep -q .
+}
+
 # --- Signing verification ---
 
 @test "All DEB packages have corresponding .asc signature files" {
@@ -224,7 +245,7 @@ setup() {
     if [ "$size" -lt "$min_size" ]; then
       issues="$issues\n  Too small: $(basename "$artifact") ($size bytes)"
     fi
-  done < <(find "$ARTIFACTS_DIR" \( -name "*.deb" -o -name "*.rpm" -o -name "*.nupkg" -o -name "*.pkg" \))
+  done < <(find "$ARTIFACTS_DIR" \( -name "*.deb" -o -name "*.rpm" -o -name "*.nupkg" -o -name "*.pkg" -o -name "*.exe" -o -name "*.msi" -o -name "*.msix" \))
 
   if [ -n "$issues" ]; then
     echo -e "Size issues:$issues"
@@ -234,7 +255,7 @@ setup() {
 
 @test "No duplicate basenames across all artifacts" {
   local all_names
-  all_names=$(find "$ARTIFACTS_DIR" \( -name "*.deb" -o -name "*.rpm" -o -name "*.nupkg" -o -name "*.pkg" \) -exec basename {} \; | sort)
+  all_names=$(find "$ARTIFACTS_DIR" \( -name "*.deb" -o -name "*.rpm" -o -name "*.nupkg" -o -name "*.pkg" -o -name "*.exe" -o -name "*.msi" -o -name "*.msix" \) -exec basename {} \; | sort)
 
   local duplicates
   duplicates=$(echo "$all_names" | uniq -d)

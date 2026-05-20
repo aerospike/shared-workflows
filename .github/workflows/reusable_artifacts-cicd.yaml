@@ -228,6 +228,30 @@ on:
         type: string
         default: ""
 
+      # Windows signing (optional; runs after sign-mac; uses SSL.com eSigner / CodeSignTool)
+      sign-windows:
+        description: Enable Windows code signing (.exe, .msi, .msix)
+        required: false
+        type: boolean
+        default: false
+      win-artifact-glob:
+        description: |
+          Glob(s) for Windows signing scope (passed to sign-win-artifacts artifact-glob). One pattern or comma-separated,
+          e.g. "*.exe,*.msi,*.msix". Default **/*
+        required: false
+        type: string
+        default: "**/*"
+      win-runs-on:
+        description: Runner for the sign-windows job
+        required: false
+        type: string
+        default: windows-2025
+      win-signing-identity:
+        description: Optional display name for signed installers (CodeSignTool -program_name)
+        required: false
+        type: string
+        default: ""
+
     secrets:
       gpg-private-key:
         required: true
@@ -242,6 +266,18 @@ on:
       credential_id:
         required: false
       es-totp_secret:
+        required: false
+      es_ov_credential_id:
+        description: eSigner credential ID for Windows Authenticode (OV signing)
+        required: false
+      es_ov_password:
+        description: SSL.com account password for Windows Authenticode (OV signing)
+        required: false
+      es_ov_totp_secret:
+        description: TOTP secret for Windows Authenticode (OV signing)
+        required: false
+      es_ov_username:
+        description: SSL.com account username for Windows Authenticode (OV signing)
         required: false
       apple-application-cert:
         required: false
@@ -400,9 +436,28 @@ jobs:
       dry-run: ${{ inputs.dry-run }}
     secrets: inherit
 
-  sign:
+  sign-windows:
+    if: inputs.sign-windows && always() && !cancelled() && needs.collect-matrix-artifacts.result == 'success' && needs.sign-mac.result != 'failure'
     needs: [resolve, collect-matrix-artifacts, sign-mac]
-    if: always() && !cancelled() && needs.collect-matrix-artifacts.result == 'success' && needs.sign-mac.result != 'failure'
+    uses: ./.github/workflows/reusable_sign-win-artifacts.yaml
+    with:
+      artifact-glob: ${{ inputs.win-artifact-glob }}
+      dry-run: ${{ inputs.dry-run }}
+      gh-checkout-path: ${{ inputs.gh-checkout-path }}
+      gh-retention-days: ${{ inputs.gh-retention-days }}
+      gh-unsigned-artifacts: build-artifacts
+      gh-workflows-ref: ${{ inputs.gh-workflows-ref }}
+      runs-on: ${{ inputs.win-runs-on }}
+      signing-identity: ${{ inputs.win-signing-identity }}
+    secrets:
+      es_ov_username: ${{ secrets.es_ov_username }}
+      es_ov_password: ${{ secrets.es_ov_password }}
+      es_ov_credential_id: ${{ secrets.es_ov_credential_id }}
+      es_ov_totp_secret: ${{ secrets.es_ov_totp_secret }}
+
+  sign:
+    needs: [resolve, collect-matrix-artifacts, sign-mac, sign-windows]
+    if: always() && !cancelled() && needs.collect-matrix-artifacts.result == 'success' && needs.sign-mac.result != 'failure' && needs.sign-windows.result != 'failure'
     uses: ./.github/workflows/reusable_sign-artifacts.yaml
     with:
       gh-artifact-name: signed-artifacts
