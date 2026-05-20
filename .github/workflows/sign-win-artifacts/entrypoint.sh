@@ -51,6 +51,9 @@ Environment variables (required when not dry-run):
 Environment variables (optional):
   ESIGNER_PROGRAM_NAME   Passed to CodeSignTool as -program_name for MSI (UAC display name)
   CODESIGNTOOL           Path to CodeSignTool (CodeSignTool.bat on Windows, CodeSignTool.sh on Linux/macOS)
+  CODE_SIGN_TOOL_PATH    (Windows .bat only) Absolute Windows path to the extracted CodeSignTool bundle root
+                         (directory that contains jdk-*, jar/, CodeSignTool.bat). Required when the process
+                         cwd is not that directory; reusable_sign-win-artifacts sets this after unzip.
 
 Examples:
   entrypoint.sh --source-dir unsigned-artifacts --target-dir signed-output
@@ -283,8 +286,17 @@ sign_one_file() {
 
     cmd+=("-output_dir_path=$win_outdir")
 
+    # CodeSignTool.bat runs .\jdk-11...\java when CODE_SIGN_TOOL_PATH is unset; cwd is usually the repo root.
+    case "$(uname -s 2>/dev/null)" in
+    MINGW* | MSYS* | CYGWIN*)
+        if [[ ${cst,,} == *.bat ]]; then
+            export CODE_SIGN_TOOL_PATH
+            CODE_SIGN_TOOL_PATH=$(codesigntool_path_for_args "$(dirname "$cst")")
+        fi
+        ;;
+    esac
+
     echo "  Running CodeSignTool sign for: $file"
-    echo "  ...debug '${cmd[*]}'"
     run "${cmd[@]}"
 
     local base outpath

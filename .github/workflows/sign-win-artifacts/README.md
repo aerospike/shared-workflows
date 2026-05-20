@@ -37,6 +37,8 @@ The signing step sets environment variables **`ES_OV_USERNAME`**, **`ES_OV_PASSW
 
 When `dry-run: true`, these secrets may be omitted.
 
+**Windows:** SSL.com’s `CodeSignTool.bat` runs the bundled JRE via paths relative to the **extracted bundle root** only when `CODE_SIGN_TOOL_PATH` is set; otherwise it uses `.\jdk-*`, which resolves against the **process cwd** (often the GitHub workspace, where there is no `jdk-*`). This reusable workflow sets `CODE_SIGN_TOOL_PATH` after unzip. If you call [`entrypoint.sh`](./entrypoint.sh) yourself on Windows, export `CODE_SIGN_TOOL_PATH` to the absolute Windows path of that bundle root (parent of `CodeSignTool.bat`).
+
 ---
 
 ## Example Usage
