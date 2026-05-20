@@ -178,18 +178,19 @@ runs:
         username: ${{ steps.jf.outputs.oidc-user }}
         password: ${{ steps.jf.outputs.oidc-token }}
 
-    - name: Create named volume to send TLS and config files to the server
+    - name: Create volumes to send TLS files and server config file to the server
       id: server-volume
       run: |
-        VOLUME_NAME="server_volume"
-        echo "volume_name=$VOLUME_NAME" >> "$GITHUB_OUTPUT"
-        docker volume create "$VOLUME_NAME"
+        CONFIG_FILES_VOLUME_NAME="server_volume"
+        echo "conf_volume_name=$CONFIG_FILES_VOLUME_NAME" >> "$GITHUB_OUTPUT"
+        docker volume create "$CONFIG_FILES_VOLUME_NAME"
 
         CONTAINER_NAME_TO_LOAD_VOLUME="container_to_load_volume"
         echo "container_name_to_load_volume=$CONTAINER_NAME_TO_LOAD_VOLUME" >> "$GITHUB_OUTPUT"
+
         # Avoid overriding the default config files in /etc/aerospike
         VOLUME_DEST_DIR=/etc/aerospike-custom
-        echo "volume_dest_dir=$VOLUME_DEST_DIR" >> "$GITHUB_OUTPUT"
+        echo "conf_volume_dest_dir=$VOLUME_DEST_DIR" >> "$GITHUB_OUTPUT"
 
         TLS_VOLUME_NAME="tls_server_volume"
         echo "tls_volume_name=$TLS_VOLUME_NAME" >> "$GITHUB_OUTPUT"
@@ -198,10 +199,13 @@ runs:
         TLS_VOLUME_DEST_DIR=/etc/aerospike/tls
         echo "tls_volume_dest_dir=$TLS_VOLUME_DEST_DIR" >> "$GITHUB_OUTPUT"
 
-        docker run --name "$CONTAINER_NAME_TO_LOAD_VOLUME" -d -v "$VOLUME_NAME:$VOLUME_DEST_DIR" -v "$TLS_VOLUME_NAME:$TLS_VOLUME_DEST_DIR" alpine tail -f /dev/null
+        docker run --name "$CONTAINER_NAME_TO_LOAD_VOLUME" -d \
+          -v "$CONFIG_FILES_VOLUME_NAME:$VOLUME_DEST_DIR" \
+          -v "$TLS_VOLUME_NAME:$TLS_VOLUME_DEST_DIR" \
+          alpine tail -f /dev/null
       shell: bash -ex {0}
       env:
-        # Prevents VOLUME_DEST_DIR from being expanded since it starts with /
+        # Prevents volume directories from being expanded since they start with /
         MSYS_NO_PATHCONV: 1
 
     - name: Generate TLS certificates
@@ -288,7 +292,7 @@ runs:
         source "${{ github.action_path }}/config-helpers.sh"
 
         export FEATURE_KEY_FILE
-        FEATURE_KEY_FILE=$(build_feature_key_file_directive "$server_edition" "${{ inputs.features-file }}" "${FEATURES_CONTENT}" "${{ steps.server-volume.outputs.volume_dest_dir }}/features.conf")
+        FEATURE_KEY_FILE=$(build_feature_key_file_directive "$server_edition" "${{ inputs.features-file }}" "${FEATURES_CONTENT}" "${{ steps.server-volume.outputs.conf_volume_dest_dir }}/features.conf")
 
         # Build security stanza from template
         export SECURITY=""
@@ -371,11 +375,11 @@ runs:
         echo "config-path=$config_path" >> "$GITHUB_OUTPUT"
 
         if [[ -n "$config_path" ]]; then
-          docker cp "$config_path" "${{ steps.server-volume.outputs.container_name_to_load_volume }}:${{ steps.server-volume.outputs.volume_dest_dir }}"
+          docker cp "$config_path" "${{ steps.server-volume.outputs.container_name_to_load_volume }}:${{ steps.server-volume.outputs.conf_volume_dest_dir }}"
         fi
 
         if [[ "$server_edition" == "enterprise" && -n "$features_path" ]]; then
-          docker cp "$features_path" "${{ steps.server-volume.outputs.container_name_to_load_volume }}:${{ steps.server-volume.outputs.volume_dest_dir }}"
+          docker cp "$features_path" "${{ steps.server-volume.outputs.container_name_to_load_volume }}:${{ steps.server-volume.outputs.conf_volume_dest_dir }}"
         fi
 
     - name: Create Docker network
@@ -407,7 +411,6 @@ runs:
         config_path="${{ steps.prepare-config.outputs.config-path }}"
         enable_tls="${{ inputs.enable-tls }}"
         tls_base_port=${{ inputs.tls-base-port }}
-        tls_cert_dir="${{ steps.generate-tls-certs.outputs.tls-cert-dir }}"
         effective_security="${{ steps.validate.outputs.effective-security }}"
         enable_sc="${{ inputs.enable-strong-consistency }}"
         server_edition="${{ steps.validate.outputs.server-edition }}"
@@ -473,7 +476,7 @@ runs:
             source "${{ github.action_path }}/config-helpers.sh"
 
             export FEATURE_KEY_FILE
-            FEATURE_KEY_FILE=$(build_feature_key_file_directive "$server_edition" "$features_path" "" "${{ steps.server-volume.outputs.volume_dest_dir }}/features.conf")
+            FEATURE_KEY_FILE=$(build_feature_key_file_directive "$server_edition" "$features_path" "" "${{ steps.server-volume.outputs.conf_volume_dest_dir }}/features.conf")
 
             # Build security stanza from template
             export SECURITY=""
@@ -501,7 +504,7 @@ runs:
             awk -v seeds="$mesh_seeds" '/mode mesh/{print; printf "%s", seeds; next}1' "$config_path" > "$cluster_config"
             config_path="$cluster_config"
           fi
-          docker cp "$config_path" "${{ steps.server-volume.outputs.container_name_to_load_volume }}:${{ steps.server-volume.outputs.volume_dest_dir }}"
+          docker cp "$config_path" "${{ steps.server-volume.outputs.container_name_to_load_volume }}:${{ steps.server-volume.outputs.conf_volume_dest_dir }}"
         fi
 
         for (( i=1; i<=num_nodes; i++ )); do
@@ -542,10 +545,10 @@ runs:
           run_args+=("${env_flags[@]}")
 
           if [[ -n "$config_path" ]]; then
-            run_args+=("-v" "${{ steps.server-volume.outputs.volume_name }}:${{ steps.server-volume.outputs.volume_dest_dir }}")
+            run_args+=("-v" "${{ steps.server-volume.outputs.conf_volume_name }}:${{ steps.server-volume.outputs.conf_volume_dest_dir }}")
           fi
 
-          if [[ -n "$tls_cert_dir" ]]; then
+          if [[ "${{ inputs.enable_tls }}" == "true" ]]; then
             run_args+=("-v" "${{ steps.server-volume.outputs.tls_volume_name }}:${{ steps.server-volume.outputs.tls_volume_dest_dir }}")
           fi
 
@@ -565,7 +568,7 @@ runs:
 
           if [[ -n "$config_path" ]]; then
             aerospike_conf_filename=$(basename "$config_path")
-            run_args+=("--config-file" "${{ steps.server-volume.outputs.volume_dest_dir }}/$aerospike_conf_filename")
+            run_args+=("--config-file" "${{ steps.server-volume.outputs.conf_volume_dest_dir }}/$aerospike_conf_filename")
           fi
 
           # No longer need this
