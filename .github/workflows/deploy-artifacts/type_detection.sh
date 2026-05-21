@@ -14,11 +14,11 @@
 #
 # PyPI ambiguous archives use the artifact-publisher style detector (wheel METADATA + sdist
 # PKG-INFO / .dist-info METADATA with non-empty Name/Version). Additional passes mirror
-# jfrog-fetch "Detect *" steps: wheels under the artifacts root, Maven POM coordinate checks,
-# and docker-images.json bundle metadata into generic/docker/.
+# jfrog-fetch-style passes: wheels, Maven POMs, docker-images.json, NuGet packages
+# (.nupkg / .snupkg by extension, validated with is_nuget_package from artifact-publisher).
 #
-# Content predicates (is_npm_package, is_pypi_package, is_go_module, is_maven_package) live here;
-# package_utils keeps metadata extractors (e.g. _extract_npm_package_json, get_go_metadata).
+# Content predicates (is_npm_package, is_pypi_package, is_go_module, is_maven_package,
+# is_nuget_package, is_helm_chart) live here; package_utils keeps metadata extractors.
 
 # --- npm --------------------------------------------------------------------------------------
 
@@ -156,6 +156,54 @@ is_maven_package() {
     return 1
 }
 
+# --- NuGet (artifact-publisher artifact-identification.sh) ------------------------------------
+
+_nuget_trim() {
+    local s="$1"
+    s="${s//$'\r'/}"
+    s="${s#"${s%%[![:space:]]*}"}"
+    s="${s%"${s##*[![:space:]]}"}"
+    printf '%s' "$s"
+}
+
+# is_nuget_package <path>
+# Returns 0 if the file is a *.nupkg or *.snupkg zip containing a .nuspec with non-empty <id> and <version>.
+is_nuget_package() {
+    local f="$1"
+    local nuspec xml pkg_id version raw_id raw_version
+
+    [[ -n $f && -f $f && -r $f ]] || return 1
+    case "${f,,}" in
+    *.nupkg | *.snupkg) ;;
+    *)
+        echo "Not a NuGet package: $f (expected *.nupkg or *.snupkg)" >&2
+        return 1
+        ;;
+    esac
+
+    if ! command -v unzip >/dev/null 2>&1; then
+        echo "Not a NuGet package: unzip is required" >&2
+        return 1
+    fi
+
+    nuspec=$(unzip -Z1 "$f" 2>/dev/null | grep -E '\.nuspec$' | head -n1) || return 1
+    [[ -n $nuspec ]] || return 1
+
+    xml=$(unzip -p "$f" "$nuspec" 2>/dev/null) || return 1
+    [[ -n $xml ]] || return 1
+
+    raw_id=$(printf '%s' "$xml" | sed -n 's/.*<id>\([^<]*\)<\/id>.*/\1/p' | head -n1)
+    raw_version=$(printf '%s' "$xml" | sed -n 's/.*<version>\([^<]*\)<\/version>.*/\1/p' | head -n1)
+    pkg_id=$(_nuget_trim "$raw_id")
+    version=$(_nuget_trim "$raw_version")
+
+    if [[ -n $pkg_id && -n $version ]]; then
+        return 0
+    fi
+    echo "Not a NuGet package: $f (.nuspec missing id or version)" >&2
+    return 1
+}
+
 # Detect npm: handled by existing CONTENT_DETECT_ORDER + is_npm_package (no extra pass).
 
 # Detect PyPI wheels: jfrog-fetch stages *.whl with is_pypi_package; the main content loop only
@@ -175,6 +223,28 @@ _detect_structure_pypi_wheels() {
             fi
         fi
     done < <(find "$artifacts_root" -name "*.whl" -type f -print0 2>/dev/null)
+}
+
+# Detect NuGet: extension-based find; is_nuget_package validates .nuspec (artifact-publisher).
+# Uses TYPE_STRUCT_DIR[nupkg] and process_nupkg for both .nupkg and .snupkg; manifest type matches extension.
+_detect_structure_nuget_packages() {
+    local artifacts_root="$1"
+    local dest="./structured_build_artifacts/${TYPE_STRUCT_DIR[nupkg]}"
+    while IFS= read -r -d '' file; do
+        [[ -f $file ]] || continue
+        is_nuget_package "$file" || continue
+        local kind=nupkg
+        case "${file,,}" in
+        *.snupkg) kind=snupkg ;;
+        esac
+        echo "Processing ${kind^^}: $file" >&2
+        local target_path
+        target_path=$(process_nupkg "$file" "$dest")
+        if [[ -n $target_path ]]; then
+            gather_companions "$file" "$(dirname "$target_path")" "$kind"
+            manifest_add "$target_path" "$kind"
+        fi
+    done < <(find "$artifacts_root" \( -name "*.nupkg" -o -name "*.snupkg" \) -type f -print0 2>/dev/null)
 }
 
 # Detect Maven POMs: coordinate validation then same jar/ layout as structure_standalone_poms.
@@ -264,6 +334,7 @@ structure_content_detected_files() {
     done < <(find "$artifacts_root" \( "${find_args[@]}" \) -print0)
 
     _detect_structure_pypi_wheels "$artifacts_root"
+    _detect_structure_nuget_packages "$artifacts_root"
     _detect_structure_maven_poms "$artifacts_root"
     _detect_structure_docker_bundle_metadata "$artifacts_root"
 }
