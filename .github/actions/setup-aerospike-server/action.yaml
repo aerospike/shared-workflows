@@ -269,7 +269,7 @@ runs:
 
         # Make sure that docker gets the actual Windows path of the user's temp folder in order to copy properly
         # Exporting MSYS2_ARG_CONV_EXCL set to the container name doesn't prevent the volume dest dir from being expanded
-        if [[ ${{ runner.os == 'Windows' }} ]]; then
+        if [[ "${{ runner.os }}" == "Windows" ]]; then
           copy_path="$(cygpath -w "$cert_dir")\\."
         else
           copy_path="$cert_dir/."
