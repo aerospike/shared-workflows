@@ -362,7 +362,13 @@ jobs:
     with:
       build-script: ${{ matrix['build-script'] || inputs.build-script }}
       build-script-path: ${{ matrix['build-script-path'] || inputs.build-script-path }}
-      build-env: ${{ format('MATRIX_JSON={0}{1}', toJSON(matrix), (matrix['build-env'] || inputs.build-env) != '' && format(';{0}', matrix['build-env'] || inputs.build-env) || '') }}
+      # Merge top-level build-env with matrix-level build-env. Matrix entries
+      # appear after top-level so the parser's later-wins semantics make
+      # matrix-level shadow top-level on key conflicts. MATRIX_JSON is no
+      # longer smuggled here; it travels via matrix-json-data below so its
+      # JSON content cannot collide with the ';' delimiter.
+      build-env: ${{ inputs.build-env != '' && matrix['build-env'] != '' && format('{0};{1}', inputs.build-env, matrix['build-env']) || inputs.build-env || matrix['build-env'] || '' }}
+      matrix-json-data: ${{ toJSON(matrix) }}
       dry-run: ${{ inputs.dry-run }}
       gh-artifact-directory: ${{ matrix['gh-artifact-directory'] || inputs.gh-artifact-directory }}
       gh-artifact-name: build-artifacts-${{ matrix.distro }}-${{ matrix.arch }}

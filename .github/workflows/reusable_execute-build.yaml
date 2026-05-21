@@ -84,6 +84,15 @@ on:
         description: JFrog Artifactory URL
         type: string
         default: https://artifact.aerospike.io
+      matrix-json-data:
+        description: |
+          Optional JSON string carrying the matrix entry. Exported as MATRIX_JSON to
+          the build subprocess so build scripts can read matrix fields with `jq`.
+          Carried via a dedicated input (not build-env) so values containing
+          semicolons cannot collide with the build-env parser delimiter.
+        required: false
+        type: string
+        default: ""
       oidc-audience:
         type: string
         default: aerospike
@@ -256,48 +265,24 @@ jobs:
         shell: bash
         env:
           BUILD_ENV: ${{ inputs.build-env }}
+          MATRIX_JSON: ${{ inputs.matrix-json-data }}
         run: |
-          # handle inject build-env into the build step
-          # some care must be taken to allow literal semicolons and backslashes in the build-env
-          if [[ -n "${BUILD_ENV:-}" ]]; then
-            current=""
-            escape="false"
-            pairs=()
-            for (( i=0; i<${#BUILD_ENV}; i++ )); do
-              char="${BUILD_ENV:i:1}"
-              if [[ "$escape" == "true" ]]; then
-                current+="$char"
-                escape="false"
-                continue
-              fi
-              if [[ "$char" == "\\" ]]; then
-                escape="true"
-                continue
-              fi
-              if [[ "$char" == ";" ]]; then
-                pairs+=("$current")
-                current=""
-                continue
-              fi
-              current+="$char"
-            done
-            pairs+=("$current")
-
-            for pair in "${pairs[@]}"; do
-              [[ -z "$pair" ]] && continue
-              if [[ "$pair" != *=* ]]; then
-                echo "Error: build-env entries must be KEY=VALUE (got: $pair)" >&2
-                exit 1
-              fi
-              key="${pair%%=*}"
-              value="${pair#*=}"
-              if [[ -z "$key" || ! "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
-                echo "Error: invalid env var name '$key' in build-env" >&2
-                exit 1
-              fi
-              export "$key=$value"
-            done
-          fi
+          # Parse build-env into per-key exports. The parser lives in
+          # parse-build-env.sh so it can be unit-tested. MATRIX_JSON is
+          # carried via a dedicated input (above) so values containing ';'
+          # cannot collide with the build-env delimiter.
+          parser="${{ inputs.gh-checkout-path }}/.github/workflows/execute-build/parse-build-env.sh"
+          chmod +x "$parser"
+          # Apply each KEY=VALUE both as a shell export (for entrypoint.sh
+          # subprocess in this step) and into $GITHUB_ENV (for subsequent
+          # steps). Later assignments to the same key overwrite earlier ones,
+          # which is how matrix-level entries (appended after top-level by
+          # the orchestrator) shadow top-level values.
+          while IFS= read -r line; do
+            [[ -z $line ]] && continue
+            export "${line?}"
+            echo "$line" >>"$GITHUB_ENV"
+          done < <("$parser")
 
           # Entrypoint scripts are always in the shared-workflows checkout location
           entrypoint=$(realpath "${{ inputs.gh-checkout-path }}/.github/workflows/execute-build/entrypoint.sh")
