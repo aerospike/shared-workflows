@@ -143,6 +143,12 @@ jobs:
               echo "ERROR: CodeSignTool.bat not found in zip" >&2
               exit 1
             fi
+            if command -v cygpath >/dev/null 2>&1; then
+              # CodeSignTool.bat uses .\jdk-... when unset; cwd is the workspace, so Java is not found.
+              # SSL.com documents CODE_SIGN_TOOL_PATH as the extracted bundle root (contains jdk-*, jar/).
+              echo "CODE_SIGN_TOOL_PATH=$(cygpath -wa "$dest")" >> "$GITHUB_ENV"
+              cst=$(cygpath -u "$cst")
+            fi
           else
             sudo apt-get update -qq
             sudo apt-get install -y -qq default-jre-headless curl unzip

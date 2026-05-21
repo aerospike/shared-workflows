@@ -51,6 +51,9 @@ Environment variables (required when not dry-run):
 Environment variables (optional):
   ESIGNER_PROGRAM_NAME   Passed to CodeSignTool as -program_name for MSI (UAC display name)
   CODESIGNTOOL           Path to CodeSignTool (CodeSignTool.bat on Windows, CodeSignTool.sh on Linux/macOS)
+  CODE_SIGN_TOOL_PATH    (Windows .bat only) Absolute Windows path to the extracted CodeSignTool bundle root
+                         (directory that contains jdk-*, jar/, CodeSignTool.bat). Required when the process
+                         cwd is not that directory; reusable_sign-win-artifacts sets this after unzip.
 
 Examples:
   entrypoint.sh --source-dir unsigned-artifacts --target-dir signed-output
@@ -113,21 +116,56 @@ if [[ $DRY_RUN != "true" ]]; then
     done
 fi
 
+# CodeSignTool.bat runs a Windows JVM: -input_file_path / -output_dir_path must be
+# absolute Windows paths. cygpath -w alone keeps relative paths relative; the JVM
+# then resolves them against the wrong working directory ("path not specified").
+codesigntool_path_for_args() {
+    local p="$1"
+    case "$(uname -s 2>/dev/null)" in
+    MINGW* | MSYS* | CYGWIN*)
+        if command -v cygpath >/dev/null 2>&1; then
+            cygpath -wa "$p" 2>/dev/null || cygpath -w "$p" 2>/dev/null || echo "$p"
+        else
+            echo "$p"
+        fi
+        ;;
+    *)
+        echo "$p"
+        ;;
+    esac
+}
+
+# Prefer MSYS-style path so bash can exec CodeSignTool.bat without mixed D:\.../... segments.
+normalize_codesigntool_exe() {
+    local c="$1"
+    case "$(uname -s 2>/dev/null)" in
+    MINGW* | MSYS* | CYGWIN*)
+        if command -v cygpath >/dev/null 2>&1 && [[ -f $c ]]; then
+            cygpath -u "$c" 2>/dev/null || echo "$c"
+        else
+            echo "$c"
+        fi
+        ;;
+    *)
+        echo "$c"
+        ;;
+    esac
+}
+
 resolve_codesigntool() {
+    local c=""
     if [[ -n ${CODESIGNTOOL-} ]]; then
-        echo "$CODESIGNTOOL"
-        return
+        c="$CODESIGNTOOL"
+    elif command -v CodeSignTool.bat >/dev/null 2>&1; then
+        c=$(command -v CodeSignTool.bat)
+    elif command -v CodeSignTool.sh >/dev/null 2>&1; then
+        c=$(command -v CodeSignTool.sh)
+    else
+        echo "ERROR: CodeSignTool not found. Set CODESIGNTOOL or install CodeSignTool.bat / CodeSignTool.sh on PATH." >&2
+        exit 1
     fi
-    if command -v CodeSignTool.bat >/dev/null 2>&1; then
-        command -v CodeSignTool.bat
-        return
-    fi
-    if command -v CodeSignTool.sh >/dev/null 2>&1; then
-        command -v CodeSignTool.sh
-        return
-    fi
-    echo "ERROR: CodeSignTool not found. Set CODESIGNTOOL or install CodeSignTool.bat / CodeSignTool.sh on PATH." >&2
-    exit 1
+
+    normalize_codesigntool_exe "$c"
 }
 
 # --- Glob matching (same semantics as sign-mac-artifacts, plus comma-separated alternates) ---
@@ -189,6 +227,37 @@ lower_ext() {
     echo "$ext" | tr '[:upper:]' '[:lower:]'
 }
 
+# CodeSignTool / Java Authenticode expects real Windows binaries. Placeholders (e.g. /dev/zero)
+# fail with: java.io.IOException: DOS header signature not found
+preflight_windows_signable() {
+    local path="$1"
+    local ext="$2"
+    case "$ext" in
+    exe)
+        if ! printf '\x4d\x5a' | cmp -s -n 2 - "$path" 2>/dev/null; then
+            echo "ERROR: Not a valid PE executable (missing MZ DOS header): $path" >&2
+            echo "Authenticode (.exe) requires a real Windows binary (e.g. MSVC or MinGW), not empty or arbitrary bytes." >&2
+            return 1
+        fi
+        ;;
+    msi)
+        if ! printf '\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1' | cmp -s -n 8 - "$path" 2>/dev/null; then
+            echo "ERROR: Not a valid MSI (missing compound file / structured storage header): $path" >&2
+            echo "Authenticode (.msi) requires a real Windows Installer database." >&2
+            return 1
+        fi
+        ;;
+    msix)
+        if ! printf '\x50\x4b\x03\x04' | cmp -s -n 4 - "$path" 2>/dev/null; then
+            echo "ERROR: Not a valid MSIX package (expected ZIP local file header at offset 0): $path" >&2
+            echo "Authenticode (.msix) requires a real MSIX (OPC / ZIP-based) file." >&2
+            return 1
+        fi
+        ;;
+    esac
+    return 0
+}
+
 sign_one_file() {
     local file="$1"
     local ext
@@ -211,25 +280,53 @@ sign_one_file() {
     fi
 
     cst=$(resolve_codesigntool)
+    preflight_windows_signable "$file" "$ext" || exit 1
+
+    local outdir
+    case "$(uname -s 2>/dev/null)" in
+    MINGW* | MSYS* | CYGWIN*)
+        if [[ -n ${RUNNER_TEMP-} ]]; then
+            outdir="${RUNNER_TEMP}/signwin-out-$$-${RANDOM}"
+            mkdir -p "$outdir"
+        else
+            outdir=$(mktemp -d)
+        fi
+        ;;
+    *)
+        outdir=$(mktemp -d)
+        ;;
+    esac
+    # shellcheck disable=SC2064
+    trap "rm -rf '$outdir'" RETURN
+
+    local win_file win_outdir
+    win_file=$(codesigntool_path_for_args "$file")
+    win_outdir=$(codesigntool_path_for_args "$outdir")
 
     local -a cmd
     cmd=(
-        "$cst" sign
-        "-username=$ES_OV_USERNAME"
-        "-password=$ES_OV_PASSWORD"
-        "-credential_id=$ES_OV_CREDENTIAL_ID"
-        "-input_file_path=$file"
-        "-totp_secret=$ES_OV_TOTP_SECRET"
+        "$cst" "sign"
+        "-username=${ES_OV_USERNAME}"
+        "-password=${ES_OV_PASSWORD}"
+        "-credential_id=${ES_OV_CREDENTIAL_ID}"
+        "-input_file_path=${win_file}"
+        "-totp_secret=${ES_OV_TOTP_SECRET}"
     )
     if [[ $ext == "msi" && -n ${ESIGNER_PROGRAM_NAME-} ]]; then
-        cmd+=("-program_name=$ESIGNER_PROGRAM_NAME")
+        cmd+=("-program_name=${ESIGNER_PROGRAM_NAME}")
     fi
 
-    local outdir
-    outdir=$(mktemp -d)
-    # shellcheck disable=SC2064
-    trap "rm -rf '$outdir'" RETURN
-    cmd+=("-output_dir_path=$outdir")
+    cmd+=("-output_dir_path=${win_outdir}")
+
+    # CodeSignTool.bat runs .\jdk-11...\java when CODE_SIGN_TOOL_PATH is unset; cwd is usually the repo root.
+    case "$(uname -s 2>/dev/null)" in
+    MINGW* | MSYS* | CYGWIN*)
+        if [[ ${cst,,} == *.bat ]]; then
+            export CODE_SIGN_TOOL_PATH
+            CODE_SIGN_TOOL_PATH=$(codesigntool_path_for_args "$(dirname "$cst")")
+        fi
+        ;;
+    esac
 
     echo "  Running CodeSignTool sign for: $file"
     run "${cmd[@]}"
