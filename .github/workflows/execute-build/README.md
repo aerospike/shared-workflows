@@ -10,27 +10,29 @@ This workflow executes a custom build script and uploads the resulting artifacts
 
 ## Inputs
 
-| Input                   | Description                                                          | Required | Default                         |
-| ----------------------- | -------------------------------------------------------------------- | -------- | ------------------------------- |
-| `jf-project`            | JFrog Artifactory project name                                       | Yes      | -                               |
-| `jf-build-name`         | Name for this build in artifactory                                   | Yes      | -                               |
-| `jf-build-id`           | Build ID for this build in artifactory                               | Yes      | -                               |
-| `build-script`          | Inline bash commands to execute                                      | No\*     | -                               |
-| `build-script-path`     | Path to the build script file to execute                             | No\*     | -                               |
-| `gh-artifact-directory` | Directory that will contain all artifacts from this build            | Yes      | -                               |
-| `gh-artifact-name`      | Name for the uploaded artifacts                                      | No       | `build-artifacts`               |
-| `gh-retention-days`     | Retention days for the artifacts                                     | No       | `1`                             |
-| `working-directory`     | Working directory for build script execution                         | No       | -                               |
-| `jf-url`                | JFrog Artifactory URL                                                | No       | `https://artifact.aerospike.io` |
-| `oidc-provider-name`    | OIDC provider name                                                   | No       | `gh-aerospike`                  |
-| `oidc-audience`         | OIDC audience                                                        | No       | `aerospike`                     |
-| `runs-on`               | The runner to use for the build                                      | No       | `ubuntu-22.04`                  |
-| `gh-checkout-path`      | Directory to checkout the shared-workflows repository into           | No       | `shared-workflows`              |
-| `gh-workflows-ref`      | Git ref for shared-workflows (**should match your `uses:` version**) | Yes      | -                               |
-| `gh-source-repository`  | Repository to checkout for source code (format owner/repo)           | No       | `${{ github.repository }}`      |
-| `gh-source-ref`         | Reference to checkout for source repository (branch, tag, or commit) | No       | -                               |
-| `gh-source-path`        | Directory to checkout the source repository into                     | No       | `local`                         |
-| `dry-run`               | Whether to run in dry-run mode                                       | No       | `false`                         |
+| Input                   | Description                                                                                                                                | Required | Default                         |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | -------- | ------------------------------- |
+| `jf-project`            | JFrog Artifactory project name                                                                                                             | Yes      | -                               |
+| `jf-build-name`         | Name for this build in artifactory                                                                                                         | Yes      | -                               |
+| `jf-build-id`           | Build ID for this build in artifactory                                                                                                     | Yes      | -                               |
+| `build-script`          | Inline bash commands to execute                                                                                                            | No\*     | -                               |
+| `build-script-path`     | Path to the build script file to execute                                                                                                   | No\*     | -                               |
+| `gh-artifact-directory` | Directory that will contain all artifacts from this build                                                                                  | Yes      | -                               |
+| `gh-artifact-name`      | Name for the uploaded artifacts                                                                                                            | No       | `build-artifacts`               |
+| `gh-retention-days`     | Retention days for the artifacts                                                                                                           | No       | `1`                             |
+| `working-directory`     | Working directory for build script execution                                                                                               | No       | -                               |
+| `jf-url`                | JFrog Artifactory URL                                                                                                                      | No       | `https://artifact.aerospike.io` |
+| `oidc-provider-name`    | OIDC provider name                                                                                                                         | No       | `gh-aerospike`                  |
+| `oidc-audience`         | OIDC audience                                                                                                                              | No       | `aerospike`                     |
+| `runs-on`               | The runner to use for the build                                                                                                            | No       | `ubuntu-22.04`                  |
+| `gh-checkout-path`      | Directory to checkout the shared-workflows repository into                                                                                 | No       | `shared-workflows`              |
+| `gh-workflows-ref`      | Git ref for shared-workflows (**should match your `uses:` version**)                                                                       | Yes      | -                               |
+| `gh-source-repository`  | Repository to checkout for source code (format owner/repo)                                                                                 | No       | `${{ github.repository }}`      |
+| `gh-source-ref`         | Reference to checkout for source repository (branch, tag, or commit)                                                                       | No       | -                               |
+| `gh-source-path`        | Directory to checkout the source repository into                                                                                           | No       | `local`                         |
+| `build-env`             | Semicolon-delimited `KEY=VALUE` pairs exported to the build script. Use `\;` for a literal `;`, `\\` for a backslash.                      | No       | -                               |
+| `matrix-json-data`      | JSON for the current matrix entry. Exported as `MATRIX_JSON` to the build subprocess. Set automatically by `reusable_artifacts-cicd.yaml`. | No       | -                               |
+| `dry-run`               | Whether to run in dry-run mode                                                                                                             | No       | `false`                         |
 
 \*Either `build-script` or `build-script-path` is required, but not both.
 
@@ -99,11 +101,24 @@ Your build script should:
 - Build script should create artifacts in the specified directory
 - No additional system dependencies (build script handles its own requirements)
 
+## Reading the matrix entry from a build script
+
+When invoked through `reusable_artifacts-cicd.yaml`, the orchestrator sets `matrix-json-data` to the current matrix entry. The build script can read it via `$MATRIX_JSON`:
+
+```bash
+export DISTRO=$(jq -r '.distro' <<<"$MATRIX_JSON")
+export ARCH=$(jq -r '.arch'   <<<"$MATRIX_JSON")
+```
+
 ## Testing
 
 Run the test suite:
 
 ```bash
+# build-env parser
+bats .github/workflows/execute-build/tests/
+
+# entrypoint script
 .github/workflows/execute-build/test-entrypoint.sh
 ```
 

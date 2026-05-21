@@ -362,7 +362,9 @@ jobs:
     with:
       build-script: ${{ matrix['build-script'] || inputs.build-script }}
       build-script-path: ${{ matrix['build-script-path'] || inputs.build-script-path }}
-      build-env: ${{ format('MATRIX_JSON={0}{1}', toJSON(matrix), (matrix['build-env'] || inputs.build-env) != '' && format(';{0}', matrix['build-env'] || inputs.build-env) || '') }}
+      # Matrix appended after top-level so its keys win on conflict.
+      build-env: ${{ inputs.build-env != '' && matrix['build-env'] != '' && format('{0};{1}', inputs.build-env, matrix['build-env']) || inputs.build-env || matrix['build-env'] || '' }}
+      matrix-json-data: ${{ toJSON(matrix) }}
       dry-run: ${{ inputs.dry-run }}
       gh-artifact-directory: ${{ matrix['gh-artifact-directory'] || inputs.gh-artifact-directory }}
       gh-artifact-name: build-artifacts-${{ matrix.distro }}-${{ matrix.arch }}
