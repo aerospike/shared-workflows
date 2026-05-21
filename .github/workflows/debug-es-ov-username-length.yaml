@@ -1,4 +1,4 @@
-name: Debug ES_OV username length
+name: Debug ES_OV secret fingerprints
 on:
   pull_request:
     branches: [main]
@@ -7,9 +7,17 @@ permissions:
   contents: read
 
 jobs:
-  length:
+  fingerprints:
     runs-on: ubuntu-22.04
     steps:
       - env:
           ES_OV_USERNAME: ${{ secrets.ES_OV_USERNAME }}
-        run: printf 'ES_OV_USERNAME len=%d\n' "${#ES_OV_USERNAME}"
+          ES_OV_PASSWORD: ${{ secrets.ES_OV_PASSWORD }}
+          ES_OV_CREDENTIAL_ID: ${{ secrets.ES_OV_CREDENTIAL_ID }}
+          ES_OV_TOTP_SECRET: ${{ secrets.ES_OV_TOTP_SECRET }}
+        run: |
+          h() { printf '%s' "$1" | sha256sum | awk '{print $1}'; }
+          printf 'ES_OV_USERNAME       sha256=%s\n' "$(h "$ES_OV_USERNAME")"
+          printf 'ES_OV_PASSWORD       sha256=%s\n' "$(h "$ES_OV_PASSWORD")"
+          printf 'ES_OV_CREDENTIAL_ID  sha256=%s\n' "$(h "$ES_OV_CREDENTIAL_ID")"
+          printf 'ES_OV_TOTP_SECRET    sha256=%s\n' "$(h "$ES_OV_TOTP_SECRET")"
