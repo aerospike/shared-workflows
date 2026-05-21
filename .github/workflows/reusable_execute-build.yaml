@@ -266,13 +266,16 @@ jobs:
         env:
           BUILD_ENV: ${{ inputs.build-env }}
           MATRIX_JSON: ${{ inputs.matrix-json-data }}
-          # BUILD_SCRIPT and BUILD_SCRIPT_PATH are user-supplied free-form
-          # text. Carry them through the env: map (not template interpolation
-          # into the run: block) so embedded quotes, backticks, '$', etc.
-          # cannot break the rendered shell. The same hazard motivates
-          # MATRIX_JSON's dedicated input above.
-          BUILD_SCRIPT: ${{ inputs.build-script }}
-          BUILD_SCRIPT_PATH: ${{ inputs.build-script-path }}
+          # INPUT_BUILD_SCRIPT and INPUT_BUILD_SCRIPT_PATH carry user-supplied
+          # free-form text. Use the env: map (not template interpolation into
+          # the run: block) so embedded quotes, backticks, '$', etc. cannot
+          # break the rendered shell. The same hazard motivates MATRIX_JSON's
+          # dedicated input above.
+          # The INPUT_ prefix avoids colliding with entrypoint.sh's internal
+          # BUILD_SCRIPT / BUILD_SCRIPT_PATH variables, which it reads as
+          # ${BUILD_SCRIPT-} and would otherwise inherit from the parent env.
+          INPUT_BUILD_SCRIPT: ${{ inputs.build-script }}
+          INPUT_BUILD_SCRIPT_PATH: ${{ inputs.build-script-path }}
         run: |
           # Parse build-env into per-key exports. The parser lives in
           # parse-build-env.sh so it can be unit-tested. MATRIX_JSON is
@@ -300,12 +303,12 @@ jobs:
           echo "Working directory: $(pwd)"
           echo "Entrypoint script: $entrypoint"
 
-          if [[ -n "$BUILD_SCRIPT" ]]; then # Inline build script
+          if [[ -n "$INPUT_BUILD_SCRIPT" ]]; then # Inline build script
             script_arg="--build-script"
-            script_value="$BUILD_SCRIPT"
-          elif [[ -n "$BUILD_SCRIPT_PATH" ]]; then # Build script file
+            script_value="$INPUT_BUILD_SCRIPT"
+          elif [[ -n "$INPUT_BUILD_SCRIPT_PATH" ]]; then # Build script file
             script_arg="--build-script-path"
-            script_value="$BUILD_SCRIPT_PATH"
+            script_value="$INPUT_BUILD_SCRIPT_PATH"
           else
             echo "Error: Either build-script or build-script-path must be given"
             exit 1
