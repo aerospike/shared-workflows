@@ -31,4 +31,4 @@ jobs:
       oidc-provider-name: gh-dev-test
       oidc-audience: aerospike/testing
       dry-run: false
-      gh-workflows-ref: v2.0.2
+      gh-workflows-ref: ${{ github.sha }}
