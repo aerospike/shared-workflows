@@ -227,6 +227,37 @@ lower_ext() {
     echo "$ext" | tr '[:upper:]' '[:lower:]'
 }
 
+# CodeSignTool / Java Authenticode expects real Windows binaries. Placeholders (e.g. /dev/zero)
+# fail with: java.io.IOException: DOS header signature not found
+preflight_windows_signable() {
+    local path="$1"
+    local ext="$2"
+    case "$ext" in
+    exe)
+        if ! printf '\x4d\x5a' | cmp -s -n 2 - "$path" 2>/dev/null; then
+            echo "ERROR: Not a valid PE executable (missing MZ DOS header): $path" >&2
+            echo "Authenticode (.exe) requires a real Windows binary (e.g. MSVC or MinGW), not empty or arbitrary bytes." >&2
+            return 1
+        fi
+        ;;
+    msi)
+        if ! printf '\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1' | cmp -s -n 8 - "$path" 2>/dev/null; then
+            echo "ERROR: Not a valid MSI (missing compound file / structured storage header): $path" >&2
+            echo "Authenticode (.msi) requires a real Windows Installer database." >&2
+            return 1
+        fi
+        ;;
+    msix)
+        if ! printf '\x50\x4b\x03\x04' | cmp -s -n 4 - "$path" 2>/dev/null; then
+            echo "ERROR: Not a valid MSIX package (expected ZIP local file header at offset 0): $path" >&2
+            echo "Authenticode (.msix) requires a real MSIX (OPC / ZIP-based) file." >&2
+            return 1
+        fi
+        ;;
+    esac
+    return 0
+}
+
 sign_one_file() {
     local file="$1"
     local ext
@@ -249,6 +280,7 @@ sign_one_file() {
     fi
 
     cst=$(resolve_codesigntool)
+    preflight_windows_signable "$file" "$ext" || exit 1
 
     local outdir
     case "$(uname -s 2>/dev/null)" in

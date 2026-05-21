@@ -4,6 +4,11 @@
 # Mocks CodeSignTool.sh for Linux CI. Covers argument validation, tree copy,
 # glob filtering, .exe/.msi/.msix signing, and dry-run behavior.
 
+# Minimal file headers so preflight_windows_signable() matches real Windows formats.
+_fake_pe_to() { printf '\x4d\x5a%s' "$1" >"$2"; }
+_fake_msi_to() { printf '\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1%s' "$1" >"$2"; }
+_fake_msix_to() { printf '\x50\x4b\x03\x04%s' "$1" >"$2"; }
+
 setup_file() {
   GIT_ROOT="$(git rev-parse --show-toplevel)"
   export GIT_ROOT
@@ -61,6 +66,15 @@ setup() {
   export CODESIGNTOOL="$MOCK_BIN/CodeSignTool.sh"
 }
 
+@test "entrypoint rejects .exe without PE MZ header" {
+  echo "not-a-pe" > "$SOURCE_DIR/bad.exe"
+
+  run "$ENTRYPOINT" --source-dir "$SOURCE_DIR" --target-dir "$TARGET_DIR"
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"MZ DOS header"* ]]
+}
+
 # --- Argument parsing tests ---
 
 @test "entrypoint fails without --source-dir" {
@@ -114,7 +128,7 @@ setup() {
 }
 
 @test "only glob-matched exe is signed in non-dry-run" {
-  echo "fake-exe" > "$SOURCE_DIR/app.exe"
+  _fake_pe_to "fake-exe" "$SOURCE_DIR/app.exe"
   echo "fake-deb" > "$SOURCE_DIR/app.deb"
 
   run "$ENTRYPOINT" --source-dir "$SOURCE_DIR" --target-dir "$TARGET_DIR" \
@@ -123,13 +137,13 @@ setup() {
   [ "$status" -eq 0 ]
   grep -q "CodeSignTool.*sign" "$TEST_TMPDIR/commands.log"
   ! grep -q "app.deb" "$TEST_TMPDIR/commands.log"
-  [[ "$(cat "$TARGET_DIR/app.exe")" == "fake-exe" ]]
+  [[ "$(cat "$TARGET_DIR/app.exe")" == "$(printf '\x4d\x5a%s' 'fake-exe')" ]]
 }
 
 @test "comma-separated artifact-glob signs multiple Windows types" {
-  echo "fake-exe" > "$SOURCE_DIR/app.exe"
-  echo "fake-msi" > "$SOURCE_DIR/setup.msi"
-  echo "fake-msix" > "$SOURCE_DIR/bundle.msix"
+  _fake_pe_to "fake-exe" "$SOURCE_DIR/app.exe"
+  _fake_msi_to "fake-msi" "$SOURCE_DIR/setup.msi"
+  _fake_msix_to "fake-msix" "$SOURCE_DIR/bundle.msix"
   echo "fake-deb" > "$SOURCE_DIR/app.deb"
 
   run "$ENTRYPOINT" --source-dir "$SOURCE_DIR" --target-dir "$TARGET_DIR" \
@@ -143,7 +157,7 @@ setup() {
 }
 
 @test ".exe is signed with CodeSignTool" {
-  echo "payload" > "$SOURCE_DIR/tool.exe"
+  _fake_pe_to "payload" "$SOURCE_DIR/tool.exe"
 
   run "$ENTRYPOINT" --source-dir "$SOURCE_DIR" --target-dir "$TARGET_DIR"
 
@@ -152,7 +166,7 @@ setup() {
 }
 
 @test ".msi is signed with CodeSignTool" {
-  echo "msi-payload" > "$SOURCE_DIR/setup.msi"
+  _fake_msi_to "msi-payload" "$SOURCE_DIR/setup.msi"
 
   run "$ENTRYPOINT" --source-dir "$SOURCE_DIR" --target-dir "$TARGET_DIR"
 
@@ -161,7 +175,7 @@ setup() {
 }
 
 @test ".msi receives -program_name when ESIGNER_PROGRAM_NAME is set" {
-  echo "msi" > "$SOURCE_DIR/setup.msi"
+  _fake_msi_to "msi" "$SOURCE_DIR/setup.msi"
   export ESIGNER_PROGRAM_NAME="Contoso Setup"
 
   run "$ENTRYPOINT" --source-dir "$SOURCE_DIR" --target-dir "$TARGET_DIR"
@@ -171,7 +185,7 @@ setup() {
 }
 
 @test ".exe does not receive -program_name when ESIGNER_PROGRAM_NAME is set" {
-  echo "bin" > "$SOURCE_DIR/app.exe"
+  _fake_pe_to "bin" "$SOURCE_DIR/app.exe"
   export ESIGNER_PROGRAM_NAME="Contoso Setup"
 
   run "$ENTRYPOINT" --source-dir "$SOURCE_DIR" --target-dir "$TARGET_DIR"
@@ -181,13 +195,13 @@ setup() {
 }
 
 @test ".msix is signed with CodeSignTool" {
-  echo "msix-payload" > "$SOURCE_DIR/bundle.msix"
+  _fake_msix_to "msix-payload" "$SOURCE_DIR/bundle.msix"
 
   run "$ENTRYPOINT" --source-dir "$SOURCE_DIR" --target-dir "$TARGET_DIR"
 
   [ "$status" -eq 0 ]
   grep -q "CodeSignTool.*sign.*-input_file_path=.*bundle.msix" "$TEST_TMPDIR/commands.log"
-  [[ "$(cat "$TARGET_DIR/bundle.msix")" == "msix-payload" ]]
+  [[ "$(cat "$TARGET_DIR/bundle.msix")" == "$(printf '\x50\x4b\x03\x04%s' 'msix-payload')" ]]
 }
 
 @test ".msix dry-run invokes redacted CodeSignTool line" {
@@ -232,7 +246,7 @@ setup() {
 }
 
 @test "uppercase extension .EXE is signed" {
-  echo "data" > "$SOURCE_DIR/TOOL.EXE"
+  _fake_pe_to "data" "$SOURCE_DIR/TOOL.EXE"
 
   run "$ENTRYPOINT" --source-dir "$SOURCE_DIR" --target-dir "$TARGET_DIR"
 
@@ -242,7 +256,7 @@ setup() {
 
 @test ".asc files are ignored for signing" {
   echo "sig" > "$SOURCE_DIR/file.asc"
-  echo "exe" > "$SOURCE_DIR/file.exe"
+  _fake_pe_to "exe" "$SOURCE_DIR/file.exe"
 
   run "$ENTRYPOINT" --source-dir "$SOURCE_DIR" --target-dir "$TARGET_DIR"
 

@@ -28,9 +28,12 @@ jobs:
           TEST_VERSION: 0.0.0-smoke
         run: |
           set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq gcc-mingw-w64-x86-64
           mkdir -p test-artifacts
-          head -c 2048 /dev/zero > "test-artifacts/smoke-win-${TEST_VERSION}.exe"
-          head -c 2048 /dev/zero > "test-artifacts/smoke-win-${TEST_VERSION}.msi"
+          # Minimal valid PE via MinGW (unsigned). MSI omitted — real MSIs need WiX/msbuild.
+          printf '%s\n' 'int main(void) { return 0; }' > /tmp/smoke-win.c
+          x86_64-w64-mingw32-gcc -O2 /tmp/smoke-win.c -o "test-artifacts/smoke-win-${TEST_VERSION}.exe"
 
       - name: Upload unsigned artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -45,7 +48,7 @@ jobs:
       gh-unsigned-artifacts: build-artifacts
       gh-workflows-ref: ${{ github.sha }}
       signing-identity: ${{ vars.WIN_SIGNING_PROGRAM_NAME }}
-      artifact-glob: "*.exe,*.msi"
+      artifact-glob: "*.exe"
       dry-run: false
       runs-on: windows-2025
     secrets:
