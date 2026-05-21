@@ -362,11 +362,7 @@ jobs:
     with:
       build-script: ${{ matrix['build-script'] || inputs.build-script }}
       build-script-path: ${{ matrix['build-script-path'] || inputs.build-script-path }}
-      # Merge top-level build-env with matrix-level build-env. Matrix entries
-      # appear after top-level so the parser's later-wins semantics make
-      # matrix-level shadow top-level on key conflicts. MATRIX_JSON is no
-      # longer smuggled here; it travels via matrix-json-data below so its
-      # JSON content cannot collide with the ';' delimiter.
+      # Matrix appended after top-level so its keys win on conflict.
       build-env: ${{ inputs.build-env != '' && matrix['build-env'] != '' && format('{0};{1}', inputs.build-env, matrix['build-env']) || inputs.build-env || matrix['build-env'] || '' }}
       matrix-json-data: ${{ toJSON(matrix) }}
       dry-run: ${{ inputs.dry-run }}

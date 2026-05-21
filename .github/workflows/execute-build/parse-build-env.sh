@@ -1,14 +1,11 @@
 #!/usr/bin/env bash
-# parse-build-env.sh
+# Parse $BUILD_ENV (semicolon-delimited KEY=VALUE; use '\;' for a literal
+# semicolon, '\\' for a literal backslash) and emit one 'KEY=VALUE' line
+# per pair to stdout. Caller decides how to apply (typically export +
+# tee to $GITHUB_ENV). Exits non-zero on malformed pair or invalid key.
 #
-# Parse the BUILD_ENV input format used by reusable_execute-build.yaml.
-# Format: semicolon-delimited KEY=VALUE pairs. Use '\;' for a literal
-# semicolon inside a value, '\\' for a literal backslash.
-#
-# Reads BUILD_ENV from the environment. Emits one 'KEY=VALUE' line per pair
-# to stdout. The caller decides what to do with the output (typically:
-# apply via `export` for the current shell AND append to $GITHUB_ENV for
-# subsequent steps). Exits non-zero on a malformed pair or invalid key name.
+# Lives in a script (not inlined in YAML) so it has bats coverage. See
+# tests/test_parse_build_env.bats.
 
 set -euo pipefail
 

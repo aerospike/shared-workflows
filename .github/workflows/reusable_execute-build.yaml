@@ -85,11 +85,7 @@ on:
         type: string
         default: https://artifact.aerospike.io
       matrix-json-data:
-        description: |
-          Optional JSON string carrying the matrix entry. Exported as MATRIX_JSON to
-          the build subprocess so build scripts can read matrix fields with `jq`.
-          Carried via a dedicated input (not build-env) so values containing
-          semicolons cannot collide with the build-env parser delimiter.
+        description: JSON for the current matrix entry. Exported as MATRIX_JSON to the build subprocess.
         required: false
         type: string
         default: ""
@@ -266,35 +262,18 @@ jobs:
         env:
           BUILD_ENV: ${{ inputs.build-env }}
           MATRIX_JSON: ${{ inputs.matrix-json-data }}
-          # INPUT_BUILD_SCRIPT and INPUT_BUILD_SCRIPT_PATH carry user-supplied
-          # free-form text. Use the env: map (not template interpolation into
-          # the run: block) so embedded quotes, backticks, '$', etc. cannot
-          # break the rendered shell. The same hazard motivates MATRIX_JSON's
-          # dedicated input above.
-          # The INPUT_ prefix avoids colliding with entrypoint.sh's internal
-          # BUILD_SCRIPT / BUILD_SCRIPT_PATH variables, which it reads as
-          # ${BUILD_SCRIPT-} and would otherwise inherit from the parent env.
+          # INPUT_ prefix avoids clobbering entrypoint.sh's internal BUILD_SCRIPT vars.
           INPUT_BUILD_SCRIPT: ${{ inputs.build-script }}
           INPUT_BUILD_SCRIPT_PATH: ${{ inputs.build-script-path }}
         run: |
-          # Parse build-env into per-key exports. The parser lives in
-          # parse-build-env.sh so it can be unit-tested. MATRIX_JSON is
-          # carried via a dedicated input (above) so values containing ';'
-          # cannot collide with the build-env delimiter.
           parser="${{ inputs.gh-checkout-path }}/.github/workflows/execute-build/parse-build-env.sh"
           chmod +x "$parser"
-          # Apply each KEY=VALUE both as a shell export (for entrypoint.sh
-          # subprocess in this step) and into $GITHUB_ENV (for subsequent
-          # steps). Later assignments to the same key overwrite earlier ones,
-          # which is how matrix-level entries (appended after top-level by
-          # the orchestrator) shadow top-level values.
           while IFS= read -r line; do
             [[ -z $line ]] && continue
             export "${line?}"
             echo "$line" >>"$GITHUB_ENV"
           done < <("$parser")
 
-          # Entrypoint scripts are always in the shared-workflows checkout location
           entrypoint=$(realpath "${{ inputs.gh-checkout-path }}/.github/workflows/execute-build/entrypoint.sh")
           chmod +x "$entrypoint"
           if [[ -n "${{ inputs.working-directory }}" ]]; then
