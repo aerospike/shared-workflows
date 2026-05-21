@@ -336,6 +336,26 @@ setup() {
     _validate_go_module_path "github.com/aerospike/aeromod"
 }
 
+# --- is_nuget_package (type_detection.sh; aligned with artifact-publisher) ---
+
+@test "is_nuget_package returns true for real nupkg fixture" {
+    local nupkg="$GIT_ROOT/tests/some/structure/Aerospike.Client.8.0.2.nupkg"
+    if [[ ! -f "$nupkg" ]]; then
+        skip "Fixture not available"
+    fi
+    is_nuget_package "$nupkg"
+}
+
+@test "is_nuget_package returns false when nupkg zip has no nuspec" {
+    local test_dir
+    test_dir=$(mktemp -d)
+    echo "x" >"$test_dir/a.txt"
+    (cd "$test_dir" && zip -q -r "fake.nupkg" a.txt)
+    run is_nuget_package "$test_dir/fake.nupkg"
+    [[ $status -ne 0 ]]
+    rm -rf "$test_dir"
+}
+
 # --- is_helm_chart (type_detection.sh) ---
 
 @test "is_helm_chart returns true for packaged Helm chart" {

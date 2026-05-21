@@ -82,6 +82,7 @@ register_type() {
 register_type deb --extension "*.deb" --repo "deb-dev-local"
 register_type rpm --extension "*.rpm" --repo "rpm-dev-local"
 register_type jar --extension "*.jar" --repo "maven-dev-local" --companions ".pom .asc .pom.asc"
+# Extension-based layout; detect_types.sh validates with is_nuget_package before structuring.
 register_type nupkg --extension "*.nupkg" --repo "nuget-dev-local"
 register_type snupkg --extension "*.snupkg" --repo "nuget-dev-local" --struct-dir "nupkg"
 # is_npm_package is defined in type_detection.sh

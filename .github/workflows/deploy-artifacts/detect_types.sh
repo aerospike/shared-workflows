@@ -30,9 +30,9 @@ usage() {
 Usage:
   detect_types.sh [OPTIONS]
 
-Runs content-based artifact detection (npm / PyPI sdist / Go module archives under
-ambiguous extensions) and copies matches into ./structured_build_artifacts/, with
-a .manifest file like the deploy entrypoint.
+Runs content-based artifact detection (npm / PyPI / Go / Helm on ambiguous archives; NuGet
+.nupkg/.snupkg by extension after .nuspec validation; plus wheel / Maven / Docker passes) and
+copies matches into ./structured_build_artifacts/, with a .manifest file like the deploy entrypoint.
 
 Options:
   --artifacts-dir <path>   Input tree root to scan (default: build-artifacts).
