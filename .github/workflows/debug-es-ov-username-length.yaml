@@ -1,0 +1,15 @@
+name: Debug ES_OV username length
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  length:
+    runs-on: ubuntu-22.04
+    steps:
+      - env:
+          ES_OV_USERNAME: ${{ secrets.ES_OV_USERNAME }}
+        run: printf 'ES_OV_USERNAME len=%d\n' "${#ES_OV_USERNAME}"
