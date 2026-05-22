@@ -25,8 +25,7 @@ run() {
     "$@"
 }
 
-# Probe SSL.com's unauthenticated CSC info endpoint and print status + first
-# chunk of body. No credentials are sent.
+# No credentials are sent.
 csc_failure_postmortem() {
     if ! command -v curl >/dev/null 2>&1; then
         echo "  (curl not available; skipping CSC postmortem probe)" >&2
