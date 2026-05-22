@@ -25,25 +25,6 @@ run() {
     "$@"
 }
 
-# No credentials are sent.
-probe_csc_api() {
-    if ! command -v curl >/dev/null 2>&1; then
-        echo "  (curl not available; skipping CSC API probe)" >&2
-        return 0
-    fi
-    local url="https://cs.ssl.com/csc/v0/info"
-    echo "==> CSC API probe: GET $url" >&2
-    local body
-    body=$(mktemp)
-    local status
-    status=$(curl -sS -L --max-time 10 -o "$body" -w '%{http_code}' "$url" 2>&1 || true)
-    echo "  HTTP status: $status" >&2
-    echo "  Response (first 512 bytes):" >&2
-    head -c 512 "$body" | sed 's/^/    /' >&2
-    [[ $(wc -c <"$body") -gt 512 ]] && echo "    ... (truncated)" >&2
-    rm -f "$body"
-}
-
 # --- Usage ---
 usage() {
     cat <<EOF
@@ -359,7 +340,6 @@ sign_one_file() {
         echo "ERROR: CodeSignTool failed for $file" >&2
         echo "  exit code:           $cst_exit" >&2
         echo "  signed output found: $([[ -f $outpath ]] && echo yes || echo no)" >&2
-        probe_csc_api
         exit 1
     fi
     mv -f "$outpath" "$file"
