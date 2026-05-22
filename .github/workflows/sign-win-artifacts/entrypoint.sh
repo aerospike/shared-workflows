@@ -25,6 +25,29 @@ run() {
     "$@"
 }
 
+# When CodeSignTool fails (typically because SSL.com's CSC API returned HTML
+# instead of JSON, which surfaces as 'Unexpected character (<) at position 0'
+# from the Java JSON parser), the operator usually wants to see what SSL.com
+# actually returned. Probe the CSC info endpoint, dump status + first chunk of
+# body. No credentials are sent.
+csc_failure_postmortem() {
+    if ! command -v curl >/dev/null 2>&1; then
+        echo "  (curl not available; skipping CSC postmortem probe)" >&2
+        return 0
+    fi
+    local url="https://cs.ssl.com/csc/v0/info"
+    echo "==> CSC API postmortem probe: GET $url" >&2
+    local body
+    body=$(mktemp)
+    local status
+    status=$(curl -sS -L --max-time 10 -o "$body" -w '%{http_code}' "$url" 2>&1 || true)
+    echo "  HTTP status: $status" >&2
+    echo "  Response (first 512 bytes):" >&2
+    head -c 512 "$body" | sed 's/^/    /' >&2
+    [[ $(wc -c <"$body") -gt 512 ]] && echo "    ... (truncated)" >&2
+    rm -f "$body"
+}
+
 # --- Usage ---
 usage() {
     cat <<EOF
@@ -329,13 +352,33 @@ sign_one_file() {
     esac
 
     echo "  Running CodeSignTool sign for: $file"
-    run "${cmd[@]}"
+    local cst_log="$outdir/codesigntool.log"
+    local cst_exit=0
+    # Capture stdout+stderr for post-mortem inspection while still streaming
+    # to the live console. The exit code from `run` is preserved via the `||`.
+    run "${cmd[@]}" > >(tee -a "$cst_log") 2> >(tee -a "$cst_log" >&2) || cst_exit=$?
 
     local base outpath
     base=$(basename "$file")
     outpath="$outdir/$base"
-    if [[ ! -f $outpath ]]; then
-        echo "ERROR: Expected signed output not found: $outpath" >&2
+
+    # CodeSignTool sometimes exits 0 even when its JSON parser threw, so an
+    # exit-code check alone is not enough. Treat any of these as failure:
+    #   - nonzero exit
+    #   - missing signed output
+    #   - known CSC API failure markers in the captured log
+    local failed=0
+    if [[ $cst_exit -ne 0 ]]; then failed=1; fi
+    if [[ ! -f $outpath ]]; then failed=1; fi
+    if grep -qE 'Unexpected character|JSONParser|java\.io\.IOException|UnknownHostException|SSLException' "$cst_log" 2>/dev/null; then
+        failed=1
+    fi
+
+    if [[ $failed -eq 1 ]]; then
+        echo "ERROR: CodeSignTool failed for $file" >&2
+        echo "  exit code:           $cst_exit" >&2
+        echo "  signed output found: $([[ -f $outpath ]] && echo yes || echo no)" >&2
+        csc_failure_postmortem
         exit 1
     fi
     mv -f "$outpath" "$file"
