@@ -26,13 +26,13 @@ run() {
 }
 
 # No credentials are sent.
-csc_failure_postmortem() {
+probe_csc_api() {
     if ! command -v curl >/dev/null 2>&1; then
-        echo "  (curl not available; skipping CSC postmortem probe)" >&2
+        echo "  (curl not available; skipping CSC API probe)" >&2
         return 0
     fi
     local url="https://cs.ssl.com/csc/v0/info"
-    echo "==> CSC API postmortem probe: GET $url" >&2
+    echo "==> CSC API probe: GET $url" >&2
     local body
     body=$(mktemp)
     local status
@@ -359,7 +359,7 @@ sign_one_file() {
         echo "ERROR: CodeSignTool failed for $file" >&2
         echo "  exit code:           $cst_exit" >&2
         echo "  signed output found: $([[ -f $outpath ]] && echo yes || echo no)" >&2
-        csc_failure_postmortem
+        probe_csc_api
         exit 1
     fi
     mv -f "$outpath" "$file"
