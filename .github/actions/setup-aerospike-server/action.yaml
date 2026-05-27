@@ -578,6 +578,7 @@ runs:
 
           # No longer need this
           docker stop ${{ steps.server-volume.outputs.container_name_to_load_volume }}
+          docker container rm -f ${{ steps.server-volume.outputs.container_name_to_load_volume }}
 
           echo "Starting container: $name (host port: $host_port)"
 
