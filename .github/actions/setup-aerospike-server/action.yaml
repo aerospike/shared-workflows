@@ -607,10 +607,6 @@ runs:
             run_args+=("--config-file" "${{ steps.server-volume.outputs.conf_volume_dest_dir }}/$aerospike_conf_filename")
           fi
 
-          # No longer need this
-          docker stop ${{ steps.server-volume.outputs.container_name_to_load_volume }}
-          docker container rm -f ${{ steps.server-volume.outputs.container_name_to_load_volume }}
-
           echo "Starting container: $name (host port: $host_port)"
 
           # Prevent UNIX to windows path conversions here to prevent the aerospike.conf path from being wrongly converted
@@ -630,6 +626,10 @@ runs:
             tls_service_ports+="$tls_host_port"
           fi
         done
+
+        # No longer need this
+        docker stop ${{ steps.server-volume.outputs.container_name_to_load_volume }}
+        docker container rm -f ${{ steps.server-volume.outputs.container_name_to_load_volume }}
 
         echo "container-names=$container_names" >> "$GITHUB_OUTPUT"
         echo "service-ports=$service_ports" >> "$GITHUB_OUTPUT"
