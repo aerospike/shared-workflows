@@ -99,6 +99,10 @@ inputs:
     description: Aerospike tools Docker image tag
     required: false
     default: 12.1.1_2
+  enable-bash-trace-mode:
+    description: Show commands being executed in shell scripts for debugging
+    required: false
+    default: "false"
 
 outputs:
   container-names:
@@ -122,8 +126,15 @@ runs:
   steps:
     - name: Validate inputs
       id: validate
-      shell: bash -ex {0}
+      shell: bash
+      env:
+        ENABLE_BASH_TRACE_MODE: ${{ inputs.enable-bash-trace-mode }}
       run: |
+        if [[ "$ENABLE_BASH_TRACE_MODE" == "true" ]]; then
+          echo "ENABLE_BASH_TRACE_MODE=$ENABLE_BASH_TRACE_MODE" >> "$GITHUB_ENV"
+          set -x
+        fi
+
         # shellcheck source=/dev/null
         source "${{ github.action_path }}/config-helpers.sh"
 
@@ -181,6 +192,10 @@ runs:
     - name: Create volumes to send TLS files and server config file to the server
       id: server-volume
       run: |
+        if [[ "$ENABLE_BASH_TRACE_MODE" == "true" ]]; then
+          set -x
+        fi
+
         CONFIG_FILES_VOLUME_NAME="server_volume"
         echo "conf_volume_name=$CONFIG_FILES_VOLUME_NAME" >> "$GITHUB_OUTPUT"
         docker volume create "$CONFIG_FILES_VOLUME_NAME"
@@ -203,7 +218,7 @@ runs:
           -v "$CONFIG_FILES_VOLUME_NAME:$VOLUME_DEST_DIR" \
           -v "$TLS_VOLUME_NAME:$TLS_VOLUME_DEST_DIR" \
           alpine tail -f /dev/null
-      shell: bash -ex {0}
+      shell: bash
       env:
         # Prevents volume directories from being expanded since they start with /
         MSYS_NO_PATHCONV: 1
@@ -211,11 +226,15 @@ runs:
     - name: Generate TLS certificates
       id: generate-tls-certs
       if: inputs.enable-tls == 'true'
-      shell: bash -ex {0}
+      shell: bash
       env:
         # Prevents subject name from being treated like a path while running openssl commands
         MSYS_NO_PATHCONV: 1
       run: |
+        if [[ "$ENABLE_BASH_TRACE_MODE" == "true" ]]; then
+          set -x
+        fi
+
         cert_dir="$(mktemp -d)"
         cd "$cert_dir"
 
@@ -279,11 +298,15 @@ runs:
 
     - name: Prepare config files
       id: prepare-config
-      shell: bash -ex {0}
+      shell: bash
       env:
         FEATURES_CONTENT: ${{ inputs.features-content }}
         CONFIG_CONTENT: ${{ inputs.config-content }}
       run: |
+        if [[ "$ENABLE_BASH_TRACE_MODE" == "true" ]]; then
+          set -x
+        fi
+
         features_path="${{ inputs.features-file }}"
         config_path="${{ inputs.config-file }}"
         effective_security="${{ steps.validate.outputs.effective-security }}"
@@ -389,8 +412,12 @@ runs:
 
     - name: Create Docker network
       id: create-network
-      shell: bash -ex {0}
+      shell: bash
       run: |
+        if [[ "$ENABLE_BASH_TRACE_MODE" == "true" ]]; then
+          set -x
+        fi
+
         network="${{ inputs.network-name }}"
         if ! docker network inspect "$network" >/dev/null 2>&1; then
           docker network create "$network"
@@ -402,10 +429,14 @@ runs:
 
     - name: Start Aerospike Server containers
       id: start-containers
-      shell: bash -ex {0}
+      shell: bash
       env:
         ENV_VARS: ${{ inputs.env-vars }}
       run: |
+        if [[ "$ENABLE_BASH_TRACE_MODE" == "true" ]]; then
+          set -x
+        fi
+
         num_nodes=${{ inputs.num-nodes }}
         base_port=${{ inputs.base-port }}
         prefix="${{ inputs.container-name-prefix }}"
@@ -608,7 +639,13 @@ runs:
       shell: bash
       run: |
         chmod +x "${{ github.action_path }}/wait-for-aerospike-server.sh"
-        "${{ github.action_path }}/wait-for-aerospike-server.sh" \
+
+        bash_command=( "bash" )
+        if [[ "$ENABLE_BASH_TRACE_MODE" == "true" ]]; then
+          bash_command+=("-x")
+        fi
+
+        "${bash_command[@]}" "${{ github.action_path }}/wait-for-aerospike-server.sh" \
           --container-names "${{ steps.start-containers.outputs.container-names }}" \
           --num-nodes "${{ inputs.num-nodes }}" \
           --timeout "${{ inputs.startup-timeout }}" \
@@ -621,6 +658,10 @@ runs:
     - name: Print Aerospike server version
       shell: bash
       run: |
+        if [[ "$ENABLE_BASH_TRACE_MODE" == "true" ]]; then
+          set -x
+        fi
+
         image="${{ inputs.container-repo-url }}/${{ inputs.server-container-repo }}:${{ inputs.server-tag }}"
         first_container="${{ inputs.container-name-prefix }}-1"
 
@@ -651,6 +692,10 @@ runs:
       if: inputs.enable-strong-consistency == 'true'
       shell: bash
       run: |
+        if [[ "$ENABLE_BASH_TRACE_MODE" == "true" ]]; then
+          set -x
+        fi
+
         tools_image="${{ inputs.container-repo-url }}/database-docker-virtual/aerospike-tools:${{ inputs.tools-tag }}"
         network="${{ inputs.network-name }}"
         first_container="${{ inputs.container-name-prefix }}-1"
