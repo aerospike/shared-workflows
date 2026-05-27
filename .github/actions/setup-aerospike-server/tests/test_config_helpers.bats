@@ -76,13 +76,14 @@ render_multi_node_config() {
 }
 
 @test "enterprise with features content renders feature-key-file" {
-    FEATURE_KEY_FILE=$(build_feature_key_file_directive enterprise "" "feature-key-version 2" "/etc/aerospike/features.conf")
+    features_conf_path=$(mktemp)
+    FEATURE_KEY_FILE=$(build_feature_key_file_directive enterprise "" "feature-key-version 2" "$features_conf_path")
     export FEATURE_KEY_FILE
 
     config_path="$TEST_TMPDIR/aerospike.conf"
     render_default_config "$config_path"
 
-    grep -q "feature-key-file /etc/aerospike/features.conf" "$config_path"
+    grep -q "feature-key-file $features_conf_path" "$config_path"
 }
 
 @test "community with features content omits feature-key-file" {
