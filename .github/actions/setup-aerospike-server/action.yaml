@@ -130,8 +130,8 @@ runs:
       env:
         ENABLE_BASH_TRACE_MODE: ${{ inputs.enable-bash-trace-mode }}
       run: |
+        echo "ENABLE_BASH_TRACE_MODE=$ENABLE_BASH_TRACE_MODE" >> "$GITHUB_ENV"
         if [[ "$ENABLE_BASH_TRACE_MODE" == "true" ]]; then
-          echo "ENABLE_BASH_TRACE_MODE=$ENABLE_BASH_TRACE_MODE" >> "$GITHUB_ENV"
           set -x
         fi
 
