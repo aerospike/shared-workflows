@@ -52,7 +52,7 @@
 					"build-env": {
 						"type": "string",
 						"minLength": 1,
-						"description": "Override build env for this matrix entry (semicolon-delimited KEY=VALUE; use \\; for semicolons)"
+						"description": "Build env for this matrix entry, merged with the top-level build-env (matrix appended after top-level, so matrix keys win on duplicates; not a replace). Semicolon-delimited KEY=VALUE; use \\; for literal semicolons and \\\\ for literal backslashes"
 					},
 					"setup-dotnet": {
 						"type": "boolean",
@@ -81,6 +81,24 @@
 						"type": "string",
 						"minLength": 1,
 						"description": "Override package manager cache for this matrix entry (maven, gradle, sbt)"
+					},
+					"setup-python": {
+						"type": "boolean",
+						"description": "Enable Python setup for this matrix entry"
+					},
+					"python-version": {
+						"type": "string",
+						"minLength": 1,
+						"description": "Override Python version for this matrix entry (e.g., 3.11, 3.12)"
+					},
+					"setup-helm": {
+						"type": "boolean",
+						"description": "Enable Helm CLI setup for this matrix entry"
+					},
+					"helm-version": {
+						"type": "string",
+						"minLength": 1,
+						"description": "Override Helm version for this matrix entry (e.g., v3.16.4, latest)"
 					}
 				}
 			}

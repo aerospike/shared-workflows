@@ -84,14 +84,18 @@ jobs:
 Notes:
 
 - `reusable_artifacts-cicd.yaml` generates a unique parent `jf-build-id` internally (`GITHUB_RUN_ID-GITHUB_RUN_ATTEMPT`) and uses a distinct metadata build-id (`{jf-build-id}-buildinfo`) for the build-info produced during the build.
-- Signing is always enabled; provide the required signing secrets (GPG, and SSL.com secrets if `.nupkg` files are present). Using `secrets: inherit` is simplest.
+- Signing is always enabled; provide the required signing secrets (GPG, plus SSL.com secrets if `.nupkg` files or Windows executables are present). Using `secrets: inherit` is simplest.
 - All artifacts get `version` and `package_name` target-props automatically. DEB/RPM also get distribution and architecture. Use `build-type` and `internal` for additional categorization.
 - **Mac signing** is optional. Set `sign-mac: true` and provide `mac-signing-identity` plus the Apple secrets to enable Apple code signing, package signing (productsign), and notarization for `.pkg`, `.dmg`, and Mach-O binaries. Mac signing runs before GPG signing in the pipeline. See [sign-mac-artifacts README](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/sign-mac-artifacts/README.md) for secret setup.
+- **Windows signing** is optional. Set `sign-windows: true` and provide the SSL.com eSigner secrets to enable Authenticode signing of `.exe`, `.msi`, and `.msix` files. Windows signing runs after Mac signing and before GPG signing. See [sign-win-artifacts README](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/sign-win-artifacts/README.md) for secret setup.
 - **Java/Maven:** Set `setup-java: true` to have Java installed before your build script runs. Optionally set `java-version` (default `"21"`), `java-distribution` (default `temurin`), and `java-cache` (default `maven`). Matrix entries can override all four fields per build.
 - **JAR artifacts:** Use `jar-group-id` to provide a Maven group ID fallback when the JAR metadata doesn't include one.
 - **Python/PyPI:** Set `setup-python: true` to install Python and build tools (`build`, `twine`) before your build script runs. Optionally set `python-version` (default `"3.12"`). The deploy stage auto-detects `.whl` and `.tar.gz` sdist files and routes them to the appropriate PyPI repository. Matrix entries can override `setup-python` and `python-version` per build.
 - **Go modules:** The deploy stage auto-detects Go module `.zip` archives (those containing `module@version/go.mod`) and routes them to the Go repository. At upload time, it extracts the `.mod` file and generates a `.info` JSON following the [GOPROXY protocol](https://go.dev/ref/mod#goproxy-protocol). No special setup inputs are needed. Your build script should produce a Go module zip with the standard `module@version/` prefix layout.
 - **Helm charts:** Set `setup-helm: true` (and optionally `helm-version`, default `latest`) to install the Helm CLI before the build script runs. Matrix entries can override per build. The deploy stage auto-detects packaged Helm chart `.tgz` files (those containing `<chart>/Chart.yaml` with `apiVersion`, `name`, and `version`) and routes them to the project's classic Helm repository (`{project}-helm-dev-local`). Build script runs `helm package`; deploy ingests the resulting `.tgz`. JFrog auto-generates `index.yaml` from uploaded charts, so consumers `helm repo add` the repo URL and `helm install` from it. Signing is automatic: `sign-artifacts` produces a helm-native `.prov` (GPG-clearsigned Chart.yaml plus the chart's sha256) for every chart, and the `.prov` rides alongside the chart through deploy. Build scripts should use plain `helm package` (no `--sign`). See [artifacts-cicd README](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/artifacts-cicd/README.md) for the full Helm section including chart-testing pointers.
+- **NuGet:** The deploy stage auto-detects `.nupkg` and `.snupkg` packages (validated via the embedded `.nuspec`) and routes them to the project's NuGet repository (`{project}-nuget-dev-local`). NuGet packages are signed with SSL.com eSigner rather than GPG; set `nuget-environment` to choose the eSigner signing environment (default `PROD`). No special setup input is required.
+- **npm:** The deploy stage content-detects npm package tarballs (`.tgz` or `.tar.gz` containing a `package.json`) and routes them to the project's npm repository (`{project}-npm-dev-local`). No special setup input is required.
+- **Windows executables:** `.exe`, `.msi`, and `.msix` files are detected by extension and routed to the project's generic repository (`{project}-generic-dev-local`). Enable Authenticode signing for them with `sign-windows` (see Windows signing below).
 
 ### Mac signing (optional)
 
@@ -119,9 +123,37 @@ jobs:
     secrets: inherit
 ```
 
-The pipeline runs Mac signing before GPG signing: `collect -> sign-mac -> sign (GPG) -> deploy`. Apple signing modifies files in place, while GPG creates detached `.asc` signatures. Running Mac signing first ensures GPG signatures match the final file contents.
+The pipeline runs platform signing before GPG signing: `collect -> sign-mac -> sign-windows -> sign (GPG) -> deploy`. Apple and Authenticode signing modify files in place, while GPG creates detached `.asc` signatures. Running Mac and Windows signing first ensures the GPG signatures match the final file contents.
 
 Required secrets (set at org or repo level): `APPLE_APPLICATION_CERT`, `APPLE_CERT_PASSWORD`, `APPLE_ID`, `APPLE_INSTALLER_CERT`, `APPLE_NOTARIZATION_PASSWORD`, `APPLE_TEAM_ID`. See the [sign-mac-artifacts README](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/sign-mac-artifacts/README.md) for setup instructions.
+
+### Windows signing (optional)
+
+To Authenticode-sign Windows executables (.exe, .msi, .msix) via SSL.com eSigner, add the `sign-windows` inputs:
+
+```yaml
+jobs:
+  ci:
+    uses: aerospike/shared-workflows/.github/workflows/reusable_artifacts-cicd.yaml@v3.2.0
+    with:
+      gh-workflows-ref: v3.2.0
+      jf-project: my-project
+      jf-build-name: my-app
+      version: 1.2.3
+      gh-artifact-directory: dist
+      build-script: make build-windows
+
+      # Windows signing
+      sign-windows: true
+      win-artifact-glob: "*.exe,*.msi,*.msix" # Default: **/*
+      win-signing-identity: "My Product Inc." # Optional display name for installers
+      win-runs-on: windows-2025 # Default: windows-2025
+    secrets: inherit
+```
+
+Windows signing runs after Mac signing and before GPG signing (`collect -> sign-mac -> sign-windows -> sign -> deploy`), so the signed executables flow through to deploy and any later GPG `.asc` signatures match the signed bytes. Signing uses SSL.com CodeSignTool with an OV certificate.
+
+Required secrets (set at org or repo level): `ES_OV_USERNAME`, `ES_OV_PASSWORD`, `ES_OV_CREDENTIAL_ID`, `ES_OV_TOTP_SECRET`. These are SSL.com eSigner account credentials. See the [sign-win-artifacts README](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/sign-win-artifacts/README.md) for setup instructions.
 
 ### Build-info
 
@@ -301,6 +333,8 @@ For chart linting and unit tests in PRs, run [chart-testing (`ct`)](https://gith
 ## Full examples
 
 - [example_artifacts-cicd.yaml](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/example_artifacts-cicd.yaml): drop-in orchestrated pipeline with multi-ecosystem matrix (C, .NET, npm, Java, Python, Go, Helm)
+- [example_win-signing.yaml](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/example_win-signing.yaml): orchestrated pipeline with Windows Authenticode signing
+- [example_expanded-integration.yaml](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/example_expanded-integration.yaml): exhaustive multi-ecosystem integration showcase
 
 ---
 
