@@ -15,21 +15,23 @@ The other approach is the composable pipeline See [CICD-composable.md](https://g
 ```yaml
 jobs:
   ci:
-    uses: aerospike/shared-workflows/.github/workflows/reusable_artifacts-cicd.yaml@v2.0.3
+    uses: aerospike/shared-workflows/.github/workflows/reusable_artifacts-cicd.yaml@v3.2.0
     with:
-      gh-workflows-ref: v2.0.3
+      gh-workflows-ref: v3.2.0
       jf-project: my-project
       jf-build-name: my-app
       version: 1.2.3
       gh-artifact-directory: dist
-      build-script: |
+      oidc-audience: aerospike # Required
+      oidc-provider-name: gh-aerospike # Required
+      build-script: | # Provide build-script OR build-script-path, not both
         make build
       # Optional:
       build-type: release # Freeform label, applied as build.type target-prop
       internal: false # Set true to mark artifacts as internal-only
       # Java/Maven (passed through to execute-build):
       setup-java: true
-      java-version: "8"
+      java-version: "21"
       java-distribution: temurin
     secrets: inherit
 ```
@@ -48,7 +50,10 @@ The deploy stage automatically routes artifacts by file extension:
 | PyPI    | `pypi-dev-local`    | `version`, `package_name`, `pypi.name`, `pypi.version`                             |
 | Go      | `go-dev-local`      | `version`, `package_name`, `go.module`, `go.version`                               |
 | Helm    | `helm-dev-local`    | `version`, `package_name`, `helm.name`, `helm.version`                             |
+| Windows | `generic-dev-local` | `version`, `package_name`                                                          |
 | Generic | `generic-dev-local` | `version`, `package_name`                                                          |
+
+Windows executables (`.exe`, `.msi`, `.msix`) are detected by extension and routed to the generic repository; enable Authenticode signing for them with `sign-windows`. macOS `.pkg` installers produced by `sign-mac` are likewise uploaded as generic artifacts.
 
 Companion files (`.asc` signatures, `.pom` files, helm `.prov` provenance) are automatically gathered alongside their parent artifacts. Helm registers `.prov` (helm-native provenance signature) as its companion; the orphan `.tgz.asc` produced by GPG sign-artifacts is intentionally not gathered or uploaded for helm charts because `.prov` is the canonical chart signature.
 
@@ -74,7 +79,10 @@ Chart linting and unit testing are the user's responsibility. Suggestion is to r
 - When **`sign-windows: true`**, pass **`es_ov_username`**, **`es_ov_password`**, **`es_ov_credential_id`**, and **`es_ov_totp_secret`** into this workflow (for example from repository secrets **`ES_OV_USERNAME`**, **`ES_OV_PASSWORD`**, **`ES_OV_CREDENTIAL_ID`**, **`ES_OV_TOTP_SECRET`**). NuGet signing in the same pipeline still uses **`es-username`**, **`es-password`**, **`credential_id`**, and **`es-totp_secret`**.
 - The workflow generates a parent build-id automatically.
 - All artifacts get `version` and `package_name` target-props. Use `build-type` and `internal` for additional categorization.
-- **Java/Maven:** Set `setup-java: true` and optionally `java-version` (e.g. `"8"`, `"17"`), `java-distribution` (default `temurin`), and `java-cache` (default `maven`). These are passed through to the build step so Java is set up before your `build-script` runs. Matrix entries can override them per build (e.g. `setup-java: true`, `java-version: "17"`).
+- **OIDC:** `oidc-audience` and `oidc-provider-name` are required. Aerospike consumers normally use `oidc-audience: aerospike` and `oidc-provider-name: gh-aerospike`.
+- **Build script:** Provide either `build-script` (inline) or `build-script-path` (path to a script file), not both.
+- **build-env:** Optional semicolon-delimited `KEY=VALUE` pairs exported into the build script's environment (use `\;` for a literal semicolon). Matrix-level `build-env` merges with the top-level value rather than replacing it.
+- **Language/tool setup:** Set `setup-java: true` and optionally `java-version` (default `"21"`), `java-distribution` (default `temurin`), and `java-cache` (default `maven`). The same passthrough exists for `setup-dotnet` (`dotnet-version`, default `8.0`), `setup-python` (`python-version`, default `3.12`), and `setup-helm` (`helm-version`, default `latest`). Each toolchain is set up before your `build-script` runs. Matrix entries can override these per build.
 
 ## Testing
 

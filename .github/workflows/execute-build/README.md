@@ -20,7 +20,7 @@ This workflow executes a custom build script and uploads the resulting artifacts
 | `gh-artifact-directory` | Directory that will contain all artifacts from this build                                                                                  | Yes      | -                               |
 | `gh-artifact-name`      | Name for the uploaded artifacts                                                                                                            | No       | `build-artifacts`               |
 | `gh-retention-days`     | Retention days for the artifacts                                                                                                           | No       | `1`                             |
-| `working-directory`     | Working directory for build script execution                                                                                               | No       | -                               |
+| `working-directory`     | Working directory for build script execution                                                                                               | No       | `.`                             |
 | `jf-url`                | JFrog Artifactory URL                                                                                                                      | No       | `https://artifact.aerospike.io` |
 | `oidc-provider-name`    | OIDC provider name                                                                                                                         | No       | `gh-aerospike`                  |
 | `oidc-audience`         | OIDC audience                                                                                                                              | No       | `aerospike`                     |
@@ -29,9 +29,20 @@ This workflow executes a custom build script and uploads the resulting artifacts
 | `gh-workflows-ref`      | Git ref for shared-workflows (**should match your `uses:` version**)                                                                       | Yes      | -                               |
 | `gh-source-repository`  | Repository to checkout for source code (format owner/repo)                                                                                 | No       | `${{ github.repository }}`      |
 | `gh-source-ref`         | Reference to checkout for source repository (branch, tag, or commit)                                                                       | No       | -                               |
-| `gh-source-path`        | Directory to checkout the source repository into                                                                                           | No       | `local`                         |
+| `gh-source-path`        | Directory to checkout the source repository into. If set to an empty string, the source repository is not checked out.                     | No       | `local`                         |
 | `build-env`             | Semicolon-delimited `KEY=VALUE` pairs exported to the build script. Use `\;` for a literal `;`, `\\` for a backslash.                      | No       | -                               |
 | `matrix-json-data`      | JSON for the current matrix entry. Exported as `MATRIX_JSON` to the build subprocess. Set automatically by `reusable_artifacts-cicd.yaml`. | No       | -                               |
+| `publish-build-info`    | Whether to publish build-info to JFrog                                                                                                     | No       | `true`                          |
+| `setup-dotnet`          | Install the .NET SDK before the build script runs                                                                                          | No       | `false`                         |
+| `dotnet-version`        | .NET SDK version (when `setup-dotnet`)                                                                                                     | No       | `"8.0"`                         |
+| `setup-java`            | Install Java before the build script runs                                                                                                  | No       | `false`                         |
+| `java-version`          | Java version (when `setup-java`)                                                                                                           | No       | `"21"`                          |
+| `java-distribution`     | Java distribution (when `setup-java`)                                                                                                      | No       | `temurin`                       |
+| `java-cache`            | Package manager to cache (when `setup-java`)                                                                                               | No       | `maven`                         |
+| `setup-python`          | Install Python before the build script runs                                                                                                | No       | `false`                         |
+| `python-version`        | Python version (when `setup-python`)                                                                                                       | No       | `"3.12"`                        |
+| `setup-helm`            | Install the Helm CLI before the build script runs                                                                                          | No       | `false`                         |
+| `helm-version`          | Helm version (when `setup-helm`)                                                                                                           | No       | `latest`                        |
 | `dry-run`               | Whether to run in dry-run mode                                                                                                             | No       | `false`                         |
 
 \*Either `build-script` or `build-script-path` is required, but not both.
@@ -51,7 +62,7 @@ on:
 
 jobs:
   build:
-    uses: aerospike/shared-workflows/.github/workflows/reusable_execute-build.yaml@v2.0.2
+    uses: aerospike/shared-workflows/.github/workflows/reusable_execute-build.yaml@v3.2.0
     with:
       jf-project: my-project
       jf-build-name: my-app
@@ -60,7 +71,7 @@ jobs:
       gh-artifact-directory: dist
       gh-artifact-name: my-build-artifacts
       gh-retention-days: 7
-      gh-workflows-ref: v2.0.2 # Should match the version in your 'uses:' line
+      gh-workflows-ref: v3.2.0 # Should match the version in your 'uses:' line
       dry-run: false
 ```
 
@@ -69,7 +80,7 @@ jobs:
 ```yaml
 jobs:
   build:
-    uses: aerospike/shared-workflows/.github/workflows/reusable_execute-build.yaml@v2.0.2
+    uses: aerospike/shared-workflows/.github/workflows/reusable_execute-build.yaml@v3.2.0
     with:
       jf-project: my-project
       jf-build-name: my-app
@@ -78,7 +89,7 @@ jobs:
       gh-artifact-directory: dist
       gh-artifact-name: my-build-artifacts
       gh-retention-days: 7
-      gh-workflows-ref: v2.0.2 # Should match the version in your 'uses:' line
+      gh-workflows-ref: v3.2.0 # Should match the version in your 'uses:' line
       dry-run: false
 ```
 
