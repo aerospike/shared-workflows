@@ -196,18 +196,18 @@ runs:
           set -x
         fi
 
-        CONFIG_FILES_VOLUME_NAME="server_volume"
+        CONFIG_FILES_VOLUME_NAME="server_volume_${{ github.run_id }}_${{ github.run_attempt }}"
         echo "conf_volume_name=$CONFIG_FILES_VOLUME_NAME" >> "$GITHUB_OUTPUT"
         docker volume create "$CONFIG_FILES_VOLUME_NAME"
 
-        CONTAINER_NAME_TO_LOAD_VOLUME="container_to_load_volume"
+        CONTAINER_NAME_TO_LOAD_VOLUME="container_to_load_volume_${{ github.run_id }}_${{ github.run_attempt }}"
         echo "container_name_to_load_volume=$CONTAINER_NAME_TO_LOAD_VOLUME" >> "$GITHUB_OUTPUT"
 
         # Avoid overriding the default config files in /etc/aerospike
         VOLUME_DEST_DIR=/etc/aerospike-custom
         echo "conf_volume_dest_dir=$VOLUME_DEST_DIR" >> "$GITHUB_OUTPUT"
 
-        TLS_VOLUME_NAME="tls_server_volume"
+        TLS_VOLUME_NAME="tls_server_volume_${{ github.run_id }}_${{ github.run_attempt }}"
         echo "tls_volume_name=$TLS_VOLUME_NAME" >> "$GITHUB_OUTPUT"
         docker volume create "$TLS_VOLUME_NAME"
 
