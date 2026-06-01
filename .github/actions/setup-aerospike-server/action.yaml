@@ -563,6 +563,7 @@ runs:
           # TLS port mapping and cert mounting
           if [[ "$enable_tls" == "true" ]]; then
             run_args+=("-p" "${tls_host_port}:4333")
+            run_args+=("-v" "${{ steps.server-volume.outputs.tls_volume_name }}:${{ steps.server-volume.outputs.tls_volume_dest_dir }}")
           fi
 
           # Decide whether to bypass the entrypoint. The Aerospike Docker entrypoint
@@ -586,10 +587,6 @@ runs:
 
           if [[ -n "$config_path" ]]; then
             run_args+=("-v" "${{ steps.server-volume.outputs.conf_volume_name }}:${{ steps.server-volume.outputs.conf_volume_dest_dir }}")
-          fi
-
-          if [[ "$enable_tls" == "true" ]]; then
-            run_args+=("-v" "${{ steps.server-volume.outputs.tls_volume_name }}:${{ steps.server-volume.outputs.tls_volume_dest_dir }}")
           fi
 
           run_args+=("--ulimit" "nofile=15000")
