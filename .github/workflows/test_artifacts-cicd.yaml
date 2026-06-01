@@ -50,12 +50,21 @@ jobs:
             "arch":"arm64",
             "runs-on":"macos-14",
             "build-script":"mkdir -p packaged && echo 'test-pkg-payload' > /tmp/test-binary && pkgbuild --root /tmp --identifier com.aerospike.test --version 1.0.0-test --install-location /usr/local/bin packaged/test-1.0.0-test-darwin-arm64.pkg"
+          },
+          {
+            "distro":"win10",
+            "arch":"x64",
+            "runs-on":"ubuntu-latest",
+            "build-script":"mkdir -p packaged && head -c 2048 /dev/zero > packaged/ci-win-upload-artifact.exe && head -c 2048 /dev/zero > packaged/ci-win-upload-artifact.msi && head -c 2048 /dev/zero > packaged/ci-win-upload-artifact.msix"
           }
         ]}
       dry-run: true
       sign-mac: true
       mac-signing-identity: "Developer ID Application: Test (TESTID)"
       mac-installer-identity: "Developer ID Installer: Test (TESTID)"
+      sign-windows: true
+      win-artifact-glob: "*.exe,*.msi,*.msix"
+      win-runs-on: windows-2025
     secrets:
       gpg-private-key: ${{ secrets.GPG_SECRET_KEY }}
       gpg-public-key: ${{ secrets.GPG_PUBLIC_KEY }}
@@ -64,6 +73,10 @@ jobs:
       es-password: ${{ secrets.ES_PASSWORD }}
       credential_id: ${{ secrets.CREDENTIAL_ID }}
       es-totp_secret: ${{ secrets.ES_TOTP_SECRET }}
+      es_ov_username: ${{ secrets.ES_OV_USERNAME }}
+      es_ov_password: ${{ secrets.ES_OV_PASSWORD }}
+      es_ov_credential_id: ${{ secrets.ES_OV_CREDENTIAL_ID }}
+      es_ov_totp_secret: ${{ secrets.ES_OV_TOTP_SECRET }}
       apple-application-cert: ${{ secrets.APPLE_APPLICATION_CERT }}
       apple-installer-cert: ${{ secrets.APPLE_INSTALLER_CERT }}
       apple-cert-password: ${{ secrets.APPLE_CERT_PASSWORD }}
@@ -78,7 +91,7 @@ jobs:
     needs: cicd-test
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@9ca718d3bf646d6534007c269a635b3e54cadf99 # v2.19.2
+        uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
         with:
           egress-policy: audit
 

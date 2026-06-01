@@ -239,7 +239,11 @@ structure_build_artifacts() {
         local processor="process_${type}"
         # snupkg uses process_nupkg
         [[ $type == "snupkg" ]] && processor="process_nupkg"
-        discover_and_process "${TYPE_EXTENSIONS[$type]}" "$label" "$processor" "$dest" "$type"
+        local pat
+        while IFS= read -r pat; do
+            [[ -z $pat ]] && continue
+            discover_and_process "$pat" "$label" "$processor" "$dest" "$type"
+        done < <(emit_type_extension_globs "${TYPE_EXTENSIONS[$type]}")
     done
 
     # Content-detected types: ambiguous extensions need inspection to determine type
@@ -636,6 +640,43 @@ upload_helm_packages() {
     }
 
     manifest_for_type "helm" _upload_helm_entry
+}
+
+upload_win_files() {
+    echo "Uploading Windows artifacts..." >&2
+
+    # shellcheck disable=SC2329  # invoked indirectly via manifest_for_type
+    _upload_win_entry() {
+        local file="$1"
+        [[ -f $file ]] || return 0
+
+        local filename
+        filename=$(basename "$file")
+        local props
+        props=$(get_win_props "$file")
+
+        local target_path="${BUILD_NAME}/${VERSION}/${filename}"
+
+        echo "  Uploading Windows file: $file" >&2
+        echo "    Target: $target_path" >&2
+        run jf rt upload "$file" "$PROJECT-generic-dev-local/${target_path}" \
+            --build-name="$BUILD_NAME" \
+            --build-number="$ARTIFACT_BUILD_NUMBER" \
+            --project="$PROJECT" \
+            --target-props "$props"
+
+        local companions="${TYPE_COMPANIONS[win]-}"
+        for suffix in $companions; do
+            if [[ -f "$file$suffix" ]]; then
+                echo "  Uploading companion: $file$suffix" >&2
+                run jf rt upload "$file$suffix" "$PROJECT-generic-dev-local/${target_path}${suffix}" \
+                    --build-name="$BUILD_NAME" \
+                    --build-number="$ARTIFACT_BUILD_NUMBER" \
+                    --project="$PROJECT"
+            fi
+        done
+    }
+    manifest_for_type "win" _upload_win_entry
 }
 
 upload_generic_files() {

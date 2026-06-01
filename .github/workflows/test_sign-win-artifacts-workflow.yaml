@@ -1,12 +1,13 @@
-name: Test Sign Mac Artifacts Workflow
+name: Test Sign Windows Artifacts Workflow
 
 on:
   workflow_dispatch:
   pull_request:
     branches: [main]
     paths:
-      - .github/workflows/reusable_sign-mac-artifacts.yaml
-      - .github/workflows/sign-mac-artifacts/**
+      - .github/workflows/reusable_artifacts-cicd.yaml
+      - .github/workflows/reusable_sign-win-artifacts.yaml
+      - .github/workflows/sign-win-artifacts/**
 
 permissions:
   id-token: write
@@ -18,20 +19,17 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
+        uses: step-security/harden-runner@8d3c67de8e2fe68ef647c8db1e6a09f647780f40 # v2.19.0
         with:
           egress-policy: audit
 
       - name: Create test fixtures
-        env:
-          V: 0.0.0-test
         run: |
           mkdir -p test-fixtures
-          echo "fake-pkg-data" > "test-fixtures/myapp-${V}-darwin-arm64.pkg"
-          echo "fake-dmg-data" > "test-fixtures/myapp-${V}-darwin-arm64.dmg"
-          echo "fake-binary"   > test-fixtures/myapp-darwin-arm64
-          echo "fake-deb-data" > "test-fixtures/myapp-${V}-jammy-amd64.deb"
-          echo "fake-rpm-data" > "test-fixtures/myapp-${V}-el9-x86_64.rpm"
+          echo "fake-exe-data" > test-fixtures/myapp.exe
+          echo "fake-msi-data" > test-fixtures/myapp.msi
+          echo "fake-msix-data" > test-fixtures/myapp.msix
+          echo "fake-deb-data" > test-fixtures/myapp_amd64.deb
 
       - name: Upload test fixtures
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -39,64 +37,51 @@ jobs:
           name: build-artifacts
           path: test-fixtures
 
-  test-sign-mac-dry-run:
+  # Exercises reusable_sign-win-artifacts on windows-2025 (default runs-on) with dry-run
+  test-sign-win-dry-run:
     if: github.actor != 'dependabot[bot]'
     needs: upload-test-fixtures
-    uses: ./.github/workflows/reusable_sign-mac-artifacts.yaml
+    uses: ./.github/workflows/reusable_sign-win-artifacts.yaml
     with:
       gh-unsigned-artifacts: build-artifacts
       gh-workflows-ref: ${{ github.sha }}
-      signing-identity: "Developer ID Application: Test (TESTID)"
-      installer-identity: "Developer ID Installer: Test (TESTID)"
-      notarize: false
+      signing-identity: Test Product
       dry-run: true
-      runs-on: macos-14
 
   verify-artifacts-preserved:
     if: github.actor != 'dependabot[bot]'
-    needs: test-sign-mac-dry-run
+    needs: test-sign-win-dry-run
     runs-on: ubuntu-22.04
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
+        uses: step-security/harden-runner@8d3c67de8e2fe68ef647c8db1e6a09f647780f40 # v2.19.0
         with:
           egress-policy: audit
 
-      - name: Download signed artifacts
+      - name: Download artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: build-artifacts
           path: output
 
       - name: Verify all files preserved
-        env:
-          V: 0.0.0-test
         run: |
           set -euo pipefail
-          echo "Checking that all files survived the sign-mac pass:"
           ls -laR output/
-
-          # All original files must still be present (full tree copy)
-          for f in \
-            "myapp-${V}-darwin-arm64.pkg" \
-            "myapp-${V}-darwin-arm64.dmg" \
-            myapp-darwin-arm64 \
-            "myapp-${V}-jammy-amd64.deb" \
-            "myapp-${V}-el9-x86_64.rpm"; do
+          for f in myapp.exe myapp.msi myapp.msix myapp_amd64.deb; do
             if [ ! -f "output/$f" ]; then
               echo "FAIL: Missing file: $f"
               exit 1
             fi
             echo "OK: $f"
           done
-          echo "All files preserved."
 
   run-bats-tests:
     if: github.actor != 'dependabot[bot]'
     runs-on: ubuntu-22.04
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
+        uses: step-security/harden-runner@8d3c67de8e2fe68ef647c8db1e6a09f647780f40 # v2.19.0
         with:
           egress-policy: audit
 
@@ -109,4 +94,4 @@ jobs:
 
       - name: Run Bats tests
         run: |
-          bats .github/workflows/sign-mac-artifacts/tests/bats/test_sign_mac.bats
+          bats .github/workflows/sign-win-artifacts/tests/bats/test_sign_win.bats

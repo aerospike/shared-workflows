@@ -149,7 +149,7 @@ discover_and_process() {
 # --- Upload dispatch ---
 
 # Default upload loop for simple types (deb, rpm).
-# Complex types (jar, nupkg, generic) provide their own upload function override.
+# Complex types (jar, nupkg, win, generic) provide their own upload function override.
 # The convention is: if upload_TYPE_packages() exists, it is called instead.
 # Otherwise this generic loop handles find -> props -> upload -> companions.
 # Usage: upload_type <type>

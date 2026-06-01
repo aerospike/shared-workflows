@@ -15,6 +15,7 @@ A reusable GitHub Actions workflow for uploading build artifacts to JFrog Artifa
 | npm (.tgz)                | `{project}-npm-dev-local`     | `.asc`                     | `version`, `package_name`                                                          |
 | PyPI (.whl/.tar.gz sdist) | `{project}-pypi-dev-local`    | `.asc`                     | `version`, `package_name`, `pypi.name`, `pypi.version`                             |
 | Go module (.zip)          | `{project}-go-dev-local`      | `.asc`                     | `version`, `package_name`, `go.module`, `go.version`                               |
+| Windows (.exe/.msi/.msix) | `{project}-generic-dev-local` | `.asc`                     | `version`, `package_name` (same repo as generic)                                   |
 | Generic (everything else) | `{project}-generic-dev-local` | `.asc`                     | `version`, `package_name`                                                          |
 
 All types also include `build.type` and `internal` properties when those inputs are set.
@@ -23,7 +24,7 @@ All types also include `build.type` and `internal` properties when those inputs 
 
 The deploy pipeline uses a centralized type registry (`type_registry.sh`). To add a new type:
 
-1. Add entries to the config arrays in `type_registry.sh` (`TYPE_EXTENSIONS`, `TYPE_REPO`, `TYPE_COMPANIONS`, `TYPE_STRUCT_DIR`)
+1. Call `register_type` in `type_registry.sh` with `--extension` (single `find -name` glob) or `--extensions` (comma-separated globs, e.g. `*.whl,*.tar.gz`), plus `--repo`, companions, etc.
 2. Add `type` to `UPLOAD_ORDER` (before `generic`)
 3. Add a `get_TYPE_props()` function in `type_registry.sh`
 4. Add a `process_TYPE()` function in `package_utils.sh` (or reuse `process_generic`)
@@ -73,7 +74,7 @@ The deploy pipeline uses a centralized type registry (`type_registry.sh`). To ad
 
 Artifacts arrive in `build-artifacts/` as a flat collection from the sign stage. The structuring phase categorizes them by type and gathers companion files:
 
-- Types with unique extensions (DEB, RPM, JAR, NuGet, `.whl`) are matched by extension
+- Types with unique extensions (DEB, RPM, JAR, NuGet, `.whl`, Windows `.exe`/`.msi`/`.msix`) are matched by extension
 - Gzipped tarballs (`.tgz` and `.tar.gz`) and zip archives (`.zip`) are inspected with content-based detectors to distinguish npm packages, PyPI source distributions, Go modules, and generic archives
 - Companion files (defined per type in `TYPE_COMPANIONS`) are automatically copied alongside their primary artifact
 - Generic catches everything not claimed by the above
@@ -83,7 +84,7 @@ Artifacts arrive in `build-artifacts/` as a flat collection from the sign stage.
 Each type directory is uploaded to its respective repository with appropriate properties. The upload functions are driven by the type registry:
 
 - Simple types (DEB, RPM) use the generic `upload_type()` dispatch which calls `get_TYPE_props()` and `get_TYPE_extra_flags()` by convention
-- Types with custom path layouts (JAR, NuGet, npm, PyPI, Go, generic) define `upload_TYPE_packages()` overrides
+- Types with custom path layouts (JAR, NuGet, npm, PyPI, Go, win, generic) define `upload_TYPE_*` overrides in `entrypoint.sh`
 - All uploads go through `jf_upload()` or `run jf rt upload` which adds standard flags (`--build-name`, `--build-number`, `--project`)
 
 ### 3. Build info

@@ -532,3 +532,6 @@ process_helm() { copy_to_structured "$1" "$2"; }
 # Args: <file> <dest_dir>
 # Returns: target path on stdout.
 process_generic() { copy_to_structured "$1" "$2" "unsigned-artifacts"; }
+
+# Structure Windows artifacts (exe, msi, msix); same path rules as generic.
+process_win() { process_generic "$1" "$2"; }

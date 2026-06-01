@@ -74,7 +74,7 @@ jobs:
       gh-artifact-name: ${{ steps.sign-outputs.outputs.gh-artifact-name }}
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@9ca718d3bf646d6534007c269a635b3e54cadf99 # v2.19.2
+        uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
         with:
           egress-policy: audit
 
@@ -91,6 +91,24 @@ jobs:
           find unsigned-artifacts -name "*.nupkg" -exec mv {} unsigned-nuget-packages/ \;
           echo "Found nuget packages: $(ls unsigned-nuget-packages/)"
           echo "count=$(ls unsigned-nuget-packages/ | wc -l)" >> $GITHUB_OUTPUT
+      - name: Isolate Windows Authenticode binaries (skip GPG)
+        id: windows-binaries
+        run: |
+          set -euo pipefail
+          mkdir -p unsigned-windows-staging
+          count=0
+          while IFS= read -r -d '' f; do
+            rel="${f#unsigned-artifacts/}"
+            dest_dir="unsigned-windows-staging/unsigned-artifacts/$(dirname "$rel")"
+            mkdir -p "$dest_dir"
+            if [[ -f "${f}.asc" ]]; then
+              mv "${f}.asc" "unsigned-windows-staging/unsigned-artifacts/${rel}.asc"
+            fi
+            mv "$f" "unsigned-windows-staging/unsigned-artifacts/$rel"
+            count=$((count + 1))
+          done < <(find unsigned-artifacts -type f \( -name '*.exe' -o -name '*.msi' -o -name '*.msix' \) -print0 2>/dev/null || true)
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+          echo "Isolated $count Windows installer file(s) from GPG (Authenticode-only, mirrors NuGet isolation)"
       - name: Checkout shared-workflows repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -100,7 +118,7 @@ jobs:
           fetch-depth: 1
 
       - name: Set up GPG
-        uses: aerospike/shared-workflows/.github/actions/setup-gpg@f6bb565e7d31fa3013a1a75c5f80aed44c3bde5c # v3.4.1
+        uses: aerospike/shared-workflows/.github/actions/setup-gpg@8ec712eafbec26c8db8d1183688a5fd806560a95 # v3.5.0
         with:
           gpg-private-key: ${{ secrets.gpg-private-key }}
           gpg-public-key: ${{ secrets.gpg-public-key }}
@@ -114,7 +132,7 @@ jobs:
           fi
           mkdir -p ${{ inputs.gh-artifact-name }}/nuget
       - name: Sign NuGet Packages with SSL.com
-        uses: step-security/esigner-codesign@8ff3d1cc0f91d52f5641fe33f81efed2aa0823d6 # v1.0.0
+        uses: step-security/esigner-codesign@389e3735dd2b2a0b6c3daa02fac03723ac17ffe0 # v1.0.1
         if: steps.nuget-packages.outputs.count > 0
         with:
           command: batch_sign
@@ -137,6 +155,14 @@ jobs:
           entrypoint="${{ inputs.gh-checkout-path }}/.github/workflows/sign-artifacts/entrypoint.sh"
           chmod +x "$entrypoint"
           "$entrypoint" 'unsigned-artifacts/**/*' '${{ inputs.gh-artifact-name }}'
+      - name: Restore Windows Authenticode binaries into signed output
+        if: steps.windows-binaries.outputs.count != '0'
+        run: |
+          set -euo pipefail
+          dest='${{ inputs.gh-artifact-name }}'
+          mkdir -p "$dest"
+          cp -a unsigned-windows-staging/. "$dest/"
+          echo "Restored ${{ steps.windows-binaries.outputs.count }} Windows file(s) under $dest"
       - name: Upload Artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

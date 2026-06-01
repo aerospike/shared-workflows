@@ -7,6 +7,9 @@
 #   3. Add a process_TYPE() function in package_utils.sh (or reuse process_generic)
 #   4. Add tests
 #
+# Extension globs: use --extension for a single find -name pattern, or --extensions for
+# several comma-separated patterns (e.g. "*.whl,*.tar.gz"). Spaces after commas are trimmed.
+#
 # Required globals (set by entrypoint.sh before sourcing):
 #   VERSION, BUILD_NAME, PROJECT, BUILD_TYPE, INTERNAL
 
@@ -25,11 +28,16 @@ CONTENT_DETECT_ORDER=()
 register_type() {
     local type="$1"
     shift
+    # extension: single glob (--extension) or comma-separated globs (--extensions); stored in TYPE_EXTENSIONS
     local extension="" repo="" companions=".asc" struct_dir="$type" detect=""
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
         --extension)
+            extension="$2"
+            shift 2
+            ;;
+        --extensions)
             extension="$2"
             shift 2
             ;;
@@ -74,6 +82,7 @@ register_type() {
 register_type deb --extension "*.deb" --repo "deb-dev-local"
 register_type rpm --extension "*.rpm" --repo "rpm-dev-local"
 register_type jar --extension "*.jar" --repo "maven-dev-local" --companions ".pom .asc .pom.asc"
+# Extension-based layout; detect_types.sh validates with is_nuget_package before structuring.
 register_type nupkg --extension "*.nupkg" --repo "nuget-dev-local"
 register_type snupkg --extension "*.snupkg" --repo "nuget-dev-local" --struct-dir "nupkg"
 # is_npm_package is defined in type_detection.sh
@@ -86,6 +95,8 @@ register_type go --repo "go-dev-local" --detect "is_go_module"
 # companions=".prov" carries the helm-native provenance signature
 # (GPG-clearsigned Chart.yaml + sha256) produced by sign-artifacts.
 register_type helm --repo "helm-dev-local" --detect "is_helm_chart" --companions ".prov"
+# Windows installers / packages (exe, msi, msix); structured and uploaded like generic.
+register_type win --extensions "*.exe,*.msi,*.msix" --repo "generic-dev-local"
 register_type generic --repo "generic-dev-local"
 
 # Ambiguous extensions that trigger content-based detection.
@@ -95,16 +106,33 @@ register_type generic --repo "generic-dev-local"
 CONTENT_DETECT_EXTENSIONS=("*.tgz" "*.tar.gz" "*.zip")
 
 # Upload order matters: jar before generic (jar can move files to generic)
-UPLOAD_ORDER=(rpm deb jar nupkg npm pypi go helm generic)
+UPLOAD_ORDER=(rpm deb jar nupkg npm pypi go win helm generic)
 
 # --- helpers ---
+
+# Emit one line per find -name glob. TYPE_EXTENSIONS values may be comma-separated (--extensions).
+emit_type_extension_globs() {
+    local csv="$1"
+    [[ -z $csv ]] && return 0
+    local IFS=,
+    read -ra parts <<<"$csv" || true
+    local p
+    for p in "${parts[@]}"; do
+        p="${p#"${p%%[![:space:]]*}"}"
+        p="${p%"${p##*[![:space:]]}"}"
+        [[ -n $p ]] && printf '%s\n' "$p"
+    done
+}
 
 # Returns the list of all known file extensions (primary + content-detected + companion + build).
 # Used to build the negated find pattern for generic file discovery.
 get_known_extensions() {
     local -a exts=()
-    for ext_pattern in "${TYPE_EXTENSIONS[@]}"; do
-        exts+=("$ext_pattern")
+    local ext_group line
+    for ext_group in "${TYPE_EXTENSIONS[@]}"; do
+        while IFS= read -r line; do
+            [[ -n $line ]] && exts+=("$line")
+        done < <(emit_type_extension_globs "$ext_group")
     done
     # Content-detected extensions (ambiguous types like .tgz/.tar.gz)
     exts+=("${CONTENT_DETECT_EXTENSIONS[@]}")
@@ -224,4 +252,8 @@ get_generic_props() {
     local filename
     filename=$(basename "$file")
     echo "$(get_base_props);package_name=$filename"
+}
+
+get_win_props() {
+    get_generic_props "$1"
 }

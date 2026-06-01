@@ -43,10 +43,11 @@ bats .github/workflows/deploy-artifacts/tests/bats/test_metadata.bats
 
 - `test_metadata.bats` - Metadata extraction: codename mapping, nupkg/rpm parsing
 - `test_type_registry.bats` - Registry config, base/per-type props, known extensions
+- `test_command_parsers.bats` - `extract_upload_commands` / `extract_nuget_commands` on dry-run-shaped lines (leading ANSI + spaces + `jf`, per `run()` in entrypoint)
 
 ### Structuring tests (verify file routing and companion co-location)
 
-- `test_structuring.bats` - Artifact routing to correct dirs, companion gathering, prefix stripping
+- `test_structuring.bats` - Artifact routing to correct dirs, companion gathering, prefix stripping, Windows → `win/` + `generic-dev-local` uploads
 
 ### Integration tests (dry-run entrypoint, parse upload commands)
 

@@ -69,7 +69,7 @@ The `reusable_artifacts-cicd.yaml` orchestrator runs 5 jobs. Understanding the a
 
 - Each matrix variant uploads its own GH artifact: `build-artifacts-{distro}-{arch}`
 - Upload path: `{working-directory}/{gh-artifact-directory}` — contents are flattened (upload-artifact strips the path prefix)
-- Build scripts run as temp subprocess files — `build-env` vars (including `MATRIX_JSON`) are exported, but vars set inside the script with plain `VAR=val` are local. **Must `export` them** for child processes (make, docker) to see them.
+- Build scripts run as temp subprocess files. `build-env` vars are parsed (semicolon-delimited `KEY=VALUE`) and exported; `MATRIX_JSON` is carried via a dedicated `matrix-json-data` input and also exported. Vars set inside the build script with plain `VAR=val` are local. **Must `export` them** for child processes (make, docker) to see them.
 
 ### Collect stage (`collect-matrix-artifacts` job)
 
