@@ -585,7 +585,7 @@ runs:
           # User-supplied env vars
           run_args+=("${env_flags[@]}")
 
-          if [[ -n "$config_path" ]]; then
+          if [[ -n "$config_path" || -n "$features_path" ]]; then
             run_args+=("-v" "${{ steps.server-volume.outputs.conf_volume_name }}:${{ steps.server-volume.outputs.conf_volume_dest_dir }}")
           fi
 
