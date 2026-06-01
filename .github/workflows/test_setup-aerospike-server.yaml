@@ -17,7 +17,7 @@ permissions:
   id-token: write
 
 env:
-  ENABLE_BASH_TRACE_MODE: ${{ inputs.enable-bash-trace-mode }}
+  ENABLE_BASH_TRACE_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.enable-bash-trace-mode || 'false' }}
 
 jobs:
   test-config-helpers:
