@@ -631,10 +631,6 @@ runs:
           fi
         done
 
-        # No longer need this
-        docker stop ${{ steps.server-volume.outputs.container_name_to_load_volume }}
-        docker container rm -f ${{ steps.server-volume.outputs.container_name_to_load_volume }}
-
         echo "container-names=$container_names" >> "$GITHUB_OUTPUT"
         echo "service-ports=$service_ports" >> "$GITHUB_OUTPUT"
         echo "tls-service-ports=$tls_service_ports" >> "$GITHUB_OUTPUT"
@@ -777,3 +773,11 @@ runs:
         fi
 
         echo "Strong consistency roster setup complete."
+
+    - name: Cleanup
+      if: ${{ always() }}
+      shell: bash
+      run: |
+        # No longer need these
+        docker stop ${{ steps.server-volume.outputs.container_name_to_load_volume }}
+        docker container rm -f ${{ steps.server-volume.outputs.container_name_to_load_volume }}
