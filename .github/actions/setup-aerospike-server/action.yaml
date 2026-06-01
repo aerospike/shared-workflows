@@ -511,8 +511,9 @@ runs:
             # shellcheck source=/dev/null
             source "${{ github.action_path }}/config-helpers.sh"
 
+            features_conf_filename=$(basename "$features_path")
             export FEATURE_KEY_FILE
-            FEATURE_KEY_FILE=$(build_feature_key_file_directive "$server_edition" "$features_path" "" "${{ steps.server-volume.outputs.conf_volume_dest_dir }}/features.conf")
+            FEATURE_KEY_FILE=$(build_feature_key_file_directive "$server_edition" "$features_path" "" "${{ steps.server-volume.outputs.conf_volume_dest_dir }}/$features_conf_filename")
 
             # Build security stanza from template
             export SECURITY=""
