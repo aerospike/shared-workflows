@@ -269,17 +269,29 @@ jobs:
 
       - name: Prepare build secrets
         shell: bash
+        env:
+          # Pass OIDC credentials via env (not command-line args) so the token
+          # is never exposed in the process list, and so values are available
+          # to jq for safe URL-encoding below.
+          OIDC_USER: ${{ steps.jf.outputs.oidc-user }}
+          OIDC_TOKEN: ${{ steps.jf.outputs.oidc-token }}
         run: |
           set -euo pipefail
           mkdir -p /tmp/docker-secrets
 
           # Delta 1: Always inject OIDC token as a build secret
-          echo -n '${{ steps.jf.outputs.oidc-token }}' > /tmp/docker-secrets/jfrog_token
+          printf '%s' "$OIDC_TOKEN" > /tmp/docker-secrets/jfrog_token
 
           # Delta 2: Construct authenticated GOPROXY URL when jf-go-repo is set
           jf_go_repo='${{ inputs.jf-go-repo }}'
           if [ -n "$jf_go_repo" ]; then
-            echo -n "https://${{ steps.jf.outputs.oidc-user }}:${{ steps.jf.outputs.oidc-token }}@${{ inputs.jf-registry-base }}/artifactory/api/go/${jf_go_repo}" \
+            # Percent-encode the user and token before embedding them in the URL
+            # userinfo component. OIDC users/tokens can contain reserved chars
+            # (e.g. '@', ':', '/', '+') that would otherwise corrupt the URL and
+            # break the HTTP request to Artifactory.
+            oidc_user_enc=$(jq -rn 'env.OIDC_USER | @uri')
+            oidc_token_enc=$(jq -rn 'env.OIDC_TOKEN | @uri')
+            printf '%s' "https://${oidc_user_enc}:${oidc_token_enc}@${{ inputs.jf-registry-base }}/artifactory/api/go/${jf_go_repo}" \
               > /tmp/docker-secrets/goproxy
           fi
 
