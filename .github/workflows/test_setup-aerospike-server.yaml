@@ -2,6 +2,7 @@ name: Test Setup Aerospike Server Action
 on:
   workflow_dispatch:
     inputs:
+      # checkov:skip=CKV_GHA_7:workflow_dispatch input used for debugging failing test cases in this repo
       enable-bash-trace-mode:
         type: boolean
         required: false
