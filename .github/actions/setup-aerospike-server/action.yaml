@@ -348,6 +348,7 @@ runs:
           fi
 
           if ! should_use_features_file "$server_edition" "$features_path"; then
+            export FEATURE_KEY_FILE=""
             features_path=""
           else
             features_conf_filename=$(basename "$features_path")
