@@ -345,7 +345,7 @@ runs:
         else
           # Write features-content to temp file only when the edition can use it.
           if [[ -z "$features_path" && -n "${FEATURES_CONTENT}" ]]; then
-            features_path="$RUNNER_TEMP/features.conf"
+            features_path="$(mktemp)"
             printf '%s' "${FEATURES_CONTENT}" > "$features_path"
             echo "Wrote features-content to $features_path"
           fi
