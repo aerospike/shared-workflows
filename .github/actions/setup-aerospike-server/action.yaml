@@ -287,7 +287,7 @@ runs:
         echo "tls-cert-dir=$cert_dir" >> "$GITHUB_OUTPUT"
 
         # Make sure that docker gets the actual Windows path of the user's temp folder in order to copy properly
-        # Exporting MSYS2_ARG_CONV_EXCL set to the container name doesn't prevent the volume dest dir from being expanded
+        # MSYS2_ARG_CONV_EXCL is another way to do this, but I had trouble using it
         if [[ "${{ runner.os }}" == "Windows" ]]; then
           copy_path="$(cygpath -w "$cert_dir")\\."
         else
