@@ -644,7 +644,6 @@ runs:
 
         "${bash_command[@]}" "${{ github.action_path }}/wait-for-aerospike-server.sh" \
           --container-names "${{ steps.start-containers.outputs.container-names }}" \
-          --num-nodes "${{ inputs.num-nodes }}" \
           --timeout "${{ inputs.startup-timeout }}" \
           --service-port "${{ inputs.service-port }}" \
           --security "${{ steps.validate.outputs.effective-security }}" \

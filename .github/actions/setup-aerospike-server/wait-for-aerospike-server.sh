@@ -14,7 +14,6 @@ handle_error() {
 
 # Default values
 CONTAINER_NAMES=""
-NUM_NODES=1
 TIMEOUT=30
 SERVICE_PORT=3000
 SECURITY="false"
@@ -27,10 +26,6 @@ while [[ $# -gt 0 ]]; do
     case $1 in
     --container-names)
         CONTAINER_NAMES="$2"
-        shift 2
-        ;;
-    --num-nodes)
-        NUM_NODES="$2"
         shift 2
         ;;
     --timeout)
