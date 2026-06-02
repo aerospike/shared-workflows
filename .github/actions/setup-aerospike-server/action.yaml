@@ -771,7 +771,7 @@ runs:
         echo "Strong consistency roster setup complete."
 
     - name: Cleanup
-      if: ${{ always() }}
+      if: ${{ always() && steps.server-volume.outcome == 'success' }}
       shell: bash
       run: |
         # No longer need these
