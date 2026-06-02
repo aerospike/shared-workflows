@@ -72,64 +72,7 @@ fi
 # Convert CSV to array
 IFS=',' read -ra containers <<<"$CONTAINER_NAMES"
 
-# Phase 1: Wait for each node's service port to accept connections
-echo "Phase 1: Waiting for individual node readiness..."
-for container in "${containers[@]}"; do
-    echo "  Waiting for $container..."
-    elapsed=0
-    ready="false"
-    # Prevent the /dev/tcp* command from being expanded
-    export MSYS_NO_PATHCONV=1
-    while ((elapsed < TIMEOUT)); do
-        if docker exec "$container" bash -c "</dev/tcp/localhost/${SERVICE_PORT}" 2>/dev/null; then
-            echo "  $container is ready (${elapsed}s)"
-            ready="true"
-            break
-        fi
-        sleep 2
-        elapsed=$((elapsed + 2))
-    done
-    unset MSYS_NO_PATHCONV
-
-    if [[ $ready != "true" ]]; then
-        echo "Error: $container did not become ready within ${TIMEOUT}s" >&2
-        echo "Container logs:" >&2
-        docker logs "$container" >&2
-        exit 1
-    fi
-done
-echo "All nodes are ready."
-
-# Phase 2: Wait for cluster formation (only for multi-node)
-if ((NUM_NODES > 1)); then
-    echo "Phase 2: Waiting for cluster formation (expected size: $NUM_NODES)..."
-    first_container="${containers[0]}"
-    elapsed=0
-    cluster_size=0
-    while ((elapsed < TIMEOUT)); do
-        cluster_size=$(docker logs "$first_container" 2>&1 | grep -oP 'CLUSTER-SIZE \K\d+' | tail -1 || echo "0")
-        if [[ $cluster_size == "$NUM_NODES" ]]; then
-            echo "Cluster formed: $cluster_size nodes (${elapsed}s)"
-            break
-        fi
-        sleep 2
-        elapsed=$((elapsed + 2))
-    done
-
-    if [[ $cluster_size != "$NUM_NODES" ]]; then
-        echo "Error: Cluster did not form within ${TIMEOUT}s (expected $NUM_NODES nodes)" >&2
-        echo "Per-node cluster-size for debugging:" >&2
-        for container in "${containers[@]}"; do
-            size=$(docker logs "$container" 2>&1 | grep -oP 'CLUSTER-SIZE \K\d+' | tail -1 || echo "N/A")
-            echo "  $container: cluster-size=$size" >&2
-            docker logs "$container" 2>&1
-        done
-        exit 1
-    fi
-fi
-
-# Phase 3: Wait for cluster stability
-echo "Phase 3: Waiting for cluster stability..."
+echo "Waiting for cluster stability..."
 
 ignore_migrations="$ENABLE_SC"
 
