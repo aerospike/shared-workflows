@@ -23,7 +23,7 @@ on:
       types-requiring-jira:
         required: false
         type: string
-        default: feat, fix, docs, ci, refactor
+        default: feat, fix
         description: >
           Comma-separated list of conventional commit types that require a JIRA
           ticket in the PR title. Types not in this list skip JIRA validation.
