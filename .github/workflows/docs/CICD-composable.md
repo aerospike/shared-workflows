@@ -14,6 +14,7 @@ The orchestrated `reusable_artifacts-cicd.yaml` handles build → sign → deplo
 | ------------------------------------- | -------------------------------------------------------------------------------------------- |
 | `reusable_execute-build.yaml`         | Run a build script, upload artifacts to GitHub Artifacts, publish build-info to JFrog        |
 | `reusable_sign-mac-artifacts.yaml`    | Apple codesign/productsign/notarize for .pkg, .dmg, Mach-O binaries (macOS runner)           |
+| `reusable_sign-win-artifacts.yaml`    | Authenticode signing for .exe, .msi, .msix via SSL.com eSigner CodeSignTool (Windows runner) |
 | `reusable_sign-artifacts.yaml`        | Download unsigned artifacts, GPG-sign deb/rpm/generic files, SSL.com-sign nupkg files        |
 | `reusable_deploy-artifacts.yaml`      | Download signed artifacts, upload to JFrog Artifactory (auto-routes by file extension)       |
 | `reusable_create-release-bundle.yaml` | Create JFrog release bundle from one or more builds (standalone, handles checkout and setup) |
@@ -25,7 +26,7 @@ The orchestrated `reusable_artifacts-cicd.yaml` handles build → sign → deplo
 | `collect-build-artifacts` | Merge per-matrix GitHub Artifacts into a single artifact for downstream jobs |
 | `create-release-bundle`   | Create a JFrog release bundle from one or more builds                        |
 | `delete-release-bundle`   | Delete an existing release bundle version (safe no-op if it doesn't exist)   |
-| `promote-release-bundle`  | Promote a release bundle to a target environment (DEV, TEST, PROD, etc.)     |
+| `promote-release-bundle`  | Promote a release bundle to a target promotion stage (DEV, TEST, PROD, etc.) |
 
 ## High-level flow
 
@@ -55,10 +56,10 @@ Internally, GitHub Actions artifacts are used for _in-runner handoff_ between st
 
 ## Composable artifact pipeline
 
-See [example_composable-matrix.yaml](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/example_composable-matrix.yaml) for the complete working example. It demonstrates DEB/RPM, npm, Java/Maven, Python/PyPI, and Go module builds with a custom test step inserted between build and sign:
+See [example_composable-matrix.yaml](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/example_composable-matrix.yaml) for the complete working example. It demonstrates DEB/RPM, npm, Java/Maven, Python/PyPI, Go module, and Helm chart builds with a custom test step inserted between build and sign:
 
 ```text
-extract-version  →  build (matrix + npm + java + python + go)  →  collect  →  [your tests]  →  sign-mac (optional)  →  sign  →  deploy
+extract-version  →  build (matrix + npm + java + python + go + helm)  →  collect  →  [your tests]  →  sign-mac (optional)  →  sign-windows (optional)  →  sign  →  deploy
 ```
 
 With release bundles (shown in the example for `workflow_dispatch`):
@@ -80,8 +81,9 @@ Deploy parent:     {run_id}-{run_attempt}
 
 **Artifact naming.** Each build job uploads with a distinct name (e.g., `build-artifacts-el9-x86_64`, `build-artifacts-npm-x86_64`). The `collect-build-artifacts` action merges these into a single `build-artifacts` artifact that sign and deploy consume.
 
-**Collecting matrix artifacts.** Use the `collect-build-artifacts` composite action after all build jobs complete. It downloads all artifacts matching a pattern (default `build-artifacts-*`) and re-uploads them as one merged artifact:
-**Signing secrets.** GPG keys (and SSL.com credentials if nupkg files are present) must be available. For Mac signing, provide Apple certificates and notarization credentials. See the [sign-mac-artifacts README](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/sign-mac-artifacts/README.md).
+**Collecting matrix artifacts.** Use the `collect-build-artifacts` composite action after all build jobs complete. It downloads all artifacts matching a pattern (default `build-artifacts-*`) and re-uploads them as one merged artifact.
+
+**Signing secrets.** GPG keys (and SSL.com credentials if nupkg files or Windows executables are present) must be available. For Mac signing, provide Apple certificates and notarization credentials; for Windows signing, provide SSL.com eSigner credentials. See the [sign-mac-artifacts README](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/sign-mac-artifacts/README.md) and [sign-win-artifacts README](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/sign-win-artifacts/README.md).
 
 **Mac signing (optional).** If your build produces macOS artifacts, insert `reusable_sign-mac-artifacts.yaml` between collect and GPG sign. It downloads `build-artifacts`, Apple-signs the matched files, and re-uploads with `overwrite: true`. The GPG sign step then picks up the already-Apple-signed artifacts:
 
@@ -115,7 +117,41 @@ sign:
 
 The `if: always() && !cancelled() && !failure()` on the GPG sign job ensures it runs even when `sign-mac` is skipped (a skipped needed job would otherwise silently skip the downstream job too).
 
-**Java/Maven setup.** Pass `setup-java: true` to `reusable_execute-build.yaml` along with optional `java-version` (default `"21"`), `java-distribution` (default `temurin`), and `java-cache` (default `maven`). For JAR artifacts, pass `jar-group-id` to `reusable_deploy-artifacts.yaml` as a Maven group ID fallback when JAR metadata doesn't include one.
+**Windows signing (optional).** If your build produces Windows executables (.exe, .msi, .msix), insert `reusable_sign-win-artifacts.yaml` between collect and GPG sign. It downloads `build-artifacts`, Authenticode-signs the matched files via SSL.com CodeSignTool, and re-uploads with `overwrite: true`. The GPG sign step then picks up the already-signed executables. Place it after `sign-mac` so the GPG `sign` job needs both:
+
+```yaml
+sign-windows:
+  needs: collect
+  uses: aerospike/shared-workflows/.github/workflows/reusable_sign-win-artifacts.yaml@v3.2.0
+  with:
+    gh-unsigned-artifacts: build-artifacts
+    gh-workflows-ref: v3.2.0
+    runs-on: windows-2025
+    artifact-glob: "*.exe,*.msi,*.msix"
+    signing-identity: "My Product Inc." # Optional display name
+  secrets:
+    es_ov_username: ${{ secrets.ES_OV_USERNAME }}
+    es_ov_password: ${{ secrets.ES_OV_PASSWORD }}
+    es_ov_credential_id: ${{ secrets.ES_OV_CREDENTIAL_ID }}
+    es_ov_totp_secret: ${{ secrets.ES_OV_TOTP_SECRET }}
+
+sign:
+  needs: [collect, sign-mac, sign-windows]
+  if: always() && !cancelled() && !failure()
+  uses: aerospike/shared-workflows/.github/workflows/reusable_sign-artifacts.yaml@v3.2.0
+  with:
+    gh-unsigned-artifacts: build-artifacts
+    gh-workflows-ref: v3.2.0
+  secrets: inherit
+```
+
+See [example_win-signing.yaml](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/example_win-signing.yaml) for a full Windows-signing pipeline.
+
+**Language and tool setup.** Pass `setup-java: true` to `reusable_execute-build.yaml` along with optional `java-version` (default `"21"`), `java-distribution` (default `temurin`), and `java-cache` (default `maven`). The same workflow also exposes `setup-dotnet` (with `dotnet-version`, default `8.0`), `setup-python` (with `python-version`, default `3.12`), and `setup-helm` (with `helm-version`, default `latest`) to install the matching toolchain before your build script runs. For JAR artifacts, pass `jar-group-id` to `reusable_deploy-artifacts.yaml` as a Maven group ID fallback when JAR metadata doesn't include one.
+
+**Build environment.** `reusable_execute-build.yaml` accepts a `build-env` input: semicolon-delimited `KEY=VALUE` pairs exported into the build script's environment (use `\;` for a literal semicolon and `\\` for a literal backslash; parsed by `execute-build/parse-build-env.sh`). When both a top-level `build-env` and a matrix-level `build-env` are present, they are **merged** by concatenation (`{top-level};{matrix-level}`) with the matrix entry appended last, so matrix keys win on duplicates. It is not a replace. See [INFRA-482](https://aerospike.atlassian.net/browse/INFRA-482).
+
+**Matrix data (`MATRIX_JSON`).** `reusable_execute-build.yaml` also accepts a separate `matrix-json-data` input, exported to the build subprocess as the `MATRIX_JSON` environment variable (the jq-parseable JSON of the current matrix entry). This lets a build script branch on matrix properties (distro, arch, custom flags). `MATRIX_JSON` is a distinct input from `build-env` precisely so embedded semicolons in the JSON do not corrupt the `build-env` split (INFRA-482).
 
 ### Build-info architecture
 
@@ -160,7 +196,9 @@ At Aerospike, release bundles are the only way artifacts are promoted between en
 
 ## Full examples
 
-- [example_composable-matrix.yaml](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/example_composable-matrix.yaml): multi-ecosystem matrix builds (DEB/RPM, npm, Java, Python, Go) with custom test step, release bundle lifecycle, and promotion
+- [example_composable-matrix.yaml](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/example_composable-matrix.yaml): multi-ecosystem matrix builds (DEB/RPM, npm, Java, Python, Go, Helm) with custom test step, release bundle lifecycle, and promotion
+- [example_win-signing.yaml](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/example_win-signing.yaml): Windows Authenticode signing wired into a composable pipeline
+- [example_expanded-integration.yaml](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/example_expanded-integration.yaml): exhaustive composable showcase with custom packaging and downstream artifact consumption
 
 ---
 

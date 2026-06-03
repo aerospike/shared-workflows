@@ -30,7 +30,7 @@ title_matches_patterns() {
 # Usage: extract_jira_ticket "PR title"
 extract_jira_ticket() {
         local title="$1"
-        echo "$title" | grep -oP '^[a-z]+(\([a-z0-9-]+\))?: \[\K[A-Z]{2,10}-[0-9]+(?=\] )' | head -1
+        echo "$title" | grep -oP '^[a-z]+(\([a-z0-9-_]+\))?: \[\K[A-Z]{2,10}-[0-9]+(?=\] )' | head -1
 }
 
 # Extract the conventional commit type from a PR title

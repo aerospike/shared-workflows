@@ -37,8 +37,8 @@ jobs:
 - `jf-registry-base` (string, default `artifact.aerospike.io`): Registry hostname (no repo path)
 - `jf-url` (string, default `https://artifact.aerospike.io`): Base JFrog Artifactory URL
 - `labels-json` (string, default `{}`): JSON object of image labels (e.g., `{"com.aerospike.version":"7.0.0","com.aerospike.release":"stable","maintainer":"Aerospike"}`)
-- `oidc-audience` (string, default `aerospike/testing`): OIDC audience value for token
-- `oidc-provider-name` (string, default `gh-dev-test`): JFrog OIDC provider name
+- `oidc-audience` (string, default `aerospike`): OIDC audience value for token
+- `oidc-provider-name` (string, default `gh-aerospike`): JFrog OIDC provider name
 - `platforms` (string, default `linux/amd64,linux/arm64`): Comma-separated target platforms for buildx
 - `provenance` (string, default `mode=max`): BuildKit provenance setting (`''`, `'false'`, or `'mode=max'`)
 - `push` (boolean, default `true`): Whether to push the image
@@ -134,6 +134,7 @@ RUN --mount=type=secret,id=npm_token \
 ## Notes
 
 - The workflow automatically handles `v` prefix in version strings (e.g., `v1.2.3` becomes `1.2.3`)
+- OCI tags forbid the `+` character, but SemVer uses it for build metadata (e.g., `1.2.3+build-123`). The workflow replaces `+` with `-` in tags (`1.2.3+build-123` becomes `1.2.3-build-123`); the original version is preserved in the image's OCI labels.
 - OCI labels are automatically generated with image metadata (title, version, created, revision, source, url)
 - User-provided labels (via `labels-json`) override OCI labels when keys conflict
 - For Artifactory, the registry path includes the repository (e.g., `artifact.aerospike.io/database-docker-dev-local`)

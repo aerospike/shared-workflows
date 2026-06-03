@@ -1,36 +1,36 @@
 # Release Bundles
 
-At Aerospike, release bundles are the **only way artifacts are promoted between environments**. Instead of promoting individual builds, we group all artifacts for a release into a [Release Bundle v2](https://jfrog.com/help/r/jfrog-artifactory-documentation/understanding-release-bundles-v2) and promote the bundle through DEV, TEST, STAGE, PREVIEW, and PROD.
+At Aerospike, release bundles are the **only way artifacts are promoted between promotion stages**. Instead of promoting individual builds, we group all artifacts for a release into a [Release Bundle v2](https://jfrog.com/help/r/jfrog-artifactory-documentation/understanding-release-bundles-v2) and promote the bundle through DEV, TEST, STAGE, PREVIEW, and PROD.
 
 ## Why bundles
 
 JFrog [Release Bundles v2](https://jfrog.com/help/r/jfrog-artifactory-documentation/understanding-release-bundles-v2) provide:
 
 - **Immutability**: once created, a bundle's contents cannot change. This guarantees that what was tested is what gets promoted.
-- **Promotion tracking**: each environment transition (DEV to TEST, TEST to STAGE, etc.) is recorded with who promoted and when, creating an auditable chain of custody.
+- **Promotion tracking**: each promotion-stage transition (DEV to TEST, TEST to STAGE, etc.) is recorded with who promoted and when, creating an auditable chain of custody.
 - **Multi-artifact grouping**: a single bundle can reference multiple builds (e.g., artifact pipeline + Docker pipeline), so everything for a release moves together.
 
 These properties make bundles the right unit for our SDLC promotion model.
 
 ## Aerospike's promotion pipeline
 
-Artifacts flow through gated environments. Each gate has an owner and requirements that must be met before promotion.
+Artifacts flow through gated promotion stages. Each gate has an owner and requirements that must be met before promotion.
 
 ```text
 CI/Build  ->  DEV  ->  TEST  ->  STAGE  ->  PREVIEW  ->  PROD
                                           ->  INTERNAL
 ```
 
-| Environment | Owner       | Gate requirement                         |
-| ----------- | ----------- | ---------------------------------------- |
-| DEV         | Engineering | Build + smoke tests pass                 |
-| TEST        | QE          | Basic integration tests pass             |
-| STAGE       | QE          | Deep integration and performance testing |
-| PREVIEW     | Product     | Customer preview validation              |
-| PROD        | Product     | Security review and production readiness |
-| INTERNAL    | Engineering | Internal-only artifacts (not public)     |
+| Promotion stage | Owner       | Gate requirement                         |
+| --------------- | ----------- | ---------------------------------------- |
+| DEV             | Engineering | Build + smoke tests pass                 |
+| TEST            | QE          | Basic integration tests pass             |
+| STAGE           | QE          | Deep integration and performance testing |
+| PREVIEW         | Product     | Customer preview validation              |
+| PROD            | Product     | Security review and production readiness |
+| INTERNAL        | Engineering | Internal-only artifacts (not public)     |
 
-The release bundle is created after deployment to DEV (at the DEV to TEST gate). From that point forward, the bundle carries all artifacts and metadata through the remaining environments.
+The release bundle is created after deployment to DEV (at the DEV to TEST gate). From that point forward, the bundle carries all artifacts and metadata through the remaining promotion stages.
 
 For the full gate definitions and evidence requirements, see:
 
@@ -54,7 +54,22 @@ release-bundle:
   secrets: inherit
 ```
 
-There is a composite action that may be used for promotion of bundles documented at [Promote Release Bundle Composite Action](https://github.com/aerospike/shared-workflows/blob/main/.github/actions/promote-release-bundle/README.md).
+Set `dry-run: true` to validate the configuration and JFrog authentication without actually creating the bundle. In dry-run mode the workflow echoes the commands it would run instead of calling `jf release-bundle-create`.
+
+There is a composite action that may be used for promotion of bundles documented at [Promote Release Bundle Composite Action](https://github.com/aerospike/shared-workflows/blob/main/.github/actions/promote-release-bundle/README.md). The `promote-release-bundle` action accepts `include-repos` and `exclude-repos` (semicolon-separated repo lists, e.g. `my-project-deb-dev-local;my-project-rpm-dev-local`) to scope which repositories are promoted. With neither set, all repositories in the bundle are promoted.
+
+### Deleting a bundle before re-deploy
+
+The `delete-release-bundle` composite action deletes a bundle version safely: it searches first, no-ops when the bundle is absent, and reports `existed=true/false` rather than failing. Wire it to run before deploy when you may re-run a pipeline against an already-promoted bundle (promoted bundles lock the underlying dev-local artifacts).
+
+```yaml
+delete-existing-bundle:
+  uses: aerospike/shared-workflows/.github/actions/delete-release-bundle@v3.2.0
+  with:
+    bundle-name: my-release
+    version: 1.2.3
+    jf-project: my-project
+```
 
 For a complete working example including bundle deletion and promotion, see [example_composable-matrix.yaml](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/example_composable-matrix.yaml).
 
@@ -62,9 +77,9 @@ For a complete working example including bundle deletion and promotion, see [exa
 
 **Bundle creation fails**: confirm the `jf-build-names` input is a comma-separated list of `name:version` pairs that exist in JFrog, and that your project permissions allow bundle creation. Bundle creation requires higher permissions than artifact upload.
 
-**Promoted bundle locks artifacts**: promoted bundles lock the underlying artifacts in dev-local repos, causing re-deploy uploads to fail with permission errors. Either delete the old bundle before deploying, or increment the version/build ID.
+**Promoted bundle locks artifacts**: promoted bundles lock the underlying artifacts in dev-local repos, causing re-deploy uploads to fail with permission errors. Either delete the old bundle before deploying (use the `delete-release-bundle` action), or increment the version/build ID.
 
-**Re-running a pipeline**: if the bundle already exists and has been promoted, you must delete it before deploying new artifacts with the same names/path.
+**Re-running a pipeline**: if the bundle already exists and has been promoted, delete it before deploying new artifacts with the same names/path. The `delete-release-bundle` action is safe to call unconditionally (it no-ops when the bundle is absent), so it can run on every pipeline before deploy.
 
 ## References
 

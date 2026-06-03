@@ -1,6 +1,6 @@
 # Promote Release Bundle
 
-Promote a JFrog release bundle to a target environment (DEV, TEST, STAGE, PROD, etc.).
+Promote a JFrog release bundle to a target promotion stage (DEV, TEST, STAGE, PROD, etc.).
 
 ## Prerequisites
 
@@ -8,12 +8,14 @@ JFrog CLI must be configured before calling this action (via `setup-jfrog-cli`).
 
 ## Inputs
 
-| Input         | Required | Description                                       |
-| ------------- | -------- | ------------------------------------------------- |
-| `bundle-name` | Yes      | Release bundle name                               |
-| `version`     | Yes      | Release bundle version to promote                 |
-| `environment` | Yes      | Target environment (DEV, TEST, STAGE, PROD, etc.) |
-| `jf-project`  | Yes      | JFrog project key                                 |
+| Input           | Required | Description                                                                     |
+| --------------- | -------- | ------------------------------------------------------------------------------- |
+| `bundle-name`   | Yes      | Release bundle name                                                             |
+| `version`       | Yes      | Release bundle version to promote                                               |
+| `environment`   | Yes      | Target promotion stage (DEV, TEST, STAGE, PROD, etc.)                           |
+| `jf-project`    | Yes      | JFrog project key                                                               |
+| `include-repos` | No       | Semicolon-separated list of target repos to include in promotion (limits scope) |
+| `exclude-repos` | No       | Semicolon-separated list of target repos to exclude from promotion              |
 
 ## Example Usage
 

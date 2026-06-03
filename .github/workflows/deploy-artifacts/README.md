@@ -15,6 +15,7 @@ A reusable GitHub Actions workflow for uploading build artifacts to JFrog Artifa
 | npm (.tgz)                | `{project}-npm-dev-local`     | `.asc`                     | `version`, `package_name`                                                          |
 | PyPI (.whl/.tar.gz sdist) | `{project}-pypi-dev-local`    | `.asc`                     | `version`, `package_name`, `pypi.name`, `pypi.version`                             |
 | Go module (.zip)          | `{project}-go-dev-local`      | `.asc`                     | `version`, `package_name`, `go.module`, `go.version`                               |
+| Helm chart (.tgz)         | `{project}-helm-dev-local`    | `.prov`                    | `version`, `package_name`, `helm.name`, `helm.version`                             |
 | Windows (.exe/.msi/.msix) | `{project}-generic-dev-local` | `.asc`                     | `version`, `package_name` (same repo as generic)                                   |
 | Generic (everything else) | `{project}-generic-dev-local` | `.asc`                     | `version`, `package_name`                                                          |
 
@@ -42,25 +43,25 @@ The deploy pipeline uses a centralized type registry (`type_registry.sh`). To ad
 
 ## Inputs
 
-| Input                  | Description                                                                 | Required | Default                         |
-| ---------------------- | --------------------------------------------------------------------------- | -------- | ------------------------------- |
-| `jf-project`           | JFrog Artifactory project name                                              | Yes      | -                               |
-| `jf-build-name`        | JFrog build name                                                            | Yes      | -                               |
-| `jf-build-id`          | JFrog build ID for the overall build info                                   | Yes      | -                               |
-| `jf-metadata-build-id` | JFrog build ID for the build metadata                                       | Yes      | -                               |
-| `version`              | Version string for build info                                               | Yes      | -                               |
-| `gh-workflows-ref`     | Git ref for shared-workflows (**must match `uses:`**)                       | Yes      | -                               |
-| `build-type`           | Freeform label applied as `build.type` target-prop (e.g., release, nightly) | No       | `""`                            |
-| `internal`             | Mark artifacts as internal-only (`internal=true` target-prop)               | No       | `false`                         |
-| `dry-run`              | Show what would be uploaded without uploading                               | No       | `false`                         |
-| `jar-group-id`         | Maven group ID fallback for JAR artifacts                                   | No       | `""`                            |
-| `gh-artifact-name`     | Name of the artifacts to download                                           | No       | `signed-artifacts`              |
-| `gh-checkout-path`     | Directory to checkout shared-workflows into                                 | No       | `shared-workflows`              |
-| `gh-retention-days`    | Retention days for the artifacts                                            | No       | `1`                             |
-| `jf-url`               | JFrog Artifactory URL                                                       | No       | `https://artifact.aerospike.io` |
-| `oidc-provider-name`   | OIDC provider name for authentication                                       | No       | `gh-aerospike`                  |
-| `oidc-audience`        | OIDC audience for authentication                                            | No       | `aerospike`                     |
-| `runs-on`              | The runner to use                                                           | No       | `ubuntu-22.04`                  |
+| Input                  | Description                                                                                                                                                                                          | Required | Default                         |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------------------------------- |
+| `jf-project`           | JFrog Artifactory project name                                                                                                                                                                       | Yes      | -                               |
+| `jf-build-name`        | JFrog build name                                                                                                                                                                                     | Yes      | -                               |
+| `jf-build-id`          | JFrog build ID for the overall build info                                                                                                                                                            | Yes      | -                               |
+| `jf-metadata-build-id` | Build ID prefix used to discover child build-infos for aggregation (searches for `<prefix>*.json`). When empty, child build-info aggregation is skipped and only the parent build-info is published. | No       | `""`                            |
+| `version`              | Version string for build info                                                                                                                                                                        | Yes      | -                               |
+| `gh-workflows-ref`     | Git ref for shared-workflows (**must match `uses:`**)                                                                                                                                                | Yes      | -                               |
+| `build-type`           | Freeform label applied as `build.type` target-prop (e.g., release, nightly)                                                                                                                          | No       | `""`                            |
+| `internal`             | Mark artifacts as internal-only (`internal=true` target-prop)                                                                                                                                        | No       | `false`                         |
+| `dry-run`              | Show what would be uploaded without uploading                                                                                                                                                        | No       | `false`                         |
+| `jar-group-id`         | Maven group ID fallback for JAR artifacts                                                                                                                                                            | No       | `""`                            |
+| `gh-artifact-name`     | Name of the artifacts to download                                                                                                                                                                    | No       | `signed-artifacts`              |
+| `gh-checkout-path`     | Directory to checkout shared-workflows into                                                                                                                                                          | No       | `shared-workflows`              |
+| `gh-retention-days`    | Retention days for the artifacts                                                                                                                                                                     | No       | `1`                             |
+| `jf-url`               | JFrog Artifactory URL                                                                                                                                                                                | No       | `https://artifact.aerospike.io` |
+| `oidc-provider-name`   | OIDC provider name for authentication                                                                                                                                                                | No       | `gh-aerospike`                  |
+| `oidc-audience`        | OIDC audience for authentication                                                                                                                                                                     | No       | `aerospike`                     |
+| `runs-on`              | The runner to use                                                                                                                                                                                    | No       | `ubuntu-22.04`                  |
 
 ## Outputs
 
@@ -75,7 +76,7 @@ The deploy pipeline uses a centralized type registry (`type_registry.sh`). To ad
 Artifacts arrive in `build-artifacts/` as a flat collection from the sign stage. The structuring phase categorizes them by type and gathers companion files:
 
 - Types with unique extensions (DEB, RPM, JAR, NuGet, `.whl`, Windows `.exe`/`.msi`/`.msix`) are matched by extension
-- Gzipped tarballs (`.tgz` and `.tar.gz`) and zip archives (`.zip`) are inspected with content-based detectors to distinguish npm packages, PyPI source distributions, Go modules, and generic archives
+- Gzipped tarballs (`.tgz` and `.tar.gz`) and zip archives (`.zip`) are inspected with content-based detectors to distinguish npm packages, PyPI source distributions, Go modules, Helm charts (`.tgz` containing `Chart.yaml`), and generic archives
 - Companion files (defined per type in `TYPE_COMPANIONS`) are automatically copied alongside their primary artifact
 - Generic catches everything not claimed by the above
 
@@ -170,12 +171,34 @@ Uploaded to JFrog as:
   {module}/@v/{version}.info
 ```
 
+### Helm chart
+
+`.tgz` files are inspected for a top-level `Chart.yaml` (with `apiVersion`, `name`, `version`) to distinguish packaged Helm charts from npm/generic tarballs. The chart's `.prov` provenance file (produced by the sign stage) is gathered as the companion instead of a `.asc`.
+
+```text
+helm/
+  {chart}-{version}.tgz
+  {chart}-{version}.tgz.prov
+```
+
+### Windows
+
+`.exe`, `.msi`, and `.msix` files are matched by extension and uploaded to the generic repository.
+
+```text
+win/
+  {filename}.exe
+  {filename}.exe.asc
+```
+
 ## File layout
 
 ```text
 deploy-artifacts/
   entrypoint.sh          # Main script: arg parsing, upload functions, orchestration
   type_registry.sh       # Type config arrays + per-type props/flags functions
+  type_detection.sh      # Content-based detection predicates (is_npm_package, is_helm_chart, etc.)
+  detect_types.sh        # Standalone detection entrypoint (used by the detect-artifacts action)
   upload_utils.sh        # Shared helpers: jf_upload, upload_companions, discover_and_process, upload_type
   package_utils.sh       # Metadata extraction + process_* functions for structuring
   create-test-fixtures.sh

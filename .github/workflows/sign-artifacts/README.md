@@ -2,10 +2,11 @@
 
 > **Note:** This workflow is used internally by [`reusable_artifacts-cicd.yaml`](../artifacts-cicd/README.md). Most consumers should use the orchestrator rather than calling this directly.
 
-This is a reusable GitHub Actions workflow that signs binary artifacts using GPG. It supports `.deb`, `.rpm`, `.nupkg` (NuGet via SSL.com), and other file types passed via a glob pattern. It produces:
+This is a reusable GitHub Actions workflow that signs binary artifacts using GPG. It supports `.deb`, `.rpm`, `.nupkg` (NuGet via SSL.com), Helm charts, and other file types passed via a glob pattern. It produces:
 
-- GPG detached signature (`.asc`) for files that pass through the GPG stage
+- GPG detached signature (`.asc`) for generic files that pass through the GPG stage (e.g. `.jar`, `.zip`, plain tarballs)
 - Native signing for `.deb` and `.rpm` using `dpkg-sig` and `rpm --addsign`
+- Helm chart provenance (`.prov`) for packaged charts (`.tgz`/`.tar.gz` containing a `Chart.yaml`): a GPG-clearsigned message containing the chart's `Chart.yaml` plus a sha256 of the tarball, the same native format `helm package --sign` produces. The chart receives a `.prov` rather than a detached `.asc`, and consumers verify with `helm verify` or `helm install --verify`.
 
 **Not** GPG-signed here (same pattern as NuGet, which is moved out before GPG):
 
@@ -55,12 +56,12 @@ From another workflow:
 ```yaml
 jobs:
   sign:
-    uses: aerospike/shared-workflows/.github/workflows/reusable_sign-artifacts.yaml@v2.0.2
+    uses: aerospike/shared-workflows/.github/workflows/reusable_sign-artifacts.yaml@v3.2.0
     with:
       gh-unsigned-artifacts: test-fixtures
       gh-artifact-name: signed-artifacts # optional, defaults to signed-artifacts
       gh-retention-days: 7 # optional, defaults to 1
-      gh-workflows-ref: v2.0.2 # Should match the version in your 'uses:' line
+      gh-workflows-ref: v3.2.0 # Should match the version in your 'uses:' line
     secrets:
       gpg-private-key: ${{ secrets.GPG_SECRET_KEY }}
       gpg-public-key: ${{ secrets.GPG_PUBLIC_KEY }}

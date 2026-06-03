@@ -1,13 +1,13 @@
 # Detect artifact types
 
-Runs [`detect_types.sh`](../../workflows/deploy-artifacts/detect_types.sh): content-based detection for ambiguous archives (npm tarballs, PyPI sdists, Go module zips) and writes `structured_build_artifacts/` plus a manifest, matching the deploy entrypoint’s detection phase. JFrog/build metadata is not required because detection only inspects file contents and copies into the structured tree.
+Runs [`detect_types.sh`](../../workflows/deploy-artifacts/detect_types.sh): content-based detection for ambiguous archives (npm tarballs, PyPI sdists, Go module zips, Helm charts) plus structured passes for PyPI wheels, NuGet packages, Maven POMs, and Docker bundle metadata, and writes `structured_build_artifacts/` plus a manifest, matching the deploy entrypoint’s detection phase. JFrog/build metadata is not required because detection only inspects file contents and copies into the structured tree.
 
 ## Prerequisites
 
 - Merged build tree on disk (for example from [`collect-build-artifacts`](../collect-build-artifacts) or a `download-artifact` step with the same layout).
-- `detect_types.sh` and sibling scripts (`package_utils.sh`, `type_registry.sh`, `upload_utils.sh`, `type_detection.sh`) available. Checkout **shared-workflows** at `gh-workflows-ref` (full or sparse-checkout including `.github/workflows/deploy-artifacts/`).
+- `detect_types.sh` and its sibling scripts (`package_utils.sh`, `type_registry.sh`, `upload_utils.sh`, `type_detection.sh`) plus `../lib/helm-helpers.sh` (sourced for Helm chart detection) available. Checkout **shared-workflows** at `gh-workflows-ref` (full or sparse-checkout including both `.github/workflows/deploy-artifacts/` and `.github/workflows/lib/`).
 
-Runner tools used by detectors: `jq`, `tar`, `unzip` (typical GitHub-hosted Ubuntu images include these).
+Runner tools used by detectors: `jq`, `tar`, `unzip`, `xmllint` (for Maven POM detection). Typical GitHub-hosted Ubuntu images include these.
 
 ## Inputs
 

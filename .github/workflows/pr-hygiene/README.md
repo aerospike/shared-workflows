@@ -11,7 +11,7 @@ type(scope): [JIRA-123] description
 ```
 
 - **type**: `feat|fix|refactor|docs|test|ci|chore|build|perf` (validated by commitlint)
-- **scope**: optional, lowercase (e.g., `workflows`, `deploy`, `actions`)
+- **scope**: optional, lowercase alphanumeric with hyphens and underscores (e.g., `workflows`, `deploy`, `actions`, `my-scope`, `my_scope`)
 - **JIRA**: uppercase project key in brackets, required for certain types (see [Types and Jira enforcement](#types-and-jira-enforcement))
 
 Examples:
