@@ -36,9 +36,10 @@ build_feature_key_file_directive() {
     local server_edition=$1
     local features_path=$2
     local features_content=$3
+    local feature_path_in_container=$4
 
     if [[ $server_edition == "enterprise" && (-n $features_path || -n $features_content) ]]; then
-        printf '%s\n' "feature-key-file /etc/aerospike/features.conf"
+        printf '%s\n' "feature-key-file $feature_path_in_container"
     fi
 }
 

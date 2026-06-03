@@ -99,6 +99,10 @@ inputs:
     description: Aerospike tools Docker image tag
     required: false
     default: 12.1.1_2
+  enable-bash-trace-mode:
+    description: Show commands being executed in shell scripts for debugging
+    required: false
+    default: "false"
 
 outputs:
   container-names:
@@ -123,7 +127,14 @@ runs:
     - name: Validate inputs
       id: validate
       shell: bash
+      env:
+        ENABLE_BASH_TRACE_MODE: ${{ inputs.enable-bash-trace-mode }}
       run: |
+        echo "ENABLE_BASH_TRACE_MODE=$ENABLE_BASH_TRACE_MODE" >> "$GITHUB_ENV"
+        if [[ "$ENABLE_BASH_TRACE_MODE" == "true" ]]; then
+          set -x
+        fi
+
         # shellcheck source=/dev/null
         source "${{ github.action_path }}/config-helpers.sh"
 
@@ -178,11 +189,52 @@ runs:
         username: ${{ steps.jf.outputs.oidc-user }}
         password: ${{ steps.jf.outputs.oidc-token }}
 
+    - name: Create volumes to send TLS files and server config file to the server
+      id: server-volume
+      run: |
+        if [[ "$ENABLE_BASH_TRACE_MODE" == "true" ]]; then
+          set -x
+        fi
+
+        CONFIG_FILES_VOLUME_NAME="server_volume_${{ github.run_id }}_${{ github.run_attempt }}"
+        echo "conf_volume_name=$CONFIG_FILES_VOLUME_NAME" >> "$GITHUB_OUTPUT"
+        docker volume create "$CONFIG_FILES_VOLUME_NAME"
+
+        CONTAINER_NAME_TO_LOAD_VOLUME="container_to_load_volume_${{ github.run_id }}_${{ github.run_attempt }}"
+        echo "container_name_to_load_volume=$CONTAINER_NAME_TO_LOAD_VOLUME" >> "$GITHUB_OUTPUT"
+
+        # Avoid overriding the default config files in /etc/aerospike
+        VOLUME_DEST_DIR=/etc/aerospike-custom
+        echo "conf_volume_dest_dir=$VOLUME_DEST_DIR" >> "$GITHUB_OUTPUT"
+
+        TLS_VOLUME_NAME="tls_server_volume_${{ github.run_id }}_${{ github.run_attempt }}"
+        echo "tls_volume_name=$TLS_VOLUME_NAME" >> "$GITHUB_OUTPUT"
+        docker volume create "$TLS_VOLUME_NAME"
+
+        TLS_VOLUME_DEST_DIR=/etc/aerospike/tls
+        echo "tls_volume_dest_dir=$TLS_VOLUME_DEST_DIR" >> "$GITHUB_OUTPUT"
+
+        docker run --name "$CONTAINER_NAME_TO_LOAD_VOLUME" -d \
+          -v "$CONFIG_FILES_VOLUME_NAME:$VOLUME_DEST_DIR" \
+          -v "$TLS_VOLUME_NAME:$TLS_VOLUME_DEST_DIR" \
+          alpine tail -f /dev/null
+      shell: bash
+      env:
+        # Prevents volume directories from being expanded since they start with /
+        MSYS_NO_PATHCONV: 1
+
     - name: Generate TLS certificates
       id: generate-tls-certs
       if: inputs.enable-tls == 'true'
       shell: bash
+      env:
+        # Prevents subject name from being treated like a path while running openssl commands
+        MSYS_NO_PATHCONV: 1
       run: |
+        if [[ "$ENABLE_BASH_TRACE_MODE" == "true" ]]; then
+          set -x
+        fi
+
         cert_dir="$(mktemp -d)"
         cd "$cert_dir"
 
@@ -234,6 +286,16 @@ runs:
         ls -la "$cert_dir"
         echo "tls-cert-dir=$cert_dir" >> "$GITHUB_OUTPUT"
 
+        # Make sure that docker gets the actual Windows path of the user's temp folder in order to copy properly
+        # MSYS2_ARG_CONV_EXCL is another way to do this, but I had trouble using it
+        if [[ "${{ runner.os }}" == "Windows" ]]; then
+          copy_path="$(cygpath -w "$cert_dir")\\."
+        else
+          copy_path="$cert_dir/."
+        fi
+        docker cp "$copy_path" "${{ steps.server-volume.outputs.container_name_to_load_volume }}:${{ steps.server-volume.outputs.tls_volume_dest_dir }}"
+        docker exec "${{ steps.server-volume.outputs.container_name_to_load_volume }}" ls "${{ steps.server-volume.outputs.tls_volume_dest_dir }}"
+
     - name: Prepare config files
       id: prepare-config
       shell: bash
@@ -241,6 +303,10 @@ runs:
         FEATURES_CONTENT: ${{ inputs.features-content }}
         CONFIG_CONTENT: ${{ inputs.config-content }}
       run: |
+        if [[ "$ENABLE_BASH_TRACE_MODE" == "true" ]]; then
+          set -x
+        fi
+
         features_path="${{ inputs.features-file }}"
         config_path="${{ inputs.config-file }}"
         effective_security="${{ steps.validate.outputs.effective-security }}"
@@ -252,9 +318,6 @@ runs:
         render_tpl="${{ github.action_path }}/render-template.sh"
         # shellcheck source=/dev/null
         source "${{ github.action_path }}/config-helpers.sh"
-
-        export FEATURE_KEY_FILE
-        FEATURE_KEY_FILE=$(build_feature_key_file_directive "$server_edition" "${{ inputs.features-file }}" "${FEATURES_CONTENT}")
 
         # Build security stanza from template
         export SECURITY=""
@@ -285,7 +348,13 @@ runs:
           fi
 
           if ! should_use_features_file "$server_edition" "$features_path"; then
+            export FEATURE_KEY_FILE=""
             features_path=""
+          else
+            features_conf_filename=$(basename "$features_path")
+
+            export FEATURE_KEY_FILE
+            FEATURE_KEY_FILE=$(build_feature_key_file_directive "$server_edition" "${{ inputs.features-file }}" "${FEATURES_CONTENT}" "${{ steps.server-volume.outputs.conf_volume_dest_dir }}/$features_conf_filename")
           fi
         fi
 
@@ -336,10 +405,22 @@ runs:
         echo "features-path=$features_path" >> "$GITHUB_OUTPUT"
         echo "config-path=$config_path" >> "$GITHUB_OUTPUT"
 
+        if [[ -n "$config_path" ]]; then
+          docker cp "$config_path" "${{ steps.server-volume.outputs.container_name_to_load_volume }}:${{ steps.server-volume.outputs.conf_volume_dest_dir }}"
+        fi
+
+        if [[ "$server_edition" == "enterprise" && -n "$features_path" ]]; then
+          docker cp "$features_path" "${{ steps.server-volume.outputs.container_name_to_load_volume }}:${{ steps.server-volume.outputs.conf_volume_dest_dir }}"
+        fi
+
     - name: Create Docker network
       id: create-network
       shell: bash
       run: |
+        if [[ "$ENABLE_BASH_TRACE_MODE" == "true" ]]; then
+          set -x
+        fi
+
         network="${{ inputs.network-name }}"
         if ! docker network inspect "$network" >/dev/null 2>&1; then
           docker network create "$network"
@@ -355,6 +436,10 @@ runs:
       env:
         ENV_VARS: ${{ inputs.env-vars }}
       run: |
+        if [[ "$ENABLE_BASH_TRACE_MODE" == "true" ]]; then
+          set -x
+        fi
+
         num_nodes=${{ inputs.num-nodes }}
         base_port=${{ inputs.base-port }}
         prefix="${{ inputs.container-name-prefix }}"
@@ -365,7 +450,6 @@ runs:
         config_path="${{ steps.prepare-config.outputs.config-path }}"
         enable_tls="${{ inputs.enable-tls }}"
         tls_base_port=${{ inputs.tls-base-port }}
-        tls_cert_dir="${{ steps.generate-tls-certs.outputs.tls-cert-dir }}"
         effective_security="${{ steps.validate.outputs.effective-security }}"
         enable_sc="${{ inputs.enable-strong-consistency }}"
         server_edition="${{ steps.validate.outputs.server-edition }}"
@@ -430,8 +514,9 @@ runs:
             # shellcheck source=/dev/null
             source "${{ github.action_path }}/config-helpers.sh"
 
+            features_conf_filename=$(basename "$features_path")
             export FEATURE_KEY_FILE
-            FEATURE_KEY_FILE=$(build_feature_key_file_directive "$server_edition" "$features_path" "")
+            FEATURE_KEY_FILE=$(build_feature_key_file_directive "$server_edition" "$features_path" "" "${{ steps.server-volume.outputs.conf_volume_dest_dir }}/$features_conf_filename")
 
             # Build security stanza from template
             export SECURITY=""
@@ -459,6 +544,7 @@ runs:
             awk -v seeds="$mesh_seeds" '/mode mesh/{print; printf "%s", seeds; next}1' "$config_path" > "$cluster_config"
             config_path="$cluster_config"
           fi
+          docker cp "$config_path" "${{ steps.server-volume.outputs.container_name_to_load_volume }}:${{ steps.server-volume.outputs.conf_volume_dest_dir }}"
         fi
 
         for (( i=1; i<=num_nodes; i++ )); do
@@ -477,12 +563,7 @@ runs:
           # TLS port mapping and cert mounting
           if [[ "$enable_tls" == "true" ]]; then
             run_args+=("-p" "${tls_host_port}:4333")
-            run_args+=("-v" "${tls_cert_dir}:/etc/aerospike/tls:ro")
-          fi
-
-          # Mount features.conf if provided
-          if [[ -n "$features_path" ]]; then
-            run_args+=("-v" "$(realpath "$features_path"):/etc/aerospike/features.conf:ro")
+            run_args+=("-v" "${{ steps.server-volume.outputs.tls_volume_name }}:${{ steps.server-volume.outputs.tls_volume_dest_dir }}")
           fi
 
           # Decide whether to bypass the entrypoint. The Aerospike Docker entrypoint
@@ -501,17 +582,14 @@ runs:
             bypass_entrypoint="true"
           fi
 
-          # Mount aerospike.conf (read-only when bypassing entrypoint)
-          if [[ -n "$config_path" ]]; then
-            if [[ "$bypass_entrypoint" == "true" ]]; then
-              run_args+=("-v" "$(realpath "$config_path"):/etc/aerospike/aerospike.conf:ro")
-            else
-              run_args+=("-v" "$(realpath "$config_path"):/etc/aerospike/aerospike.conf")
-            fi
-          fi
-
           # User-supplied env vars
           run_args+=("${env_flags[@]}")
+
+          if [[ -n "$config_path" || -n "$features_path" ]]; then
+            run_args+=("-v" "${{ steps.server-volume.outputs.conf_volume_name }}:${{ steps.server-volume.outputs.conf_volume_dest_dir }}")
+          fi
+
+          run_args+=("--ulimit" "nofile=15000")
 
           # Bypass entrypoint to prevent config overwrite
           if [[ "$bypass_entrypoint" == "true" ]]; then
@@ -525,8 +603,15 @@ runs:
             run_args+=("--foreground")
           fi
 
+          if [[ -n "$config_path" ]]; then
+            aerospike_conf_filename=$(basename "$config_path")
+            run_args+=("--config-file" "${{ steps.server-volume.outputs.conf_volume_dest_dir }}/$aerospike_conf_filename")
+          fi
+
           echo "Starting container: $name (host port: $host_port)"
-          docker run "${run_args[@]}"
+
+          # Prevent UNIX to windows path conversions here to prevent the aerospike.conf path from being wrongly converted
+          MSYS_NO_PATHCONV=1 docker run "${run_args[@]}"
 
           # Build CSV outputs
           if [[ -n "$container_names" ]]; then
@@ -551,9 +636,14 @@ runs:
       shell: bash
       run: |
         chmod +x "${{ github.action_path }}/wait-for-aerospike-server.sh"
-        "${{ github.action_path }}/wait-for-aerospike-server.sh" \
+
+        bash_command=( "bash" )
+        if [[ "$ENABLE_BASH_TRACE_MODE" == "true" ]]; then
+          bash_command+=("-x")
+        fi
+
+        "${bash_command[@]}" "${{ github.action_path }}/wait-for-aerospike-server.sh" \
           --container-names "${{ steps.start-containers.outputs.container-names }}" \
-          --num-nodes "${{ inputs.num-nodes }}" \
           --timeout "${{ inputs.startup-timeout }}" \
           --service-port "${{ inputs.service-port }}" \
           --security "${{ steps.validate.outputs.effective-security }}" \
@@ -564,6 +654,10 @@ runs:
     - name: Print Aerospike server version
       shell: bash
       run: |
+        if [[ "$ENABLE_BASH_TRACE_MODE" == "true" ]]; then
+          set -x
+        fi
+
         image="${{ inputs.container-repo-url }}/${{ inputs.server-container-repo }}:${{ inputs.server-tag }}"
         first_container="${{ inputs.container-name-prefix }}-1"
 
@@ -594,6 +688,10 @@ runs:
       if: inputs.enable-strong-consistency == 'true'
       shell: bash
       run: |
+        if [[ "$ENABLE_BASH_TRACE_MODE" == "true" ]]; then
+          set -x
+        fi
+
         tools_image="${{ inputs.container-repo-url }}/database-docker-virtual/aerospike-tools:${{ inputs.tools-tag }}"
         network="${{ inputs.network-name }}"
         first_container="${{ inputs.container-name-prefix }}-1"
@@ -671,3 +769,11 @@ runs:
         fi
 
         echo "Strong consistency roster setup complete."
+
+    - name: Cleanup
+      if: ${{ always() && steps.server-volume.outcome == 'success' }}
+      shell: bash
+      run: |
+        # No longer need these
+        docker stop ${{ steps.server-volume.outputs.container_name_to_load_volume }}
+        docker container rm -f ${{ steps.server-volume.outputs.container_name_to_load_volume }}

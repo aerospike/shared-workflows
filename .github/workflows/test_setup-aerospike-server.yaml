@@ -1,6 +1,12 @@
 name: Test Setup Aerospike Server Action
 on:
   workflow_dispatch:
+    inputs:
+      # checkov:skip=CKV_GHA_7:workflow_dispatch input used for debugging failing test cases in this repo
+      enable-bash-trace-mode:
+        type: boolean
+        required: false
+        default: false
   pull_request:
     branches: [main]
     paths:
@@ -10,6 +16,9 @@ on:
 permissions:
   contents: read
   id-token: write
+
+env:
+  ENABLE_BASH_TRACE_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.enable-bash-trace-mode || 'false' }}
 
 jobs:
   test-config-helpers:
@@ -56,6 +65,7 @@ jobs:
         with:
           oidc-provider: ${{ vars.JFROG_OIDC_PROVIDER }}
           oidc-audience: ${{ vars.JFROG_OIDC_AUDIENCE }}
+          enable-bash-trace-mode: ${{ env.ENABLE_BASH_TRACE_MODE }}
 
       - name: Verify outputs
         run: |
@@ -108,6 +118,7 @@ jobs:
           features-content: ${{ secrets.AES_FEATURES_CONF }}
           oidc-provider: ${{ vars.JFROG_OIDC_PROVIDER }}
           oidc-audience: ${{ vars.JFROG_OIDC_AUDIENCE }}
+          enable-bash-trace-mode: ${{ env.ENABLE_BASH_TRACE_MODE }}
 
       - name: Verify outputs
         run: |
@@ -159,6 +170,7 @@ jobs:
           features-content: ${{ secrets.AES_FEATURES_CONF }}
           oidc-provider: ${{ vars.JFROG_OIDC_PROVIDER }}
           oidc-audience: ${{ vars.JFROG_OIDC_AUDIENCE }}
+          enable-bash-trace-mode: ${{ env.ENABLE_BASH_TRACE_MODE }}
 
       - name: Verify server status via asinfo
         run: |
@@ -195,6 +207,7 @@ jobs:
           startup-timeout: "60"
           oidc-provider: ${{ vars.JFROG_OIDC_PROVIDER }}
           oidc-audience: ${{ vars.JFROG_OIDC_AUDIENCE }}
+          enable-bash-trace-mode: ${{ env.ENABLE_BASH_TRACE_MODE }}
 
       - name: Verify outputs
         run: |
@@ -249,6 +262,7 @@ jobs:
           env-vars: NAMESPACE=test;SERVICE_THREADS=4
           oidc-provider: ${{ vars.JFROG_OIDC_PROVIDER }}
           oidc-audience: ${{ vars.JFROG_OIDC_AUDIENCE }}
+          enable-bash-trace-mode: ${{ env.ENABLE_BASH_TRACE_MODE }}
 
       - name: Verify env vars in container
         run: |
@@ -277,6 +291,7 @@ jobs:
           enable-tls: "true"
           oidc-provider: ${{ vars.JFROG_OIDC_PROVIDER }}
           oidc-audience: ${{ vars.JFROG_OIDC_AUDIENCE }}
+          enable-bash-trace-mode: ${{ env.ENABLE_BASH_TRACE_MODE }}
 
       - name: Verify TLS outputs
         run: |
@@ -334,6 +349,7 @@ jobs:
           features-content: ${{ secrets.AES_FEATURES_CONF }}
           oidc-provider: ${{ vars.JFROG_OIDC_PROVIDER }}
           oidc-audience: ${{ vars.JFROG_OIDC_AUDIENCE }}
+          enable-bash-trace-mode: ${{ env.ENABLE_BASH_TRACE_MODE }}
 
       - name: Verify admin auth works
         run: |
@@ -381,6 +397,7 @@ jobs:
           startup-timeout: "60"
           oidc-provider: ${{ vars.JFROG_OIDC_PROVIDER }}
           oidc-audience: ${{ vars.JFROG_OIDC_AUDIENCE }}
+          enable-bash-trace-mode: ${{ env.ENABLE_BASH_TRACE_MODE }}
 
       - name: Verify SC namespace
         run: |
@@ -417,6 +434,7 @@ jobs:
           startup-timeout: "60"
           oidc-provider: ${{ vars.JFROG_OIDC_PROVIDER }}
           oidc-audience: ${{ vars.JFROG_OIDC_AUDIENCE }}
+          enable-bash-trace-mode: ${{ env.ENABLE_BASH_TRACE_MODE }}
 
       - name: Verify SC namespace with auth
         run: |
@@ -466,6 +484,7 @@ jobs:
           startup-timeout: "60"
           oidc-provider: ${{ vars.JFROG_OIDC_PROVIDER }}
           oidc-audience: ${{ vars.JFROG_OIDC_AUDIENCE }}
+          enable-bash-trace-mode: ${{ env.ENABLE_BASH_TRACE_MODE }}
 
       - name: Verify TLS outputs
         run: |
@@ -552,6 +571,7 @@ jobs:
           startup-timeout: "60"
           oidc-provider: ${{ vars.JFROG_OIDC_PROVIDER }}
           oidc-audience: ${{ vars.JFROG_OIDC_AUDIENCE }}
+          enable-bash-trace-mode: ${{ env.ENABLE_BASH_TRACE_MODE }}
 
       - name: Verify outputs
         run: |
