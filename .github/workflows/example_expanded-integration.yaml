@@ -28,7 +28,7 @@ jobs:
   # Manual dispatches should not take arguments.
   # here we use a file (VERSION.example) to set the test version that will be used.
   # Since this action actually produces an immutable release bundle you must remove it or change the version
-  # to remove the test bundle use the command `jf rbdell test-release --project test 1.2.3`
+  # to remove the test bundle use the command `jf release-bundle-delete-local test-release 1.2.9 --project=test`
   # In a real CI/CD pipeline you could trigger on version tag or commit also. Here we use the file so we can show the behaviour on demand.
   extract-version:
     runs-on: ubuntu-latest

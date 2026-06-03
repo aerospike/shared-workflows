@@ -320,6 +320,21 @@ jobs:
       # The fixture script creates deb, rpm, jar, nupkg, snupkg, npm, and generic
       # artifacts. Even though we only verify npm now, the deploy uploads everything.
 
+      - name: Cleanup release bundles locking test artifacts
+        if: always()
+        run: |
+          # Promoted bundles lock their artifacts and block re-deployment to the same
+          # paths. Delete all versions of test-release before wiping the repos so the
+          # artifact deletes below don't silently 409.
+          versions=$(jf release-bundle-search versions test-release \
+            --project=test --format=json 2>/dev/null \
+            || echo '{"release_bundles":[]}')
+          echo "$versions" | jq -r '.release_bundles[].release_bundle_version' \
+          | while read -r v; do
+            echo "Deleting bundle: test-release $v"
+            jf release-bundle-delete-local test-release "$v" --project=test --quiet || true
+          done
+
       - name: Cleanup all test artifacts
         if: always()
         run: |
