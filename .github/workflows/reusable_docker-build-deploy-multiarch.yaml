@@ -1,0 +1,537 @@
+name: Reusable Docker Build, Publish & Attest (Distributed Multi-Arch)
+
+# Same workflow_call interface (inputs / secrets / outputs) as
+# reusable_docker-build-deploy.yaml. The only difference is HOW the image is
+# built: instead of one runner building every platform under QEMU emulation,
+# each architecture is built natively on its own runner, pushed BY DIGEST
+# (untagged), and a final `merge` job assembles the per-arch digests into a
+# single multi-arch manifest list. Tags are applied ONCE, at merge time.
+#
+# NOTE: this distributed flow inherently pushes (push-by-digest). `push: false`
+# is not meaningful here — there is nothing to merge if nothing is pushed.
+
+on:
+  workflow_call:
+    inputs:
+      # Required inputs
+      app-version:
+        type: string
+        required: true
+        description: Version of the application
+      image-name:
+        type: string
+        required: true
+        description: Docker image name (repository component, without registry). Used to construct the full image path (e.g., "test-image" becomes "registry/project-repo/test-image:tag")
+      jf-project:
+        type: string
+        required: true
+        description: JFrog project key
+
+      # Optional inputs
+      amd64-runner:
+        type: string
+        default: ubuntu-22.04
+        description: Runner label used to natively build the linux/amd64 platform
+      app-name:
+        type: string
+        required: false
+        description: Human-readable application name for OCI labels (defaults to image-name). Can differ from image-name for display purposes (e.g., image-name="aerospike-server-enterprise", app-name="Aerospike Server Enterprise")
+      arm64-runner:
+        type: string
+        default: ubuntu-22.04-arm
+        description: Runner label used to natively build the linux/arm64 platform
+      attest:
+        type: boolean
+        default: true
+        description: Generate SLSA build-provenance attestation
+      build-args-json:
+        type: string
+        default: "{}"
+        description: JSON object of build-args passed to docker build # {"KEY":"VALUE",...}
+      context:
+        type: string
+        default: .
+        description: Docker build context directory
+      file:
+        type: string
+        default: Dockerfile
+        description: Path to Dockerfile (relative to context)
+      jf-build-name:
+        type: string
+        required: false
+        description: Build name for JFrog build-info (defaults to workflow name)
+      jf-registry:
+        type: string
+        required: false
+        description: Full Docker registry URL including repository path (e.g., artifact.aerospike.io/test-docker-dev-local) # should be full uri for Artifactory registry eg artifact.aerospike.io/test-docker-dev-local
+      jf-registry-base:
+        type: string
+        default: artifact.aerospike.io
+        description: Registry hostname (no repo path)
+      jf-url:
+        type: string
+        default: https://artifact.aerospike.io
+        description: Base JFrog Artifactory URL
+      labels-json:
+        type: string
+        default: "{}"
+        description: JSON object of image labels # {"key":"value",...}
+      oidc-audience:
+        type: string
+        default: aerospike
+        description: OIDC audience value for token
+      oidc-provider-name:
+        type: string
+        default: gh-aerospike
+        description: JFrog OIDC provider name
+      platforms:
+        type: string
+        default: linux/amd64,linux/arm64
+        description: Comma-separated target platforms. Each platform is built natively on its own runner (see platform->runner mapping in the `prepare` job). # pass-through
+      provenance:
+        type: string
+        default: mode=max
+        description: BuildKit provenance setting ('', 'false', or 'mode=max') # "", "false", or "mode=max"
+      push:
+        type: boolean
+        default: true
+        description: Whether to push the image (the distributed multi-arch flow requires push=true - it pushes by digest then merges)
+      repo-scope:
+        type: string
+        default: -docker-dev-local
+        description: Repository suffix appended to jf-project (e.g., -docker-preview-public-local) # e.g. "-docker-preview-public-local"
+      sbom:
+        type: boolean
+        default: true
+        description: Enable SBOM generation (pass-through to docker/build-push-action)
+      jf-go-repo:
+        type: string
+        required: false
+        description: >-
+          JFrog Go repository name for GOPROXY (e.g., "platforms-go-virtual").
+          When set, a "goproxy" build secret is injected with the authenticated
+          URL. Typically a virtual repo (aggregates private locals + public
+          remote cache), but can be any Go repo type.
+      versions-override:
+        type: string
+        required: false
+        description: |
+          Override the tags generated by the workflow (other than the immutable tag which is always generated).
+          Format: comma separated list of versions eg "tag1,tag2,tag3"
+          If not provided, the versions used in the tags (for app version 3.2.1) would be "3.2.1_20251202T021054Z, 3.2.1, 3, latest"
+          Setting this value to "dev" would cause the versions to be "3.2.1_20251202T021054Z, dev". Only version is settable in this way. App name, repository scope, and app version are calculated.
+    secrets:
+      build-secrets-json:
+        required: false
+        description: >-
+          JSON object of additional build secrets {"name": "value", ...}.
+          Each is available in Dockerfile via: RUN --mount=type=secret,id=name
+    outputs:
+      digest:
+        description: Image manifest digest
+        value: ${{ jobs.merge.outputs.digest }}
+      image-ref:
+        description: Primary tag with @digest
+        value: ${{ jobs.merge.outputs.image-ref }}
+      tags:
+        description: Comma separated list of tags used
+        value: ${{ jobs.prepare.outputs.tags }}
+      immutable-tag:
+        description: Immutable tag (registry/image:version_timestamp)
+        value: ${{ jobs.prepare.outputs.immutable-tag }}
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # prepare: compute registry, tags, and the per-arch build matrix ONCE.
+  # Tags carry a timestamp, so they must be computed a single time and shared
+  # with the merge job (computing per-job would yield mismatched timestamps).
+  # ---------------------------------------------------------------------------
+  prepare:
+    runs-on: ubuntu-22.04
+    outputs:
+      registry: ${{ steps.registry.outputs.registry }}
+      tags: ${{ steps.tags.outputs.tags }}
+      immutable-tag: ${{ steps.tags.outputs.immutable-tag }}
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
+        with:
+          egress-policy: audit
+
+      - name: Compute registry
+        id: registry
+        shell: bash
+        run: |
+          set -euo pipefail
+          reg='${{ inputs.jf-registry }}'
+          if [ -z "$reg" ]; then
+            reg='${{ inputs.jf-registry-base }}/${{ inputs.jf-project }}${{ inputs.repo-scope }}'
+          fi
+          echo "registry=$reg" >> "$GITHUB_OUTPUT"
+
+      - name: Compute tags
+        id: tags
+        shell: bash
+        run: |
+          base="${{ steps.registry.outputs.registry }}/${{ inputs.image-name }}"
+          timestamp=$(date --utc +%Y%m%dT%H%M%SZ)
+
+          # Extract major version (handle 'v' prefix, take first number before first dot)
+          app_version="${{ inputs.app-version }}"
+          app_version="${app_version#v}"  # Strip 'v' prefix if present
+          # OCI tags forbid '+' but SemVer build metadata uses it (e.g. 1.2.3+abc).
+          # Replace with '-' so SemVer inputs still produce valid image tags.
+          app_version="${app_version//+/-}"
+          major_version="${app_version%%.*}"  # Extract first number before first dot
+
+          # Build immutable tag (always included)
+          immutable="${base}:${app_version}_${timestamp}"
+
+          # Build tags array: always start with immutable tag
+          tags_array=("${immutable}")
+
+          if [ -n "${{ inputs.versions-override }}" ]; then
+            # Parse comma-separated override tags and prepend base
+            IFS=',' read -ra override_tags <<< "${{ inputs.versions-override }}"
+            for tag in "${override_tags[@]}"; do
+              # Trim whitespace and prepend base
+              tag=$(echo "$tag" | xargs)
+              if [ -n "$tag" ]; then
+                tags_array+=("${base}:${tag}")
+              fi
+            done
+          else
+            # Default tags: immutable, version, major version, and latest
+            tags_array+=("${base}:${app_version}" "${base}:${major_version}" "${base}:latest")
+          fi
+
+          # Join tags with comma for output
+          IFS=','
+          tags="${tags_array[*]}"
+
+          echo "tags=${tags}" >> "$GITHUB_OUTPUT"
+          echo "immutable-tag=${immutable}" >> "$GITHUB_OUTPUT"
+
+      - name: Compute build matrix
+        id: matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Map each requested platform to a native runner. amd64/arm64 use the
+          # amd64-runner / arm64-runner inputs; any other platform falls back to
+          # the amd64 runner (override via inputs if you build other arches).
+          matrix=$(jq -c -n \
+            --arg platforms '${{ inputs.platforms }}' \
+            --arg amd64_runner '${{ inputs.amd64-runner }}' \
+            --arg arm64_runner '${{ inputs.arm64-runner }}' '
+            $platforms
+            | split(",")
+            | map(gsub("^\\s+|\\s+$"; ""))
+            | map(select(length > 0))
+            | map({
+                platform: .,
+                pair: (gsub("/"; "-")),
+                runner: (
+                  if . == "linux/arm64" then $arm64_runner
+                  elif . == "linux/amd64" then $amd64_runner
+                  else $amd64_runner end
+                )
+              })
+          ')
+          echo "matrix=${matrix}" >> "$GITHUB_OUTPUT"
+
+  # ---------------------------------------------------------------------------
+  # build: one job per platform, on a NATIVE runner (no QEMU). Each pushes the
+  # image BY DIGEST (untagged) and uploads its digest as an artifact.
+  # ---------------------------------------------------------------------------
+  build:
+    needs: prepare
+    env:
+      JFROG_CLI_BUILD_NAME: ${{ inputs.jf-build-name || github.workflow }}
+      JFROG_CLI_LOG_LEVEL: INFO
+    strategy:
+      fail-fast: true
+      matrix:
+        include: ${{ fromJson(needs.prepare.outputs.matrix) }}
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install JFrog CLI
+        id: jf
+        uses: step-security/setup-jfrog-cli@3054b554c0fb4915b3d58847fb7730c593dbb934 # v5.0.0
+        env:
+          JF_URL: ${{ inputs.jf-url }}
+          JF_PROJECT: ${{ inputs.jf-project }}
+          JFROG_CLI_BUILD_NAME: ${{ inputs.jf-build-name || github.workflow }}
+        with:
+          version: 2.78.8
+          oidc-provider-name: ${{ inputs.oidc-provider-name }}
+          oidc-audience: ${{ inputs.oidc-audience }}
+
+      - name: Docker login to Artifactory
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
+        with:
+          registry: ${{ needs.prepare.outputs.registry }}
+          username: ${{ steps.jf.outputs.oidc-user }}
+          password: ${{ steps.jf.outputs.oidc-token }}
+
+      - uses: step-security/setup-buildx-action@f931205d68723ad9589fd2a7e2ece238bf9de341 # v4.0.0
+
+      - name: Prepare build args/labels
+        shell: bash
+        run: |
+          set -euo pipefail
+          to_kv() { jq -r 'to_entries|map("\(.key)=\(.value)")|.[]'; }
+
+          # Generate OCI labels
+          oci_labels=$(jq -n \
+            --arg title "${{ inputs.app-name || inputs.image-name }}" \
+            --arg version "${{ inputs.app-version }}" \
+            --arg created "$(date --utc -Iseconds)" \
+            --arg revision "${{ github.sha }}" \
+            --arg source "${{ github.server_url }}/${{ github.repository }}" \
+            --arg url "${{ github.server_url }}/${{ github.repository }}" \
+            '{
+              "org.opencontainers.image.title": $title,
+              "org.opencontainers.image.version": $version,
+              "org.opencontainers.image.created": $created,
+              "org.opencontainers.image.revision": $revision,
+              "org.opencontainers.image.source": $source,
+              "org.opencontainers.image.url": $url
+            }')
+
+          # Merge user labels with OCI labels (user labels override)
+          user_labels='${{ inputs.labels-json }}'
+          merged_labels=$(jq -n --argjson oci "$oci_labels" --argjson user "$user_labels" '$oci * $user')
+
+          # Convert JSON to KEY=VALUE lines
+          echo '${{ inputs.build-args-json }}' | to_kv > /tmp/build_args
+          echo "$merged_labels" | to_kv > /tmp/labels
+
+          # Add JFROG_TOKEN to build args automatically
+          echo "JFROG_TOKEN=${{ steps.jf.outputs.oidc-token }}" >> /tmp/build_args
+
+          # Use heredoc syntax so multi-line values are preserved in GITHUB_ENV
+          {
+            echo "BUILD_ARGS<<EOF"
+            cat /tmp/build_args
+            echo "EOF"
+            echo "LABELS<<EOF"
+            cat /tmp/labels
+            echo "EOF"
+          } >> "$GITHUB_ENV"
+
+      - name: Prepare build secrets
+        shell: bash
+        env:
+          # Pass OIDC credentials via env (not command-line args) so the token
+          # is never exposed in the process list, and so values are available
+          # to jq for safe URL-encoding below.
+          OIDC_USER: ${{ steps.jf.outputs.oidc-user }}
+          OIDC_TOKEN: ${{ steps.jf.outputs.oidc-token }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/docker-secrets
+
+          # Delta 1: Always inject OIDC token as a build secret
+          printf '%s' "$OIDC_TOKEN" > /tmp/docker-secrets/jfrog_token
+
+          # Delta 2: Construct authenticated GOPROXY URL when jf-go-repo is set
+          jf_go_repo='${{ inputs.jf-go-repo }}'
+          if [ -n "$jf_go_repo" ]; then
+            # Percent-encode the user and token before embedding them in the URL
+            # userinfo component. OIDC users/tokens can contain reserved chars
+            # (e.g. '@', ':', '/', '+') that would otherwise corrupt the URL and
+            # break the HTTP request to Artifactory.
+            oidc_user_enc=$(jq -rn 'env.OIDC_USER | @uri')
+            oidc_token_enc=$(jq -rn 'env.OIDC_TOKEN | @uri')
+            printf '%s' "https://${oidc_user_enc}:${oidc_token_enc}@${{ inputs.jf-registry-base }}/artifactory/api/go/${jf_go_repo}" \
+              > /tmp/docker-secrets/goproxy
+          fi
+
+          # Delta 3: Write consumer-provided secrets from JSON
+          secrets_json='${{ secrets.build-secrets-json }}'
+          if [ -n "$secrets_json" ] && [ "$secrets_json" != "{}" ]; then
+            echo "$secrets_json" | jq -r 'to_entries[] | "\(.key)\n\(.value)"' | \
+              while IFS= read -r key && IFS= read -r value; do
+                echo -n "$value" > "/tmp/docker-secrets/$key"
+              done
+          fi
+
+          # Generate secret-files lines (only file paths, not values)
+          secret_files=""
+          for f in /tmp/docker-secrets/*; do
+            [ -f "$f" ] || continue
+            name=$(basename "$f")
+            secret_files+="${name}=${f}"$'\n'
+          done
+          {
+            echo "BUILD_SECRET_FILES<<EOF"
+            echo -n "$secret_files"
+            echo "EOF"
+          } >> "$GITHUB_ENV"
+
+      # Build a SINGLE platform natively and push BY DIGEST (no tags). Tags are
+      # applied later, once, in the merge job. `name-canonical=true` makes the
+      # step's `digest` output a by-digest reference suitable for imagetools.
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
+        with:
+          context: ${{ inputs.context }}
+          file: ${{ inputs.file }}
+          platforms: ${{ matrix.platform }}
+          provenance: ${{ inputs.provenance }}
+          sbom: ${{ inputs.sbom }}
+          build-args: ${{ env.BUILD_ARGS }}
+          labels: ${{ env.LABELS }}
+          secret-files: ${{ env.BUILD_SECRET_FILES }}
+          outputs: type=image,name=${{ needs.prepare.outputs.registry }}/${{ inputs.image-name }},push-by-digest=true,name-canonical=true,push=${{ inputs.push }}
+
+      - name: Cleanup build secrets
+        if: always()
+        shell: bash
+        run: rm -rf /tmp/docker-secrets
+
+      # Export this arch's digest as a (empty) file named after the digest. The
+      # merge job collects all such files to assemble the manifest list.
+      - name: Export digest
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/digests
+          digest='${{ steps.build.outputs.digest }}'
+          touch "/tmp/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          # image-name namespaces the artifact so concurrent callers (e.g. a
+          # matrix of distros all calling this reusable workflow in the same run)
+          # do not clobber each other's digest files. Without this, every distro
+          # would upload "digests-linux-amd64" and overwrite the others.
+          name: digests-${{ inputs.image-name }}-${{ matrix.pair }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  # ---------------------------------------------------------------------------
+  # merge: combine the per-arch digests into ONE multi-arch manifest list and
+  # apply ALL tags here. Then create build-info, publish, and attest — exactly
+  # like the single-job workflow, but against the final manifest-list digest.
+  # ---------------------------------------------------------------------------
+  merge:
+    needs: [prepare, build]
+    env:
+      JFROG_CLI_BUILD_NAME: ${{ inputs.jf-build-name || github.workflow }}
+      JFROG_CLI_LOG_LEVEL: INFO
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
+      image-ref: ${{ steps.meta.outputs.image-ref }}
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install JFrog CLI
+        id: jf
+        uses: step-security/setup-jfrog-cli@3054b554c0fb4915b3d58847fb7730c593dbb934 # v5.0.0
+        env:
+          JF_URL: ${{ inputs.jf-url }}
+          JF_PROJECT: ${{ inputs.jf-project }}
+          JFROG_CLI_BUILD_NAME: ${{ inputs.jf-build-name || github.workflow }}
+        with:
+          version: 2.78.8
+          oidc-provider-name: ${{ inputs.oidc-provider-name }}
+          oidc-audience: ${{ inputs.oidc-audience }}
+
+      - name: Docker login to Artifactory
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
+        with:
+          registry: ${{ needs.prepare.outputs.registry }}
+          username: ${{ steps.jf.outputs.oidc-user }}
+          password: ${{ steps.jf.outputs.oidc-token }}
+
+      - uses: step-security/setup-buildx-action@f931205d68723ad9589fd2a7e2ece238bf9de341 # v4.0.0
+
+      - name: Download digests
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          path: /tmp/digests
+          pattern: digests-${{ inputs.image-name }}-*
+          merge-multiple: true
+
+      # THIS is where tags are applied — once, to the combined manifest list.
+      - name: Create multi-arch manifest list
+        id: build
+        shell: bash
+        working-directory: /tmp/digests
+        run: |
+          set -euo pipefail
+          image='${{ needs.prepare.outputs.registry }}/${{ inputs.image-name }}'
+
+          # Turn the comma-separated tag list into `-t <tag>` flags.
+          tag_flags=()
+          IFS=',' read -ra tags <<< '${{ needs.prepare.outputs.tags }}'
+          for t in "${tags[@]}"; do
+            [ -n "$t" ] && tag_flags+=("-t" "$t")
+          done
+
+          # Build `<image>@sha256:<digest>` source refs from the downloaded files.
+          source_refs=()
+          for f in *; do
+            [ -f "$f" ] || continue
+            source_refs+=("${image}@sha256:${f}")
+          done
+
+          docker buildx imagetools create "${tag_flags[@]}" "${source_refs[@]}"
+
+          # Capture the resulting manifest-list digest (the workflow's output).
+          digest=$(docker buildx imagetools inspect '${{ needs.prepare.outputs.immutable-tag }}' \
+            --format '{{json .Manifest.Digest}}' | tr -d '"')
+          echo "digest=${digest}" >> "$GITHUB_OUTPUT"
+
+      - name: Create build info for docker image
+        id: meta
+        shell: bash
+        run: |
+          # Use primary tag with digest for build-info
+          image_ref="${{ needs.prepare.outputs.immutable-tag }}@${{ steps.build.outputs.digest }}"
+          echo "image-ref=${image_ref}" >> "$GITHUB_OUTPUT"
+          jf rt build-docker-create --image-file <(echo "$image_ref") "${{ inputs.jf-project }}${{ inputs.repo-scope }}"
+
+      - name: Publish Build Info
+        shell: bash
+        run: |
+          jf rt build-collect-env  "$JFROG_CLI_BUILD_NAME" "$JFROG_CLI_BUILD_NUMBER"
+          jf rt build-add-git      "$JFROG_CLI_BUILD_NAME" "$JFROG_CLI_BUILD_NUMBER"
+          jf rt build-publish --detailed-summary "$JFROG_CLI_BUILD_NAME" "$JFROG_CLI_BUILD_NUMBER"
+
+      - name: Attest OCI Image
+        if: ${{ inputs.attest }}
+        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
+        with:
+          subject-name: oci://${{ needs.prepare.outputs.immutable-tag }}
+          subject-digest: ${{ steps.build.outputs.digest }}
