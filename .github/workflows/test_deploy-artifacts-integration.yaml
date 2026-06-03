@@ -318,9 +318,8 @@ jobs:
 
       # --- cleanup (always runs) ---
       # The fixture script creates deb, rpm, jar, nupkg, snupkg, npm, and generic
-      # artifacts. Even though we only verify npm now, the deploy uploads everything.
 
-      - name: Cleanup release bundles locking test artifacts
+      - name: Cleanup test release bundles
         if: always()
         run: |
           # Promoted bundles lock their artifacts and block re-deployment to the same
@@ -335,7 +334,7 @@ jobs:
             jf release-bundle-delete-local test-release "$v" --project=test --quiet || true
           done
 
-      - name: Cleanup all test artifacts
+      - name: Cleanup test artifacts
         if: always()
         run: |
           echo "Cleaning up all test artifacts from JFrog..."
