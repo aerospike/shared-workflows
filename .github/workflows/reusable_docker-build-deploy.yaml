@@ -275,9 +275,9 @@ jobs:
           echo '${{ inputs.build-args-json }}' | to_kv > /tmp/build_args
           echo "$merged_labels" | to_kv > /tmp/labels
 
-          # Add JFROG_TOKEN to build args automatically (INFRA-560 Task 3.1 will
-          # remove this build-arg path; preserved here pending the consumer grep).
-          echo "JFROG_TOKEN=${{ steps.jf.outputs.oidc-token }}" >> /tmp/build_args
+          # NOTE: the JFrog/OIDC token is intentionally NOT passed as a build-arg.
+          # Build-args persist in image history and provenance. The token reaches
+          # the build only via the jfrog_token secret-file mount (see below).
 
           # Use heredoc syntax so multi-line values are preserved in GITHUB_ENV
           {
@@ -320,11 +320,21 @@ jobs:
           # Delta 3: Write consumer-provided secrets from JSON
           secrets_json='${{ secrets.build-secrets-json }}'
           if [ -n "$secrets_json" ] && [ "$secrets_json" != "{}" ]; then
+            # Validate key names before using them as filenames. Keys become
+            # paths under /tmp/docker-secrets, so reject anything outside a safe
+            # charset (no '/', '..', etc.). Reject, do not sanitize.
+            if echo "$secrets_json" | jq -r 'keys[]' | grep -qvE '^[a-zA-Z0-9_-]+$'; then
+              echo "::error::build-secrets-json contains an invalid key name; keys must match ^[a-zA-Z0-9_-]+$"
+              exit 1
+            fi
             echo "$secrets_json" | jq -r 'to_entries[] | "\(.key)\n\(.value)"' | \
               while IFS= read -r key && IFS= read -r value; do
                 echo -n "$value" > "/tmp/docker-secrets/$key"
               done
           fi
+
+          # Lock down secret files: readable only by the runner process user.
+          chmod 600 /tmp/docker-secrets/* 2>/dev/null || true
 
           # Generate secret-files lines (only file paths, not values)
           secret_files=""
