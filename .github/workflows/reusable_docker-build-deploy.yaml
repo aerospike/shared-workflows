@@ -110,39 +110,95 @@ on:
           Each is available in Dockerfile via: RUN --mount=type=secret,id=name
     outputs:
       digest:
-        description: Image manifest digest
-        value: ${{ jobs.build.outputs.digest }}
+        description: Image manifest-list (index) digest
+        value: ${{ jobs.merge.outputs.digest }}
       image-ref:
         description: Primary tag with @digest
-        value: ${{ jobs.build.outputs.image-ref }}
+        value: ${{ jobs.merge.outputs.image-ref }}
       tags:
         description: Comma separated list of tags used
-        value: ${{ jobs.build.outputs.tags }}
+        value: ${{ jobs.merge.outputs.tags }}
       immutable-tag:
         description: Immutable tag (registry/image:version_timestamp)
-        value: ${{ jobs.build.outputs.immutable-tag }}
+        value: ${{ jobs.merge.outputs.immutable-tag }}
 
+# INFRA-560: the single build job is split into per-platform native legs plus a
+# merge job. Each platform is built on its own native runner (QEMU only for
+# platforms without one), each job mints its own short-lived OIDC token, legs
+# push by digest, and the merge job assembles one multi-platform manifest,
+# publishes one build-info record, and attests. Internal job names/topology are
+# NOT part of the workflow_call contract; the inputs/outputs surface above is.
 jobs:
+  # Parse the arbitrary `platforms` input into a build matrix, mapping each
+  # platform to a native runner (QEMU fallback for any without one). A static
+  # strategy.matrix cannot read an input at parse time, so we emit it here.
+  parse-platforms:
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.parse.outputs.matrix }}
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
+        with:
+          egress-policy: audit
+
+      - name: Parse platforms into matrix
+        id: parse
+        shell: bash
+        env:
+          PLATFORMS: ${{ inputs.platforms }}
+        run: |
+          set -euo pipefail
+          entries=()
+          IFS=',' read -ra arr <<< "$PLATFORMS"
+          for p in "${arr[@]}"; do
+            # trim surrounding whitespace
+            p="$(echo "$p" | xargs)"
+            [ -z "$p" ] && continue
+            sanitized="${p//\//-}"
+            # Native runner mapping. arm64 and amd64 have GitHub-hosted native
+            # runners; anything else falls back to QEMU emulation on amd64.
+            case "$p" in
+              linux/amd64) runner="ubuntu-24.04";     qemu=false ;;
+              linux/arm64) runner="ubuntu-24.04-arm"; qemu=false ;;
+              *)           runner="ubuntu-24.04";     qemu=true  ;;
+            esac
+            entries+=("$(jq -nc \
+              --arg platform "$p" \
+              --arg runner "$runner" \
+              --arg sanitized "$sanitized" \
+              --argjson qemu "$qemu" \
+              '{platform: $platform, runner: $runner, sanitized: $sanitized, qemu: $qemu}')")
+          done
+          if [ "${#entries[@]}" -eq 0 ]; then
+            echo "::error::no platforms parsed from input '$PLATFORMS'"
+            exit 1
+          fi
+          matrix="$(printf '%s\n' "${entries[@]}" | jq -sc '.')"
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          echo "Parsed platform matrix: $matrix"
+
+  # Per-platform build leg. Builds one platform on its mapped runner, mints its
+  # own OIDC token, pushes the image BY DIGEST (no tags), and uploads the digest
+  # plus per-leg metadata as artifacts for the merge job. No build-info, no
+  # attestation here.
   build:
+    needs: parse-platforms
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.parse-platforms.outputs.matrix) }}
+    runs-on: ${{ matrix.runner }}
     env:
       JFROG_CLI_BUILD_NAME: ${{ inputs.jf-build-name || github.workflow }}
       JFROG_CLI_LOG_LEVEL: INFO
-    runs-on: ubuntu-22.04
     permissions:
       contents: read
       packages: write
-      attestations: write
       id-token: write
-
-    outputs:
-      digest: ${{ steps.build.outputs.digest }}
-      image-ref: ${{ steps.meta.outputs.image-ref }}
-      tags: ${{ steps.tags.outputs.tags }}
-      immutable-tag: ${{ steps.tags.outputs.immutable-tag }}
-
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
         with:
           egress-policy: audit
 
@@ -160,6 +216,11 @@ jobs:
           oidc-provider-name: ${{ inputs.oidc-provider-name }}
           oidc-audience: ${{ inputs.oidc-audience }}
 
+      - name: Record token fetch time
+        id: token_time
+        shell: bash
+        run: echo "fetched_at=$(date -u +%s)" >> "$GITHUB_OUTPUT"
+
       - name: Compute registry
         id: registry
         shell: bash
@@ -172,56 +233,16 @@ jobs:
           echo "registry=$reg" >> "$GITHUB_OUTPUT"
 
       - name: Docker login to Artifactory
-        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
         with:
           registry: ${{ steps.registry.outputs.registry }}
           username: ${{ steps.jf.outputs.oidc-user }}
           password: ${{ steps.jf.outputs.oidc-token }}
 
-      - uses: docker/setup-qemu-action@06116385d9baf250c9f4dcb4858b16962ea869c3 # v4.1.0
+      - name: Set up QEMU
+        if: ${{ matrix.qemu }}
+        uses: docker/setup-qemu-action@ce360397dd3f832beb865e1373c09c0e9f86d70a # v4.0.0
       - uses: step-security/setup-buildx-action@f931205d68723ad9589fd2a7e2ece238bf9de341 # v4.0.0
-      - name: Compute tags
-        id: tags
-        shell: bash
-        run: |
-          base="${{ steps.registry.outputs.registry }}/${{ inputs.image-name }}"
-          timestamp=$(date --utc +%Y%m%dT%H%M%SZ)
-
-          # Extract major version (handle 'v' prefix, take first number before first dot)
-          app_version="${{ inputs.app-version }}"
-          app_version="${app_version#v}"  # Strip 'v' prefix if present
-          # OCI tags forbid '+' but SemVer build metadata uses it (e.g. 1.2.3+abc).
-          # Replace with '-' so SemVer inputs still produce valid image tags.
-          app_version="${app_version//+/-}"
-          major_version="${app_version%%.*}"  # Extract first number before first dot
-
-          # Build immutable tag (always included)
-          immutable="${base}:${app_version}_${timestamp}"
-
-          # Build tags array: always start with immutable tag
-          tags_array=("${immutable}")
-
-          if [ -n "${{ inputs.versions-override }}" ]; then
-            # Parse comma-separated override tags and prepend base
-            IFS=',' read -ra override_tags <<< "${{ inputs.versions-override }}"
-            for tag in "${override_tags[@]}"; do
-              # Trim whitespace and prepend base
-              tag=$(echo "$tag" | xargs)
-              if [ -n "$tag" ]; then
-                tags_array+=("${base}:${tag}")
-              fi
-            done
-          else
-            # Default tags: immutable, version, major version, and latest
-            tags_array+=("${base}:${app_version}" "${base}:${major_version}" "${base}:latest")
-          fi
-
-          # Join tags with comma for output
-          IFS=','
-          tags="${tags_array[*]}"
-
-          echo "tags=${tags}" >> "$GITHUB_OUTPUT"
-          echo "immutable-tag=${immutable}" >> "$GITHUB_OUTPUT"
 
       - name: Prepare build args/labels
         shell: bash
@@ -254,7 +275,8 @@ jobs:
           echo '${{ inputs.build-args-json }}' | to_kv > /tmp/build_args
           echo "$merged_labels" | to_kv > /tmp/labels
 
-          # Add JFROG_TOKEN to build args automatically
+          # Add JFROG_TOKEN to build args automatically (INFRA-560 Task 3.1 will
+          # remove this build-arg path; preserved here pending the consumer grep).
           echo "JFROG_TOKEN=${{ steps.jf.outputs.oidc-token }}" >> /tmp/build_args
 
           # Use heredoc syntax so multi-line values are preserved in GITHUB_ENV
@@ -272,7 +294,7 @@ jobs:
         env:
           # Pass OIDC credentials via env (not command-line args) so the token
           # is never exposed in the process list, and so values are available
-          # to jq for safe URL-encoding below.
+          # to jq for safe URL-encoding below. Built from THIS leg's own token.
           OIDC_USER: ${{ steps.jf.outputs.oidc-user }}
           OIDC_TOKEN: ${{ steps.jf.outputs.oidc-token }}
         run: |
@@ -317,41 +339,249 @@ jobs:
             echo "EOF"
           } >> "$GITHUB_ENV"
 
-      - name: Build and push
+      - name: Build and push by digest
         id: build
-        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
+        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
         with:
           context: ${{ inputs.context }}
           file: ${{ inputs.file }}
-          platforms: ${{ inputs.platforms }}
-          push: ${{ inputs.push }}
-          tags: ${{ steps.tags.outputs.tags }}
+          platforms: ${{ matrix.platform }}
           provenance: ${{ inputs.provenance }}
           sbom: ${{ inputs.sbom }}
           build-args: ${{ env.BUILD_ARGS }}
           labels: ${{ env.LABELS }}
           secret-files: ${{ env.BUILD_SECRET_FILES }}
+          # GHA build-step cache (mode=max). Caches expensive builder stages;
+          # scoped per platform so legs do not collide. Nothing is written to
+          # JFrog (no dev-local cache-exposure surface).
+          cache-from: type=gha,scope=${{ matrix.sanitized }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.sanitized }}
+          # Push by digest, no tags. The merge job assembles the tagged manifest.
+          outputs: type=image,name=${{ steps.registry.outputs.registry }}/${{ inputs.image-name }},push-by-digest=true,name-canonical=true,push=${{ inputs.push }}
+
+      - name: Record push time
+        id: push_time
+        shell: bash
+        run: echo "pushed_at=$(date -u +%s)" >> "$GITHUB_OUTPUT"
+
       - name: Cleanup build secrets
         if: always()
         shell: bash
         run: rm -rf /tmp/docker-secrets
+
+      - name: Export digest and leg metadata
+        shell: bash
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+          PLATFORM: ${{ matrix.platform }}
+          SANITIZED: ${{ matrix.sanitized }}
+          RUNNER_ARCH: ${{ runner.arch }}
+          FETCHED_AT: ${{ steps.token_time.outputs.fetched_at }}
+          PUSHED_AT: ${{ steps.push_time.outputs.pushed_at }}
+        run: |
+          set -euo pipefail
+          mkdir -p "${RUNNER_TEMP}/digests" "${RUNNER_TEMP}/legmeta"
+          # buildx-by-digest convention: an empty file named after the digest.
+          touch "${RUNNER_TEMP}/digests/${DIGEST#sha256:}"
+          # Per-leg metadata for test assertions (runner arch, token timing).
+          jq -nc \
+            --arg platform "$PLATFORM" \
+            --arg digest "$DIGEST" \
+            --arg runner_arch "$RUNNER_ARCH" \
+            --arg fetched_at "$FETCHED_AT" \
+            --arg pushed_at "$PUSHED_AT" \
+            '{platform:$platform, digest:$digest, runner_arch:$runner_arch, token_fetched_at:($fetched_at|tonumber), push_completed_at:($pushed_at|tonumber)}' \
+            > "${RUNNER_TEMP}/legmeta/${SANITIZED}.json"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: digests-${{ matrix.sanitized }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Upload leg metadata
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: legmeta-${{ matrix.sanitized }}
+          path: ${{ runner.temp }}/legmeta/*
+          if-no-files-found: error
+          retention-days: 1
+
+  # Merge job: assemble one multi-platform manifest from the per-leg digests,
+  # compute tags, publish one build-info record (under the unchanged build
+  # number), and attest the manifest-list digest. Output-producing job.
+  merge:
+    needs: [parse-platforms, build]
+    runs-on: ubuntu-24.04
+    env:
+      JFROG_CLI_BUILD_NAME: ${{ inputs.jf-build-name || github.workflow }}
+      JFROG_CLI_LOG_LEVEL: INFO
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+    outputs:
+      digest: ${{ steps.manifest.outputs.digest }}
+      image-ref: ${{ steps.manifest.outputs.image-ref }}
+      tags: ${{ steps.tags.outputs.tags }}
+      immutable-tag: ${{ steps.tags.outputs.immutable-tag }}
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install JFrog CLI
+        id: jf
+        uses: step-security/setup-jfrog-cli@3054b554c0fb4915b3d58847fb7730c593dbb934 # v5.0.0
+        env:
+          JF_URL: ${{ inputs.jf-url }}
+          JF_PROJECT: ${{ inputs.jf-project }}
+          JFROG_CLI_BUILD_NAME: ${{ inputs.jf-build-name || github.workflow }}
+        with:
+          version: 2.78.8
+          oidc-provider-name: ${{ inputs.oidc-provider-name }}
+          oidc-audience: ${{ inputs.oidc-audience }}
+
+      - name: Compute registry
+        id: registry
+        shell: bash
+        run: |
+          set -euo pipefail
+          reg='${{ inputs.jf-registry }}'
+          if [ -z "$reg" ]; then
+            reg='${{ inputs.jf-registry-base }}/${{ inputs.jf-project }}${{ inputs.repo-scope }}'
+          fi
+          echo "registry=$reg" >> "$GITHUB_OUTPUT"
+
+      - name: Docker login to Artifactory
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
+        with:
+          registry: ${{ steps.registry.outputs.registry }}
+          username: ${{ steps.jf.outputs.oidc-user }}
+          password: ${{ steps.jf.outputs.oidc-token }}
+
+      - uses: step-security/setup-buildx-action@f931205d68723ad9589fd2a7e2ece238bf9de341 # v4.0.0
+
+      - name: Compute tags
+        id: tags
+        shell: bash
+        run: |
+          base="${{ steps.registry.outputs.registry }}/${{ inputs.image-name }}"
+          timestamp=$(date --utc +%Y%m%dT%H%M%SZ)
+
+          # Extract major version (handle 'v' prefix, take first number before first dot)
+          app_version="${{ inputs.app-version }}"
+          app_version="${app_version#v}"  # Strip 'v' prefix if present
+          # OCI tags forbid '+' but SemVer build metadata uses it (e.g. 1.2.3+abc).
+          # Replace with '-' so SemVer inputs still produce valid image tags.
+          app_version="${app_version//+/-}"
+          major_version="${app_version%%.*}"  # Extract first number before first dot
+
+          # Build immutable tag (always included)
+          immutable="${base}:${app_version}_${timestamp}"
+
+          # Build tags array: always start with immutable tag
+          tags_array=("${immutable}")
+
+          if [ -n "${{ inputs.versions-override }}" ]; then
+            # Parse comma-separated override tags and prepend base
+            IFS=',' read -ra override_tags <<< "${{ inputs.versions-override }}"
+            for tag in "${override_tags[@]}"; do
+              # Trim whitespace and prepend base
+              tag=$(echo "$tag" | xargs)
+              if [ -n "$tag" ]; then
+                tags_array+=("${base}:${tag}")
+              fi
+            done
+          else
+            # Default tags: immutable, version, major version, and latest
+            tags_array+=("${base}:${app_version}" "${base}:${major_version}" "${base}:latest")
+          fi
+
+          # Join tags with comma for output
+          IFS=','
+          tags="${tags_array[*]}"
+
+          echo "tags=${tags}" >> "$GITHUB_OUTPUT"
+          echo "immutable-tag=${immutable}" >> "$GITHUB_OUTPUT"
+
+      - name: Download per-leg digests
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: digests-*
+          merge-multiple: true
+
+      - name: Create multi-platform manifest
+        id: manifest
+        shell: bash
+        env:
+          REGISTRY: ${{ steps.registry.outputs.registry }}
+          IMAGE: ${{ inputs.image-name }}
+          TAGS: ${{ steps.tags.outputs.tags }}
+          IMMUTABLE_TAG: ${{ steps.tags.outputs.immutable-tag }}
+          PUSH: ${{ inputs.push }}
+        run: |
+          set -euo pipefail
+          if [ "$PUSH" != "true" ]; then
+            echo "push=false; skipping manifest assembly"
+            echo "image-ref=" >> "$GITHUB_OUTPUT"
+            echo "digest=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # -t for every requested tag
+          tag_args=()
+          IFS=',' read -ra TAGS_ARR <<< "$TAGS"
+          for t in "${TAGS_ARR[@]}"; do
+            tag_args+=("-t" "$t")
+          done
+
+          # source refs: registry/image@sha256:<digest> for each leg digest file
+          src_args=()
+          shopt -s nullglob
+          for f in "${RUNNER_TEMP}/digests"/*; do
+            src_args+=("${REGISTRY}/${IMAGE}@sha256:$(basename "$f")")
+          done
+          if [ "${#src_args[@]}" -eq 0 ]; then
+            echo "::error::no per-leg digests found to assemble"
+            exit 1
+          fi
+
+          docker buildx imagetools create "${tag_args[@]}" "${src_args[@]}"
+
+          # The manifest-list (index) digest is what consumers pull and what we
+          # attest. Read it back from the immutable tag.
+          digest="$(docker buildx imagetools inspect "$IMMUTABLE_TAG" --format '{{json .Manifest}}' | jq -r '.digest')"
+          echo "digest=${digest}" >> "$GITHUB_OUTPUT"
+          echo "image-ref=${IMMUTABLE_TAG}@${digest}" >> "$GITHUB_OUTPUT"
+
       # TODO: Uncomment this when xray scan is ready
       #   - name: xray scan
       #     shell: bash
       #     run: |
-      #       echo "JFROG_CLI_BUILD_NAME=${{ env.JFROG_CLI_BUILD_NAME }}"
       #       jf docker pull ${{ steps.tags.outputs.immutable-tag }} --build-name="${{ env.JFROG_CLI_BUILD_NAME }}" --build-number="$JFROG_CLI_BUILD_NUMBER"
       #       jf docker scan ${{ steps.tags.outputs.immutable-tag }} --build-name="${{ env.JFROG_CLI_BUILD_NAME }}" --build-number="$JFROG_CLI_BUILD_NUMBER"
+
       - name: Create build info for docker image
-        id: meta
+        if: ${{ inputs.push }}
         shell: bash
         run: |
-          # Use primary tag with digest for build-info
-          image_ref="${{ steps.tags.outputs.immutable-tag }}@${{ steps.build.outputs.digest }}"
-          echo "image-ref=${image_ref}" >> "$GITHUB_OUTPUT"
+          # Build-info is created against the multi-platform manifest-list digest,
+          # under the unchanged build number (the setup-jfrog-cli default,
+          # github.run_number) so existing consumer release-bundle references of
+          # the form <name>:${{ github.run_number }} still resolve.
+          image_ref="${{ steps.manifest.outputs.image-ref }}"
           jf rt build-docker-create --image-file <(echo "$image_ref") "${{ inputs.jf-project }}${{ inputs.repo-scope }}"
 
       - name: Publish Build Info
+        if: ${{ inputs.push }}
         shell: bash
         run: |
           jf rt build-collect-env  "$JFROG_CLI_BUILD_NAME" "$JFROG_CLI_BUILD_NUMBER"
@@ -359,8 +589,8 @@ jobs:
           jf rt build-publish --detailed-summary "$JFROG_CLI_BUILD_NAME" "$JFROG_CLI_BUILD_NUMBER"
 
       - name: Attest OCI Image
-        if: ${{ inputs.attest }}
+        if: ${{ inputs.attest && inputs.push }}
         uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
         with:
           subject-name: oci://${{ steps.tags.outputs.immutable-tag }}
-          subject-digest: ${{ steps.build.outputs.digest }}
+          subject-digest: ${{ steps.manifest.outputs.digest }}
