@@ -118,7 +118,12 @@ setup() {
   if [ "${LOCAL_SIGNING:-}" = "true" ]; then
     skip "No .nupkg fixtures in local signing mode"
   fi
-  find "$ARTIFACTS_DIR" -name "*.nupkg" | grep -q .
+  local nupkg
+  nupkg=$(find "$ARTIFACTS_DIR" -name "*.nupkg" -print -quit 2>/dev/null || true)
+  if [[ -z "$nupkg" ]]; then
+    skip "No .nupkg in ARTIFACTS_DIR (dotnet/NuGet matrix not in this pipeline run)"
+  fi
+  [[ -f "$nupkg" ]]
 }
 
 @test "Mac .pkg artifact is present" {
