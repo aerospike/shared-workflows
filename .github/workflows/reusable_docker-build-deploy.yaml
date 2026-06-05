@@ -403,10 +403,16 @@ jobs:
             '{platform:$platform, digest:$digest, runner_arch:$runner_arch, token_fetched_at:($fetched_at|tonumber), push_completed_at:($pushed_at|tonumber)}' \
             > "${RUNNER_TEMP}/legmeta/${SANITIZED}.json"
 
+      # Artifact names are namespaced by image-name so the workflow can be
+      # invoked more than once in a single run (e.g. several images, or a
+      # multi-platform plus a single-platform build) without colliding. The
+      # `--` delimiter avoids glob prefix-collision between names where one is a
+      # prefix of another (e.g. "test-image" vs "test-image-single"). image-name
+      # must not contain `--` or characters illegal in artifact names.
       - name: Upload digest
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: digests-${{ matrix.sanitized }}
+          name: digests-${{ inputs.image-name }}--${{ matrix.sanitized }}
           path: ${{ runner.temp }}/digests/*
           if-no-files-found: error
           retention-days: 1
@@ -414,7 +420,7 @@ jobs:
       - name: Upload leg metadata
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: legmeta-${{ matrix.sanitized }}
+          name: legmeta-${{ inputs.image-name }}--${{ matrix.sanitized }}
           path: ${{ runner.temp }}/legmeta/*
           if-no-files-found: error
           retention-days: 1
@@ -525,7 +531,8 @@ jobs:
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           path: ${{ runner.temp }}/digests
-          pattern: digests-*
+          # Scoped to this invocation's image-name (see upload namespacing note).
+          pattern: digests-${{ inputs.image-name }}--*
           merge-multiple: true
 
       - name: Create multi-platform manifest
