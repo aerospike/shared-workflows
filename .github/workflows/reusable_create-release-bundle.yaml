@@ -37,6 +37,13 @@ on:
         required: false
         type: boolean
         default: false
+      bundle-metadata-path:
+        description: |
+          Optional path to `.maven-bundle-metadata.json` (e.g. from detect-artifacts `bundle-metadata-path`).
+          When set and the file exists, entries are applied as release bundle properties via `jf release-bundle-annotate`.
+        required: false
+        type: string
+        default: ""
       gh-checkout-path:
         description: Directory to checkout the shared-workflows repository into
         required: false
@@ -111,9 +118,14 @@ jobs:
           if [ "${{ inputs.dry-run }}" = "true" ]; then
             dry_run_arg="--dry-run"
           fi
+          meta_arg=()
+          if [[ -n "${{ inputs.bundle-metadata-path }}" ]]; then
+            meta_arg=(--bundle-metadata "${{ inputs.bundle-metadata-path }}")
+          fi
           "$entrypoint" \
             --project "${{ inputs.jf-project }}" \
             --build-names "${{ inputs.jf-build-names }}" \
             --bundle-name "${{ inputs.jf-bundle-name }}" \
             --version "${{ inputs.version }}" \
+            "${meta_arg[@]}" \
             $dry_run_arg

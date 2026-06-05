@@ -31,12 +31,12 @@ record_test_result() {
     local test_name="$1"
     local success="$2"
     TOTAL_TESTS=$((TOTAL_TESTS + 1))
-    if [[ "$success" == "true" ]]; then
+    if [[ $success == "true" ]]; then
         PASSED_TESTS=$((PASSED_TESTS + 1))
-        echo "✅ $test_name - PASSED" >> "$TEST_REPORT_FILE"
+        echo "✅ $test_name - PASSED" >>"$TEST_REPORT_FILE"
     else
         FAILED_TESTS=$((FAILED_TESTS + 1))
-        echo "❌ $test_name - FAILED" >> "$TEST_REPORT_FILE"
+        echo "❌ $test_name - FAILED" >>"$TEST_REPORT_FILE"
     fi
 }
 
@@ -146,6 +146,29 @@ fi
 
 record_test_result "Test 4: Error handling - invalid build name format (missing version)" "$test4_success"
 
+# Test 5: Bundle metadata path triggers release-bundle-annotate in dry-run
+echo ""
+echo "Test 5: Bundle metadata path triggers annotate (dry-run)"
+test5_success=true
+
+cd "$TEST_DIR"
+cat >"$TEST_DIR/maven-bundle-metadata.json" <<'JSON'
+{"is_multi_package":true,"maven_module_count":2,"maven_aggregator_present":true,"is_flattened":false}
+JSON
+output=$("$SCRIPT_DIR/entrypoint.sh" --project test-project --build-names "test-build:1728052628123" --bundle-name meta-bundle --version v3.0.0 --bundle-metadata "$TEST_DIR/maven-bundle-metadata.json" --dry-run 2>&1)
+
+if ! echo "$output" | grep -q "jf release-bundle-annotate"; then
+    test5_success=false
+fi
+if ! echo "$output" | grep -q "is_multi_package=true"; then
+    test5_success=false
+fi
+if ! echo "$output" | grep -q "maven_module_count=2"; then
+    test5_success=false
+fi
+
+record_test_result "Test 5: Bundle metadata path triggers annotate (dry-run)" "$test5_success"
+
 # Summary
 echo ""
 echo "Test report: $TEST_REPORT_FILE"
@@ -160,4 +183,4 @@ else
     echo ""
     echo "❌ Test suite completed with exit code 1"
     exit 1
-fi 
+fi

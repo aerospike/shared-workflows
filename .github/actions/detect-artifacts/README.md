@@ -19,13 +19,13 @@ Runner tools used by detectors: `jq`, `tar`, `unzip`, `xmllint` (for Maven POM d
 
 ## Outputs
 
-| Output                       | Description                                                                                                                                                                                       |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `structured-artifacts-dir`   | Relative path to `structured_build_artifacts/` (per-type subdirs and copied files). If `working-dir` is set, this path is rooted under that directory (e.g. `my-job/structured_build_artifacts`). |
-| `manifest-path`              | Relative path to the TSV manifest (`.manifest`): one row per primary artifact with columns `path` and `type`. Companion files are gathered on disk but not listed here.                           |
-| `maven-bundle-metadata-path` | Relative path to `.maven-bundle-metadata.json`: Maven-only scan of all `*.pom` under the artifacts root (`is_multi_package`, `maven_module_count`, `maven_aggregator_present`, `is_flattened`).   |
+| Output                     | Description                                                                                                                                                                                       |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `structured-artifacts-dir` | Relative path to `structured_build_artifacts/` (per-type subdirs and copied files). If `working-dir` is set, this path is rooted under that directory (e.g. `my-job/structured_build_artifacts`). |
+| `manifest-path`            | Relative path to the TSV manifest (`.manifest`): one row per primary artifact with columns `path` and `type`. Companion files are gathered on disk but not listed here.                           |
+| `bundle-metadata-path`     | Relative path to `.maven-bundle-metadata.json`: Maven-only scan of all `*.pom` under the artifacts root (`is_multi_package`, `maven_module_count`, `maven_aggregator_present`, `is_flattened`).   |
 
-In the calling workflow, give the `uses` step an `id` (for example `id: detect-artifacts`), then reference `${{ steps.detect-artifacts.outputs.structured-artifacts-dir }}` and `${{ steps.detect-artifacts.outputs.manifest-path }}`. You can also forward them from `jobs.<job_id>.outputs`.
+After detection, `.maven-bundle-metadata.json` can be passed to [create-release-bundle](../create-release-bundle/README.md) as `bundle-metadata-path` so those fields are set on the release bundle version (`jf release-bundle-annotate`).
 
 ## Example (after collect, before release bundle)
 

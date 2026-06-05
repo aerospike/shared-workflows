@@ -26,11 +26,11 @@ outputs:
   manifest-path:
     description: TSV manifest of structured primary files (path and type columns), under structured-artifacts-dir
     value: ${{ steps.detect.outputs.manifest-path }}
-  maven-bundle-metadata-path:
+  bundle-metadata-path:
     description: |
       JSON file with Maven bundle hints (is_multi_package, maven_module_count, maven_aggregator_present,
       is_flattened) under structured-artifacts-dir; absent only if jq is missing (then detection fails).
-    value: ${{ steps.detect.outputs.maven-bundle-metadata-path }}
+    value: ${{ steps.detect.outputs.bundle-metadata-path }}
 runs:
   using: composite
   steps:
@@ -64,4 +64,4 @@ runs:
         fi
         echo "structured-artifacts-dir=$struct_dir" >>"$GITHUB_OUTPUT"
         echo "manifest-path=$struct_dir/.manifest" >>"$GITHUB_OUTPUT"
-        echo "maven-bundle-metadata-path=$struct_dir/.maven-bundle-metadata.json" >>"$GITHUB_OUTPUT"
+        echo "bundle-metadata-path=$struct_dir/.maven-bundle-metadata.json" >>"$GITHUB_OUTPUT"

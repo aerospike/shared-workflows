@@ -23,6 +23,13 @@ inputs:
     description: Path to the create-release-bundle entrypoint script (relative to workspace)
     required: false
     default: .github/workflows/create-release-bundle/entrypoint.sh
+  bundle-metadata-path:
+    description: |
+      Optional path to `.maven-bundle-metadata.json` (e.g. detect-artifacts output `bundle-metadata-path`).
+      When set and the file exists, key=value pairs from the JSON are applied to the release bundle version using
+      `jf release-bundle-annotate` after `jf release-bundle-create`. Relative paths are resolved from the job workspace.
+    required: false
+    default: ""
 runs:
   using: composite
   steps:
@@ -40,9 +47,14 @@ runs:
         if [ "${{ inputs.dry-run }}" = "true" ]; then
           dry_run_arg="--dry-run"
         fi
+        meta_arg=()
+        if [[ -n "${{ inputs.bundle-metadata-path }}" ]]; then
+          meta_arg=(--bundle-metadata "${{ inputs.bundle-metadata-path }}")
+        fi
         "$entrypoint" \
           --project "${{ inputs.jf-project }}" \
           --build-names "${{ inputs.build-names }}" \
           --bundle-name "${{ inputs.bundle-name }}" \
           --version "${{ inputs.version }}" \
+          "${meta_arg[@]}" \
           $dry_run_arg

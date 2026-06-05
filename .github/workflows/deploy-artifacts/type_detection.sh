@@ -249,7 +249,7 @@ _detect_structure_nuget_packages() {
 
 # --- Maven bundle metadata (multi-module / flatten-maven-plugin heuristics) --------------------
 # Writes structured_build_artifacts/.maven-bundle-metadata.json after scanning all *.pom under
-# the artifacts root. See detect-artifacts action output maven-bundle-metadata-path.
+# the artifacts root. See detect-artifacts action output bundle-metadata-path.
 
 # _maven_read_pom_coordinates <pom>
 # Sets: _mv_group_id _mv_artifact_id _mv_version _mv_packaging _mv_module_count (int)

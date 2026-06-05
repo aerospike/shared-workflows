@@ -8,19 +8,20 @@ This workflow creates JFrog release bundles by bundling one or more builds into 
 
 ## Inputs
 
-| Input                | Description                                                                                                 | Required | Default                         |
-| -------------------- | ----------------------------------------------------------------------------------------------------------- | -------- | ------------------------------- |
-| `jf-project`         | JFrog Artifactory project name                                                                              | Yes      | -                               |
-| `jf-build-names`     | Comma-separated list of `build-name:version` pairs to include (e.g. `"app-build:1.2.3,client-build:2.1.0"`) | Yes      | -                               |
-| `jf-bundle-name`     | Name for the release bundle                                                                                 | Yes      | -                               |
-| `version`            | Version of the release bundle                                                                               | Yes      | -                               |
-| `jf-url`             | JFrog Artifactory URL                                                                                       | No       | `https://artifact.aerospike.io` |
-| `oidc-provider-name` | OIDC provider name for authentication                                                                       | No       | `gh-aerospike`                  |
-| `oidc-audience`      | OIDC audience for authentication                                                                            | No       | `aerospike`                     |
-| `runs-on`            | The runner to use for the build                                                                             | No       | `ubuntu-22.04`                  |
-| `gh-checkout-path`   | Directory to checkout the shared-workflows repository into                                                  | No       | `shared-workflows`              |
-| `gh-workflows-ref`   | Git ref for shared-workflows (**should match `uses:`**)                                                     | Yes      | -                               |
-| `dry-run`            | Whether to run in dry-run mode                                                                              | No       | `false`                         |
+| Input                  | Description                                                                                                                               | Required | Default                         |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------------------------------- |
+| `jf-project`           | JFrog Artifactory project name                                                                                                            | Yes      | -                               |
+| `jf-build-names`       | Comma-separated list of `build-name:version` pairs to include (e.g. `"app-build:1.2.3,client-build:2.1.0"`)                               | Yes      | -                               |
+| `jf-bundle-name`       | Name for the release bundle                                                                                                               | Yes      | -                               |
+| `version`              | Version of the release bundle                                                                                                             | Yes      | -                               |
+| `jf-url`               | JFrog Artifactory URL                                                                                                                     | No       | `https://artifact.aerospike.io` |
+| `oidc-provider-name`   | OIDC provider name for authentication                                                                                                     | No       | `gh-aerospike`                  |
+| `oidc-audience`        | OIDC audience for authentication                                                                                                          | No       | `aerospike`                     |
+| `runs-on`              | The runner to use for the build                                                                                                           | No       | `ubuntu-22.04`                  |
+| `gh-checkout-path`     | Directory to checkout the shared-workflows repository into                                                                                | No       | `shared-workflows`              |
+| `gh-workflows-ref`     | Git ref for shared-workflows (**should match `uses:`**)                                                                                   | Yes      | -                               |
+| `dry-run`              | Whether to run in dry-run mode                                                                                                            | No       | `false`                         |
+| `bundle-metadata-path` | Optional path to `.maven-bundle-metadata.json` (e.g. detect-artifacts `bundle-metadata-path`). Applied as bundle properties after create. | No       | _(empty)_                       |
 
 ## Example Usage
 
