@@ -1,6 +1,6 @@
 # Detect artifact types
 
-Runs [`detect_types.sh`](../../workflows/deploy-artifacts/detect_types.sh): content-based detection for ambiguous archives (npm tarballs, PyPI sdists, Go module zips, Helm charts) plus structured passes for PyPI wheels, NuGet packages, Maven POMs, and Docker bundle metadata, and writes `structured_build_artifacts/` plus a manifest, matching the deploy entrypoint’s detection phase. JFrog/build metadata is not required because detection only inspects file contents and copies into the structured tree.
+Runs [`detect_types.sh`](../../workflows/deploy-artifacts/detect_types.sh): content-based detection for ambiguous archives (npm tarballs, PyPI sdists, Go module zips, Helm charts) plus structured passes for PyPI wheels, NuGet packages, Maven POMs, and Docker bundle metadata, and writes `structured_build_artifacts/` plus a manifest, matching the deploy entrypoint’s detection phase. After scanning, it writes **`.maven-bundle-metadata.json`** (unique Maven GAV count, multi-package flag, aggregator presence, flatten heuristics) under the same structured directory. JFrog/build metadata is not required because detection only inspects file contents and copies into the structured tree.
 
 ## Prerequisites
 
@@ -19,10 +19,11 @@ Runner tools used by detectors: `jq`, `tar`, `unzip`, `xmllint` (for Maven POM d
 
 ## Outputs
 
-| Output                     | Description                                                                                                                                                                                       |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `structured-artifacts-dir` | Relative path to `structured_build_artifacts/` (per-type subdirs and copied files). If `working-dir` is set, this path is rooted under that directory (e.g. `my-job/structured_build_artifacts`). |
-| `manifest-path`            | Relative path to the TSV manifest (`.manifest`): one row per primary artifact with columns `path` and `type`. Companion files are gathered on disk but not listed here.                           |
+| Output                       | Description                                                                                                                                                                                       |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `structured-artifacts-dir`   | Relative path to `structured_build_artifacts/` (per-type subdirs and copied files). If `working-dir` is set, this path is rooted under that directory (e.g. `my-job/structured_build_artifacts`). |
+| `manifest-path`              | Relative path to the TSV manifest (`.manifest`): one row per primary artifact with columns `path` and `type`. Companion files are gathered on disk but not listed here.                           |
+| `maven-bundle-metadata-path` | Relative path to `.maven-bundle-metadata.json`: Maven-only scan of all `*.pom` under the artifacts root (`is_multi_package`, `maven_module_count`, `maven_aggregator_present`, `is_flattened`).   |
 
 In the calling workflow, give the `uses` step an `id` (for example `id: detect-artifacts`), then reference `${{ steps.detect-artifacts.outputs.structured-artifacts-dir }}` and `${{ steps.detect-artifacts.outputs.manifest-path }}`. You can also forward them from `jobs.<job_id>.outputs`.
 

@@ -3,6 +3,7 @@ description: |
   Run content-based artifact type detection (npm / PyPI sdist / Go module archives) via
   deploy-artifacts/detect_types.sh. Intended after merged build artifacts are available
   (e.g. collect-build-artifacts) and before downstream packaging such as create-release-bundle.
+  Also emits Maven bundle metadata JSON (`.maven-bundle-metadata.json`) when any `*.pom` is scanned.
 inputs:
   script-path:
     description: Path to detect_types.sh (relative to workspace unless absolute)
@@ -25,6 +26,11 @@ outputs:
   manifest-path:
     description: TSV manifest of structured primary files (path and type columns), under structured-artifacts-dir
     value: ${{ steps.detect.outputs.manifest-path }}
+  maven-bundle-metadata-path:
+    description: |
+      JSON file with Maven bundle hints (is_multi_package, maven_module_count, maven_aggregator_present,
+      is_flattened) under structured-artifacts-dir; absent only if jq is missing (then detection fails).
+    value: ${{ steps.detect.outputs.maven-bundle-metadata-path }}
 runs:
   using: composite
   steps:
@@ -58,3 +64,4 @@ runs:
         fi
         echo "structured-artifacts-dir=$struct_dir" >>"$GITHUB_OUTPUT"
         echo "manifest-path=$struct_dir/.manifest" >>"$GITHUB_OUTPUT"
+        echo "maven-bundle-metadata-path=$struct_dir/.maven-bundle-metadata.json" >>"$GITHUB_OUTPUT"

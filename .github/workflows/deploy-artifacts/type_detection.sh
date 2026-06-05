@@ -247,6 +247,121 @@ _detect_structure_nuget_packages() {
     done < <(find "$artifacts_root" \( -name "*.nupkg" -o -name "*.snupkg" \) -type f -print0 2>/dev/null)
 }
 
+# --- Maven bundle metadata (multi-module / flatten-maven-plugin heuristics) --------------------
+# Writes structured_build_artifacts/.maven-bundle-metadata.json after scanning all *.pom under
+# the artifacts root. See detect-artifacts action output maven-bundle-metadata-path.
+
+# _maven_read_pom_coordinates <pom>
+# Sets: _mv_group_id _mv_artifact_id _mv_version _mv_packaging _mv_module_count (int)
+_maven_read_pom_coordinates() {
+    local pom="$1"
+    _mv_artifact_id=$(xmllint --xpath "string(/*[local-name()='project']/*[local-name()='artifactId'])" "$pom" 2>/dev/null || true)
+    _mv_group_id=$(xmllint --xpath "string(/*[local-name()='project']/*[local-name()='groupId'])" "$pom" 2>/dev/null || true)
+    if [[ -z ${_mv_group_id} ]]; then
+        _mv_group_id=$(xmllint --xpath "string(/*[local-name()='project']/*[local-name()='parent']/*[local-name()='groupId'])" "$pom" 2>/dev/null || true)
+    fi
+    _mv_version=$(xmllint --xpath "string(/*[local-name()='project']/*[local-name()='version'])" "$pom" 2>/dev/null || true)
+    if [[ -z ${_mv_version} ]]; then
+        _mv_version=$(xmllint --xpath "string(/*[local-name()='project']/*[local-name()='parent']/*[local-name()='version'])" "$pom" 2>/dev/null || true)
+    fi
+    _mv_packaging=$(xmllint --xpath "string(/*[local-name()='project']/*[local-name()='packaging'])" "$pom" 2>/dev/null || true)
+    [[ -z ${_mv_packaging} ]] && _mv_packaging="jar"
+    _mv_module_count=$(xmllint --xpath "count(/*[local-name()='project']/*[local-name()='modules']/*[local-name()='module'])" "$pom" 2>/dev/null || echo 0)
+    if [[ -z ${_mv_module_count} ]] || [[ ! (${_mv_module_count} =~ ^[0-9]+$) ]]; then
+        _mv_module_count=0
+    fi
+}
+
+# _pom_has_flatten_maven_plugin_marker <pom>
+# True when the preamble mentions the plugin (typical when keepCommentsInPom or header comment preserved).
+_pom_has_flatten_maven_plugin_marker() {
+    local pom="$1"
+    head -c 24576 "$pom" 2>/dev/null | tr '[:upper:]' '[:lower:]' | grep -q 'flatten-maven-plugin'
+}
+
+# _pom_matches_flatten_resolved_heuristic <pom>
+# Structural hint aligned with https://www.mojohaus.org/flatten-maven-plugin/flatten-mojo.html :
+# consumer flattened POMs usually have no parent, no modules, no ${...} interpolation, and publish
+# resolved direct dependencies. We skip packaging=pom (BOM/aggregator) to avoid false positives on
+# minimal parent-only POMs. Marker comment (_pom_has_flatten_maven_plugin_marker) remains the
+# strongest signal for flattened BOMs.
+_pom_matches_flatten_resolved_heuristic() {
+    local pom="$1"
+    is_maven_package "$pom" || return 1
+    _maven_read_pom_coordinates "$pom"
+    if [[ ${_mv_packaging,,} == pom ]]; then
+        return 1
+    fi
+    local dep_count
+    dep_count=$(xmllint --xpath "count(/*[local-name()='project']/*[local-name()='dependencies']/*[local-name()='dependency'])" "$pom" 2>/dev/null || echo 0)
+    [[ $dep_count =~ ^[0-9]+$ ]] || dep_count=0
+    [[ $dep_count -gt 0 ]] || return 1
+    if grep -qE '\$\{' "$pom" 2>/dev/null; then
+        return 1
+    fi
+    local pc mc
+    pc=$(xmllint --xpath "count(/*[local-name()='project']/*[local-name()='parent'])" "$pom" 2>/dev/null || echo 1)
+    [[ $pc =~ ^[0-9]+$ ]] || pc=1
+    [[ $pc -eq 0 ]] || return 1
+    mc=$(xmllint --xpath "count(/*[local-name()='project']/*[local-name()='modules']/*[local-name()='module'])" "$pom" 2>/dev/null || echo 1)
+    [[ $mc =~ ^[0-9]+$ ]] || mc=1
+    [[ $mc -eq 0 ]] || return 1
+    return 0
+}
+
+# _pom_is_flattened_maven_style <pom>
+_pom_is_flattened_maven_style() {
+    local pom="$1"
+    _pom_has_flatten_maven_plugin_marker "$pom" && return 0
+    _pom_matches_flatten_resolved_heuristic "$pom" && return 0
+    return 1
+}
+
+# _write_maven_bundle_metadata_json <artifacts_root>
+# Emits JSON with is_multi_package, maven_module_count, maven_aggregator_present, is_flattened.
+_write_maven_bundle_metadata_json() {
+    local artifacts_root="$1"
+    local out="./structured_build_artifacts/.maven-bundle-metadata.json"
+    declare -A gav_seen=()
+    local maven_aggregator_present=false
+    local is_flattened=false
+
+    while IFS= read -r -d '' pom; do
+        [[ -f $pom ]] || continue
+        is_maven_package "$pom" || continue
+        _maven_read_pom_coordinates "$pom"
+        if [[ -z ${_mv_group_id-} || -z ${_mv_artifact_id-} || -z ${_mv_version-} ]]; then
+            continue
+        fi
+        local gav_key="${_mv_group_id}|${_mv_artifact_id}|${_mv_version}"
+        gav_seen["$gav_key"]=1
+
+        if [[ ${_mv_packaging,,} == pom && $_mv_module_count -gt 0 ]]; then
+            maven_aggregator_present=true
+        fi
+        if _pom_is_flattened_maven_style "$pom"; then
+            is_flattened=true
+        fi
+    done < <(find "$artifacts_root" -name "*.pom" -type f -print0 2>/dev/null)
+
+    local maven_module_count=${#gav_seen[@]}
+    local is_multi_package=false
+    [[ $maven_module_count -gt 1 ]] && is_multi_package=true
+
+    if ! command -v jq >/dev/null 2>&1; then
+        echo "Error: jq is required to write $out" >&2
+        return 1
+    fi
+    jq -n \
+        --argjson is_multi_package "$is_multi_package" \
+        --argjson maven_module_count "$maven_module_count" \
+        --argjson maven_aggregator_present "$maven_aggregator_present" \
+        --argjson is_flattened "$is_flattened" \
+        '{is_multi_package: $is_multi_package, maven_module_count: $maven_module_count, maven_aggregator_present: $maven_aggregator_present, is_flattened: $is_flattened}' \
+        >"$out"
+    echo "Wrote Maven bundle metadata ($maven_module_count unique GAV(s)): $out" >&2
+}
+
 # Detect Maven POMs: coordinate validation then same jar/ layout as structure_standalone_poms.
 _detect_structure_maven_poms() {
     local artifacts_root="$1"
@@ -337,4 +452,5 @@ structure_content_detected_files() {
     _detect_structure_nuget_packages "$artifacts_root"
     _detect_structure_maven_poms "$artifacts_root"
     _detect_structure_docker_bundle_metadata "$artifacts_root"
+    _write_maven_bundle_metadata_json "$artifacts_root"
 }

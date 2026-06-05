@@ -198,7 +198,8 @@ deploy-artifacts/
   entrypoint.sh          # Main script: arg parsing, upload functions, orchestration
   type_registry.sh       # Type config arrays + per-type props/flags functions
   type_detection.sh      # Content-based detection predicates (is_npm_package, is_helm_chart, etc.)
-  detect_types.sh        # Standalone detection entrypoint (used by the detect-artifacts action)
+  detect_types.sh        # Standalone detection entrypoint (used by the detect-artifacts action); writes
+                         # structured_build_artifacts/.maven-bundle-metadata.json (Maven GAV scan)
   upload_utils.sh        # Shared helpers: jf_upload, upload_companions, discover_and_process, upload_type
   package_utils.sh       # Metadata extraction + process_* functions for structuring
   create-test-fixtures.sh
