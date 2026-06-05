@@ -228,9 +228,14 @@ jobs:
           TOKEN: ${{ steps.jf.outputs.oidc-token }}
         run: |
           set -euo pipefail
+          # Build-info published under a JFrog project must be queried with the
+          # project param; the global /api/build/<name>/<number> path 404s for
+          # project-scoped builds. The build number is github.run_number (the
+          # setup-jfrog-cli default), which is what consumer release-bundle
+          # references rely on.
           code=$(curl -s -o /tmp/bi.json -w '%{http_code}' \
             -H "Authorization: Bearer $TOKEN" \
-            "$JF_URL/artifactory/api/build/${BUILD_NAME}/${BUILD_NUMBER}")
+            "$JF_URL/artifactory/api/build/${BUILD_NAME}/${BUILD_NUMBER}?project=test")
           echo "build-info HTTP $code"
           [ "$code" = "200" ] || { echo "::error::build-info $BUILD_NAME/$BUILD_NUMBER not found ($code)"; cat /tmp/bi.json; exit 1; }
           digest="${MULTI_DIGEST#sha256:}"
