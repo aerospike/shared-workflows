@@ -53,10 +53,32 @@ jobs:
 
 ## Outputs
 
-- `digest`: Image manifest digest
+- `digest`: Multi-platform manifest-list (index) digest
 - `image-ref`: Primary tag with `@digest`
 - `tags`: Comma separated list of tags used
 - `immutable-tag`: Immutable tag (registry/image:version_timestamp)
+
+## Multi-arch build and caching
+
+The workflow builds each requested platform **natively**: a setup step parses `platforms` into a matrix, each platform builds on its own runner (`linux/amd64` on `ubuntu-24.04`, `linux/arm64` on `ubuntu-24.04-arm`), and QEMU emulation is used only for a platform that has no native runner. Each leg pushes its image **by digest**; a final merge step assembles one multi-platform manifest index (`docker buildx imagetools create`) and applies the tags. A single-platform build still produces a manifest index. The four outputs (digest, image-ref, tags, immutable-tag) and the single build-info record are produced by the merge step; the build-info build number is `github.run_number`, unchanged, so release-bundle references of the form `<build-name>:${{ github.run_number }}` keep resolving. Each leg and the merge step mint their own short-lived OIDC token immediately before pushing, so total build time no longer has to fit inside one token's lifetime.
+
+Two independent caching levers reduce repeat work:
+
+1. **Base-image pull-through (primary).** Point your `FROM` lines at the JFrog virtual for your project rather than the public registry, so base layers are fetched from upstream once and then served from JFrog:
+
+   ```dockerfile
+   # instead of:  FROM ubuntu:24.04@sha256:...
+   FROM artifact.aerospike.io/<jf-project>-docker-virtual/library/ubuntu:24.04@sha256:...
+   # gcr.io/distroless/...  ->  artifact.aerospike.io/<jf-project>-docker-virtual/distroless/...
+   ```
+
+   Keep the `@sha256:` digest pins. The virtuals (Docker Hub, RedHat, Quay, ghcr.io, gcr.io, registry.k8s.io, public.ecr.aws, mcr.microsoft.com) are provided per project; your repo's OIDC grant must include read + cache-deploy on the public-mirror remotes for the first uncached pull to succeed (this is granted by the standard per-repo OIDC mapping; see OIDC below).
+
+2. **Build-step cache (secondary).** The workflow uses the GitHub Actions cache (`type=gha`, `mode=max`) so unchanged builder-stage layers are reused on warm runs. Nothing is written to JFrog. It is best-effort: the per-repo GHA cache quota is finite, so on large matrices a miss simply rebuilds.
+
+## OIDC
+
+Authenticate with the org-scoped provider (defaults: `oidc-provider-name: gh-aerospike`, `oidc-audience: aerospike`). Your repo needs a per-repo OIDC mapping in tf-artifactory granting write to the target project's dev locals plus read + cache-deploy on the public-mirror remotes (the standard consumer mapping; the legacy per-project-role providers like `gh-dev-test` are being retired). Without the cache-deploy grant, base-image pull-through (lever 1) cannot populate the cache on the first pull.
 
 ## Tag Generation
 
@@ -73,7 +95,7 @@ The registry is automatically constructed from `jf-registry` (if provided) or `{
 
 ## Build Secrets
 
-The workflow automatically injects the JFrog OIDC token as a Docker build secret (`jfrog_token`), available in every build without any configuration. This is in addition to the existing `JFROG_TOKEN` build-arg (which remains for backwards compatibility).
+The workflow automatically injects the JFrog OIDC token as a Docker build secret (`jfrog_token`), available in every build without any configuration. The token is provided **only** as a secret-mount: there is no `JFROG_TOKEN` build-arg. Build-args persist in image history and provenance, so the token is never passed that way.
 
 ### Using the JFrog token secret
 
@@ -83,7 +105,7 @@ RUN --mount=type=secret,id=jfrog_token \
     curl -H "Authorization: Bearer $TOKEN" https://artifact.aerospike.io/...
 ```
 
-Unlike the build-arg approach (`ARG JFROG_TOKEN`), secrets mounted via `--mount=type=secret` are never persisted in image layers or visible in `docker history`.
+Secrets mounted via `--mount=type=secret` are never persisted in image layers or visible in `docker history`. Do not read a secret into a variable that is then written into the image, and do not `COPY` or `ADD` a secret-derived file into any layer: the build-step cache (see Multi-arch build and caching) caches intermediate stages, so anything materialized into a layer is captured there.
 
 ### Private Go modules via GOPROXY
 
