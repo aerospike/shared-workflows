@@ -51,8 +51,8 @@ jobs:
       context: ./.github/workflows/execute-build/test_apps/hi
       file: ./.github/workflows/execute-build/test_apps/hi/Dockerfile
       jf-build-name: test-container
-      oidc-provider-name: gh-dev-test
-      oidc-audience: aerospike/testing
+      oidc-provider-name: gh-aerospike
+      oidc-audience: aerospike
 
   # Single-platform build (AC5 single-platform / Task 1.3): a single-platform
   # call must still publish a multi-platform manifest index. Distinct image-name
@@ -69,8 +69,8 @@ jobs:
       context: ./.github/workflows/execute-build/test_apps/hi
       file: ./.github/workflows/execute-build/test_apps/hi/Dockerfile
       jf-build-name: test-container-single
-      oidc-provider-name: gh-dev-test
-      oidc-audience: aerospike/testing
+      oidc-provider-name: gh-aerospike
+      oidc-audience: aerospike
 
   # AC12 (negative): attestation runs only in the merge job. A definition-level
   # lint so re-adding attest to a leg fails fast, no build needed.
@@ -139,8 +139,8 @@ jobs:
           JF_PROJECT: test
         with:
           version: 2.78.8
-          oidc-provider-name: gh-dev-test
-          oidc-audience: aerospike/testing
+          oidc-provider-name: gh-aerospike
+          oidc-audience: aerospike
 
       - name: Docker login to Artifactory
         uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
