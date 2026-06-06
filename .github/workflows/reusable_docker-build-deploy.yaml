@@ -157,7 +157,11 @@ jobs:
             [ -z "$p" ] && continue
             sanitized="${p//\//-}"
             # Native runner mapping. arm64 and amd64 have GitHub-hosted native
-            # runners; anything else falls back to QEMU emulation on amd64.
+            # runners; anything else falls back to QEMU emulation on amd64. The
+            # mapping is internal (consumers only pass `platforms`); the QEMU
+            # fallback is intentional. Do NOT add a hard-fail guard for
+            # unrecognized platforms: consumers may pass exotic platforms
+            # expecting emulation.
             case "$p" in
               linux/amd64) runner="ubuntu-24.04";     qemu=false ;;
               linux/arm64) runner="ubuntu-24.04-arm"; qemu=false ;;
