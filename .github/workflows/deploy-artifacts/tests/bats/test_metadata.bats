@@ -469,19 +469,19 @@ YAML
 
 @test "_validate_helm_name rejects name with semicolons (property injection)" {
     export DEPLOY_DIR
-    run bash -c 'source "$DEPLOY_DIR/package_utils.sh" && _validate_helm_name "evil;injected=bar"'
+    run bash -c 'error() { echo "$@" >&2; return 1; }; source "$DEPLOY_DIR/package_utils.sh" && _validate_helm_name "evil;injected=bar"'
     [[ $status -ne 0 ]]
 }
 
 @test "_validate_helm_name rejects uppercase names" {
     export DEPLOY_DIR
-    run bash -c 'source "$DEPLOY_DIR/package_utils.sh" && _validate_helm_name "BadName"'
+    run bash -c 'error() { echo "$@" >&2; return 1; }; source "$DEPLOY_DIR/package_utils.sh" && _validate_helm_name "BadName"'
     [[ $status -ne 0 ]]
 }
 
 @test "_validate_helm_name rejects name with spaces" {
     export DEPLOY_DIR
-    run bash -c 'source "$DEPLOY_DIR/package_utils.sh" && _validate_helm_name "has spaces"'
+    run bash -c 'error() { echo "$@" >&2; return 1; }; source "$DEPLOY_DIR/package_utils.sh" && _validate_helm_name "has spaces"'
     [[ $status -ne 0 ]]
 }
 
