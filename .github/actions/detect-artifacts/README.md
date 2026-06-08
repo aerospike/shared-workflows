@@ -23,7 +23,16 @@ Runner tools used by detectors: `jq`, `tar`, `unzip`, `xmllint` (for Maven POM d
 | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `structured-artifacts-dir` | Relative path to `structured_build_artifacts/` (per-type subdirs and copied files). If `working-dir` is set, this path is rooted under that directory (e.g. `my-job/structured_build_artifacts`). |
 | `manifest-path`            | Relative path to the TSV manifest (`.manifest`): one row per primary artifact with columns `path` and `type`. Companion files are gathered on disk but not listed here.                           |
-| `bundle-metadata-path`     | Relative path to `.maven-bundle-metadata.json`: Maven-only scan of all `*.pom` under the artifacts root (`is_multi_package`, `maven_module_count`, `maven_aggregator_present`, `is_flattened`).   |
+| `bundle-metadata-path`     | Relative path to `.maven-bundle-metadata.json` (see table below).                                                                                                                                 |
+
+### Fields in `.maven-bundle-metadata.json`
+
+| Property                   | Description                                                                                                   |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `is_multi_package`         | `true` when the tree has more than one distinct Maven GAV (multi-artifact release).                           |
+| `maven_module_count`       | Number of unique Maven `(groupId, artifactId, version)` coordinates found in scanned POMs.                    |
+| `maven_aggregator_present` | `true` if any scanned POM is a reactor root (`packaging` `pom` with `<modules>`).                             |
+| `is_flattened`             | `true` if any POM looks flattened (flatten-plugin marker and/or resolved, no-`${}` consumer-style heuristic). |
 
 After detection, `.maven-bundle-metadata.json` can be passed to [create-release-bundle](../create-release-bundle/README.md) as `bundle-metadata-path` so those fields are set on the release bundle version (`jf release-bundle-annotate`).
 
@@ -48,6 +57,7 @@ steps:
     run: |
       echo "Structured dir: ${{ steps.detect-artifacts.outputs.structured-artifacts-dir }}"
       echo "Manifest: ${{ steps.detect-artifacts.outputs.manifest-path }}"
+      echo "Bundle metadata: ${{ steps.detect-artifacts.outputs.bundle-metadata-path }}"
 ```
 
 See [`reusable_artifacts-cicd.yaml`](../../workflows/reusable_artifacts-cicd.yaml) for an integrated job between matrix collect and sign.
