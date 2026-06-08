@@ -68,6 +68,8 @@ With release bundles (shown in the example for `workflow_dispatch`):
 deploy  →  create-release-bundle  →  promote
 ```
 
+When you use `reusable_deploy-artifacts.yaml` followed by `reusable_create-release-bundle.yaml`, pass `gh-bundle-metadata-artifact-name: ${{ needs.<deploy-job>.outputs.bundle-metadata-artifact-name }}` so Maven bundle metadata (`.maven-bundle-metadata.json`) is carried between jobs as a small artifact; the deploy workflow sets `bundle-metadata-available` when that upload ran.
+
 ### Key concepts
 
 **Build IDs.** The `jf-build-id` ties build-info together across stages. Use `${{ github.run_id }}-${{ github.run_attempt }}` as the base. Each build job adds a unique suffix; the deploy job uses the base without the suffix.
