@@ -92,15 +92,43 @@ on:
         required: false
         type: string
         default: ubuntu-22.04
+      gh-upload-bundle-metadata:
+        description: |
+          When true and structured_build_artifacts/.maven-bundle-metadata.json exists after deploy,
+          upload it as a GitHub Actions artifact named gh-bundle-metadata-artifact-name for downstream
+          jobs (e.g. reusable_create-release-bundle via gh-bundle-metadata-artifact-name).
+        required: false
+        type: boolean
+        default: true
+      gh-bundle-metadata-artifact-name:
+        description: GitHub artifact name used when uploading .maven-bundle-metadata.json
+        required: false
+        type: string
+        default: bundle-metadata
+    outputs:
+      jf-build-id:
+        description: JFrog build ID for the parent build info published by this deploy
+        value: ${{ jobs.deploy.outputs.jf-build-id }}
+      bundle-metadata-artifact-name:
+        description: |
+          GitHub artifact name for `.maven-bundle-metadata.json` when uploaded; empty when not available.
+          Pass to `reusable_create-release-bundle` as `gh-bundle-metadata-artifact-name`.
+        value: ${{ jobs.deploy.outputs.bundle-metadata-artifact-name }}
+      bundle-metadata-available:
+        description: Whether Maven bundle metadata was uploaded as a GitHub artifact
+        value: ${{ jobs.deploy.outputs.bundle-metadata-available }}
 permissions:
   contents: read
   id-token: write
+  actions: write
 
 jobs:
   deploy:
     runs-on: ${{ inputs.runs-on }}
     outputs:
       jf-build-id: ${{ steps.deploy.outputs.jf-build-id }}
+      bundle-metadata-artifact-name: ${{ steps.bundle-metadata-state.outputs.artifact-name }}
+      bundle-metadata-available: ${{ steps.bundle-metadata-state.outputs.available == 'true' }}
     steps:
       - name: Harden the runner (Audit all outbound calls)
         uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
@@ -176,6 +204,7 @@ jobs:
           struct_dir="structured_build_artifacts"
           echo "structured-artifacts-dir=$struct_dir" >>"$GITHUB_OUTPUT"
           echo "manifest-path=$struct_dir/.manifest" >>"$GITHUB_OUTPUT"
+          echo "bundle-metadata-path=$struct_dir/.maven-bundle-metadata.json" >>"$GITHUB_OUTPUT"
 
       - name: Detected Artifacts
         shell: bash
@@ -231,3 +260,30 @@ jobs:
             $build_type_arg \
             $internal_arg
           echo "jf-build-id=${{ inputs.jf-build-id }}" >> $GITHUB_OUTPUT
+
+      - name: Record bundle metadata artifact outputs
+        id: bundle-metadata-state
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ inputs.gh-upload-bundle-metadata }}" != "true" ]]; then
+            echo "available=false" >>"$GITHUB_OUTPUT"
+            echo "artifact-name=" >>"$GITHUB_OUTPUT"
+            exit 0
+          fi
+          meta_path="structured_build_artifacts/.maven-bundle-metadata.json"
+          if [[ ! -f "$meta_path" ]]; then
+            echo "available=false" >>"$GITHUB_OUTPUT"
+            echo "artifact-name=" >>"$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "available=true" >>"$GITHUB_OUTPUT"
+          echo "artifact-name=${{ inputs.gh-bundle-metadata-artifact-name }}" >>"$GITHUB_OUTPUT"
+
+      - name: Upload Maven bundle metadata
+        if: success() && steps.bundle-metadata-state.outputs.available == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ inputs.gh-bundle-metadata-artifact-name }}
+          path: structured_build_artifacts/.maven-bundle-metadata.json

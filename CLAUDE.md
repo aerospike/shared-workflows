@@ -91,6 +91,7 @@ The `reusable_artifacts-cicd.yaml` orchestrator runs 5 jobs. Understanding the a
 - `structure_build_artifacts()` uses recursive `find build-artifacts -name "*.{ext}"` to discover files
 - Routes by extension: deb/rpm/jar/nupkg/snupkg each to their JFrog repo. Ambiguous archives (`.tgz`, `.tar.gz`, `.zip`) are content-detected (npm, pypi, go, helm) via `is_*` predicates in `type_detection.sh`. Anything that doesn't match falls back to generic.
 - Build-info aggregation: discovers child build-infos via AQL (`{metadata-build-id}*.json`), appends to parent build
+- After deploy, `detect_types.sh` may write `structured_build_artifacts/.maven-bundle-metadata.json`; the workflow can upload it as a GitHub artifact (outputs `bundle-metadata-artifact-name` / `bundle-metadata-available`) for `reusable_create-release-bundle.yaml` via `gh-bundle-metadata-artifact-name`.
 
 ## Running Tests
 

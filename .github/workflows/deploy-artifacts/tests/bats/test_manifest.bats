@@ -78,7 +78,7 @@ get_manifest() {
     while IFS=$'\t' read -r path type; do
         if [[ ! -f "$path" ]]; then
             echo "Missing: $path (type: $type)" >&2
-            ((missing++))
+            missing=$((missing + 1))
         fi
     done < structured_build_artifacts/.manifest
     [[ $missing -eq 0 ]]
@@ -163,10 +163,16 @@ get_manifest() {
     normalized_manifest=$(echo "$manifest_paths" | sed -e 's|^\./||' -e 's|//|/|g')
     local missing=0
     while IFS= read -r file; do
-        local normalized="${file#./}"
+        local base normalized
+        base=$(basename "$file")
+        # Sidecar JSON from detect_types (not a deployable primary); not listed in .manifest
+        if [[ "$base" == .*bundle-metadata.json ]]; then
+            continue
+        fi
+        normalized="${file#./}"
         if ! echo "$normalized_manifest" | grep -qF "$normalized"; then
             echo "Not in manifest: $file" >&2
-            ((missing++))
+            missing=$((missing + 1))
         fi
     done <<< "$structured_files"
     [[ $missing -eq 0 ]]

@@ -43,31 +43,35 @@ The deploy pipeline uses a centralized type registry (`type_registry.sh`). To ad
 
 ## Inputs
 
-| Input                  | Description                                                                                                                                                                                          | Required | Default                         |
-| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------------------------------- |
-| `jf-project`           | JFrog Artifactory project name                                                                                                                                                                       | Yes      | -                               |
-| `jf-build-name`        | JFrog build name                                                                                                                                                                                     | Yes      | -                               |
-| `jf-build-id`          | JFrog build ID for the overall build info                                                                                                                                                            | Yes      | -                               |
-| `jf-metadata-build-id` | Build ID prefix used to discover child build-infos for aggregation (searches for `<prefix>*.json`). When empty, child build-info aggregation is skipped and only the parent build-info is published. | No       | `""`                            |
-| `version`              | Version string for build info                                                                                                                                                                        | Yes      | -                               |
-| `gh-workflows-ref`     | Git ref for shared-workflows (**must match `uses:`**)                                                                                                                                                | Yes      | -                               |
-| `build-type`           | Freeform label applied as `build.type` target-prop (e.g., release, nightly)                                                                                                                          | No       | `""`                            |
-| `internal`             | Mark artifacts as internal-only (`internal=true` target-prop)                                                                                                                                        | No       | `false`                         |
-| `dry-run`              | Show what would be uploaded without uploading                                                                                                                                                        | No       | `false`                         |
-| `jar-group-id`         | Maven group ID fallback for JAR artifacts                                                                                                                                                            | No       | `""`                            |
-| `gh-artifact-name`     | Name of the artifacts to download                                                                                                                                                                    | No       | `signed-artifacts`              |
-| `gh-checkout-path`     | Directory to checkout shared-workflows into                                                                                                                                                          | No       | `shared-workflows`              |
-| `gh-retention-days`    | Retention days for the artifacts                                                                                                                                                                     | No       | `1`                             |
-| `jf-url`               | JFrog Artifactory URL                                                                                                                                                                                | No       | `https://artifact.aerospike.io` |
-| `oidc-provider-name`   | OIDC provider name for authentication                                                                                                                                                                | No       | `gh-aerospike`                  |
-| `oidc-audience`        | OIDC audience for authentication                                                                                                                                                                     | No       | `aerospike`                     |
-| `runs-on`              | The runner to use                                                                                                                                                                                    | No       | `ubuntu-22.04`                  |
+| Input                              | Description                                                                                                                                                                                          | Required | Default                         |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------------------------------- |
+| `jf-project`                       | JFrog Artifactory project name                                                                                                                                                                       | Yes      | -                               |
+| `jf-build-name`                    | JFrog build name                                                                                                                                                                                     | Yes      | -                               |
+| `jf-build-id`                      | JFrog build ID for the overall build info                                                                                                                                                            | Yes      | -                               |
+| `jf-metadata-build-id`             | Build ID prefix used to discover child build-infos for aggregation (searches for `<prefix>*.json`). When empty, child build-info aggregation is skipped and only the parent build-info is published. | No       | `""`                            |
+| `version`                          | Version string for build info                                                                                                                                                                        | Yes      | -                               |
+| `gh-workflows-ref`                 | Git ref for shared-workflows (**must match `uses:`**)                                                                                                                                                | Yes      | -                               |
+| `build-type`                       | Freeform label applied as `build.type` target-prop (e.g., release, nightly)                                                                                                                          | No       | `""`                            |
+| `internal`                         | Mark artifacts as internal-only (`internal=true` target-prop)                                                                                                                                        | No       | `false`                         |
+| `dry-run`                          | Show what would be uploaded without uploading                                                                                                                                                        | No       | `false`                         |
+| `jar-group-id`                     | Maven group ID fallback for JAR artifacts                                                                                                                                                            | No       | `""`                            |
+| `gh-artifact-name`                 | Name of the artifacts to download                                                                                                                                                                    | No       | `signed-artifacts`              |
+| `gh-checkout-path`                 | Directory to checkout shared-workflows into                                                                                                                                                          | No       | `shared-workflows`              |
+| `gh-retention-days`                | Retention days for the artifacts                                                                                                                                                                     | No       | `1`                             |
+| `jf-url`                           | JFrog Artifactory URL                                                                                                                                                                                | No       | `https://artifact.aerospike.io` |
+| `oidc-provider-name`               | OIDC provider name for authentication                                                                                                                                                                | No       | `gh-aerospike`                  |
+| `oidc-audience`                    | OIDC audience for authentication                                                                                                                                                                     | No       | `aerospike`                     |
+| `runs-on`                          | The runner to use                                                                                                                                                                                    | No       | `ubuntu-22.04`                  |
+| `gh-upload-bundle-metadata`        | When true and `structured_build_artifacts/.maven-bundle-metadata.json` exists after deploy, upload it as a workflow artifact for downstream jobs (e.g. release bundle annotate).                     | No       | `true`                          |
+| `gh-bundle-metadata-artifact-name` | GitHub artifact name for the uploaded `.maven-bundle-metadata.json`.                                                                                                                                 | No       | `bundle-metadata`               |
 
 ## Outputs
 
-| Output        | Description       |
-| ------------- | ----------------- |
-| `jf-build-id` | The build ID used |
+| Output                          | Description                                                                                                                                                |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `jf-build-id`                   | The build ID used                                                                                                                                          |
+| `bundle-metadata-artifact-name` | Artifact name to pass to `reusable_create-release-bundle` as `gh-bundle-metadata-artifact-name` when `bundle-metadata-available` is true; otherwise empty. |
+| `bundle-metadata-available`     | `true` when Maven bundle metadata was uploaded as a GitHub artifact.                                                                                       |
 
 ## How it works
 
@@ -198,7 +202,8 @@ deploy-artifacts/
   entrypoint.sh          # Main script: arg parsing, upload functions, orchestration
   type_registry.sh       # Type config arrays + per-type props/flags functions
   type_detection.sh      # Content-based detection predicates (is_npm_package, is_helm_chart, etc.)
-  detect_types.sh        # Standalone detection entrypoint (used by the detect-artifacts action)
+  detect_types.sh        # Standalone detection entrypoint (used by the detect-artifacts action); writes
+                         # structured_build_artifacts/.maven-bundle-metadata.json (Maven GAV scan)
   upload_utils.sh        # Shared helpers: jf_upload, upload_companions, discover_and_process, upload_type
   package_utils.sh       # Metadata extraction + process_* functions for structuring
   create-test-fixtures.sh

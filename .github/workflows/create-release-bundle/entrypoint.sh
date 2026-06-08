@@ -13,8 +13,8 @@ handle_error() {
 }
 
 error() {
-    local reason="${1:-}"
-    if [[ -n "$reason" ]]; then
+    local reason="${1-}"
+    if [[ -n $reason ]]; then
         echo "Error: $reason" >&2
     else
         echo "Error" >&2
@@ -24,156 +24,166 @@ error() {
 
 # Default values
 DRY_RUN="false"
+BUNDLE_METADATA_PATH=""
 
 show_help() {
-  echo "Usage: $0 --project <project> --build-names <builds> --bundle-name <name> --version <version> [OPTIONS]" >&2
-  echo "" >&2
-  echo "Create JFrog release bundles from a configurable list of build names" >&2
-  echo "" >&2
-  echo "Required Arguments:" >&2
-  echo "  --project <project>        JFrog Artifactory project name" >&2
-  echo "  --build-names <builds>     Comma-separated list of build name:version pairs to include" >&2
-  echo "  --bundle-name <name>       Name for the release bundle" >&2
-  echo "  --version <version>        Version of the release bundle" >&2
-  echo "" >&2
-  echo "Options:" >&2
-  echo "  --dry-run                  Show what would be done without actually doing it" >&2
-  echo "  --help, -h                 Show this help message" >&2
-  echo "" >&2
-  echo "Examples:" >&2
-  echo "  $0 --project database --build-names 'db-build-1:1728052628123,db-build-2:1728052628123' --bundle-name database-release --version v1.0.0" >&2
-  echo "  $0 --project app --build-names 'app-build:1728052628123' --bundle-name app-release --version v2.1.0 --dry-run" >&2
-  }
-
-
+    echo "Usage: $0 --project <project> --build-names <builds> --bundle-name <name> --version <version> [OPTIONS]" >&2
+    echo "" >&2
+    echo "Create JFrog release bundles from a configurable list of build names" >&2
+    echo "" >&2
+    echo "Required Arguments:" >&2
+    echo "  --project <project>        JFrog Artifactory project name" >&2
+    echo "  --build-names <builds>     Comma-separated list of build name:version pairs to include" >&2
+    echo "  --bundle-name <name>       Name for the release bundle" >&2
+    echo "  --version <version>        Version of the release bundle" >&2
+    echo "" >&2
+    echo "Options:" >&2
+    echo "  --dry-run                  Show what would be done without actually doing it" >&2
+    echo "  --bundle-metadata <path>  Optional JSON (e.g. .maven-bundle-metadata.json from detect-artifacts)." >&2
+    echo "                            When the file exists, key=value pairs are applied to the bundle via" >&2
+    echo "                            jf release-bundle-annotate after create." >&2
+    echo "  --help, -h                 Show this help message" >&2
+    echo "" >&2
+    echo "Examples:" >&2
+    echo "  $0 --project database --build-names 'db-build-1:1728052628123,db-build-2:1728052628123' --bundle-name database-release --version v1.0.0" >&2
+    echo "  $0 --project app --build-names 'app-build:1728052628123' --bundle-name app-release --version v2.1.0 --dry-run" >&2
+    echo "  $0 ... --bundle-metadata ./structured_build_artifacts/.maven-bundle-metadata.json" >&2
+}
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
-  case $1 in
+    case $1 in
     --project)
-      PROJECT="$2"
-      shift 2
-      ;;
+        PROJECT="$2"
+        shift 2
+        ;;
     --build-names)
-      BUILD_NAMES="$2"
-      shift 2
-      ;;
+        BUILD_NAMES="$2"
+        shift 2
+        ;;
     --bundle-name)
-      BUNDLE_NAME="$2"
-      shift 2
-      ;;
+        BUNDLE_NAME="$2"
+        shift 2
+        ;;
     --version)
-      VERSION="$2"
-      shift 2
-      ;;
+        VERSION="$2"
+        shift 2
+        ;;
     --dry-run)
-      DRY_RUN="true"
-      shift
-      ;;
-    --help|-h)
-      show_help
-      exit 0
-      ;;
+        DRY_RUN="true"
+        shift
+        ;;
+    --bundle-metadata)
+        BUNDLE_METADATA_PATH="$2"
+        shift 2
+        ;;
+    --help | -h)
+        show_help
+        exit 0
+        ;;
     -*)
-      echo "Unknown option: $1" >&2
-      show_help
-      exit 1
-      ;;
+        echo "Unknown option: $1" >&2
+        show_help
+        exit 1
+        ;;
     *)
-      echo "Unexpected positional argument: $1" >&2
-      show_help
-      exit 1
-      ;;
-  esac
+        echo "Unexpected positional argument: $1" >&2
+        show_help
+        exit 1
+        ;;
+    esac
 done
 
 # Validate required arguments
-if [[ -z "${PROJECT:-}" ]]; then
-   echo "--project is required."
-   show_help
-   exit 1
+if [[ -z ${PROJECT-} ]]; then
+    echo "--project is required."
+    show_help
+    exit 1
 fi
 
-if [[ -z "${BUILD_NAMES:-}" ]]; then
-   echo "--build-names is required."
-   show_help
-   exit 1
+if [[ -z ${BUILD_NAMES-} ]]; then
+    echo "--build-names is required."
+    show_help
+    exit 1
 fi
 
-if [[ -z "${BUNDLE_NAME:-}" ]]; then
-   echo "--bundle-name is required."
-   show_help
-   exit 1
+if [[ -z ${BUNDLE_NAME-} ]]; then
+    echo "--bundle-name is required."
+    show_help
+    exit 1
 fi
 
-if [[ -z "${VERSION:-}" ]]; then
-   echo "--version is required."
-   show_help
-   exit 1
+if [[ -z ${VERSION-} ]]; then
+    echo "--version is required."
+    show_help
+    exit 1
 fi
 
 # Wrapper function that either executes or echoes commands
 run() {
-  if [[ "$DRY_RUN" == "true" ]]; then
-    local green='\033[0;32m'
-    local reset='\033[0m'
-    echo -e "${green}   $*${reset}" >&2
-  else
-    "$@"
-  fi
-  }
+    if [[ $DRY_RUN == "true" ]]; then
+        local green='\033[0;32m'
+        local reset='\033[0m'
+        echo -e "${green}   $*${reset}" >&2
+    else
+        "$@"
+    fi
+}
 
 # Function to generate the files array JSON
 generate_files_json() {
-  echo "["
-  for ((i=0; i<${#BUILD_ARRAY[@]}; i++)); do
-    build_pair="${BUILD_ARRAY[i]}"
-    build_pair=$(echo "$build_pair" | tr -d '[:space:]')
-    if [[ "$build_pair" == *":"* ]]; then
-      build_name="${build_pair%:*}"
-      build_version="${build_pair#*:}"
-      echo "    {"
-      echo "      \"project\": \"$PROJECT\","
-      echo "      \"build\": \"$build_name/$build_version\""
-      if [[ $i -lt $((${#BUILD_ARRAY[@]}-1)) ]]; then
-        echo "    },"
-      else
-        echo "    }"
-      fi
-    else
-      echo "Error: Build pair '$build_pair' must be in format 'name:version'" >&2
-      exit 1
-    fi
-  done
-  echo "]"
+    echo "["
+    for ((i = 0; i < ${#BUILD_ARRAY[@]}; i++)); do
+        build_pair="${BUILD_ARRAY[i]}"
+        build_pair=$(echo "$build_pair" | tr -d '[:space:]')
+        if [[ $build_pair == *":"* ]]; then
+            build_name="${build_pair%:*}"
+            build_version="${build_pair#*:}"
+            echo "    {"
+            echo "      \"project\": \"$PROJECT\","
+            echo "      \"build\": \"$build_name/$build_version\""
+            if [[ $i -lt $((${#BUILD_ARRAY[@]} - 1)) ]]; then
+                echo "    },"
+            else
+                echo "    }"
+            fi
+        else
+            echo "Error: Build pair '$build_pair' must be in format 'name:version'" >&2
+            exit 1
+        fi
+    done
+    echo "]"
 }
 
 main() {
-  echo "Command line: $0 $*" >&2
+    echo "Command line: $0 $*" >&2
 
-  if [[ "$DRY_RUN" == "true" ]]; then
-    echo "Would execute create-release-bundle workflow" >&2
-    echo "The following JFrog commands would be executed:" >&2
-    echo "" >&2
-  else
-    echo "Executing create-release-bundle workflow" >&2
-  fi
+    if [[ $DRY_RUN == "true" ]]; then
+        echo "Would execute create-release-bundle workflow" >&2
+        echo "The following JFrog commands would be executed:" >&2
+        echo "" >&2
+    else
+        echo "Executing create-release-bundle workflow" >&2
+    fi
 
-  echo "Project: $PROJECT" >&2
-  echo "Build names: $BUILD_NAMES" >&2
-  echo "Bundle name: $BUNDLE_NAME" >&2
-  echo "Version: $VERSION" >&2
-  echo "Dry run: $DRY_RUN" >&2
+    echo "Project: $PROJECT" >&2
+    echo "Build names: $BUILD_NAMES" >&2
+    echo "Bundle name: $BUNDLE_NAME" >&2
+    echo "Version: $VERSION" >&2
+    echo "Dry run: $DRY_RUN" >&2
+    if [[ -n ${BUNDLE_METADATA_PATH-} ]]; then
+        echo "Bundle metadata: $BUNDLE_METADATA_PATH" >&2
+    fi
 
-  # Convert comma-separated build name:version pairs to array
-  IFS=',' read -ra BUILD_ARRAY <<< "$BUILD_NAMES"
-  mkdir -p build-artifacts
+    # Convert comma-separated build name:version pairs to array
+    IFS=',' read -ra BUILD_ARRAY <<<"$BUILD_NAMES"
+    mkdir -p build-artifacts
 
-  # Generate the files JSON content
-  FILES_JSON=$(generate_files_json)
+    # Generate the files JSON content
+    FILES_JSON=$(generate_files_json)
 
-  # Create the release bundle spec file
-  cat > build-artifacts/release-bundle-spec.json <<EOF
+    # Create the release bundle spec file
+    cat >build-artifacts/release-bundle-spec.json <<EOF
 {
   "name": "$BUNDLE_NAME",
   "version": "$VERSION",
@@ -182,16 +192,39 @@ main() {
 }
 EOF
 
-  echo "Spec file:" >&2
-  cat build-artifacts/release-bundle-spec.json >&2
+    echo "Spec file:" >&2
+    cat build-artifacts/release-bundle-spec.json >&2
 
-  # Create the release bundle
-  run jf release-bundle-create "$BUNDLE_NAME" "$VERSION" \
-      --spec build-artifacts/release-bundle-spec.json \
-      --project="$PROJECT" \
-      --signing-key="aerospike"
+    # Create the release bundle
+    run jf release-bundle-create "$BUNDLE_NAME" "$VERSION" \
+        --spec build-artifacts/release-bundle-spec.json \
+        --project="$PROJECT" \
+        --signing-key="aerospike"
 
-  echo "Create release bundle workflow completed successfully!" >&2
+    if [[ -n ${BUNDLE_METADATA_PATH-} ]]; then
+        if [[ ! -f $BUNDLE_METADATA_PATH ]]; then
+            echo "Warning: bundle metadata path is not a file (skipping annotate): $BUNDLE_METADATA_PATH" >&2
+        else
+            if ! command -v jq >/dev/null 2>&1; then
+                error "jq is required to read bundle metadata at $BUNDLE_METADATA_PATH"
+            fi
+            jq -e . "$BUNDLE_METADATA_PATH" >/dev/null ||
+                error "invalid or unreadable bundle metadata JSON: $BUNDLE_METADATA_PATH"
+            local rb_props
+            rb_props=$(jq -r 'to_entries | map("\(.key)=\(.value|tostring)") | join(";")' "$BUNDLE_METADATA_PATH") ||
+                error "failed to build properties string from $BUNDLE_METADATA_PATH"
+            if [[ -n $rb_props ]]; then
+                echo "Applying release bundle properties from bundle metadata (${#rb_props} chars)" >&2
+                run jf release-bundle-annotate "$BUNDLE_NAME" "$VERSION" \
+                    --project="$PROJECT" \
+                    --properties="$rb_props"
+            else
+                echo "Bundle metadata produced no properties (empty object); skipping annotate" >&2
+            fi
+        fi
+    fi
+
+    echo "Create release bundle workflow completed successfully!" >&2
 }
 
 main "$@"

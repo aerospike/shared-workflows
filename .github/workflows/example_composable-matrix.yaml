@@ -413,6 +413,7 @@ jobs:
       version: ${{ needs.extract-version.outputs.version }}
       oidc-provider-name: gh-dev-test
       oidc-audience: aerospike/testing
+      gh-bundle-metadata-artifact-name: ${{ needs.deploy.outputs.bundle-metadata-artifact-name }}
 
   # Promote to DEV after bundle creation. Promotion is only available as a
   # composite action, so this must be a steps-based job.
