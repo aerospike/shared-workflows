@@ -58,6 +58,8 @@ jobs:
 - `tags`: Comma separated list of tags used
 - `immutable-tag`: Immutable tag (registry/image:version_timestamp)
 
+On a dry run (`push: false`), `digest` and `image-ref` are empty; `tags` and `immutable-tag` are still computed.
+
 ## Multi-arch build and caching
 
 The workflow builds each requested platform **natively**: a setup step parses `platforms` into a matrix, each platform builds on its own runner (`linux/amd64` on `ubuntu-24.04`, `linux/arm64` on `ubuntu-24.04-arm`), and QEMU emulation is used only for a platform that has no native runner. Each leg pushes its image **by digest**; a final merge step assembles one multi-platform manifest index (`docker buildx imagetools create`) and applies the tags. A single-platform build still produces a manifest index. The four outputs (digest, image-ref, tags, immutable-tag) and the single build-info record are produced by the merge step; the build-info build number is `github.run_number`, unchanged, so release-bundle references of the form `<build-name>:${{ github.run_number }}` keep resolving. Each leg and the merge step mint their own short-lived OIDC token immediately before pushing, so total build time no longer has to fit inside one token's lifetime.

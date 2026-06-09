@@ -77,7 +77,7 @@ on:
       push:
         type: boolean
         default: true
-        description: Whether to push the image
+        description: Whether to push the image. On a dry run (push=false) the digest and image-ref outputs are empty; tags and immutable-tag are still computed.
       repo-scope:
         type: string
         default: -docker-dev-local
@@ -150,11 +150,20 @@ jobs:
         run: |
           set -euo pipefail
           entries=()
+          declare -A seen
           IFS=',' read -ra arr <<< "$PLATFORMS"
           for p in "${arr[@]}"; do
             # trim surrounding whitespace
             p="$(echo "$p" | xargs)"
             [ -z "$p" ] && continue
+            # Dedupe by platform. A repeated platform would otherwise produce
+            # two legs with the same sanitized name and colliding digest/legmeta
+            # artifact uploads (a hard 409: same artifact name twice in one run).
+            if [ -n "${seen[$p]:-}" ]; then
+              echo "::warning::duplicate platform '$p' ignored"
+              continue
+            fi
+            seen[$p]=1
             sanitized="${p//\//-}"
             # Native runner mapping. arm64 and amd64 have GitHub-hosted native
             # runners; anything else falls back to QEMU emulation on amd64. The
