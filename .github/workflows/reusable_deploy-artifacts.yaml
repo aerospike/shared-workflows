@@ -92,6 +92,11 @@ on:
         required: false
         type: string
         default: ubuntu-22.04
+
+    outputs:
+      jf-build-id:
+        description: JFrog build ID echoed back from the deploy job
+        value: ${{ jobs.deploy.outputs.jf-build-id }}
 permissions:
   contents: read
   id-token: write

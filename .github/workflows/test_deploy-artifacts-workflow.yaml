@@ -45,6 +45,32 @@ jobs:
       gh-artifact-name: test-fixtures
       dry-run: true
 
+  verify-workflow-outputs:
+    needs: test-deploy-workflow
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: audit
+
+      - name: Verify jf-build-id output is exposed to callers
+        env:
+          ACTUAL_BUILD_ID: ${{ needs.test-deploy-workflow.outputs.jf-build-id }}
+          EXPECTED_BUILD_ID: ${{ github.run_number }}
+        run: |
+          echo "Expected jf-build-id: ${EXPECTED_BUILD_ID}"
+          echo "Actual jf-build-id:   ${ACTUAL_BUILD_ID}"
+          if [[ -z "${ACTUAL_BUILD_ID}" ]]; then
+            echo "::error::jf-build-id output is empty - workflow_call output is not exposed to callers"
+            exit 1
+          fi
+          if [[ "${ACTUAL_BUILD_ID}" != "${EXPECTED_BUILD_ID}" ]]; then
+            echo "::error::jf-build-id output mismatch: expected '${EXPECTED_BUILD_ID}', got '${ACTUAL_BUILD_ID}'"
+            exit 1
+          fi
+          echo "jf-build-id output verified successfully"
+
   run-tests:
     runs-on: ubuntu-22.04
     steps:
