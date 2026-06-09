@@ -155,6 +155,8 @@ RUN --mount=type=secret,id=npm_token \
     npm install
 ```
 
+Pass secrets only through `build-secrets-json`, never through `build-args-json`. With `provenance: mode=max` (the default), every build-arg value is recorded in the signed provenance attestation published alongside the image, and that attestation is world-readable for preview-public and public repos. `build-args-json` is for non-secret values only.
+
 ## Notes
 
 - The workflow automatically handles `v` prefix in version strings (e.g., `v1.2.3` becomes `1.2.3`)
