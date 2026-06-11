@@ -217,6 +217,8 @@ structure_generic_files() {
         if [[ -n $target_path ]]; then
             gather_companions "$generic" "$(dirname "$target_path")" "generic"
             manifest_add "$target_path" "generic"
+        else
+            echo "Warning: process_generic returned no target path; artifact not copied: $generic" >&2
         fi
     done < <(find build-artifacts \( "${exclude_args[@]}" \) -type f -print0)
 }

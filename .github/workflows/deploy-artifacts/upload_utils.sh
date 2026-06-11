@@ -142,6 +142,8 @@ discover_and_process() {
         if [[ -n $type && -n $target_path ]]; then
             gather_companions "$file" "$(dirname "$target_path")" "$type"
             manifest_add "$target_path" "$type"
+        elif [[ -n $type && -z $target_path ]]; then
+            echo "Warning: $label processor returned no target path; artifact not copied to structured tree: $file" >&2
         fi
     done < <(find build-artifacts -name "$pattern" -print0)
 }
