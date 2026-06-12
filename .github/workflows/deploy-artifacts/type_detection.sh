@@ -220,6 +220,8 @@ _detect_structure_pypi_wheels() {
             if [[ -n $target_path ]]; then
                 gather_companions "$file" "$(dirname "$target_path")" "pypi"
                 manifest_add "$target_path" "pypi"
+            else
+                echo "Warning: PyPI wheel passed is_pypi_package but process_pypi returned no target path; artifact not copied: $file" >&2
             fi
         fi
     done < <(find "$artifacts_root" -name "*.whl" -type f -print0 2>/dev/null)
@@ -243,6 +245,8 @@ _detect_structure_nuget_packages() {
         if [[ -n $target_path ]]; then
             gather_companions "$file" "$(dirname "$target_path")" "$kind"
             manifest_add "$target_path" "$kind"
+        else
+            echo "Warning: ${kind^^} passed is_nuget_package but process_nupkg returned no target path; artifact not copied: $file" >&2
         fi
     done < <(find "$artifacts_root" \( -name "*.nupkg" -o -name "*.snupkg" \) -type f -print0 2>/dev/null)
 }
@@ -331,6 +335,7 @@ _write_maven_bundle_metadata_json() {
         is_maven_package "$pom" || continue
         _maven_read_pom_coordinates "$pom"
         if [[ -z ${_mv_group_id-} || -z ${_mv_artifact_id-} || -z ${_mv_version-} ]]; then
+            echo "Notice: excluding POM from Maven bundle metadata (incomplete GAV after coordinate read): $pom (group_id='${_mv_group_id-}' artifact_id='${_mv_artifact_id-}' version='${_mv_version-}')" >&2
             continue
         fi
         local gav_key="${_mv_group_id}|${_mv_artifact_id}|${_mv_version}"
@@ -370,9 +375,15 @@ _detect_structure_maven_poms() {
         local base_name jar_file
         base_name=$(basename "$pom" .pom)
         jar_file="$(dirname "$pom")/$base_name.jar"
-        [[ -f $jar_file ]] || continue
+        if [[ ! -f $jar_file ]]; then
+            echo "Notice: skipping standalone POM structuring (no sibling JAR): $pom (expected $jar_file)" >&2
+            continue
+        fi
 
-        is_maven_package "$pom" || continue
+        if ! is_maven_package "$pom"; then
+            echo "Notice: skipping standalone POM structuring (Maven package validation failed): $pom" >&2
+            continue
+        fi
 
         echo "Processing MAVEN (standalone POM): $pom" >&2
         local group_id artifact_id version group_path target
@@ -432,6 +443,8 @@ structure_content_detected_files() {
                 if [[ -n $target_path ]]; then
                     gather_companions "$file" "$(dirname "$target_path")" "$type"
                     manifest_add "$target_path" "$type"
+                else
+                    echo "Warning: content detection classified as ${type^^} but processor returned no target path; artifact not copied: $file" >&2
                 fi
                 matched=true
                 break
@@ -444,6 +457,8 @@ structure_content_detected_files() {
             if [[ -n $target_path ]]; then
                 gather_companions "$file" "$(dirname "$target_path")" "generic"
                 manifest_add "$target_path" "generic"
+            else
+                echo "Warning: generic fallback after content detection produced no target path; artifact not copied: $file" >&2
             fi
         fi
     done < <(find "$artifacts_root" \( "${find_args[@]}" \) -print0)
