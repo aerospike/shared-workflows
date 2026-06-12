@@ -19,10 +19,10 @@ jobs:
         with:
           egress-policy: audit
 
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
       - name: setup GPG
-        uses: aerospike/shared-workflows/.github/actions/setup-gpg@610a9431704d7d385f0c13243025bcf2ae73e228 # v3.6.0
+        uses: aerospike/shared-workflows/.github/actions/setup-gpg@bd168dedaa4fc0b17a560541779d815540eded2d # v3.7.0
         with:
           gpg-private-key: ${{ secrets.GPG_SECRET_KEY }}
           gpg-public-key: ${{ secrets.GPG_PUBLIC_KEY }}
