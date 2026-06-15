@@ -53,6 +53,8 @@ The deploy pipeline uses a centralized type registry (`type_registry.sh`). To ad
 | `gh-workflows-ref`                 | Git ref for shared-workflows (**must match `uses:`**)                                                                                                                                                | Yes      | -                               |
 | `build-type`                       | Freeform label applied as `build.type` target-prop (e.g., release, nightly)                                                                                                                          | No       | `""`                            |
 | `internal`                         | Mark artifacts as internal-only (`internal=true` target-prop)                                                                                                                                        | No       | `false`                         |
+| `skip-publish-build-info`            | Upload artifacts only; defer build-info publish to a later job (parallel platform deploys)                                                                                                           | No       | `false`                         |
+| `publish-build-info-only`            | Publish parent build-info only after parallel upload jobs; skips artifact download/upload                                                                                                            | No       | `false`                         |
 | `dry-run`                          | Show what would be uploaded without uploading                                                                                                                                                        | No       | `false`                         |
 | `jar-group-id`                     | Maven group ID fallback for JAR artifacts                                                                                                                                                            | No       | `""`                            |
 | `gh-artifact-name`                 | Name of the artifacts to download                                                                                                                                                                    | No       | `signed-artifacts`              |
@@ -95,6 +97,14 @@ Each type directory is uploaded to its respective repository with appropriate pr
 ### 3. Build info
 
 After uploads, build info is published with parent-child relationships linking metadata builds and artifact builds.
+
+#### Parallel platform deploys (one parent build-info)
+
+When artifacts are uploaded from multiple jobs (e.g. Linux, macOS, Windows) that share the same `jf-build-id`:
+
+1. Each platform job calls this workflow with `skip-publish-build-info: true` and an empty `jf-metadata-build-id`.
+2. All uploads tag the same artifact child build number (`{jf-build-id}-artifacts`).
+3. A final job calls this workflow with `publish-build-info-only: true` and `jf-metadata-build-id` set to the build-phase prefix (e.g. `{jf-build-id}-buildinfo`) so metadata children are discovered and appended once.
 
 ## Directory structure after structuring
 

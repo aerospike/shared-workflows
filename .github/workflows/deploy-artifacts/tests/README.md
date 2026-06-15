@@ -56,6 +56,7 @@ bats .github/workflows/deploy-artifacts/tests/bats/test_metadata.bats
 - `test_nupkg_upload.bats` - NuGet package uploads and metadata parsing
 - `test_all_files_upload.bats` - JAR/generic routing and NuGet-not-in-generic safety check
 - `test_error_handling.bats` - Missing arguments and invalid options
+- `test_deploy_modes.bats` - Upload-only and publish-only modes for parallel deploys
 
 ### Regression tests (codify production bugs so they never regress)
 

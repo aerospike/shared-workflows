@@ -26,6 +26,8 @@ BUILD_TYPE=""
 # shellcheck disable=SC2034  # Used by type_registry.sh get_base_props()
 INTERNAL="false"
 METADATA_BUILD_NUMBER=""
+SKIP_PUBLISH_BUILD_INFO="false"
+PUBLISH_BUILD_INFO_ONLY="false"
 # print full command line
 echo "Command line: $0 $*" >&2
 # Parse command line arguments
@@ -49,6 +51,14 @@ while [[ $# -gt 0 ]]; do
         INTERNAL="true"
         shift
         ;;
+    --skip-publish-build-info)
+        SKIP_PUBLISH_BUILD_INFO="true"
+        shift
+        ;;
+    --publish-build-info-only)
+        PUBLISH_BUILD_INFO_ONLY="true"
+        shift
+        ;;
     --help | -h)
         echo "Usage: $0 <project> <build-name> <version> <build-number> [metadata-build-number] [OPTIONS]" >&2
         echo "" >&2
@@ -61,6 +71,8 @@ while [[ $# -gt 0 ]]; do
         echo "  --jar-group-id <group-id>        Maven group ID for JAR artifacts" >&2
         echo "  --build-type <label>             Freeform build type label (e.g., release, nightly)" >&2
         echo "  --internal                       Mark artifacts as internal-only (not for public promotion)" >&2
+        echo "  --skip-publish-build-info        Upload artifacts only; defer build-info publish to a later job" >&2
+        echo "  --publish-build-info-only        Publish build-info only (no artifact download/upload); use after parallel upload jobs" >&2
         echo "  --dry-run        Show what would be uploaded without actually uploading" >&2
         echo "  --help, -h       Show this help message" >&2
         echo "" >&2
@@ -114,6 +126,10 @@ fi
 if [[ -z ${BUILD_NUMBER-} ]]; then
     error "build-number is required
 Use --help for usage information"
+fi
+
+if [[ $SKIP_PUBLISH_BUILD_INFO == "true" && $PUBLISH_BUILD_INFO_ONLY == "true" ]]; then
+    error "Cannot use --skip-publish-build-info and --publish-build-info-only together"
 fi
 
 ARTIFACT_BUILD_NUMBER="$BUILD_NUMBER-artifacts"
@@ -793,7 +809,13 @@ publish_build_info() {
 }
 
 main() {
-    if [[ $DRY_RUN == "true" ]]; then
+    if [[ $PUBLISH_BUILD_INFO_ONLY == "true" ]]; then
+        if [[ $DRY_RUN == "true" ]]; then
+            echo "Would publish build info to JFrog Artifactory" >&2
+        else
+            echo "Publishing build info to JFrog Artifactory" >&2
+        fi
+    elif [[ $DRY_RUN == "true" ]]; then
         echo "Would deploy artifacts to JFrog Artifactory" >&2
     else
         echo "Deploying artifacts to JFrog Artifactory" >&2
@@ -804,6 +826,16 @@ main() {
     echo "Dry run: $DRY_RUN" >&2
     echo "Build number: $BUILD_NUMBER" >&2
     echo "Metadata build number: $METADATA_BUILD_NUMBER" >&2
+    echo "Skip publish build info: $SKIP_PUBLISH_BUILD_INFO" >&2
+    echo "Publish build info only: $PUBLISH_BUILD_INFO_ONLY" >&2
+
+    if [[ $PUBLISH_BUILD_INFO_ONLY == "true" ]]; then
+        publish_build_info
+        echo "Build info publish complete!" >&2
+        echo "Build name: $BUILD_NAME" >&2
+        echo "Build number: $BUILD_NUMBER" >&2
+        return 0
+    fi
 
     echo "Note: for type detection use separate workflow step 'Detect artifact types'" >&2
 
@@ -823,8 +855,11 @@ main() {
         (cd "$dir" && upload_type "$type")
     done
 
-    # Publish build info once for the unified build
-    publish_build_info
+    if [[ $SKIP_PUBLISH_BUILD_INFO == "true" ]]; then
+        echo "Skipping build-info publish (upload-only mode)" >&2
+    else
+        publish_build_info
+    fi
 
     echo "Deploy complete!" >&2
     echo "Build name: $BUILD_NAME" >&2
