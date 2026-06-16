@@ -83,7 +83,9 @@ Deploy parent:     {run_id}-{run_attempt}
 
 **Artifact naming.** Each build job uploads with a distinct name (e.g., `build-artifacts-el9-x86_64`, `build-artifacts-npm-x86_64`). The `collect-build-artifacts` action merges these into a single `build-artifacts` artifact that sign and deploy consume.
 
-**Collecting matrix artifacts.** Use the `collect-build-artifacts` composite action after all build jobs complete. It downloads all artifacts matching a pattern (default `build-artifacts-*`) and re-uploads them as one merged artifact.
+**Collecting matrix artifacts.** Use the `collect-build-artifacts` composite action after all build jobs complete. It downloads all artifacts matching a pattern (default `build-artifacts-*`) with **`merge-multiple: false`** (each artifact isolated), runs `merge_flat.sh` to copy files **sequentially** into one flat directory (avoids corrupting binaries when the same basename is unpacked concurrently), **fails fast** if two files would share the same basename, then re-uploads as one merged artifact.
+
+**Why not `merge-multiple: true`?** Flat-merging multiple artifact zips into one directory can interleave or partially overwrite the same path under load, producing damaged archives (for example ZIP CRC errors inside wheels). Isolated download plus sequential copy prevents that class of failure.
 
 **Signing secrets.** GPG keys (and SSL.com credentials if nupkg files or Windows executables are present) must be available. For Mac signing, provide Apple certificates and notarization credentials; for Windows signing, provide SSL.com eSigner credentials. See the [sign-mac-artifacts README](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/sign-mac-artifacts/README.md) and [sign-win-artifacts README](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/sign-win-artifacts/README.md).
 

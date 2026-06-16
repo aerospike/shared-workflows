@@ -73,9 +73,9 @@ The `reusable_artifacts-cicd.yaml` orchestrator runs 5 jobs. Understanding the a
 
 ### Collect stage (`collect-matrix-artifacts` job)
 
-- `download-artifact` with `pattern: build-artifacts-*` and `merge-multiple: true`
-- All files from all matrix artifacts merge flat into `build-artifacts/`
-- **Collision risk**: if two matrix builds produce files with the same name, one silently overwrites the other
+- `download-artifact` with `pattern: build-artifacts-*` and **`merge-multiple: false`** so each matrix artifact extracts under its own subdirectory (avoids parallel unpack races into the same basename, which can corrupt zips such as wheels)
+- `merge_flat.sh` copies every file **sequentially** into a flat `build-artifacts/` tree (`cp -p`)
+- **Duplicate basename** across matrix artifacts is a hard error (exit 1 with paths) instead of silent overwrite; fix matrix outputs or artifact layout if this triggers
 - Re-uploads as single `build-artifacts` artifact
 
 ### Sign stage (`reusable_sign-artifacts.yaml`)
