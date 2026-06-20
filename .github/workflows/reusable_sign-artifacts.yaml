@@ -109,6 +109,20 @@ jobs:
           done < <(find unsigned-artifacts -type f \( -name '*.exe' -o -name '*.msi' -o -name '*.msix' \) -print0 2>/dev/null || true)
           echo "count=$count" >> "$GITHUB_OUTPUT"
           echo "Isolated $count Windows installer file(s) from GPG (Authenticode-only, mirrors NuGet isolation)"
+      - name: Check for GPG-signable artifacts
+        id: gpg-artifacts
+        run: |
+          set -euo pipefail
+          # Count files left in unsigned-artifacts/ after NuGet and Windows
+          # Authenticode isolation. Exclude detached signatures so an orphan
+          # .asc never makes us spin up GPG with nothing to actually sign.
+          count=$(find unsigned-artifacts -type f ! -name '*.asc' 2>/dev/null | wc -l | tr -d ' ')
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+          if [ "$count" -eq 0 ]; then
+            echo "No GPG-signable artifacts remain after NuGet/Windows isolation; skipping GPG signing."
+          else
+            echo "Found $count file(s) for GPG signing."
+          fi
       - name: Checkout shared-workflows repository
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
@@ -118,6 +132,7 @@ jobs:
           fetch-depth: 1
 
       - name: Set up GPG
+        if: steps.gpg-artifacts.outputs.count != '0'
         uses: aerospike/shared-workflows/.github/actions/setup-gpg@bd168dedaa4fc0b17a560541779d815540eded2d # v3.7.0
         with:
           gpg-private-key: ${{ secrets.gpg-private-key }}
@@ -148,9 +163,11 @@ jobs:
           signing_method: v1
 
       - name: Install dpkg-sig
+        if: steps.gpg-artifacts.outputs.count != '0'
         run: |
           sudo apt-get update && sudo apt-get install dpkg-sig dpkg-dev -y
       - name: Sign Artifacts
+        if: steps.gpg-artifacts.outputs.count != '0'
         run: |
           entrypoint="${{ inputs.gh-checkout-path }}/.github/workflows/sign-artifacts/entrypoint.sh"
           chmod +x "$entrypoint"
