@@ -123,6 +123,29 @@ jobs:
           else
             echo "Found $count file(s) for GPG signing."
           fi
+      - name: Determine GPG signing eligibility
+        id: gpg-signing
+        run: |
+          set -euo pipefail
+          count="${{ steps.gpg-artifacts.outputs.count }}"
+          if [ "$count" -eq 0 ]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "reason=no-artifacts"
+            exit 0
+          fi
+          if [ "${{ github.actor }}" = "dependabot[bot]" ]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "reason=dependabot"
+            echo "GPG signing skipped: Dependabot workflows cannot access GPG secrets."
+            exit 0
+          fi
+          if [ -z "${{ secrets.gpg-private-key }}" ]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "reason=missing-secrets"
+            echo "GPG signing skipped: gpg-private-key is unavailable."
+            exit 0
+          fi
+          echo "enabled=true" >> "$GITHUB_OUTPUT"
       - name: Checkout shared-workflows repository
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
@@ -132,7 +155,7 @@ jobs:
           fetch-depth: 1
 
       - name: Set up GPG
-        if: steps.gpg-artifacts.outputs.count != '0'
+        if: steps.gpg-signing.outputs.enabled == 'true'
         uses: aerospike/shared-workflows/.github/actions/setup-gpg@bd168dedaa4fc0b17a560541779d815540eded2d # v3.7.0
         with:
           gpg-private-key: ${{ secrets.gpg-private-key }}
@@ -163,15 +186,29 @@ jobs:
           signing_method: v1
 
       - name: Install dpkg-sig
-        if: steps.gpg-artifacts.outputs.count != '0'
+        if: steps.gpg-signing.outputs.enabled == 'true'
         run: |
           sudo apt-get update && sudo apt-get install dpkg-sig dpkg-dev -y
       - name: Sign Artifacts
-        if: steps.gpg-artifacts.outputs.count != '0'
+        if: steps.gpg-signing.outputs.enabled == 'true'
         run: |
           entrypoint="${{ inputs.gh-checkout-path }}/.github/workflows/sign-artifacts/entrypoint.sh"
           chmod +x "$entrypoint"
           "$entrypoint" 'unsigned-artifacts/**/*' '${{ inputs.gh-artifact-name }}'
+      - name: Stage unsigned artifacts when GPG signing skipped
+        if: >-
+          steps.gpg-artifacts.outputs.count != '0'
+          && steps.gpg-signing.outputs.enabled != 'true'
+        run: |
+          set -euo pipefail
+          dest='${{ inputs.gh-artifact-name }}'
+          mkdir -p "$dest"
+          shopt -s globstar nullglob
+          for f in unsigned-artifacts/**/*; do
+            [[ -f "$f" ]] || continue
+            cp -v --parents "$f" "$dest/"
+          done
+          echo "Staged unsigned artifacts under $dest (GPG signing skipped: ${{ steps.gpg-signing.outputs.reason }})"
       - name: Restore Windows Authenticode binaries into signed output
         if: steps.windows-binaries.outputs.count != '0'
         run: |
