@@ -156,7 +156,7 @@ jobs:
 
       - name: Set up GPG
         if: steps.gpg-signing.outputs.enabled == 'true'
-        uses: aerospike/shared-workflows/.github/actions/setup-gpg@bd168dedaa4fc0b17a560541779d815540eded2d # v3.7.0
+        uses: aerospike/shared-workflows/.github/actions/setup-gpg@d70905d2259d746d19783ecfc0ea5f337c1d5176 # v3.8.1
         with:
           gpg-private-key: ${{ secrets.gpg-private-key }}
           gpg-public-key: ${{ secrets.gpg-public-key }}
