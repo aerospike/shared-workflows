@@ -44,6 +44,7 @@ Notes:
 - NuGet signing runs only if `.nupkg` files are present in the unsigned artifacts.
 - If `.nupkg` files are found, all four SSL.com secrets above must be provided or the workflow fails.
 - GPG setup and signing are skipped automatically when no GPG-signable files remain after NuGet and Windows Authenticode isolation (e.g. a NuGet-only or Windows-only build). The job still uploads the signed NuGet/Windows outputs.
+- GPG signing is also skipped when GPG secrets are unavailable (e.g. Dependabot `push` workflows). Unsigned artifacts are staged into the signed artifact tree so the job can still succeed and downstream steps receive the build outputs.
 - **macOS `.pkg` / `.dmg`** are not isolated by this workflow; they still receive GPG detached signatures if present under `unsigned-artifacts`. Use the orchestrator’s `sign-mac` job for Apple signing before this job when you need Apple-only treatment.
 
 ---
