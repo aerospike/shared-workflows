@@ -60,7 +60,7 @@ There is a composite action that may be used for promotion of bundles documented
 
 ### Deleting a bundle before re-deploy
 
-The `delete-release-bundle` composite action deletes a bundle version safely: it searches first, no-ops when the bundle is absent, and reports `existed=true/false` rather than failing. **Promotion guards** run twice when a bundle exists: before delete is attempted and again immediately before `jf release-bundle-delete-local`, refusing deletion when the version is promoted beyond DEV (TEST, STAGE, PREVIEW, INTERNAL, PROD). Wire it to run before deploy when you may re-run a pipeline against an already-promoted bundle (promoted bundles lock the underlying dev-local artifacts).
+The `delete-release-bundle` composite action deletes a bundle version safely: it searches first, no-ops when the bundle is absent, and reports `existed=true/false` rather than failing. A **promotion guard** runs when a bundle exists, refusing deletion when the version is promoted beyond DEV (TEST, STAGE, PREVIEW, INTERNAL, or PROD). Wire it to run before deploy when you may re-run a pipeline against an already-promoted bundle (promoted bundles lock the underlying dev-local artifacts).
 
 ```yaml
 delete-existing-bundle:
