@@ -10,6 +10,18 @@ This orchestrator is the simpler of two supported approaches: it handles the ful
 
 The other approach is the composable pipeline See [CICD-composable.md](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/docs/CICD-composable.md) for that workflow. (Hint if you want to integrate tests or custom steps between stages, the composable pipeline is the right choice rather than this one.)
 
+## Workflow permissions
+
+Grant at least `contents: read` and `id-token: write` on your caller workflow (or calling job):
+
+```yaml
+permissions:
+  contents: read
+  id-token: write
+```
+
+If your build produces Maven/JAR artifacts and you rely on bundle metadata for release bundles, also add `actions: write` so the deploy stage can upload `.maven-bundle-metadata.json` as a GitHub artifact. See [deploy-artifacts README](../deploy-artifacts/README.md#permissions).
+
 ## Usage
 
 ```yaml

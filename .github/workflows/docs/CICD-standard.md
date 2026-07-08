@@ -35,6 +35,18 @@ The architecture follows an ecosystem-specific build & sign pattern, where artif
 
 **Create Release Bundle** → combine artifacts and/or docker builds into a single distributable release bundle
 
+## Workflow permissions
+
+Caller workflows need at least:
+
+```yaml
+permissions:
+  contents: read
+  id-token: write
+```
+
+Since v3.8.0, deploy can upload optional Maven bundle metadata (`.maven-bundle-metadata.json`) for release-bundle annotation. If your pipeline builds Maven/JAR artifacts and chains into `reusable_create-release-bundle.yaml` via that metadata artifact, add `actions: write` to the caller workflow (or job) permissions. Without it, deploy to JFrog still succeeds; only the metadata upload step fails when metadata is produced.
+
 ## Standard Workflows for your project
 
 - `reusable_artifacts-cicd.yaml`: **Artifacts pipeline** (build → sign → deploy). [README](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/artifacts-cicd/README.md)
@@ -48,6 +60,11 @@ The lower-level workflows (`reusable_execute-build.yaml`, `reusable_sign-artifac
 This orchestrates the full build → sign → deploy lifecycle internally.
 
 ```yaml
+permissions:
+  contents: read
+  id-token: write
+  # actions: write  # add when building Maven/JAR artifacts and using bundle metadata upload
+
 jobs:
   ci:
     uses: aerospike/shared-workflows/.github/workflows/reusable_artifacts-cicd.yaml@v3.2.0
@@ -344,6 +361,8 @@ See [Why gh-workflows-ref is required](https://github.com/aerospike/shared-workf
 
 ## Troubleshooting tips
 
+- **Workflow validation: "requesting 'actions: write', but is only allowed 'actions: none'"** → upgrade shared-workflows to a release where deploy scopes `actions: write` to the deploy job only (workflow-level permissions stay `contents: read` + `id-token: write`). If you use Maven bundle metadata upload, your caller workflow still needs `actions: write` at runtime.
+- **Deploy fails on "Upload Maven bundle metadata"** → add `actions: write` to your caller workflow permissions, or set `gh-upload-bundle-metadata: false` on the deploy call if you do not need release-bundle metadata handoff.
 - **Deploy fails (auth)** → confirm GitHub→JFrog **OIDC** trust/policy is configured and that the workflow's identity has deploy permission to the target project/repo. (example mistakes often around wrong audience or incorrect token permissions)
 - **Docker push fails** → ensure `tag` includes the full registry path (e.g., `artifact.aerospike.io/project-docker-dev-local/image:tag`). Verify JFrog registry permissions and OIDC authentication.
 - **Bundle issues** → see the troubleshooting section in [Release Bundles](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/docs/release-bundles.md#troubleshooting).

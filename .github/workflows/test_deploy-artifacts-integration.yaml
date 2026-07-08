@@ -12,6 +12,7 @@ on:
 permissions:
   id-token: write
   contents: read
+  actions: write # integration fixtures include JAR/POM; deploy may upload bundle metadata
 
 concurrency:
   group: jfrog-test-deploy
