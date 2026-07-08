@@ -191,7 +191,7 @@ jobs:
       - name: Verify non-npm .tgz IS in generic repo
         if: needs.deploy.result == 'success'
         run: |
-          result=$(jf rt search "test-generic-dev-local/generic-archive.tgz" --project=test)
+          result=$(jf rt search "test-generic-dev-local/${{ env.BUILD_NAME }}/${{ env.VERSION }}/generic-archive.tgz" --project=test)
           echo "Search result: $result"
           count=$(echo "$result" | jq 'length')
           if [[ "$count" -lt 1 ]]; then
