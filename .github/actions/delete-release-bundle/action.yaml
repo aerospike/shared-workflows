@@ -1,5 +1,5 @@
 name: Delete Release Bundle
-description: Check for and delete an existing JFrog release bundle version. JFrog CLI must be configured by the caller.
+description: Check for and delete an existing JFrog release bundle version in the DEV environment. JFrog CLI must be configured by the caller.
 inputs:
   bundle-name:
     description: Release bundle name
@@ -33,6 +33,14 @@ runs:
           echo "No existing bundle found."
           echo "exists=false" >> "$GITHUB_OUTPUT"
         fi
+
+    - name: Guard — block delete when promoted beyond DEV
+      if: steps.check.outputs.exists == 'true'
+      shell: bash
+      run: |
+        bash "${{ github.action_path }}/guard-promoted-beyond.sh" \
+          "${{ inputs.bundle-name }}" "${{ inputs.version }}" "${{ inputs.jf-project }}" \
+          "Promotion check guard"
 
     - name: Show existing bundle details
       if: steps.check.outputs.exists == 'true'
