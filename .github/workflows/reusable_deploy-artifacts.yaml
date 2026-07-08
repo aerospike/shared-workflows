@@ -120,11 +120,14 @@ on:
 permissions:
   contents: read
   id-token: write
-  actions: write
 
 jobs:
   deploy:
     runs-on: ${{ inputs.runs-on }}
+    permissions:
+      contents: read
+      id-token: write
+      actions: write
     outputs:
       jf-build-id: ${{ steps.deploy.outputs.jf-build-id }}
       bundle-metadata-artifact-name: ${{ steps.bundle-metadata-state.outputs.artifact-name }}

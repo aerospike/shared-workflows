@@ -77,6 +77,8 @@ For a complete working example including bundle deletion and promotion, see [exa
 
 After deploy, `reusable_deploy-artifacts.yaml` can upload `structured_build_artifacts/.maven-bundle-metadata.json` as a separate GitHub artifact (see outputs `bundle-metadata-artifact-name` / `bundle-metadata-available`). Pass that name to `reusable_create-release-bundle.yaml` as `gh-bundle-metadata-artifact-name` so the bundle job downloads the JSON and runs `jf release-bundle-annotate` without checking out the consumer repository. Alternatively, set `bundle-metadata-path` when the JSON is already on disk in that job.
 
+The metadata upload requires `actions: write` on your **top-level** caller workflow (or job). Grant it alongside `contents: read` and `id-token: write`, or set `gh-upload-bundle-metadata: false` on deploy when metadata handoff is not needed.
+
 ## Troubleshooting
 
 **Bundle creation fails**: confirm the `jf-build-names` input is a comma-separated list of `name:version` pairs that exist in JFrog, and that your project permissions allow bundle creation. Bundle creation requires higher permissions than artifact upload.
