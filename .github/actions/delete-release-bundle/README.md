@@ -2,6 +2,8 @@
 
 Check for and delete an existing JFrog release bundle version. Safe to call when no bundle exists (outputs `existed=false` and skips deletion).
 
+Refuses deletion when the bundle version has **completed promotions beyond DEV** (TEST, STAGE, PREVIEW, INTERNAL, or PROD). Two promotion-record checks run when a bundle exists: once before showing bundle details, and again immediately before delete (defense in depth against promotion races).
+
 ## Prerequisites
 
 JFrog CLI must be configured before calling this action (via `setup-jfrog-cli`).
