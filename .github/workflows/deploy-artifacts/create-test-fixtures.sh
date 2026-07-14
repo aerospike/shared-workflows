@@ -221,6 +221,105 @@ sha1sum "$BUILD_ARTIFACTS_DIR/standalone-bom.pom" >"$BUILD_ARTIFACTS_DIR/standal
 echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/standalone-bom.pom.asc"
 echo "  Created standalone POM (standalone-bom.pom + .md5/.sha1/.asc)"
 
+# JFrog Maven repo layout (nested download paths). Exercises recursive find in
+# detect_types / deploy when artifacts are not flat in build-artifacts/.
+make_maven_jar_with_coords() {
+    local out="$1" group_id="$2" artifact_id="$3" version="$4"
+    local tmp props_dir out_dir
+    mkdir -p "$(dirname "$out")"
+    out_dir=$(cd "$(dirname "$out")" && pwd)
+    out="$out_dir/$(basename "$out")"
+    tmp=$(mktemp -d)
+    mkdir -p "$tmp/META-INF"
+    echo "Manifest-Version: 1.0" >"$tmp/META-INF/MANIFEST.MF"
+    props_dir="$tmp/META-INF/maven/${group_id}/${artifact_id}"
+    mkdir -p "$props_dir"
+    cat >"$props_dir/pom.properties" <<EOF
+groupId=${group_id}
+artifactId=${artifact_id}
+version=${version}
+EOF
+    (cd "$tmp" && zip -q -r "$out" .)
+    rm -rf "$tmp"
+}
+
+MAVEN_REPO="$BUILD_ARTIFACTS_DIR/maven-repo"
+
+# 1. Normal jar + pom + asc
+dir="$MAVEN_REPO/com/example/app/my-app/1.0.0"
+mkdir -p "$dir"
+make_maven_jar_with_coords "$dir/my-app-1.0.0.jar" "com.example.app" "my-app" "1.0.0"
+cat >"$dir/my-app-1.0.0.pom" <<'POM'
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>com.example.app</groupId>
+  <artifactId>my-app</artifactId>
+  <version>1.0.0</version>
+  <packaging>jar</packaging>
+</project>
+POM
+echo "FAKE-GPG-SIGNATURE" >"$dir/my-app-1.0.0.jar.asc"
+echo "FAKE-GPG-SIGNATURE" >"$dir/my-app-1.0.0.pom.asc"
+echo "  Created maven-repo my-app (jar+pom+asc)"
+
+# 2. Parent aggregator + two children
+dir="$MAVEN_REPO/com/example/parent/parent-proj/1.0.0"
+mkdir -p "$dir"
+cat >"$dir/parent-proj-1.0.0.pom" <<'POM'
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>com.example.parent</groupId>
+  <artifactId>parent-proj</artifactId>
+  <version>1.0.0</version>
+  <packaging>pom</packaging>
+  <modules>
+    <module>child-one</module>
+    <module>child-two</module>
+  </modules>
+</project>
+POM
+echo "FAKE-GPG-SIGNATURE" >"$dir/parent-proj-1.0.0.pom.asc"
+
+for child in child-one child-two; do
+    dir="$MAVEN_REPO/com/example/parent/${child}/1.0.0"
+    mkdir -p "$dir"
+    make_maven_jar_with_coords "$dir/${child}-1.0.0.jar" "com.example.parent" "$child" "1.0.0"
+    cat >"$dir/${child}-1.0.0.pom" <<POM
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>com.example.parent</groupId>
+    <artifactId>parent-proj</artifactId>
+    <version>1.0.0</version>
+  </parent>
+  <artifactId>${child}</artifactId>
+  <packaging>jar</packaging>
+</project>
+POM
+    echo "FAKE-GPG-SIGNATURE" >"$dir/${child}-1.0.0.jar.asc"
+    echo "FAKE-GPG-SIGNATURE" >"$dir/${child}-1.0.0.pom.asc"
+done
+echo "  Created maven-repo parent-proj + child-one + child-two"
+
+# 3. Nested standalone BOM (distinct version from flat standalone-bom)
+dir="$MAVEN_REPO/com/example/bom/standalone-bom/2.1.0"
+mkdir -p "$dir"
+cat >"$dir/standalone-bom-2.1.0.pom" <<'POM'
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>com.example.bom</groupId>
+  <artifactId>standalone-bom</artifactId>
+  <version>2.1.0</version>
+  <packaging>pom</packaging>
+</project>
+POM
+echo "FAKE-GPG-SIGNATURE" >"$dir/standalone-bom-2.1.0.pom.asc"
+echo "  Created maven-repo standalone-bom-2.1.0 (pom+asc only)"
+
 # Create a valid ZIP file
 echo "test zip content" >"$BUILD_ARTIFACTS_DIR/temp-zip-content.txt"
 cd "$BUILD_ARTIFACTS_DIR" && zip -q "test.zip" "temp-zip-content.txt" && cd - >/dev/null

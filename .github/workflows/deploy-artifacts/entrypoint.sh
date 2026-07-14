@@ -150,53 +150,11 @@ source "$SCRIPT_DIR/package_utils.sh"
 source "$SCRIPT_DIR/type_registry.sh"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/upload_utils.sh"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/type_detection.sh"
 
 structure_standalone_poms() {
-    while IFS= read -r -d '' pom; do
-        [[ -f $pom ]] || continue
-        base_name=$(basename "$pom" .pom)
-        jar_file="$(dirname "$pom")/$base_name.jar"
-
-        # Skip if a corresponding JAR exists (already handled by process_jar).
-        # Use `if` rather than `[[ ... ]] && continue` because the latter's
-        # exit status (1 when the file is missing) trips set -e.
-        if [[ -f $jar_file ]]; then
-            continue
-        fi
-
-        echo "Processing standalone POM: $pom" >&2
-
-        # Extract metadata from POM
-        group_id=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='groupId'])" "$pom" 2>/dev/null)
-        artifact_id=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='artifactId'])" "$pom" 2>/dev/null)
-        version=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='version'])" "$pom" 2>/dev/null)
-
-        group_path="${group_id//./\/}"
-
-        target="./structured_build_artifacts/jar/${group_path}/${artifact_id}/${version}"
-        mkdir -p "$target"
-        # Always manifest_add and re-copy: the manifest is flushed at the
-        # start of each run by detect_types.sh (init_manifest flush), but the
-        # structured tree on disk persists across runs (e.g., between bats
-        # tests sharing fixtures). An "already structured" early-out skipped
-        # manifest_add and quietly dropped the standalone POM from later
-        # uploads. cp will overwrite which is the right behaviour here —
-        # source is the canonical artifact.
-        cp "$pom" "$target/"
-        manifest_add "$target/$(basename "$pom")" "jar"
-        # Copy POM sidecars (signature + checksums) so a JAR-less Maven
-        # release (BOM/parent POM) still publishes its full file set. Without
-        # this, .pom.md5/.pom.sha1 fall through to structure_generic_files
-        # which excludes them via get_known_extensions, so they vanish.
-        local pom_dir
-        pom_dir="$(dirname "$pom")"
-        for ext in pom.asc pom.md5 pom.sha1; do
-            local sibling="$pom_dir/$base_name.$ext"
-            if [[ -f $sibling ]]; then
-                cp "$sibling" "$target/"
-            fi
-        done
-    done < <(find build-artifacts -name "*.pom" -print0)
+    _detect_structure_maven_poms "${BUILD_ARTIFACTS_DIR:-build-artifacts}"
 }
 
 structure_generic_files() {

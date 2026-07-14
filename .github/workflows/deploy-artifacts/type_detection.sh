@@ -367,42 +367,56 @@ _write_maven_bundle_metadata_json() {
     echo "Wrote Maven bundle metadata ($maven_module_count unique GAV(s)): $out" >&2
 }
 
-# Detect Maven POMs: coordinate validation then same jar/ layout as structure_standalone_poms.
+# Structure Maven POMs into jar/{groupId}/{artifactId}/{version}/.
+# JAR-less BOM/parent POMs copy signature + checksum sidecars; POMs with a sibling
+# .jar copy .pom.asc only (full companion set for the pair is handled by process_jar).
 _detect_structure_maven_poms() {
     local artifacts_root="$1"
     while IFS= read -r -d '' pom; do
         [[ -f $pom ]] || continue
-        local base_name jar_file
+        local base_name jar_file pom_dir has_jar group_path target
         base_name=$(basename "$pom" .pom)
-        jar_file="$(dirname "$pom")/$base_name.jar"
-        if [[ ! -f $jar_file ]]; then
-            echo "Notice: skipping standalone POM structuring (no sibling JAR): $pom (expected $jar_file)" >&2
-            continue
+        pom_dir="$(dirname "$pom")"
+        jar_file="$pom_dir/$base_name.jar"
+        has_jar=false
+        if [[ -f $jar_file ]]; then
+            has_jar=true
         fi
 
         if ! is_maven_package "$pom"; then
-            echo "Notice: skipping standalone POM structuring (Maven package validation failed): $pom" >&2
+            echo "Notice: skipping Maven POM structuring (validation failed): $pom" >&2
             continue
         fi
 
-        echo "Processing MAVEN (standalone POM): $pom" >&2
-        local group_id artifact_id version group_path target
-        group_id=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='groupId'])" "$pom" 2>/dev/null || true)
-        artifact_id=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='artifactId'])" "$pom" 2>/dev/null || true)
-        version=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='version'])" "$pom" 2>/dev/null || true)
-        if [[ -z $group_id ]]; then
-            group_id=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='parent']/*[local-name()='groupId'])" "$pom" 2>/dev/null || true)
-        fi
-        if [[ -z $version ]]; then
-            version=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='parent']/*[local-name()='version'])" "$pom" 2>/dev/null || true)
-        fi
-        group_path="${group_id//./\/}"
-        target="./structured_build_artifacts/jar/${group_path}/${artifact_id}/${version}"
+        _maven_read_pom_coordinates "$pom"
+        group_path="${_mv_group_id//./\/}"
+        target="./structured_build_artifacts/jar/${group_path}/${_mv_artifact_id}/${_mv_version}"
         mkdir -p "$target"
+
+        if [[ $has_jar == true ]]; then
+            echo "Processing MAVEN (POM with sibling JAR): $pom" >&2
+        else
+            echo "Processing standalone POM: $pom" >&2
+        fi
+
+        # Always manifest_add and re-copy: detect_types.sh flushes the manifest at
+        # start, but the structured tree persists across runs (e.g. bats fixtures).
+        # cp overwrites; source is canonical.
         cp -a "$pom" "$target/"
         manifest_add "$target/$(basename "$pom")" "jar"
-        if [[ -f "${pom}.asc" ]]; then
-            cp -a "${pom}.asc" "$target/"
+
+        if [[ $has_jar == true ]]; then
+            if [[ -f "${pom}.asc" ]]; then
+                cp -a "${pom}.asc" "$target/"
+            fi
+        else
+            local ext sibling
+            for ext in pom.asc pom.md5 pom.sha1; do
+                sibling="$pom_dir/$base_name.$ext"
+                if [[ -f $sibling ]]; then
+                    cp -a "$sibling" "$target/"
+                fi
+            done
         fi
     done < <(find "$artifacts_root" -name "*.pom" -type f -print0 2>/dev/null)
 }

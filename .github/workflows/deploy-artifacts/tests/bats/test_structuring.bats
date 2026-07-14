@@ -212,3 +212,52 @@ teardown() {
     helm_in_generic=$(find structured_build_artifacts/generic -name "aerospike-hello-*.tgz" 2>/dev/null | wc -l)
     [[ "$helm_in_generic" -eq 0 ]]
 }
+
+# --- Maven / JAR structuring ---
+
+@test "flat JAR routes to jar/GAV/ with pom and .asc companions co-located" {
+    run_entrypoint_dry_run >/dev/null 2>&1 || true
+    local jar_dir
+    jar_dir="structured_build_artifacts/jar/com/example/test/test/1.0.0"
+    [[ -f "$jar_dir/test.jar" ]]
+    [[ -f "$jar_dir/test.pom" ]]
+    [[ -f "$jar_dir/test.jar.asc" ]]
+    [[ -f "$jar_dir/test.pom.asc" ]]
+}
+
+@test "nested JFrog-layout JAR routes to jar/GAV/ with pom and .asc co-located" {
+    run_entrypoint_dry_run >/dev/null 2>&1 || true
+    local jar_dir
+    jar_dir="structured_build_artifacts/jar/com/example/app/my-app/1.0.0"
+    [[ -f "$jar_dir/my-app-1.0.0.jar" ]]
+    [[ -f "$jar_dir/my-app-1.0.0.pom" ]]
+    [[ -f "$jar_dir/my-app-1.0.0.jar.asc" ]]
+    [[ -f "$jar_dir/my-app-1.0.0.pom.asc" ]]
+}
+
+@test "flat standalone BOM routes to jar/GAV/ with pom.asc co-located" {
+    run_entrypoint_dry_run >/dev/null 2>&1 || true
+    local bom_dir
+    bom_dir="structured_build_artifacts/jar/com/example/bom/standalone-bom/1.0.0"
+    [[ -f "$bom_dir/standalone-bom.pom" ]]
+    [[ -f "$bom_dir/standalone-bom.pom.asc" ]]
+    [[ -f "$bom_dir/standalone-bom.pom.md5" ]]
+    [[ -f "$bom_dir/standalone-bom.pom.sha1" ]]
+}
+
+@test "nested standalone BOM routes to jar/GAV/ with pom.asc co-located" {
+    run_entrypoint_dry_run >/dev/null 2>&1 || true
+    local bom_dir
+    bom_dir="structured_build_artifacts/jar/com/example/bom/standalone-bom/2.1.0"
+    [[ -f "$bom_dir/standalone-bom-2.1.0.pom" ]]
+    [[ -f "$bom_dir/standalone-bom-2.1.0.pom.asc" ]]
+}
+
+@test "No .jar or .pom files leak into generic structured dir" {
+    run_entrypoint_dry_run >/dev/null 2>&1 || true
+    local jar_in_generic pom_in_generic
+    jar_in_generic=$(find structured_build_artifacts/generic -name '*.jar' 2>/dev/null | wc -l | tr -d ' ')
+    pom_in_generic=$(find structured_build_artifacts/generic -name '*.pom' 2>/dev/null | wc -l | tr -d ' ')
+    [[ "$jar_in_generic" -eq 0 ]]
+    [[ "$pom_in_generic" -eq 0 ]]
+}
