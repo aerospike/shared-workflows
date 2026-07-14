@@ -225,7 +225,10 @@ echo "  Created standalone POM (standalone-bom.pom + .md5/.sha1/.asc)"
 # detect_types / deploy when artifacts are not flat in build-artifacts/.
 make_maven_jar_with_coords() {
     local out="$1" group_id="$2" artifact_id="$3" version="$4"
-    local tmp props_dir
+    local tmp props_dir out_dir
+    mkdir -p "$(dirname "$out")"
+    out_dir=$(cd "$(dirname "$out")" && pwd)
+    out="$out_dir/$(basename "$out")"
     tmp=$(mktemp -d)
     mkdir -p "$tmp/META-INF"
     echo "Manifest-Version: 1.0" >"$tmp/META-INF/MANIFEST.MF"
