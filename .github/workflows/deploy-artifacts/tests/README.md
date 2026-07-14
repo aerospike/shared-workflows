@@ -34,8 +34,10 @@ bats .github/workflows/deploy-artifacts/tests/bats/test_metadata.bats
 - `tests/bats/` - Test files (`.bats`)
 - `tests/helpers/` - Helper functions:
   - `setup.bash` - Setup/teardown functions
+  - `maven_fixtures.bash` - JFrog-layout Maven fixtures for structuring tests
   - `command_parsers.bash` - Command parsing utilities
   - `assertions.bash` - Validation assertions
+- `maven-coverage-matrix.md` - Maven release shapes vs bats coverage table
 
 ## Test Files
 
@@ -47,7 +49,9 @@ bats .github/workflows/deploy-artifacts/tests/bats/test_metadata.bats
 
 ### Structuring tests (verify file routing and companion co-location)
 
-- `test_structuring.bats` - Artifact routing to correct dirs, companion gathering, prefix stripping, Windows → `win/` + `generic-dev-local` uploads
+- `test_structuring.bats` - Artifact routing to correct dirs, companion gathering, prefix stripping, Windows → `win/` + `generic-dev-local` uploads; Maven flat + nested GAV layout
+- `test_maven_structuring.bats` - Maven detect_types + deploy structuring for jar+pom, parent+children, and pom-only (JFrog layout)
+- `test_maven_bundle_metadata.bats` - `.maven-bundle-metadata.json` and detect-time standalone / reactor structuring
 
 ### Integration tests (dry-run entrypoint, parse upload commands)
 

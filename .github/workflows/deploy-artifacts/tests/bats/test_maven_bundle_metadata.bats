@@ -2,6 +2,7 @@
 # Maven bundle metadata (.maven-bundle-metadata.json) from type_detection.sh
 
 load '../helpers/setup'
+load '../helpers/maven_fixtures'
 
 setup() {
     local _base="${BATS_TEST_TMPDIR:-${BATS_TMPDIR:-${TMPDIR:-/tmp}}}"
@@ -22,46 +23,31 @@ _require_bash4_for_detect_types() {
     ((BASH_VERSINFO[0] >= 4)) || skip "requires bash 4+ for detect_types (type_registry associative arrays)"
 }
 
-@test "maven bundle metadata: multi-module reactor (aggregator + child)" {
+@test "maven bundle metadata: multi-module reactor (aggregator + two children)" {
     _require_bash4_for_detect_types
-    local wd meta
+    local wd meta target
     wd="${MAVEN_BUNDLE_TEST_DIR}/wd"
-    mkdir -p "$wd/build-artifacts/maven"
-    cat >"$wd/build-artifacts/maven/parent-1.0.0.pom" <<'POM'
-<?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0">
-  <modelVersion>4.0.0</modelVersion>
-  <groupId>com.example</groupId>
-  <artifactId>parent-proj</artifactId>
-  <version>1.0.0</version>
-  <packaging>pom</packaging>
-  <modules>
-    <module>child</module>
-  </modules>
-</project>
-POM
-    cat >"$wd/build-artifacts/maven/child-1.0.0.pom" <<'POM'
-<?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0">
-  <modelVersion>4.0.0</modelVersion>
-  <parent>
-    <groupId>com.example</groupId>
-    <artifactId>parent-proj</artifactId>
-    <version>1.0.0</version>
-  </parent>
-  <artifactId>child</artifactId>
-  <packaging>jar</packaging>
-</project>
-POM
+    create_jfrog_maven_fixture_tree "$wd"
 
     (cd "$wd" && "$DEPLOY_ARTIFACTS_DIR/detect_types.sh" --artifacts-dir build-artifacts >/dev/null)
 
     meta="$wd/structured_build_artifacts/.maven-bundle-metadata.json"
     [[ -f "$meta" ]]
-    [[ "$(jq -r .maven_module_count "$meta")" == "2" ]]
+    [[ "$(jq -r .maven_module_count "$meta")" == "5" ]]
     [[ "$(jq -r .is_multi_package "$meta")" == "true" ]]
     [[ "$(jq -r .maven_aggregator_present "$meta")" == "true" ]]
     [[ "$(jq -r .is_flattened "$meta")" == "false" ]]
+
+    target="$wd/structured_build_artifacts/jar/com/example/parent/parent-proj/1.0.0"
+    [[ -f "$target/parent-proj-1.0.0.pom" ]]
+    [[ -f "$target/parent-proj-1.0.0.pom.asc" ]]
+
+    target="$wd/structured_build_artifacts/jar/com/example/parent/child-one/1.0.0"
+    [[ -f "$target/child-one-1.0.0.pom" ]]
+    [[ -f "$target/child-one-1.0.0.pom.asc" ]]
+
+    grep -qE 'parent-proj-1\.0\.0\.pom[[:space:]]+jar$' "$wd/structured_build_artifacts/.manifest"
+    grep -qE 'child-one-1\.0\.0\.pom[[:space:]]+jar$' "$wd/structured_build_artifacts/.manifest"
 }
 
 @test "maven bundle metadata: flatten-maven-plugin marker" {
