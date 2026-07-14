@@ -118,6 +118,38 @@ POM
     [[ "$(jq -r .maven_module_count "$meta")" == "1" ]]
 }
 
+@test "detect_types structures jar-less standalone POM with sidecars" {
+    _require_bash4_for_detect_types
+    local wd pom_dir f
+    wd="${MAVEN_BUNDLE_TEST_DIR}/wd"
+    pom_dir="$wd/build-artifacts"
+    mkdir -p "$pom_dir"
+    cat >"$pom_dir/standalone-bom.pom" <<'POM'
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>com.example.bom</groupId>
+  <artifactId>standalone-bom</artifactId>
+  <version>1.0.0</version>
+  <packaging>pom</packaging>
+</project>
+POM
+    echo "FAKE-GPG-SIGNATURE" >"$pom_dir/standalone-bom.pom.asc"
+    md5sum "$pom_dir/standalone-bom.pom" >"$pom_dir/standalone-bom.pom.md5"
+    sha1sum "$pom_dir/standalone-bom.pom" >"$pom_dir/standalone-bom.pom.sha1"
+
+    (cd "$wd" && "$DEPLOY_ARTIFACTS_DIR/detect_types.sh" --artifacts-dir build-artifacts >/dev/null)
+
+    pom_dir="$wd/structured_build_artifacts/jar/com/example/bom/standalone-bom/1.0.0"
+    for f in standalone-bom.pom standalone-bom.pom.asc standalone-bom.pom.md5 standalone-bom.pom.sha1; do
+        [[ -f "$pom_dir/$f" ]] || (echo "Missing structured file: $pom_dir/$f" >&2 && return 1)
+    done
+
+    grep -qE 'standalone-bom\.pom[[:space:]]+jar$' "$wd/structured_build_artifacts/.manifest" || \
+        (echo "standalone-bom.pom missing from manifest:" >&2 && cat "$wd/structured_build_artifacts/.manifest" >&2 && return 1)
+    ! grep -qE 'standalone-bom\.pom\.(asc|md5|sha1)[[:space:]]' "$wd/structured_build_artifacts/.manifest"
+}
+
 @test "maven bundle metadata: no POMs yields zeros" {
     _require_bash4_for_detect_types
     local wd meta
