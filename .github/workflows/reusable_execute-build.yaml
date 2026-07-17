@@ -172,6 +172,13 @@ on:
         type: string
         default: latest
 
+      # Node.js setup
+      setup-node-version:
+        description: Node.js major version for actions/setup-node (e.g., "20", "24"). Empty skips setup.
+        required: false
+        type: string
+        default: ""
+
     outputs:
       gh-artifact-name:
         description: The name of the uploaded artifacts on github
@@ -217,6 +224,12 @@ jobs:
           fetch-tags: true
           submodules: recursive
           fetch-depth: 0
+
+      - name: Set up Node.js
+        if: inputs.setup-node-version != ''
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
+        with:
+          node-version: ${{ inputs.setup-node-version }}
 
       - name: Set up Java
         if: inputs.setup-java
