@@ -1,0 +1,99 @@
+name: "Test: Composable minimal permissions"
+
+# Mirrors composable consumer pipelines (e.g. aerospike-server sign-build-deploy.yaml):
+# sign -> deploy -> create-release-bundle with only contents: read + id-token: write
+# at workflow scope. Catches startup_failure regressions from workflow-scoped actions:*.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/reusable_sign-artifacts.yaml
+      - .github/workflows/reusable_deploy-artifacts.yaml
+      - .github/workflows/reusable_create-release-bundle.yaml
+      - .github/workflows/test_composable-minimal-permissions.yaml
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  upload-fixtures:
+    if: github.actor != 'dependabot[bot]'
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Create test fixtures
+        run: .github/workflows/deploy-artifacts/create-test-fixtures.sh composable-minimal-fixtures
+
+      - name: Upload unsigned fixtures
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: composable-minimal-fixtures
+          path: composable-minimal-fixtures
+          retention-days: 1
+
+  sign:
+    if: github.actor != 'dependabot[bot]'
+    needs: upload-fixtures
+    uses: ./.github/workflows/reusable_sign-artifacts.yaml
+    secrets:
+      gpg-private-key: ${{ secrets.GPG_SECRET_KEY }}
+      gpg-public-key: ${{ secrets.GPG_PUBLIC_KEY }}
+      gpg-key-pass: ${{ secrets.GPG_PASS }}
+    with:
+      gh-unsigned-artifacts: composable-minimal-fixtures
+      gh-artifact-name: signed-composable-minimal
+      gh-workflows-ref: ${{ github.sha }}
+
+  deploy:
+    if: github.actor != 'dependabot[bot]'
+    needs: sign
+    uses: ./.github/workflows/reusable_deploy-artifacts.yaml
+    with:
+      gh-workflows-ref: ${{ github.sha }}
+      gh-checkout-path: .
+      gh-artifact-name: signed-composable-minimal
+      gh-upload-bundle-metadata: false
+      jf-project: test
+      jf-build-name: composable-minimal-permissions
+      jf-build-id: ${{ github.run_id }}-${{ github.run_attempt }}
+      jf-metadata-build-id: ${{ github.run_id }}-${{ github.run_attempt }}-metadata
+      version: v1.0.0-composable-minimal
+      oidc-provider-name: gh-aerospike
+      oidc-audience: aerospike
+      dry-run: true
+
+  create-release-bundle:
+    if: github.actor != 'dependabot[bot]'
+    needs: deploy
+    uses: ./.github/workflows/reusable_create-release-bundle.yaml
+    with:
+      gh-workflows-ref: ${{ github.sha }}
+      jf-project: test
+      jf-build-names: composable-minimal-permissions:v1.0.0-composable-minimal
+      jf-bundle-name: composable-minimal-test
+      version: v1.0.0-composable-minimal
+      oidc-provider-name: gh-aerospike
+      oidc-audience: aerospike
+      dry-run: true
+
+  verify-chain:
+    if: github.actor != 'dependabot[bot]'
+    needs: [sign, deploy, create-release-bundle]
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          egress-policy: audit
+
+      - run: echo "Composable minimal-permissions chain completed without startup_failure."

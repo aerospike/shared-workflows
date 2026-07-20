@@ -1,0 +1,33 @@
+name: "Test: Reusable workflow permission scoping"
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/reusable_*.yaml
+      - .github/workflows/lib/**
+      - .github/workflows/test_reusable-workflow-permissions.yaml
+
+permissions:
+  contents: read
+
+jobs:
+  permission-scope-tests:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Install bats
+        run: |
+          git clone --depth 1 https://github.com/bats-core/bats-core.git /tmp/bats-core
+          sudo /tmp/bats-core/install.sh /usr/local
+
+      - name: Run reusable workflow permission bats tests
+        run: bats .github/workflows/lib/tests/test_reusable_workflow_permissions.bats
