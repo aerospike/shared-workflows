@@ -18,7 +18,7 @@
 # (.nupkg / .snupkg by extension, validated with is_nuget_package from artifact-publisher).
 #
 # Content predicates (is_npm_package, is_pypi_package, is_go_module, is_maven_package,
-# is_nuget_package, is_helm_chart) live here; package_utils keeps metadata extractors.
+# is_nuget_package, is_helm_chart, is_crate_package) live here; package_utils keeps metadata extractors.
 
 # --- npm --------------------------------------------------------------------------------------
 
@@ -201,6 +201,35 @@ is_nuget_package() {
         return 0
     fi
     echo "Not a NuGet package: $f (.nuspec missing id or version)" >&2
+    return 1
+}
+
+# --- Rust crate --------------------------------------------------------------------------------
+
+# is_crate_package <path>
+# Returns 0 if the file is a *.crate gzip tar with Cargo.toml [package] name and version.
+is_crate_package() {
+    local file="$1"
+    [[ -n $file && -f $file && -r $file ]] || return 1
+    case "$file" in
+    *.crate) ;;
+    *)
+        echo "Not a Rust crate: $file (expected *.crate)" >&2
+        return 1
+        ;;
+    esac
+
+    local cargo_toml pkgname version
+    cargo_toml=$(_extract_crate_cargo_toml "$file" 2>/dev/null) || {
+        echo "Not a Rust crate: $file (missing Cargo.toml)" >&2
+        return 1
+    }
+    pkgname=$(_cargo_toml_package_field "$cargo_toml" "name")
+    version=$(_cargo_toml_package_field "$cargo_toml" "version")
+    if [[ -n $pkgname && -n $version ]]; then
+        return 0
+    fi
+    echo "Not a Rust crate: $file (Cargo.toml missing name or version)" >&2
     return 1
 }
 

@@ -89,6 +89,9 @@ setup_test_artifacts() {
                 "$BUILD_ARTIFACTS_DIR/ci-win-fixture.msi.asc"
                 "$BUILD_ARTIFACTS_DIR/ci-win-fixture.msix"
                 "$BUILD_ARTIFACTS_DIR/ci-win-fixture.msix.asc"
+                "$BUILD_ARTIFACTS_DIR/aerospike-3.0.0-alpha.1.crate"
+                "$BUILD_ARTIFACTS_DIR/aerospike-3.0.0-alpha.1.crate.asc"
+                "$BUILD_ARTIFACTS_DIR/invalid-fixture.crate"
         )
 
         for file in "${TEST_FILES[@]}"; do

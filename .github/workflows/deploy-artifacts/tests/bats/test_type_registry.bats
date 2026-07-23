@@ -24,6 +24,7 @@ setup() {
     [[ "${TYPE_EXTENSIONS[nupkg]}" == "*.nupkg" ]]
     [[ "${TYPE_EXTENSIONS[snupkg]}" == "*.snupkg" ]]
     [[ "${TYPE_EXTENSIONS[pypi]}" == "*.whl" ]]
+    [[ "${TYPE_EXTENSIONS[crate]}" == "*.crate" ]]
     [[ "${TYPE_EXTENSIONS[win]}" == "*.exe,*.msi,*.msix" ]]
     # npm uses content detection (*.tgz is ambiguous), not in TYPE_EXTENSIONS
     [[ -z "${TYPE_EXTENSIONS[npm]}" ]]
@@ -40,6 +41,7 @@ setup() {
     [[ "${TYPE_REPO[pypi]}" == "pypi-dev-local" ]]
     [[ "${TYPE_REPO[go]}" == "go-dev-local" ]]
     [[ "${TYPE_REPO[helm]}" == "helm-dev-local" ]]
+    [[ "${TYPE_REPO[crate]}" == "generic-dev-local" ]]
     [[ "${TYPE_REPO[win]}" == "generic-dev-local" ]]
     [[ "${TYPE_REPO[generic]}" == "generic-dev-local" ]]
 }
@@ -51,6 +53,7 @@ setup() {
     [[ "${TYPE_COMPANIONS[npm]}" == ".asc" ]]
     [[ "${TYPE_COMPANIONS[pypi]}" == ".asc" ]]
     [[ "${TYPE_COMPANIONS[helm]}" == ".prov" ]]
+    [[ "${TYPE_COMPANIONS[crate]}" == ".asc" ]]
     [[ "${TYPE_COMPANIONS[win]}" == ".asc" ]]
     [[ "${TYPE_COMPANIONS[generic]}" == ".asc" ]]
 }
@@ -75,10 +78,11 @@ setup() {
     [[ "${CONTENT_DETECT_ORDER[3]}" == "helm" ]]
 }
 
-@test "UPLOAD_ORDER has jar, pypi, go, win and helm before generic" {
+@test "UPLOAD_ORDER has jar, pypi, go, crate, win and helm before generic" {
     local jar_idx=-1
     local pypi_idx=-1
     local go_idx=-1
+    local crate_idx=-1
     local helm_idx=-1
     local win_idx=-1
     local generic_idx=-1
@@ -86,6 +90,7 @@ setup() {
         [[ "${UPLOAD_ORDER[$i]}" == "jar" ]] && jar_idx=$i
         [[ "${UPLOAD_ORDER[$i]}" == "pypi" ]] && pypi_idx=$i
         [[ "${UPLOAD_ORDER[$i]}" == "go" ]] && go_idx=$i
+        [[ "${UPLOAD_ORDER[$i]}" == "crate" ]] && crate_idx=$i
         [[ "${UPLOAD_ORDER[$i]}" == "helm" ]] && helm_idx=$i
         [[ "${UPLOAD_ORDER[$i]}" == "win" ]] && win_idx=$i
         [[ "${UPLOAD_ORDER[$i]}" == "generic" ]] && generic_idx=$i
@@ -93,8 +98,10 @@ setup() {
     [[ $jar_idx -lt $generic_idx ]]
     [[ $pypi_idx -lt $generic_idx ]]
     [[ $helm_idx -lt $generic_idx ]]
+    [[ $crate_idx -lt $generic_idx ]]
     [[ $win_idx -lt $generic_idx ]]
     [[ $go_idx -lt $win_idx ]]
+    [[ $crate_idx -lt $win_idx ]]
     [[ $pypi_idx -gt 0 ]]
 }
 
@@ -113,6 +120,7 @@ setup() {
     [[ "$exts" == *"*.exe"* ]]
     [[ "$exts" == *"*.msi"* ]]
     [[ "$exts" == *"*.msix"* ]]
+    [[ "$exts" == *"*.crate"* ]]
 }
 
 @test "emit_type_extension_globs splits on comma and trims spaces" {
@@ -291,6 +299,30 @@ setup() {
 }
 
 # --- get_helm_props ---
+
+@test "get_crate_props returns correct props for Rust crate" {
+    local test_dir
+    test_dir=$(mktemp -d)
+    mkdir -p "$test_dir/aerospike-3.0.0-alpha.1/src"
+    cat >"$test_dir/aerospike-3.0.0-alpha.1/Cargo.toml" <<'CARGO'
+[package]
+name = "aerospike"
+version = "3.0.0-alpha.1"
+edition = "2021"
+CARGO
+    echo 'pub fn placeholder() {}' >"$test_dir/aerospike-3.0.0-alpha.1/src/lib.rs"
+    cd "$test_dir" && tar -czf "aerospike-3.0.0-alpha.1.crate" aerospike-3.0.0-alpha.1/ && cd - >/dev/null
+    VERSION="3.0.0-alpha.1"
+    BUILD_TYPE=""
+    INTERNAL="false"
+    local props
+    props=$(get_crate_props "$test_dir/aerospike-3.0.0-alpha.1.crate" 2>/dev/null)
+    [[ "$props" == *"version=3.0.0-alpha.1"* ]]
+    [[ "$props" == *"package_name=aerospike"* ]]
+    [[ "$props" == *"cargo.name=aerospike"* ]]
+    [[ "$props" == *"cargo.version=3.0.0-alpha.1"* ]]
+    rm -rf "$test_dir"
+}
 
 @test "get_helm_props returns correct props for Helm chart" {
     local test_dir

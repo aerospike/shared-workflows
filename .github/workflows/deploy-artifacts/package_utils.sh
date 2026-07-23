@@ -527,6 +527,96 @@ get_helm_metadata() {
 # Returns: target path on stdout.
 process_helm() { copy_to_structured "$1" "$2"; }
 
+# --- Rust crate functions ---
+
+# Validate a Rust crate package name (Cargo [package].name).
+# Rejects names that could inject JFrog target-props (semicolons, etc.).
+# Args: <name>
+# Exits with error if invalid.
+_validate_crate_name() {
+    local name="$1"
+    if [[ ! $name =~ ^[a-zA-Z0-9_-]+$ ]]; then
+        error "Invalid crate name: '$name'"
+    fi
+}
+
+# Locate Cargo.toml inside a .crate tarball (single top-level directory).
+# Args: <crate_file>
+# Returns: member path on stdout, or return 1.
+_find_crate_cargo_toml_member() {
+    local file="$1"
+    tar -tzf "$file" 2>/dev/null | awk '/^[^/]+\/Cargo\.toml$/ {print; exit}'
+}
+
+# Extract Cargo.toml content from a .crate tarball.
+# Args: <crate_file>
+# Returns: Cargo.toml on stdout, or return 1.
+_extract_crate_cargo_toml() {
+    local file="$1"
+    local cargo_member
+    cargo_member=$(_find_crate_cargo_toml_member "$file") || return 1
+    [[ -n $cargo_member ]] || return 1
+    tar -xOzf "$file" "$cargo_member" 2>/dev/null
+}
+
+# Read a scalar field from the [package] section of Cargo.toml content.
+# Args: <cargo_toml_content> <field_name>
+# Returns: the value on stdout, or empty string.
+_cargo_toml_package_field() {
+    local content="$1" field="$2"
+    awk -v f="$field" '
+        /^\[package\]/ { in_pkg=1; next }
+        /^\[/ { in_pkg=0 }
+        in_pkg && $0 ~ "^" f "[[:space:]]*=" {
+            sub("^" f "[[:space:]]*=[[:space:]]*", "")
+            sub(/[[:space:]]+#.*$/, "")
+            sub(/[[:space:]]+$/, "")
+            sub(/^"/, "")
+            sub(/"$/, "")
+            sub(/^'\''/, "")
+            sub(/'\''$/, "")
+            print
+            exit
+        }
+    ' <<<"$content"
+}
+
+# Extract Rust crate metadata (name and version) from a .crate file.
+# Reads [package] name/version from Cargo.toml; falls back to filename parsing.
+# Args: <crate_file>
+# Returns: "name version" on stdout.
+get_crate_metadata() {
+    local crate="$1"
+    local filename="${crate##*/}"
+    local pkgname="" version=""
+    local cargo_toml
+
+    cargo_toml=$(_extract_crate_cargo_toml "$crate" 2>/dev/null || true)
+    if [[ -n $cargo_toml ]]; then
+        pkgname=$(_cargo_toml_package_field "$cargo_toml" "name")
+        version=$(_cargo_toml_package_field "$cargo_toml" "version")
+    fi
+
+    if [[ -z $pkgname || -z $version ]]; then
+        local base="${filename%.crate}"
+        if [[ $base =~ ^(.+)-([0-9]+.*)$ ]]; then
+            [[ -z $pkgname ]] && pkgname="${BASH_REMATCH[1]}"
+            [[ -z $version ]] && version="${BASH_REMATCH[2]}"
+        else
+            [[ -z $pkgname ]] && pkgname="$base"
+            [[ -z $version ]] && version="unknown"
+        fi
+    fi
+
+    _validate_crate_name "$pkgname"
+    echo "$pkgname $version"
+}
+
+# Structure a Rust crate into the destination directory.
+# Args: <file> <dest_dir>
+# Returns: target path on stdout.
+process_crate() { process_generic "$1" "$2"; }
+
 # Structure a generic file into the destination directory.
 # Strips the "unsigned-artifacts" prefix leaked from the sign stage's cp --parents.
 # Args: <file> <dest_dir>

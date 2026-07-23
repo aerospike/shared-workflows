@@ -95,6 +95,8 @@ register_type go --repo "go-dev-local" --detect "is_go_module"
 # companions=".prov" carries the helm-native provenance signature
 # (GPG-clearsigned Chart.yaml + sha256) produced by sign-artifacts.
 register_type helm --repo "helm-dev-local" --detect "is_helm_chart" --companions ".prov"
+# Rust crates (.crate); structured and uploaded to generic-dev-local like win.
+register_type crate --extension "*.crate" --repo "generic-dev-local"
 # Windows installers / packages (exe, msi, msix); structured and uploaded like generic.
 register_type win --extensions "*.exe,*.msi,*.msix" --repo "generic-dev-local"
 register_type generic --repo "generic-dev-local"
@@ -106,7 +108,7 @@ register_type generic --repo "generic-dev-local"
 CONTENT_DETECT_EXTENSIONS=("*.tgz" "*.tar.gz" "*.zip")
 
 # Upload order matters: jar before generic (jar can move files to generic)
-UPLOAD_ORDER=(rpm deb jar nupkg npm pypi go win helm generic)
+UPLOAD_ORDER=(rpm deb jar nupkg npm pypi go helm crate win generic)
 
 # --- helpers ---
 
@@ -252,6 +254,16 @@ get_generic_props() {
     local filename
     filename=$(basename "$file")
     echo "$(get_base_props);package_name=$filename"
+}
+
+get_crate_props() {
+    local file="$1"
+    local -a metadata
+    read -r -a metadata < <(get_crate_metadata "$file")
+    local pkgname="${metadata[0]}"
+    local pkgversion="${metadata[1]}"
+    echo "  Crate: $pkgname, Version: $pkgversion" >&2
+    echo "$(get_base_props);package_name=$pkgname;cargo.name=$pkgname;cargo.version=$pkgversion"
 }
 
 get_win_props() {

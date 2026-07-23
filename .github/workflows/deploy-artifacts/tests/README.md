@@ -49,7 +49,7 @@ bats .github/workflows/deploy-artifacts/tests/bats/test_metadata.bats
 
 ### Structuring tests (verify file routing and companion co-location)
 
-- `test_structuring.bats` - Artifact routing to correct dirs, companion gathering, prefix stripping, Windows → `win/` + `generic-dev-local` uploads; Maven flat + nested GAV layout
+- `test_structuring.bats` - Artifact routing to correct dirs, companion gathering, prefix stripping, Windows → `win/` + `generic-dev-local` uploads, Rust `.crate` → `crate/` + `generic-dev-local`; Maven flat + nested GAV layout
 - `test_maven_structuring.bats` - Maven detect_types + deploy structuring for jar+pom, parent+children, and pom-only (JFrog layout)
 - `test_maven_bundle_metadata.bats` - `.maven-bundle-metadata.json` and detect-time standalone / reactor structuring
 
@@ -59,6 +59,7 @@ bats .github/workflows/deploy-artifacts/tests/bats/test_metadata.bats
 - `test_java_upload.bats` - JAR/Maven artifact uploads
 - `test_nupkg_upload.bats` - NuGet package uploads and metadata parsing
 - `test_all_files_upload.bats` - JAR/generic routing and NuGet-not-in-generic safety check
+- `test_crate_upload.bats` - Rust `.crate` validation, `crate/` structuring, generic-dev-local upload path, and `cargo.*` target-props
 - `test_error_handling.bats` - Missing arguments and invalid options
 
 ### Regression tests (codify production bugs so they never regress)

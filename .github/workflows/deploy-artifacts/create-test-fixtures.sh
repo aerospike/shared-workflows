@@ -388,6 +388,22 @@ echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/ci-win-fixture.msi.asc"
 head -c 2048 /dev/zero >"$BUILD_ARTIFACTS_DIR/ci-win-fixture.msix"
 echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/ci-win-fixture.msix.asc"
 
+# Rust crate (.crate): cargo pack layout with Cargo.toml [package] name/version
+mkdir -p "$BUILD_ARTIFACTS_DIR/temp-crate/aerospike-3.0.0-alpha.1/src"
+cat >"$BUILD_ARTIFACTS_DIR/temp-crate/aerospike-3.0.0-alpha.1/Cargo.toml" <<'CARGO'
+[package]
+name = "aerospike"
+version = "3.0.0-alpha.1"
+edition = "2021"
+CARGO
+echo 'pub fn placeholder() {}' >"$BUILD_ARTIFACTS_DIR/temp-crate/aerospike-3.0.0-alpha.1/src/lib.rs"
+cd "$BUILD_ARTIFACTS_DIR/temp-crate" && tar -czf "../aerospike-3.0.0-alpha.1.crate" aerospike-3.0.0-alpha.1/ && cd - >/dev/null
+rm -rf "$BUILD_ARTIFACTS_DIR/temp-crate"
+echo "  Created aerospike-3.0.0-alpha.1.crate (Rust crate)"
+echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/aerospike-3.0.0-alpha.1.crate.asc"
+# Invalid .crate (wrong extension content) for validation tests
+echo "not-a-valid-crate-archive" >"$BUILD_ARTIFACTS_DIR/invalid-fixture.crate"
+
 # Create unsigned-artifacts/ prefix to simulate sign stage output
 # The sign stage uses cp --parents which creates: signed-artifacts/unsigned-artifacts/...
 # Deploy receives this as: build-artifacts/unsigned-artifacts/...
