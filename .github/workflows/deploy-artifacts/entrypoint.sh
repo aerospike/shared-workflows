@@ -181,6 +181,26 @@ structure_generic_files() {
     done < <(find build-artifacts \( "${exclude_args[@]}" \) -type f -print0)
 }
 
+structure_crate_files() {
+    local dest="./structured_build_artifacts/${TYPE_STRUCT_DIR[crate]}"
+    while IFS= read -r -d '' file; do
+        [[ -f $file ]] || continue
+        if ! is_crate_package "$file"; then
+            echo "Notice: skipping crate structuring (validation failed): $file" >&2
+            continue
+        fi
+        echo "Processing CRATE: $file" >&2
+        local target_path
+        target_path=$(process_crate "$file" "$dest")
+        if [[ -n $target_path ]]; then
+            gather_companions "$file" "$(dirname "$target_path")" "crate"
+            manifest_add "$target_path" "crate"
+        else
+            echo "Warning: process_crate returned no target path; artifact not copied: $file" >&2
+        fi
+    done < <(find build-artifacts -name "*.crate" -type f -print0 2>/dev/null)
+}
+
 structure_build_artifacts() {
     echo "Structuring build artifacts..." >&2
     # The deploy step might be preceded by a step that runs detect_types.sh,
@@ -194,6 +214,8 @@ structure_build_artifacts() {
 
     # Extension-based types: unambiguous file extension maps directly to type
     for type in "${!TYPE_EXTENSIONS[@]}"; do
+        # crate uses structure_crate_files() for Cargo.toml validation
+        [[ $type == "crate" ]] && continue
         local dest="./structured_build_artifacts/${TYPE_STRUCT_DIR[$type]}"
         local label="${type^^}"
         local processor="process_${type}"
@@ -205,6 +227,8 @@ structure_build_artifacts() {
             discover_and_process "$pat" "$label" "$processor" "$dest" "$type"
         done < <(emit_type_extension_globs "${TYPE_EXTENSIONS[$type]}")
     done
+
+    structure_crate_files
 
     # Content-detected types: ambiguous extensions need inspection to determine type
     echo "Note: Content detection moved to separate step of 'Detect artifact types'" >&2
@@ -600,6 +624,49 @@ upload_helm_packages() {
     }
 
     manifest_for_type "helm" _upload_helm_entry
+}
+
+upload_crate_files() {
+    echo "Uploading Rust crate artifacts..." >&2
+
+    # shellcheck disable=SC2329  # invoked indirectly via manifest_for_type
+    _upload_crate_entry() {
+        local file="$1"
+        [[ -f $file ]] || return 0
+
+        if ! is_crate_package "$file"; then
+            echo "Warning: skipping invalid Rust crate: $file" >&2
+            return 0
+        fi
+
+        local filename
+        filename=$(basename "$file")
+        local props
+        props=$(get_crate_props "$file")
+
+        local target_path="${BUILD_NAME}/${VERSION}/${filename}"
+
+        echo "  Uploading Rust crate: $file" >&2
+        echo "    Target: $target_path" >&2
+        run jf rt upload "$file" "$PROJECT-generic-dev-local/${target_path}" \
+            --build-name="$BUILD_NAME" \
+            --build-number="$ARTIFACT_BUILD_NUMBER" \
+            --project="$PROJECT" \
+            --target-props "$props"
+
+        local companions="${TYPE_COMPANIONS[crate]-}"
+        for suffix in $companions; do
+            if [[ -f "$file$suffix" ]]; then
+                echo "  Uploading companion: $file$suffix" >&2
+                run jf rt upload "$file$suffix" "$PROJECT-generic-dev-local/${target_path}${suffix}" \
+                    --build-name="$BUILD_NAME" \
+                    --build-number="$ARTIFACT_BUILD_NUMBER" \
+                    --project="$PROJECT"
+            fi
+        done
+    }
+
+    manifest_for_type "crate" _upload_crate_entry
 }
 
 upload_win_files() {
