@@ -16,6 +16,7 @@ A reusable GitHub Actions workflow for uploading build artifacts to JFrog Artifa
 | PyPI (.whl/.tar.gz sdist) | `{project}-pypi-dev-local`    | `.asc`                     | `version`, `package_name`, `pypi.name`, `pypi.version`                             |
 | Go module (.zip)          | `{project}-go-dev-local`      | `.asc`                     | `version`, `package_name`, `go.module`, `go.version`                               |
 | Helm chart (.tgz)         | `{project}-helm-dev-local`    | `.prov`                    | `version`, `package_name`, `helm.name`, `helm.version`                             |
+| Rust crate (`.crate`)     | `{project}-generic-dev-local` | `.asc`                     | `version`, `package_name`, `cargo.name`, `cargo.version`                           |
 | Windows (.exe/.msi/.msix) | `{project}-generic-dev-local` | `.asc`                     | `version`, `package_name` (same repo as generic)                                   |
 | Generic (everything else) | `{project}-generic-dev-local` | `.asc`                     | `version`, `package_name`                                                          |
 
@@ -79,7 +80,8 @@ The deploy pipeline uses a centralized type registry (`type_registry.sh`). To ad
 
 Artifacts arrive in `build-artifacts/` as a flat collection from the sign stage. The structuring phase categorizes them by type and gathers companion files:
 
-- Types with unique extensions (DEB, RPM, JAR, NuGet, `.whl`, Windows `.exe`/`.msi`/`.msix`) are matched by extension
+- Types with unique extensions (DEB, RPM, JAR, NuGet, `.whl`, Rust `.crate`, Windows `.exe`/`.msi`/`.msix`) are matched by extension
+- `.crate` files are validated with `is_crate_package()` (Cargo.toml `[package]` name and version) before structuring; invalid archives are skipped
 - Gzipped tarballs (`.tgz` and `.tar.gz`) and zip archives (`.zip`) are inspected with content-based detectors to distinguish npm packages, PyPI source distributions, Go modules, Helm charts (`.tgz` containing `Chart.yaml`), and generic archives
 - Companion files (defined per type in `TYPE_COMPANIONS`) are automatically copied alongside their primary artifact
 - Generic catches everything not claimed by the above
@@ -89,7 +91,7 @@ Artifacts arrive in `build-artifacts/` as a flat collection from the sign stage.
 Each type directory is uploaded to its respective repository with appropriate properties. The upload functions are driven by the type registry:
 
 - Simple types (DEB, RPM) use the generic `upload_type()` dispatch which calls `get_TYPE_props()` and `get_TYPE_extra_flags()` by convention
-- Types with custom path layouts (JAR, NuGet, npm, PyPI, Go, win, generic) define `upload_TYPE_*` overrides in `entrypoint.sh`
+- Types with custom path layouts (JAR, NuGet, npm, PyPI, Go, crate, win, generic) define `upload_TYPE_*` overrides in `entrypoint.sh`
 - All uploads go through `jf_upload()` or `run jf rt upload` which adds standard flags (`--build-name`, `--build-number`, `--project`)
 
 ### 3. Build info
@@ -185,6 +187,24 @@ helm/
   {chart}-{version}.tgz.prov
 ```
 
+### Rust crate
+
+`.crate` files are matched by extension and validated via `Cargo.toml` inside the archive (`is_crate_package`). Metadata (`cargo.name`, `cargo.version`) is read from the `[package]` section. Upload uses the same generic-repository layout as Windows and other generic artifacts (`{build-name}/{version}/{filename}`), not JFrog's Cargo registry path.
+
+```text
+crate/
+  aerospike-3.0.0-alpha.1.crate
+  aerospike-3.0.0-alpha.1.crate.asc
+```
+
+Uploaded to JFrog as:
+
+```text
+{project}-generic-dev-local/
+  {build-name}/{version}/aerospike-3.0.0-alpha.1.crate
+  {build-name}/{version}/aerospike-3.0.0-alpha.1.crate.asc
+```
+
 ### Windows
 
 `.exe`, `.msi`, and `.msix` files are matched by extension and uploaded to the generic repository.
@@ -201,7 +221,7 @@ win/
 deploy-artifacts/
   entrypoint.sh          # Main script: arg parsing, upload functions, orchestration
   type_registry.sh       # Type config arrays + per-type props/flags functions
-  type_detection.sh      # Content-based detection predicates (is_npm_package, is_helm_chart, etc.)
+  type_detection.sh      # Content-based detection predicates (is_npm_package, is_crate_package, is_helm_chart, etc.)
   detect_types.sh        # Standalone detection entrypoint (used by the detect-artifacts action); writes
                          # structured_build_artifacts/.maven-bundle-metadata.json (Maven GAV scan)
   upload_utils.sh        # Shared helpers: jf_upload, upload_companions, discover_and_process, upload_type

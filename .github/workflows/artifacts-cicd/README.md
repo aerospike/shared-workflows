@@ -62,10 +62,11 @@ The deploy stage automatically routes artifacts by file extension:
 | PyPI    | `pypi-dev-local`    | `version`, `package_name`, `pypi.name`, `pypi.version`                             |
 | Go      | `go-dev-local`      | `version`, `package_name`, `go.module`, `go.version`                               |
 | Helm    | `helm-dev-local`    | `version`, `package_name`, `helm.name`, `helm.version`                             |
+| Rust    | `generic-dev-local` | `version`, `package_name`, `cargo.name`, `cargo.version`                           |
 | Windows | `generic-dev-local` | `version`, `package_name`                                                          |
 | Generic | `generic-dev-local` | `version`, `package_name`                                                          |
 
-Windows executables (`.exe`, `.msi`, `.msix`) are detected by extension and routed to the generic repository; enable Authenticode signing for them with `sign-windows`. macOS `.pkg` installers produced by `sign-mac` are likewise uploaded as generic artifacts.
+Windows executables (`.exe`, `.msi`, `.msix`) are detected by extension and routed to the generic repository; enable Authenticode signing for them with `sign-windows`. Rust crates (`.crate`) are validated via `Cargo.toml`, structured under `crate/`, and uploaded to the same generic repository with `cargo.name` / `cargo.version` properties. macOS `.pkg` installers produced by `sign-mac` are likewise uploaded as generic artifacts.
 
 Companion files (`.asc` signatures, `.pom` files, helm `.prov` provenance) are automatically gathered alongside their parent artifacts. Helm registers `.prov` (helm-native provenance signature) as its companion; the orphan `.tgz.asc` produced by GPG sign-artifacts is intentionally not gathered or uploaded for helm charts because `.prov` is the canonical chart signature.
 
