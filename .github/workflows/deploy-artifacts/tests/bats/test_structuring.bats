@@ -89,6 +89,24 @@ teardown() {
     [[ "$cmds" != *win-dev-local* ]]
 }
 
+@test "Rust .crate routes to crate dir not generic; dry-run upload targets generic-dev-local" {
+    local output
+    output=$(run_entrypoint_dry_run "test-project" "test-build" "v1.0.0" "12345" "12345-metadata")
+
+    [[ -f "structured_build_artifacts/crate/aerospike-3.0.0-alpha.1.crate" ]]
+    [[ -f "structured_build_artifacts/crate/aerospike-3.0.0-alpha.1.crate.asc" ]]
+    local generic_crate_count
+    generic_crate_count=$(find structured_build_artifacts/generic -name "*.crate" 2>/dev/null | wc -l | tr -d ' ')
+    [[ "$generic_crate_count" -eq 0 ]]
+
+    local cmds
+    cmds=$(extract_upload_commands "$output")
+    echo "$cmds" | grep -qF "aerospike-3.0.0-alpha.1.crate"
+    echo "$cmds" | grep -qF "aerospike-3.0.0-alpha.1.crate.asc"
+    echo "$cmds" | grep -qF "generic-dev-local"
+    [[ "$cmds" != *crate-dev-local* ]]
+}
+
 @test "All standard type directories are created" {
     run_entrypoint_dry_run >/dev/null 2>&1 || true
     [[ -d "structured_build_artifacts/deb" ]]
@@ -97,6 +115,7 @@ teardown() {
     [[ -d "structured_build_artifacts/nupkg" ]]
     [[ -d "structured_build_artifacts/npm" ]]
     [[ -d "structured_build_artifacts/pypi" ]]
+    [[ -d "structured_build_artifacts/crate" ]]
     [[ -d "structured_build_artifacts/win" ]]
     [[ -d "structured_build_artifacts/generic" ]]
 }

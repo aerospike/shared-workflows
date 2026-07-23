@@ -58,6 +58,7 @@ teardown_file() {
   [[ -d "$TEST_DIR/structured_build_artifacts/deb" ]]
   [[ -d "$TEST_DIR/structured_build_artifacts/rpm" ]]
   [[ -d "$TEST_DIR/structured_build_artifacts/win" ]]
+  [[ -d "$TEST_DIR/structured_build_artifacts/crate" ]]
   [[ -d "$TEST_DIR/structured_build_artifacts/generic" ]]
 }
 

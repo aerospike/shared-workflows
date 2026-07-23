@@ -211,7 +211,7 @@ is_nuget_package() {
 is_crate_package() {
     local file="$1"
     [[ -n $file && -f $file && -r $file ]] || return 1
-    case "${file,,}" in
+    case "$file" in
     *.crate) ;;
     *)
         echo "Not a Rust crate: $file (expected *.crate)" >&2
