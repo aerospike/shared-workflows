@@ -35,7 +35,7 @@ jobs:
           egress-policy: audit
 
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Create test fixtures
         run: .github/workflows/deploy-artifacts/create-test-fixtures.sh integration-test-fixtures
@@ -78,7 +78,7 @@ jobs:
           egress-policy: audit
 
       - name: Setup JFrog CLI
-        uses: step-security/setup-jfrog-cli@3054b554c0fb4915b3d58847fb7730c593dbb934 # v5.0.0
+        uses: step-security/setup-jfrog-cli@53aeacb709fce45d0baf69a13ec3342f7e2d71a9 # v5.1.0
         env:
           JF_URL: https://artifact.aerospike.io
           JF_PROJECT: test
