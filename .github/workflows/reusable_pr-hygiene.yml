@@ -73,9 +73,10 @@ jobs:
 
           echo "allowed=false" >> "$GITHUB_OUTPUT"
 
-      # PR title must follow: type(scope): [JIRA-123] description
+      # PR title must follow: type(scope)[!]: [JIRA-123] description
       #   type:  feat|fix|refactor|docs|test|ci|chore|build|perf (validated by commitlint)
       #   scope: optional, lowercase (e.g., workflows, deploy, actions)
+      #   !:     optional breaking-change marker (e.g., feat!: or feat(scope)!:)
       #   JIRA:  uppercase project key in brackets, before the description
       # Example: feat(workflows): [INFRA-370] add artifacts-cicd integration tests
       - name: Validate PR title is conventional commit
@@ -127,7 +128,7 @@ jobs:
             exit 0
           fi
 
-          JIRA_TICKET=$(echo "$PR_TITLE" | grep -oP '^[a-z]+(\([a-z0-9-_]+\))?: \[\K[A-Z]{2,10}-[0-9]+(?=\] )' | head -1)
+          JIRA_TICKET=$(echo "$PR_TITLE" | grep -oP '^[a-z]+(\([a-z0-9-_]+\))?(!)?: \[\K[A-Z]{2,10}-[0-9]+(?=\] )' | head -1)
           if [ -z "$JIRA_TICKET" ]; then
             echo "❌ ERROR: No JIRA ticket found in PR title!"
             echo "PR title must follow: type(scope): [JIRA-123] description"

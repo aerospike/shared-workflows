@@ -81,6 +81,18 @@ load "$HELPERS_DIR/setup.bash"
     [ "$ticket" = "INFRA-378" ]
 }
 
+@test "breaking change title without scope extracts JIRA ticket" {
+    local ticket
+    ticket=$(extract_jira_ticket "feat!: [INFRA-649] Major release on breaking API changes")
+    [ "$ticket" = "INFRA-649" ]
+}
+
+@test "breaking change title with scope extracts JIRA ticket" {
+    local ticket
+    ticket=$(extract_jira_ticket "feat(workflows)!: [INFRA-649] Major release on breaking API changes")
+    [ "$ticket" = "INFRA-649" ]
+}
+
 @test "missing JIRA ticket returns empty" {
     local ticket
     ticket=$(extract_jira_ticket "feat: missing jira ticket")

@@ -44,6 +44,12 @@ jobs:
     with:
       pr_title: "chore: update readme"
 
+  # End-to-end test: breaking change title with JIRA should pass
+  test-breaking-change-title:
+    uses: ./.github/workflows/reusable_pr-hygiene.yml
+    with:
+      pr_title: "feat!: [INFRA-649] Major release on breaking API changes"
+
   # Unit tests via bats
   run-tests:
     runs-on: ubuntu-22.04
