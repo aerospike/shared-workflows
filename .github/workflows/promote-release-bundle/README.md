@@ -2,16 +2,16 @@
 
 ## Inputs
 
-| Input                | Description                    | Required | Default                       |
-| -------------------- | ------------------------------ | -------- | ----------------------------- |
-| `jf-project`         | JFrog Artifactory project name | Yes      | -                             |
-| `jf-bundle-name`     | Name for the release bundle    | Yes      | -                             |
-| `version`            | Version of the release bundle  | Yes      | -                             |
-| `new-environment`    | Environment to promote to      | Yes      | -                             |
-| `dry-run`            | Whether to run in dry-run mode | No       | false                         |
-| `jf-url`             | JFrog Artifactory URL          | No       | https://artifact.aerospike.io |
-| `oidc-audience`      | OIDC audience                  | No       | aerospike                     |
-| `oidc-provider-name` | OIDC provider name             | No       | gh-aerospike                  |
+| Input                | Description                    | Required | Default                         |
+| -------------------- | ------------------------------ | -------- | ------------------------------- |
+| `jf-project`         | JFrog Artifactory project name | Yes      | -                               |
+| `jf-bundle-name`     | Name for the release bundle    | Yes      | -                               |
+| `version`            | Version of the release bundle  | Yes      | -                               |
+| `new-environment`    | Environment to promote to      | Yes      | -                               |
+| `dry-run`            | Whether to run in dry-run mode | No       | false                           |
+| `jf-url`             | JFrog Artifactory URL          | No       | `https://artifact.aerospike.io` |
+| `oidc-audience`      | OIDC audience                  | No       | aerospike                       |
+| `oidc-provider-name` | OIDC provider name             | No       | gh-aerospike                    |
 
 ## Example Usage
 
