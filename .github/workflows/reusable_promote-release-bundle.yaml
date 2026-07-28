@@ -19,6 +19,7 @@ on:
         required: true
         type: string
       new-environment:
+        description: Environment to promote to
         type: string
         required: true
 
