@@ -1,0 +1,66 @@
+name: Promote Release Bundle
+
+permissions:
+  id-token: write
+
+on:
+  workflow_call:
+    inputs:
+      jf-project:
+        description: JFrog Artifactory project name
+        required: true
+        type: string
+      jf-bundle-name:
+        description: Name for the release bundle
+        required: true
+        type: string
+      version:
+        description: Version of the release bundle
+        required: true
+        type: string
+      new-environment:
+        type: string
+        required: true
+
+      # Optional inputs
+      dry-run:
+        description: Whether to run in dry-run mode
+        required: false
+        type: boolean
+        default: false
+      jf-url:
+        required: false
+        description: JFrog Artifactory URL
+        type: string
+        default: https://artifact.aerospike.io
+      oidc-audience:
+        required: false
+        description: OIDC audience
+        type: string
+        default: aerospike
+      oidc-provider-name:
+        required: false
+        description: OIDC provider name
+        type: string
+        default: gh-aerospike
+
+jobs:
+  promote-release-bundle:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Setup JFrog CLI
+        uses: jfrog/setup-jfrog-cli@1641575d87647fb969c0545f0b6a76873e328b7c # v5.0.0
+        env:
+          JF_URL: ${{ inputs.jf-url }}
+          JF_PROJECT: ${{ inputs.jf-project }}
+        with:
+          version: 2.92.0
+          oidc-provider-name: ${{ inputs.oidc-provider-name }}
+          oidc-audience: ${{ inputs.oidc-audience }}
+
+      - uses: aerospike/shared-workflows/.github/actions/promote-release-bundle@82b197fa01cafc1b1d5a82a77ad039e6e8e44545
+        with:
+          bundle-name: ${{ inputs.jf-bundle-name }}
+          version: ${{ inputs.version }}
+          environment: ${{ inputs.new-environment }}
+          jf-project: ${{ inputs.jf-project }}
