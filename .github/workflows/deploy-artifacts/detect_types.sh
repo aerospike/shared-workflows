@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Standalone helper: run content-based type detection and structuring only
-# (structure_content_detected_files). Only needs the merged artifacts tree.
+# (structure_content_detected_files, including extension-based passes for wheels, NuGet,
+# Rust .crate, Maven POMs, and docker bundle metadata). Only needs the merged artifacts tree.
 
 set -euo pipefail
 export PS4='+($LINENO): ${FUNCNAME[0]:+${FUNCNAME[0]}(): }'
@@ -31,8 +32,8 @@ Usage:
   detect_types.sh [OPTIONS]
 
 Runs content-based artifact detection (npm / PyPI / Go / Helm on ambiguous archives; NuGet
-.nupkg/.snupkg by extension after .nuspec validation; plus wheel / Maven / Docker passes) and
-copies matches into ./structured_build_artifacts/, with a .manifest file like the deploy entrypoint.
+.nupkg/.snupkg and Rust .crate by extension after validation; plus wheel / Maven / Docker passes)
+and copies matches into ./structured_build_artifacts/, with a .manifest file like the deploy entrypoint.
 
 Options:
   --artifacts-dir <path>   Input tree root to scan (default: build-artifacts).

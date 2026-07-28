@@ -545,7 +545,7 @@ _validate_crate_name() {
 # Returns: member path on stdout, or return 1.
 _find_crate_cargo_toml_member() {
     local file="$1"
-    tar -tzf "$file" 2>/dev/null | awk '/^[^/]+\/Cargo\.toml$/ {print; exit}'
+    tar -tzf "$file" 2>/dev/null | awk '/^[^\/]+\/Cargo\.toml$/ {print; exit}'
 }
 
 # Extract Cargo.toml content from a .crate tarball.
