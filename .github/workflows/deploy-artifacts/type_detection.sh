@@ -15,7 +15,8 @@
 # PyPI ambiguous archives use the artifact-publisher style detector (wheel METADATA + sdist
 # PKG-INFO / .dist-info METADATA with non-empty Name/Version). Additional passes mirror
 # jfrog-fetch-style passes: wheels, Maven POMs, docker-images.json, NuGet packages
-# (.nupkg / .snupkg by extension, validated with is_nuget_package from artifact-publisher).
+# (.nupkg / .snupkg by extension, validated with is_nuget_package from artifact-publisher),
+# and Rust .crate files (extension + is_crate_package validation).
 #
 # Content predicates (is_npm_package, is_pypi_package, is_go_module, is_maven_package,
 # is_nuget_package, is_helm_chart, is_crate_package) live here; package_utils keeps metadata extractors.
@@ -280,6 +281,28 @@ _detect_structure_nuget_packages() {
     done < <(find "$artifacts_root" \( -name "*.nupkg" -o -name "*.snupkg" \) -type f -print0 2>/dev/null)
 }
 
+# Detect Rust crates: extension-based find; is_crate_package validates Cargo.toml (artifact-publisher).
+_detect_structure_crate_packages() {
+    local artifacts_root="$1"
+    local dest="./structured_build_artifacts/${TYPE_STRUCT_DIR[crate]}"
+    while IFS= read -r -d '' file; do
+        [[ -f $file ]] || continue
+        if ! is_crate_package "$file"; then
+            echo "Notice: skipping crate structuring (validation failed): $file" >&2
+            continue
+        fi
+        echo "Processing CRATE: $file" >&2
+        local target_path
+        target_path=$(process_crate "$file" "$dest")
+        if [[ -n $target_path ]]; then
+            gather_companions "$file" "$(dirname "$target_path")" "crate"
+            manifest_add "$target_path" "crate"
+        else
+            echo "Warning: CRATE passed is_crate_package but process_crate returned no target path; artifact not copied: $file" >&2
+        fi
+    done < <(find "$artifacts_root" -name "*.crate" -type f -print0 2>/dev/null)
+}
+
 # --- Maven bundle metadata (multi-module / flatten-maven-plugin heuristics) --------------------
 # Writes structured_build_artifacts/.maven-bundle-metadata.json after scanning all *.pom under
 # the artifacts root. See detect-artifacts action output bundle-metadata-path.
@@ -508,6 +531,7 @@ structure_content_detected_files() {
 
     _detect_structure_pypi_wheels "$artifacts_root"
     _detect_structure_nuget_packages "$artifacts_root"
+    _detect_structure_crate_packages "$artifacts_root"
     _detect_structure_maven_poms "$artifacts_root"
     _detect_structure_docker_bundle_metadata "$artifacts_root"
     _write_maven_bundle_metadata_json "$artifacts_root"

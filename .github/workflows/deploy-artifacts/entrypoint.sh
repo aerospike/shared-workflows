@@ -182,23 +182,7 @@ structure_generic_files() {
 }
 
 structure_crate_files() {
-    local dest="./structured_build_artifacts/${TYPE_STRUCT_DIR[crate]}"
-    while IFS= read -r -d '' file; do
-        [[ -f $file ]] || continue
-        if ! is_crate_package "$file"; then
-            echo "Notice: skipping crate structuring (validation failed): $file" >&2
-            continue
-        fi
-        echo "Processing CRATE: $file" >&2
-        local target_path
-        target_path=$(process_crate "$file" "$dest")
-        if [[ -n $target_path ]]; then
-            gather_companions "$file" "$(dirname "$target_path")" "crate"
-            manifest_add "$target_path" "crate"
-        else
-            echo "Warning: process_crate returned no target path; artifact not copied: $file" >&2
-        fi
-    done < <(find build-artifacts -name "*.crate" -type f -print0 2>/dev/null)
+    _detect_structure_crate_packages "${BUILD_ARTIFACTS_DIR:-build-artifacts}"
 }
 
 structure_build_artifacts() {

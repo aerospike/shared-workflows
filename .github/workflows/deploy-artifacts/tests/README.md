@@ -35,6 +35,7 @@ bats .github/workflows/deploy-artifacts/tests/bats/test_metadata.bats
 - `tests/helpers/` - Helper functions:
   - `setup.bash` - Setup/teardown functions
   - `maven_fixtures.bash` - JFrog-layout Maven fixtures for structuring tests
+  - `crate_fixtures.bash` - Rust `.crate` fixtures for detect_types tests
   - `command_parsers.bash` - Command parsing utilities
   - `assertions.bash` - Validation assertions
 - `maven-coverage-matrix.md` - Maven release shapes vs bats coverage table
@@ -51,6 +52,7 @@ bats .github/workflows/deploy-artifacts/tests/bats/test_metadata.bats
 
 - `test_structuring.bats` - Artifact routing to correct dirs, companion gathering, prefix stripping, Windows → `win/` + `generic-dev-local` uploads, Rust `.crate` → `crate/` + `generic-dev-local`; Maven flat + nested GAV layout
 - `test_maven_structuring.bats` - Maven detect_types + deploy structuring for jar+pom, parent+children, and pom-only (JFrog layout)
+- `test_detect_types_crate.bats` - Rust `.crate` detect-only structuring (flat + RBV2 nested layout, manifest type `crate`)
 - `test_maven_bundle_metadata.bats` - `.maven-bundle-metadata.json` and detect-time standalone / reactor structuring
 
 ### Integration tests (dry-run entrypoint, parse upload commands)

@@ -1,7 +1,7 @@
 name: Detect artifact types
 description: |
-  Run content-based artifact type detection (npm / PyPI sdist / Go module archives) via
-  deploy-artifacts/detect_types.sh. Intended after merged build artifacts are available
+  Run content-based artifact type detection (npm / PyPI sdist / Go module archives / Rust .crate)
+  via deploy-artifacts/detect_types.sh. Intended after merged build artifacts are available
   (e.g. collect-build-artifacts) and before downstream packaging such as create-release-bundle.
   Also emits Maven bundle metadata JSON (`.maven-bundle-metadata.json`) when any `*.pom` is scanned.
 inputs:
