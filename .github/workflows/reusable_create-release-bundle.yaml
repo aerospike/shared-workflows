@@ -44,10 +44,6 @@ on:
         required: false
         type: string
         default: ""
-      jf-bundle-tag:
-        required: false
-        type: string
-        default: ""
       gh-bundle-metadata-artifact-name:
         description: |
           When set, downloads this GitHub Actions artifact (e.g. deploy job output `bundle-metadata-artifact-name`)
@@ -177,13 +173,3 @@ jobs:
             --version "${{ inputs.version }}" \
             "${meta_arg[@]}" \
             $dry_run_arg
-
-          if [[ -n "$RELEASE_BUNDLE_TAG" ]]; then
-            # Using --project flag here to be defensive, since setting the default JF project didn't work for other release bundle commands
-            jf release-bundle-annotate --project "$JF_PROJECT" --tag "$RELEASE_BUNDLE_TAG" "$JF_BUNDLE_NAME" "$JF_BUNDLE_VERSION"
-          fi
-        env:
-          JF_PROJECT: ${{ inputs.jf-project }}
-          JF_BUNDLE_NAME: ${{ inputs.jf-bundle-name }}
-          JF_BUNDLE_VERSION: ${{ inputs.version }}
-          RELEASE_BUNDLE_TAG: ${{ inputs.jf-bundle-tag }}
