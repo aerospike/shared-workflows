@@ -39,6 +39,16 @@ on:
         description: OIDC provider name
         type: string
         default: gh-aerospike
+      include-repos:
+        description: Semicolon-separated list of target repos to include in promotion (limits scope)
+        type: string
+        required: false
+        default: ""
+      exclude-repos:
+        description: Semicolon-separated list of target repos to exclude from promotion
+        type: string
+        required: false
+        default: ""
 
 jobs:
   promote-release-bundle:
@@ -60,3 +70,5 @@ jobs:
           version: ${{ inputs.version }}
           environment: ${{ inputs.new-environment }}
           jf-project: ${{ inputs.jf-project }}
+          include-repos: ${{ inputs.include-repos }}
+          exclude-repos: ${{ inputs.exclude-repos }}
