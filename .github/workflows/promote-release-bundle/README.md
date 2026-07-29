@@ -32,12 +32,7 @@ jobs:
       jf-bundle-name: database-release
       version: ${{ github.ref_name }}
       new-environment: STAGE
-      gh-workflows-ref: <sha> # Should match the version in your 'uses:' line
 ```
-
-## Required: gh-workflows-ref
-
-The `gh-workflows-ref` input is **required** and must match the version in your `uses:` line. See [Why gh-workflows-ref is required](../docs/why-gh-workflows-ref.md) for details.
 
 ## Permissions
 
