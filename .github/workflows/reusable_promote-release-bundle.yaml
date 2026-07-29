@@ -54,7 +54,7 @@ jobs:
           oidc-provider-name: ${{ inputs.oidc-provider-name }}
           oidc-audience: ${{ inputs.oidc-audience }}
 
-      - uses: aerospike/shared-workflows/.github/actions/promote-release-bundle@82b197fa01cafc1b1d5a82a77ad039e6e8e44545
+      - uses: ./.github/actions/promote-release-bundle
         with:
           bundle-name: ${{ inputs.jf-bundle-name }}
           version: ${{ inputs.version }}
