@@ -24,11 +24,6 @@ on:
         required: true
 
       # Optional inputs
-      dry-run:
-        description: Whether to run in dry-run mode
-        required: false
-        type: boolean
-        default: false
       jf-url:
         required: false
         description: JFrog Artifactory URL
