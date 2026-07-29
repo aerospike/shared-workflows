@@ -15,8 +15,6 @@
 
 ## Example Usage
 
-**Note**: The example below shows the pattern for external consumers using tagged versions. Internal workflows in this repository use relative paths (e.g., `uses: ./.github/workflows/reusable_create-release-bundle.yaml`) for development and testing.
-
 ### Basic release bundle promotion
 
 ```yaml
@@ -28,13 +26,13 @@ on:
 
 jobs:
   promote-release-bundle:
-    uses: aerospike/shared-workflows/.github/workflows/reusable_promote-release-bundle.yaml@v4.0.0
+    uses: aerospike/shared-workflows/.github/workflows/reusable_promote-release-bundle.yaml@<sha> # version
     with:
       jf-project: database
       jf-bundle-name: database-release
       version: ${{ github.ref_name }}
       new-environment: STAGE
-      gh-workflows-ref: v4.0.0 # Should match the version in your 'uses:' line
+      gh-workflows-ref: <sha> # Should match the version in your 'uses:' line
 ```
 
 ## Required: gh-workflows-ref
