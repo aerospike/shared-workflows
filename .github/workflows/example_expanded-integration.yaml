@@ -39,7 +39,7 @@ jobs:
         with:
           egress-policy: audit
 
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Extract Version
         id: extract
         uses: ./.github/actions/extract-version-from-tag
@@ -281,7 +281,7 @@ jobs:
           egress-policy: audit
 
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 1
       - name: Download All Matrix Artifacts
@@ -372,7 +372,7 @@ jobs:
 
       - name: Install JFrog CLI
         id: jf
-        uses: step-security/setup-jfrog-cli@3054b554c0fb4915b3d58847fb7730c593dbb934 # v5.0.0
+        uses: step-security/setup-jfrog-cli@53aeacb709fce45d0baf69a13ec3342f7e2d71a9 # v5.1.0
         env:
           JF_URL: https://artifact.aerospike.io
           JF_PROJECT: test
@@ -380,7 +380,7 @@ jobs:
           oidc-provider-name: gh-dev-test
           oidc-audience: aerospike/testing
       - name: Docker login to Artifactory
-        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
+        uses: docker/login-action@371161bbe7024a29a25c5e19bfcbc0804fe9ad2c # v4.5.2
         with:
           registry: artifact.aerospike.io/test-container-dev-local
           username: ${{ steps.jf.outputs.oidc-user }}
@@ -428,7 +428,7 @@ jobs:
 
       - name: Install JFrog CLI
         id: jf
-        uses: step-security/setup-jfrog-cli@3054b554c0fb4915b3d58847fb7730c593dbb934 # v5.0.0
+        uses: step-security/setup-jfrog-cli@53aeacb709fce45d0baf69a13ec3342f7e2d71a9 # v5.1.0
         env:
           JF_URL: https://artifact.aerospike.io
           JF_PROJECT: test
