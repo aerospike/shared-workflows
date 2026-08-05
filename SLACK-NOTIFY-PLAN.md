@@ -116,11 +116,11 @@ Hard failures (unchanged from source):
 
 ### Actions
 
-- [Not started] Copy and generalize templates from artifact-publisher (strip publish-specific child content)
-- [Not started] Adapt `prep_blockkit.py` for input-driven rendering + `child-blocks` merge
-- [Not started] Create `action.yaml` wiring build → send
-- [Not started] Port/adapt unit tests
-- [Not started] Write `README.md`
+- [Done] Copy and generalize templates from artifact-publisher (strip publish-specific child content)
+- [Done] Adapt `prep_blockkit.py` for input-driven rendering + `child-blocks` merge
+- [Done] Create `action.yaml` wiring build → send
+- [Done] Port/adapt unit tests
+- [Done] Write `README.md`
 
 ### Message types
 
@@ -161,8 +161,8 @@ No `should_notify` output — skip logic uses conditional step invocation.
 
 ### Action steps
 
-1. [Not started] **Validate & build payload** — run `prep_blockkit.py`
-2. [Not started] **Send** — call `./.github/actions/send-slack` (only when payload is non-empty)
+1. [Done] **Validate & build payload** — run `prep_blockkit.py`
+2. [Done] **Send** — call `./.github/actions/send-slack` (only when payload is non-empty)
 
 ```yaml
 - name: Send Slack message
@@ -207,8 +207,8 @@ Generalized template shape:
 
 ### Skip rules (non-fatal, emit `::notice::`)
 
-- [Not started] `slack-channel-id` empty → skip send step (no payload built)
-- [Not started] `dry-run=true` → build payload, print via `send-slack`, `posted=true`
+- [Done] `slack-channel-id` empty → skip send step (no payload built)
+- [Done] `dry-run=true` → build payload, print via `send-slack`, `posted=true`
 
 Hard failures:
 
@@ -218,7 +218,7 @@ Hard failures:
 
 ### Template cleanup
 
-- [Not started] Rename `block_id` values from `publish_*` to neutral ids (`alert_fail`, `alert_warning`, etc.)
+- [Done] Rename `block_id` values from `publish_*` to neutral ids (`alert_fail`, `alert_warning`, etc.)
 
 ---
 
@@ -278,9 +278,9 @@ permissions:
 
 File: `.github/workflows/test_notify-slack.yaml`
 
-- [Not started] Create test workflow (pattern from `test_extract-version-from-tag.yaml`)
-- [Not started] Run `python3 -m unittest discover .github/actions/notify-slack/tests`
-- [Not started] Run `python3 -m unittest discover .github/actions/send-slack/tests`
+- [Done] Create test workflow (pattern from `test_extract-version-from-tag.yaml`)
+- [Done] Run `python3 -m unittest discover .github/actions/notify-slack/tests`
+- [Done] Run `python3 -m unittest discover .github/actions/send-slack/tests`
 
 ### Example workflow
 
@@ -297,8 +297,8 @@ File: `.github/workflows/example_notify-slack.yaml`
 
 ## Phase 5 — Documentation
 
-- [Not started] Write `send-slack/README.md` (transport-only; env-based token; no notify gate)
-- [Not started] Write `notify-slack/README.md` (message types, `child-blocks` examples, consumer usage)
+- [Done] Write `send-slack/README.md` (transport-only; env-based token; no notify gate)
+- [Done] Write `notify-slack/README.md` (message types, `child-blocks` examples, consumer usage)
 - [Not started] Update `CLAUDE.md` with new actions and reusable workflow
 - [Not started] Mark this plan file steps `[Done]` as work completes
 
@@ -380,7 +380,7 @@ Migrate `artifact-publisher` to consume shared `notify-slack`:
 ## Implementation order
 
 1. [Done] Phase 1 — `send-slack` (copy, path fix, unit tests, README, repo secret)
-2. [Not started] Phase 2 — `notify-slack` templates, `prep_blockkit.py`, action, tests
+2. [Done] Phase 2 — `notify-slack` templates, `prep_blockkit.py`, action, tests
 3. [Not started] Phase 3 — `reusable_notify-slack.yaml`
 4. [Not started] Phase 4 — CI test workflow + example workflow
 5. [Not started] Phase 5 — Documentation (`README.md`, `CLAUDE.md`)

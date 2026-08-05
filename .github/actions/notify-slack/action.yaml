@@ -1,0 +1,56 @@
+name: Notify Slack
+description: Build a Block Kit container alert and send via send-slack
+inputs:
+  message-type:
+    description: info, fail, success, blocked, or warning
+    required: true
+  title:
+    description: Plain-text container title
+    required: true
+  subtitle:
+    description: Plain-text container subtitle
+    required: true
+  slack-channel-id:
+    description: Slack channel ID (C…)
+    required: true
+  child-blocks:
+    description: JSON array of Block Kit blocks for the container child_blocks section
+    required: false
+    default: "[]"
+  fallback-text:
+    description: chat.postMessage text fallback (defaults to title + subtitle)
+    required: false
+    default: ""
+  dry-run:
+    description: When true, print payload without HTTP POST
+    required: false
+    default: "false"
+outputs:
+  payload-json-b64:
+    description: Base64-encoded Block Kit chat.postMessage payload
+    value: ${{ steps.prep.outputs.payload_json_b64 }}
+  posted:
+    description: true when send-slack posted (or dry-run printed)
+    value: ${{ steps.send.outputs.posted }}
+runs:
+  using: composite
+  steps:
+    - name: Prepare Block Kit payload
+      id: prep
+      shell: bash
+      env:
+        MESSAGE_TYPE: ${{ inputs.message-type }}
+        TITLE: ${{ inputs.title }}
+        SUBTITLE: ${{ inputs.subtitle }}
+        SLACK_CHANNEL_ID: ${{ inputs.slack-channel-id }}
+        CHILD_BLOCKS: ${{ inputs.child-blocks }}
+        FALLBACK_TEXT: ${{ inputs.fallback-text }}
+      run: python3 "${{ github.action_path }}/prep_blockkit.py"
+
+    - name: Send Slack message
+      id: send
+      if: steps.prep.outputs.payload_json_b64 != ''
+      uses: ./.github/actions/send-slack
+      with:
+        payload-json-b64: ${{ steps.prep.outputs.payload_json_b64 }}
+        dry-run: ${{ inputs.dry-run }}

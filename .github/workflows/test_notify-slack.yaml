@@ -1,4 +1,4 @@
-name: "Test: Send Slack"
+name: "Test: Notify Slack"
 on:
   workflow_dispatch:
   pull_request:
@@ -27,8 +27,14 @@ jobs:
           cd ..
           rm -rf bats-core
 
-      - name: Run unit tests
+      - name: Run send-slack unit tests
         run: python3 -m unittest discover .github/actions/send-slack/tests -p 'test_slack_post.py' -v
 
-      - name: Run entrypoint tests
+      - name: Run send-slack entrypoint tests
         run: bats .github/actions/send-slack/tests/test_entrypoint.bats
+
+      - name: Run notify-slack unit tests
+        run: python3 -m unittest discover .github/actions/notify-slack/tests -v
+
+      - name: Run notify-slack entrypoint tests
+        run: bats .github/actions/notify-slack/tests/test_prep_blockkit.bats

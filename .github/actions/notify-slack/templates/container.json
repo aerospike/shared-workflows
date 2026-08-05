@@ -1,0 +1,27 @@
+{
+	"text": "{fallback_text}",
+	"blocks": [
+		{
+			"type": "container",
+			"block_id": "{block_id}",
+			"width": "full",
+			"is_collapsible": "{is_collapsible}",
+			"default_collapsed": "{default_collapsed}",
+			"icon": {
+				"type": "image",
+				"image_url": "{icon_image_url}",
+				"alt_text": "{icon_alt_text}"
+			},
+			"title": {
+				"type": "plain_text",
+				"text": "{title}",
+				"emoji": true
+			},
+			"subtitle": {
+				"type": "plain_text",
+				"text": "{subtitle}"
+			},
+			"child_blocks": []
+		}
+	]
+}
