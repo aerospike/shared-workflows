@@ -83,6 +83,23 @@ steps:
         ]
 ```
 
+## Reusable workflow
+
+```yaml
+notify-failure:
+  if: failure()
+  uses: aerospike/shared-workflows/.github/workflows/reusable_notify-slack.yaml@<sha>
+  with:
+    gh-workflows-ref: <sha>
+    message-type: fail
+    title: CI failed
+    subtitle: ${{ github.repository }}
+    slack-channel-id: ${{ vars.SLACK_CHANNEL_ID }}
+    child-blocks: ${{ steps.build-alert.outputs.child_blocks_json }}
+```
+
+The reusable workflow checks out `shared-workflows` (sparse: `notify-slack` + `send-slack` actions) and reads `SLACK_BOT_TOKEN` from the shared-workflows repo secret — callers do not pass a Slack secret.
+
 ## Tests
 
 ```bash

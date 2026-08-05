@@ -50,7 +50,7 @@ runs:
     - name: Send Slack message
       id: send
       if: steps.prep.outputs.payload_json_b64 != ''
-      uses: ./.github/actions/send-slack
+      uses: ${{ github.action_path }}/../send-slack
       with:
         payload-json-b64: ${{ steps.prep.outputs.payload_json_b64 }}
         dry-run: ${{ inputs.dry-run }}

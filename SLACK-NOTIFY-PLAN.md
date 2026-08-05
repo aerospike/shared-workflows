@@ -228,7 +228,7 @@ Hard failures:
 
 `.github/workflows/reusable_notify-slack.yaml`
 
-- [Not started] Create reusable workflow
+- [Done] Create reusable workflow
 
 ### Inputs
 
@@ -258,10 +258,10 @@ Consumers do not pass a Slack secret. Channel ID may still come from the consume
 
 ### Job flow
 
-- [Not started] Harden runner (match existing workflows)
-- [Not started] Sparse-checkout shared-workflows (`.github/actions/send-slack`, `.github/actions/notify-slack`)
-- [Not started] Set `SLACK_BOT_TOKEN` from repo secret at job level
-- [Not started] Call `notify-slack` action with inputs
+- [Done] Harden runner (match existing workflows)
+- [Done] Sparse-checkout shared-workflows (`.github/actions/send-slack`, `.github/actions/notify-slack`)
+- [Done] Set `SLACK_BOT_TOKEN` from repo secret at job level
+- [Done] Run `prep_blockkit.py` and `send-slack/entrypoint.sh` (supports `gh-checkout-path`; avoids dynamic `uses:`)
 
 ### Permissions
 
@@ -381,6 +381,6 @@ Migrate `artifact-publisher` to consume shared `notify-slack`:
 
 1. [Done] Phase 1 — `send-slack` (copy, path fix, unit tests, README, repo secret)
 2. [Done] Phase 2 — `notify-slack` templates, `prep_blockkit.py`, action, tests
-3. [Not started] Phase 3 — `reusable_notify-slack.yaml`
+3. [Done] Phase 3 — `reusable_notify-slack.yaml`
 4. [Not started] Phase 4 — CI test workflow + example workflow
 5. [Not started] Phase 5 — Documentation (`README.md`, `CLAUDE.md`)
