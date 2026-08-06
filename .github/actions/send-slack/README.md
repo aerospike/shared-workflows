@@ -4,6 +4,8 @@ Low-level transport action that POSTs a prepared payload to Slack via `chat.post
 
 Use [`notify-slack`](../notify-slack/) to build Block Kit container alerts. Use this action directly when you already have a base64-encoded `chat.postMessage` payload.
 
+See [Slack notification docs](../../workflows/docs/notify-slack.md) for the full consumer guide.
+
 ## Prerequisites
 
 - `SLACK_BOT_TOKEN` must be available in the step or job environment (see [Authentication](#authentication)).
