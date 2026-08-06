@@ -100,6 +100,11 @@ notify-failure:
 
 The reusable workflow checks out `shared-workflows` (sparse: `notify-slack` + `send-slack` actions) and reads `SLACK_BOT_TOKEN` from the shared-workflows repo secret — callers do not pass a Slack secret.
 
+See also:
+
+- [`example_notify-slack.yaml`](../../workflows/example_notify-slack.yaml) — dry-run matrix for all five message types
+- [`test_notify-slack-integration.yaml`](../../workflows/test_notify-slack-integration.yaml) — optional live post to `SLACK_TEST_CHANNEL_ID`
+
 ## Tests
 
 ```bash

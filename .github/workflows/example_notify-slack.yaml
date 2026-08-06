@@ -1,0 +1,54 @@
+name: Example Notify Slack
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  notify-dry-run:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - message-type: info
+            title: Example info notification
+            subtitle: Information-only message
+          - message-type: fail
+            title: Example failure notification
+            subtitle: simulating a failed workflow
+          - message-type: success
+            title: Example success notification
+            subtitle: simulating a successful release
+          - message-type: blocked
+            title: Example blocked notification
+            subtitle: simulating a blocked publish
+          - message-type: warning
+            title: Example warning notification
+            subtitle: simulating a slow-running job
+    uses: ./.github/workflows/reusable_notify-slack.yaml
+    with:
+      gh-workflows-ref: ${{ github.sha }}
+      message-type: ${{ matrix.message-type }}
+      title: ${{ matrix.title }}
+      subtitle: ${{ matrix.subtitle }}
+      slack-channel-id: C0123456789
+      dry-run: true
+      child-blocks: |
+        [
+          {
+            "type": "section",
+            "text": {
+              "type": "mrkdwn",
+              "text": "Example `${{ matrix.message-type }}` notification from `example_notify-slack.yaml`."
+            }
+          },
+          {
+            "type": "section",
+            "text": {
+              "type": "mrkdwn",
+              "text": "<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View workflow>"
+            }
+          }
+        ]

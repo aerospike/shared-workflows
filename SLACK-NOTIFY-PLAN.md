@@ -286,12 +286,12 @@ File: `.github/workflows/test_notify-slack.yaml`
 
 File: `.github/workflows/example_notify-slack.yaml`
 
-- [Not started] Create `workflow_dispatch` example with `dry-run: true`
-- [Not started] Demonstrate each `message-type` with sample `child-blocks`
+- [Done] Create `workflow_dispatch` example with `dry-run: true`
+- [Done] Demonstrate each `message-type` with sample `child-blocks`
 
 ### Manual integration test (optional)
 
-- [Not started] Separate `workflow_dispatch` job posting to a test channel when `SLACK_BOT_TOKEN` + test channel ID are configured
+- [Done] Separate `workflow_dispatch` job posting to a test channel when `SLACK_BOT_TOKEN` + test channel ID are configured
 
 ---
 
@@ -382,5 +382,5 @@ Migrate `artifact-publisher` to consume shared `notify-slack`:
 1. [Done] Phase 1 — `send-slack` (copy, path fix, unit tests, README, repo secret)
 2. [Done] Phase 2 — `notify-slack` templates, `prep_blockkit.py`, action, tests
 3. [Done] Phase 3 — `reusable_notify-slack.yaml`
-4. [Not started] Phase 4 — CI test workflow + example workflow
+4. [Done] Phase 4 — CI test workflow + example workflow
 5. [Not started] Phase 5 — Documentation (`README.md`, `CLAUDE.md`)
