@@ -238,9 +238,9 @@ The `gh-workflows-ref` input is **required** and must match the version in your 
 
 ## Permissions
 
-Workflow-level permissions are `contents: read` and `id-token: write` so nested calls from `reusable_artifacts-cicd.yaml` validate without extra caller grants.
+Workflow-level and job-level permissions are `contents: read` and `id-token: write` so nested calls from `reusable_artifacts-cicd.yaml` validate without extra caller grants. The deploy job does not request `actions` scope; artifact upload/download within the current run needs no elevated permission.
 
-The `deploy` job requests `actions: write` at **job scope** only, for the optional Maven bundle metadata upload (`gh-upload-bundle-metadata`, default `true`). At runtime, that upload succeeds only when the **top-level caller workflow** also grants `actions: write`:
+Optional Maven bundle metadata upload (`gh-upload-bundle-metadata`, default `true`) runs as a workflow step and succeeds only when the **top-level caller workflow** grants `actions: write`:
 
 ```yaml
 permissions:

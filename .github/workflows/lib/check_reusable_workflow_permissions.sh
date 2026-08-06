@@ -95,12 +95,6 @@ while IFS= read -r file; do
     fi
 
     case "$basename" in
-    reusable_deploy-artifacts.yaml)
-        if ! has_job_scoped_permission "$file" "actions"; then
-            echo "ERROR: $basename must declare job-scoped actions: write on the deploy job" >&2
-            errors=$((errors + 1))
-        fi
-        ;;
     reusable_create-release-bundle.yaml)
         if ! has_job_scoped_permission "$file" "actions"; then
             echo "ERROR: $basename must declare job-scoped actions: read on the create-release-bundle job" >&2

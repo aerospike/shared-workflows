@@ -361,7 +361,7 @@ See [Why gh-workflows-ref is required](https://github.com/aerospike/shared-workf
 
 ## Troubleshooting tips
 
-- **Workflow validation: "requesting 'actions: write', but is only allowed 'actions: none'"** → upgrade shared-workflows to a release where deploy scopes `actions: write` to the deploy job only (workflow-level permissions stay `contents: read` + `id-token: write`). If you use Maven bundle metadata upload, your caller workflow still needs `actions: write` at runtime.
+- **Workflow validation: "requesting 'actions: write', but is only allowed 'actions: none'"** → add `actions: write` to your caller workflow when using Maven bundle metadata upload, or set `gh-upload-bundle-metadata: false` on deploy. The deploy reusable workflow stays within `contents: read` + `id-token: write` and does not request `actions` scope.
 - **Workflow validation: "requesting 'actions: read', but is only allowed 'actions: none'"** → upgrade shared-workflows to a release where create-release-bundle scopes `actions: read` to the create-release-bundle job only. Add `actions: read` at runtime when passing `gh-bundle-metadata-artifact-name`.
 - **Deploy fails on "Upload Maven bundle metadata"** → add `actions: write` to your caller workflow permissions, or set `gh-upload-bundle-metadata: false` on the deploy call if you do not need release-bundle metadata handoff.
 - **Create-release-bundle fails on metadata artifact download** → add `actions: read` to your caller workflow permissions, or omit `gh-bundle-metadata-artifact-name`.
