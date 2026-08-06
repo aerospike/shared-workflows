@@ -124,10 +124,12 @@ permissions:
 jobs:
   deploy:
     runs-on: ${{ inputs.runs-on }}
+    # Must stay within the ceiling artifacts-cicd grants its children (contents: read,
+    # id-token: write). Anything more makes every artifacts-cicd call an invalid workflow.
+    # upload/download-artifact against the current run need no actions scope.
     permissions:
       contents: read
       id-token: write
-      actions: write
     outputs:
       jf-build-id: ${{ steps.deploy.outputs.jf-build-id }}
       bundle-metadata-artifact-name: ${{ steps.bundle-metadata-state.outputs.artifact-name }}
