@@ -37,17 +37,9 @@ get_jar_metadata() {
     local sibling_pom="$jar_dir/${base_no_ext}.pom"
     if [[ -z $group_id && -f $sibling_pom ]]; then
         if command -v xmllint >/dev/null 2>&1; then
-            local pom_value field
-            for field in artifactId version groupId; do
-                pom_value=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='$field'])" "$sibling_pom" 2>/dev/null)
-                # A POM inheriting the field from <parent> resolves empty; it must not clobber a value already found.
-                [[ -n $pom_value ]] || continue
-                case "$field" in
-                artifactId) pkgname="$pom_value" ;;
-                version) version="$pom_value" ;;
-                groupId) group_id="$pom_value" ;;
-                esac
-            done
+            pkgname=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='artifactId'])" "$sibling_pom" 2>/dev/null)
+            version=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='version'])" "$sibling_pom" 2>/dev/null)
+            group_id=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='groupId'])" "$sibling_pom" 2>/dev/null)
         fi
     fi
 
