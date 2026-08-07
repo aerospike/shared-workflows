@@ -492,3 +492,45 @@ YAML
 @test "_validate_helm_name accepts name with dots" {
     _validate_helm_name "my.chart"
 }
+
+# --- get_jar_metadata (flat jar + sibling POM) ---
+
+# Builds "$1/test.jar" with no pom.properties plus a sibling test.pom holding $2 as its body.
+make_flat_jar_with_pom() {
+    local dir="$1" pom_body="$2"
+    printf 'placeholder' >"$dir/payload.txt"
+    (cd "$dir" && zip -q test.jar payload.txt)
+    cat >"$dir/test.pom" <<POM
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+$pom_body
+</project>
+POM
+}
+
+@test "get_jar_metadata reads name, version and group from a sibling POM" {
+    set -e
+    local dir="$BATS_TEST_TMPDIR/direct"
+    mkdir -p "$dir"
+    make_flat_jar_with_pom "$dir" "  <artifactId>my-app</artifactId>
+  <version>2.1.0</version>
+  <groupId>com.example.direct</groupId>"
+
+    result=$(get_jar_metadata "$dir/test.jar")
+    [[ $result == "my-app 2.1.0 com.example.direct" ]]
+}
+
+@test "get_jar_metadata keeps the filename-derived name when the sibling POM inherits groupId from a parent" {
+    set -e
+    local dir="$BATS_TEST_TMPDIR/inherited"
+    mkdir -p "$dir"
+    make_flat_jar_with_pom "$dir" "  <parent>
+    <groupId>com.example.parent</groupId>
+    <artifactId>parent-pom</artifactId>
+    <version>1.0.0</version>
+  </parent>"
+
+    # groupId, artifactId and version all resolve empty from this POM. An unguarded
+    # assignment would leave the package name blank and route the jar to the wrong path.
+    result=$(get_jar_metadata "$dir/test.jar")
+    [[ $(echo "$result" | awk '{print $1}') == "test" ]]
+}
