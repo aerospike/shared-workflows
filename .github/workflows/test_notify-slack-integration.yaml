@@ -1,0 +1,116 @@
+name: "Test: Notify Slack integration"
+
+# Optional live Slack post. Requires repo secrets:
+#   SLACK_BOT_TOKEN        — bot token with chat:write
+#   SLACK_TEST_CHANNEL_ID  — target test channel (C…)
+
+on:
+  workflow_dispatch:
+    # checkov:skip=CKV_GHA_7:manual integration test; inputs select alert style and live vs dry-run
+    inputs:
+      message-type:
+        description: Alert style to post
+        required: true
+        type: choice
+        options:
+          - info
+          - fail
+          - success
+          - blocked
+          - warning
+        default: info
+      live-post:
+        description: When true, POST to Slack (requires SLACK_BOT_TOKEN and SLACK_TEST_CHANNEL_ID secrets)
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  guard:
+    runs-on: ubuntu-22.04
+    outputs:
+      proceed: ${{ steps.check.outputs.proceed }}
+      slack-channel-id: ${{ steps.check.outputs.slack_channel_id }}
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          egress-policy: audit
+
+      - name: Validate integration inputs
+        id: check
+        shell: bash
+        env:
+          LIVE_POST: ${{ inputs.live-post }}
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_TEST_CHANNEL_ID: ${{ secrets.SLACK_TEST_CHANNEL_ID }}
+        run: |
+          set -euo pipefail
+          proceed=false
+          channel_id="C0123456789"
+          if [[ "${LIVE_POST}" != "true" ]]; then
+            echo "::notice::Live Slack post skipped: set live-post to true to enable."
+          elif [[ -z "${SLACK_BOT_TOKEN}" ]]; then
+            echo "::notice::Live Slack post skipped: SLACK_BOT_TOKEN secret is not configured."
+          elif [[ -z "${SLACK_TEST_CHANNEL_ID}" ]]; then
+            echo "::notice::Live Slack post skipped: SLACK_TEST_CHANNEL_ID secret is not configured."
+          else
+            proceed=true
+            channel_id="${SLACK_TEST_CHANNEL_ID}"
+          fi
+          echo "proceed=${proceed}" >> "$GITHUB_OUTPUT"
+          echo "slack_channel_id=${channel_id}" >> "$GITHUB_OUTPUT"
+
+  notify-live:
+    needs: guard
+    if: needs.guard.outputs.proceed == 'true'
+    uses: ./.github/workflows/reusable_notify-slack.yaml
+    with:
+      gh-workflows-ref: ${{ github.sha }}
+      message-type: ${{ inputs.message-type }}
+      title: Integration test notification
+      subtitle: ${{ inputs.message-type }} from test_notify-slack-integration.yaml
+      slack-channel-id: ${{ needs.guard.outputs.slack-channel-id }}
+      dry-run: false
+      child-blocks: |
+        [
+          {
+            "type": "section",
+            "text": {
+              "type": "mrkdwn",
+              "text": "Live integration test for `${{ inputs.message-type }}`."
+            }
+          },
+          {
+            "type": "section",
+            "text": {
+              "type": "mrkdwn",
+              "text": "<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View workflow>"
+            }
+          }
+        ]
+
+  notify-dry-run:
+    needs: guard
+    if: needs.guard.outputs.proceed != 'true'
+    uses: ./.github/workflows/reusable_notify-slack.yaml
+    with:
+      gh-workflows-ref: ${{ github.sha }}
+      message-type: ${{ inputs.message-type }}
+      title: Integration test notification (dry-run)
+      subtitle: ${{ inputs.message-type }} from test_notify-slack-integration.yaml
+      slack-channel-id: ${{ needs.guard.outputs.slack-channel-id }}
+      dry-run: true
+      child-blocks: |
+        [
+          {
+            "type": "section",
+            "text": {
+              "type": "mrkdwn",
+              "text": "Dry-run fallback because live-post is disabled or secrets are missing."
+            }
+          }
+        ]

@@ -1,0 +1,132 @@
+name: Notify Slack
+
+on:
+  workflow_call:
+    inputs:
+      # Required inputs
+      message-type:
+        description: info, fail, success, blocked, or warning
+        required: true
+        type: string
+      title:
+        description: Plain-text container title
+        required: true
+        type: string
+      subtitle:
+        description: Plain-text container subtitle
+        required: true
+        type: string
+      slack-channel-id:
+        description: Slack channel ID (C…)
+        required: true
+        type: string
+      gh-workflows-ref:
+        description: |
+          Git reference for shared-workflows checkout. Should match the version in your 'uses:' line.
+          GitHub Actions doesn't expose the called workflow's ref, so this is required.
+          See: .github/workflows/docs/why-gh-workflows-ref.md
+        required: true
+        type: string
+
+      # Optional inputs
+      child-blocks:
+        description: JSON array of Block Kit blocks for the container child_blocks section
+        required: false
+        type: string
+        default: "[]"
+      dry-run:
+        description: When true, print payload without HTTP POST
+        required: false
+        type: boolean
+        default: false
+      fallback-text:
+        description: chat.postMessage text fallback (defaults to title + subtitle)
+        required: false
+        type: string
+        default: ""
+      gh-checkout-path:
+        description: Directory to checkout the shared-workflows repository into
+        required: false
+        type: string
+        default: shared-workflows
+      runs-on:
+        description: Runner label for the notify job
+        required: false
+        type: string
+        default: ubuntu-22.04
+
+    outputs:
+      payload-json-b64:
+        description: Base64-encoded Block Kit chat.postMessage payload
+        value: ${{ jobs.notify-slack.outputs.payload-json-b64 }}
+
+permissions:
+  contents: read
+
+jobs:
+  notify-slack:
+    runs-on: ${{ inputs.runs-on }}
+    env:
+      SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+    outputs:
+      payload-json-b64: ${{ steps.prep.outputs.payload_json_b64 }}
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout shared-workflows repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          repository: aerospike/shared-workflows
+          ref: ${{ inputs.gh-workflows-ref }}
+          path: ${{ inputs.gh-checkout-path }}
+          sparse-checkout: |
+            .github/actions/notify-slack
+            .github/actions/send-slack
+          sparse-checkout-cone-mode: false
+          fetch-depth: 1
+
+      - name: Prepare Block Kit payload
+        id: prep
+        shell: bash
+        env:
+          MESSAGE_TYPE: ${{ inputs.message-type }}
+          TITLE: ${{ inputs.title }}
+          SUBTITLE: ${{ inputs.subtitle }}
+          SLACK_CHANNEL_ID: ${{ inputs.slack-channel-id }}
+          CHILD_BLOCKS: ${{ inputs.child-blocks }}
+          FALLBACK_TEXT: ${{ inputs.fallback-text }}
+        run: |
+          set -euo pipefail
+          python3 "${{ github.workspace }}/${{ inputs.gh-checkout-path }}/.github/actions/notify-slack/prep_blockkit.py"
+
+      - name: Check send prerequisites
+        id: send_gate
+        if: steps.prep.outputs.payload_json_b64 != ''
+        shell: bash
+        env:
+          DRY_RUN: ${{ inputs.dry-run }}
+        run: |
+          set -euo pipefail
+          if [[ "${DRY_RUN}" == "true" || -n "${SLACK_BOT_TOKEN:-}" ]]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::Slack notify skipped: SLACK_BOT_TOKEN is not set."
+          fi
+
+      - name: Send Slack message
+        id: send
+        if: steps.send_gate.outputs.ready == 'true'
+        shell: bash
+        env:
+          PAYLOAD_JSON_B64: ${{ steps.prep.outputs.payload_json_b64 }}
+          DRY_RUN: ${{ inputs.dry-run }}
+        run: |
+          set -euo pipefail
+          args=(--payload-b64 "${PAYLOAD_JSON_B64}")
+          if [[ "${DRY_RUN}" == "true" ]]; then
+            args+=(--dry-run)
+          fi
+          python3 "${{ github.workspace }}/${{ inputs.gh-checkout-path }}/.github/actions/send-slack/slack_post.py" "${args[@]}"

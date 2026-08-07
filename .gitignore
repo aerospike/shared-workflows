@@ -16,3 +16,4 @@ obj
 .jfrog/projects/nuget.yaml
 target
 .claude/settings.local.json
+**/*.pyc

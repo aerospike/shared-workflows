@@ -1,0 +1,25 @@
+name: Send Slack message
+description: POST a prepared Block Kit payload to Slack via chat.postMessage
+inputs:
+  payload-json-b64:
+    description: Base64-encoded chat.postMessage JSON payload
+    required: true
+  dry-run:
+    description: When true, print payload without HTTP POST
+    required: false
+    default: "false"
+runs:
+  using: composite
+  steps:
+    - name: Send Slack message
+      shell: bash
+      env:
+        PAYLOAD_JSON_B64: ${{ inputs.payload-json-b64 }}
+        DRY_RUN: ${{ inputs.dry-run }}
+      run: |
+        set -euo pipefail
+        args=(--payload-b64 "${PAYLOAD_JSON_B64}")
+        if [[ "${DRY_RUN}" == "true" ]]; then
+          args+=(--dry-run)
+        fi
+        python3 "${{ github.action_path }}/slack_post.py" "${args[@]}"

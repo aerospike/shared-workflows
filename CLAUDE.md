@@ -33,14 +33,36 @@ Two approaches are supported as first-class consumer paths:
 
 Pick whichever fits the use case. The orchestrated path is generally lower-maintenance for new consumers; the composable path is the right answer when the orchestrator's opinions don't match. Both are supported, neither is a fallback.
 
-| Workflow                              | Purpose                                                       |
-| ------------------------------------- | ------------------------------------------------------------- |
-| `reusable_artifacts-cicd.yaml`        | Orchestrated build, sign, deploy                              |
-| `reusable_docker-build-deploy.yaml`   | Multi-arch OCI images with attestations                       |
-| `reusable_create-release-bundle.yaml` | JFrog release bundles (combines artifact + docker outputs)    |
-| `reusable_execute-build.yaml`         | Composable. Run arbitrary build script, upload artifacts      |
-| `reusable_sign-artifacts.yaml`        | Composable. GPG sign deb/rpm/generic/.tgz, SSL.com sign nupkg |
-| `reusable_deploy-artifacts.yaml`      | Composable. Upload to JFrog Artifactory (auto-routes by type) |
+| Workflow                              | Purpose                                                         |
+| ------------------------------------- | --------------------------------------------------------------- |
+| `reusable_artifacts-cicd.yaml`        | Orchestrated build, sign, deploy                                |
+| `reusable_docker-build-deploy.yaml`   | Multi-arch OCI images with attestations                         |
+| `reusable_create-release-bundle.yaml` | JFrog release bundles (combines artifact + docker outputs)      |
+| `reusable_execute-build.yaml`         | Composable. Run arbitrary build script, upload artifacts        |
+| `reusable_sign-artifacts.yaml`        | Composable. GPG sign deb/rpm/generic/.tgz, SSL.com sign nupkg   |
+| `reusable_deploy-artifacts.yaml`      | Composable. Upload to JFrog Artifactory (auto-routes by type)   |
+| `reusable_notify-slack.yaml`          | Post Block Kit Slack alerts (info/fail/success/blocked/warning) |
+
+### Slack notification actions
+
+| Action / workflow       | Purpose                                                       |
+| ----------------------- | ------------------------------------------------------------- |
+| `notify-slack`          | Build container-style Block Kit alert; calls `send-slack`     |
+| `send-slack`            | Low-level `chat.postMessage` transport (`slack_post.py`)      |
+| `reusable_notify-slack` | Reusable workflow wrapper (sparse checkout + notify pipeline) |
+
+Two consumer paths (same as artifact pipelines — pick what fits):
+
+- **Reusable workflow** (`reusable_notify-slack.yaml`): lowest wiring for callers; no Slack secret passed from consumer repos.
+- **Composable actions** (`notify-slack` → `send-slack`): use when you need custom steps between build and send, or a non-standard job layout.
+
+Architecture: `notify-slack` → `prep_blockkit.py` + `templates/container.json` → `send-slack` → Slack API.
+
+Message types: `info`, `fail`, `success`, `blocked`, `warning`. Per-type icon/collapsible styling is configured in `MESSAGE_TYPE_CONFIG` inside `prep_blockkit.py`; callers supply detail via the `child-blocks` JSON input.
+
+Authentication: `SLACK_BOT_TOKEN` is a **shared-workflows repo secret**, injected via job `env:` — not an action input. Consumers still pass `slack-channel-id` (typically from their own repo `vars`/`secrets`). Dry-run does not require a token.
+
+Docs: `.github/actions/notify-slack/README.md`, `.github/actions/send-slack/README.md`, `.github/workflows/docs/notify-slack.md`. Examples: `example_notify-slack.yaml`, tests: `test_notify-slack.yaml`, live integration: `test_notify-slack-integration.yaml` (optional).
 
 ## Naming Convention (v2.0.0+)
 
@@ -113,6 +135,15 @@ bats .github/workflows/deploy-artifacts/tests/bats/test_deb_rpm_upload.bats
 ```bash
 .github/workflows/execute-build/test-entrypoint.sh
 .github/workflows/create-release-bundle/test-entrypoint.sh
+```
+
+### Slack notify tests
+
+```bash
+python3 -m unittest discover .github/actions/send-slack/tests
+python3 -m unittest discover .github/actions/notify-slack/tests
+bats .github/actions/send-slack/tests/test_slack_post.bats
+bats .github/actions/notify-slack/tests/test_prep_blockkit.bats
 ```
 
 ### Linting
