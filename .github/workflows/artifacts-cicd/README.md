@@ -20,7 +20,7 @@ permissions:
   id-token: write
 ```
 
-If your build produces Maven/JAR artifacts and you rely on bundle metadata for release bundles, also add `actions: write` so the deploy stage can upload `.maven-bundle-metadata.json` as a GitHub artifact. See [deploy-artifacts README](../deploy-artifacts/README.md#permissions).
+Those two grants cover every stage, including the Maven bundle metadata handoff. No `actions` scope is needed. See [deploy-artifacts README](../deploy-artifacts/README.md#permissions).
 
 ## Usage
 

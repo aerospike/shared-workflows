@@ -45,7 +45,7 @@ permissions:
   id-token: write
 ```
 
-Since v3.8.0, deploy can upload optional Maven bundle metadata (`.maven-bundle-metadata.json`) for release-bundle annotation. If your pipeline builds Maven/JAR artifacts and chains into `reusable_create-release-bundle.yaml` via that metadata artifact, add `actions: write` (deploy upload) and `actions: read` (create-release-bundle download) to the caller workflow (or job) permissions. Without them, deploy to JFrog and bundle creation still succeed; only the metadata handoff steps fail when metadata is produced.
+Deploy can upload optional Maven bundle metadata (`.maven-bundle-metadata.json`) for release-bundle annotation, and `reusable_create-release-bundle.yaml` downloads it. Both transfers happen inside the current run, so the two grants above are all a caller needs. No `actions` scope is involved.
 
 ## Standard Workflows for your project
 
@@ -63,7 +63,6 @@ This orchestrates the full build → sign → deploy lifecycle internally.
 permissions:
   contents: read
   id-token: write
-  # actions: write  # add when building Maven/JAR artifacts and using bundle metadata upload
 
 jobs:
   ci:
@@ -361,10 +360,9 @@ See [Why gh-workflows-ref is required](https://github.com/aerospike/shared-workf
 
 ## Troubleshooting tips
 
-- **Workflow validation: "requesting 'actions: write', but is only allowed 'actions: none'"** → add `actions: write` to your caller workflow when using Maven bundle metadata upload, or set `gh-upload-bundle-metadata: false` on deploy. The deploy reusable workflow stays within `contents: read` + `id-token: write` and does not request `actions` scope.
-- **Workflow validation: "requesting 'actions: read', but is only allowed 'actions: none'"** → upgrade shared-workflows to a release where create-release-bundle scopes `actions: read` to the create-release-bundle job only. Add `actions: read` at runtime when passing `gh-bundle-metadata-artifact-name`.
-- **Deploy fails on "Upload Maven bundle metadata"** → add `actions: write` to your caller workflow permissions, or set `gh-upload-bundle-metadata: false` on the deploy call if you do not need release-bundle metadata handoff.
-- **Create-release-bundle fails on metadata artifact download** → add `actions: read` to your caller workflow permissions, or omit `gh-bundle-metadata-artifact-name`.
+- **Workflow validation: "requesting 'actions: write' (or 'actions: read'), but is only allowed 'actions: none'"** → your pinned ref sits in the range where the deploy job requested `actions: write` and the create-release-bundle job requested `actions: read`. Move to a ref that no longer requests either. Callers of `reusable_artifacts-cicd.yaml` cannot fix this by granting the permission themselves, because the orchestrator caps its children at `contents: read` + `id-token: write`.
+- **Deploy fails on "Upload Maven bundle metadata"** → the upload targets the current run and needs no permission grant, so read the step log for the real cause: no `.maven-bundle-metadata.json` was produced, or structuring failed earlier in the job.
+- **Create-release-bundle fails on "Download Maven bundle metadata artifact"** → confirm deploy actually uploaded it (its `bundle-metadata-available` output is `true`) and that `gh-bundle-metadata-artifact-name` matches deploy's `bundle-metadata-artifact-name` output.
 - **Deploy fails (auth)** → confirm GitHub→JFrog **OIDC** trust/policy is configured and that the workflow's identity has deploy permission to the target project/repo. (example mistakes often around wrong audience or incorrect token permissions)
 - **Docker push fails** → ensure `tag` includes the full registry path (e.g., `artifact.aerospike.io/project-docker-dev-local/image:tag`). Verify JFrog registry permissions and OIDC authentication.
 - **Bundle issues** → see the troubleshooting section in [Release Bundles](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/docs/release-bundles.md#troubleshooting).

@@ -12,7 +12,6 @@ permissions:
   contents: read
   packages: write
   attestations: write
-  actions: write # Maven bundle metadata upload in deploy → release bundle
 
 concurrency:
   group: jfrog-test-deploy
