@@ -38,6 +38,15 @@ on:
         type: string
         default: Dockerfile
         description: Path to Dockerfile (relative to context)
+      gh-context-artifacts-json:
+        type: string
+        default: ""
+        description: >-
+          JSON array of same-run GitHub artifacts to place inside the Docker
+          build context before the image build, e.g.
+          [{"name":"signed-artifacts","dest":"artifacts"}]. Each dest is a
+          relative path under the build context root and must not already
+          exist. Unset means no artifacts are placed.
       jf-build-name:
         type: string
         required: false
@@ -216,6 +225,142 @@ jobs:
           egress-policy: audit
 
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      # Bytes a caller asks for are placed in the build context here, between
+      # the checkout that creates the context and the build that reads it. That
+      # is the only window a caller cannot reach itself: COPY cannot read
+      # outside the context, and a job invoked with `uses:` cannot add steps.
+      # Running before the OIDC token is minted means a bad input costs nothing.
+      - name: Validate build-context artifacts
+        id: ctx_artifacts
+        if: ${{ inputs.gh-context-artifacts-json != '' }}
+        shell: bash
+        env:
+          CONTEXT_ARTIFACTS_JSON: ${{ inputs.gh-context-artifacts-json }}
+        run: |
+          set -euo pipefail
+
+          json="${CONTEXT_ARTIFACTS_JSON:-}"
+
+          fail() {
+            echo "::error::gh-context-artifacts-json: $*"
+            exit 1
+          }
+
+          if ! printf '%s' "$json" | jq -e . >/dev/null 2>&1; then
+            fail "input is not valid JSON"
+          fi
+          if ! printf '%s' "$json" | jq -e 'type == "array"' >/dev/null 2>&1; then
+            fail "input must be a JSON array, got $(printf '%s' "$json" | jq -r 'type')"
+          fi
+
+          count="$(printf '%s' "$json" | jq 'length')"
+          if [ "$count" -eq 0 ]; then
+            echo "::notice::gh-context-artifacts-json is an empty array; no artifacts will be placed"
+            {
+              echo "count=0"
+              echo "pattern="
+              echo "entries=[]"
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Shape first, so the per-entry rules below can assume two strings.
+          malformed="$(printf '%s' "$json" | jq -r '
+            to_entries
+            | map(select(
+                (.value | type) != "object"
+                or (.value.name | type) != "string"
+                or (.value.dest | type) != "string"
+                or (.value.name == "")
+                or (.value.dest == "")
+              ))
+            | if length > 0 then (.[0].key | tostring) else "" end
+          ')"
+          if [ -n "$malformed" ]; then
+            fail "entry $malformed must be an object with non-empty string \"name\" and \"dest\""
+          fi
+
+          declare -A seen_names seen_dests
+          names=()
+
+          for i in $(seq 0 $((count - 1))); do
+            name="$(printf '%s' "$json" | jq -r --argjson i "$i" '.[$i].name')"
+            dest="$(printf '%s' "$json" | jq -r --argjson i "$i" '.[$i].dest')"
+
+            # The charset also keeps minimatch metacharacters out of the
+            # download pattern built at the end of this step.
+            if ! [[ $name =~ ^[A-Za-z0-9._-]+$ ]]; then
+              fail "entry $i name \"$name\" must match ^[A-Za-z0-9._-]+\$"
+            fi
+            # Separate from the charset rule, and not redundant with it: "." and
+            # ".." are made only of permitted characters. actions/download-artifact
+            # joins the name onto the staging path, so ".." would resolve the
+            # per-artifact directory to RUNNER_TEMP itself and the later
+            # "contains a regular file" assertion would pass against it.
+            if [ "$name" = "." ] || [ "$name" = ".." ]; then
+              fail "entry $i name \"$name\" is a path traversal"
+            fi
+            if [ -n "${seen_names[$name]:-}" ]; then
+              fail "entry $i name \"$name\" is a duplicate"
+            fi
+            seen_names[$name]=1
+
+            if [ "${dest:0:1}" = "/" ]; then
+              fail "entry $i dest \"$dest\" must be relative to the build context root"
+            fi
+            # Charset is not implied by the traversal rules below: "-rf" passes
+            # every one of them. Reaching a run: block through env: stops
+            # interpolation, not a leading dash being read as an option by mv.
+            if ! [[ $dest =~ ^[A-Za-z0-9._/-]+$ ]]; then
+              fail "entry $i dest \"$dest\" must match ^[A-Za-z0-9._/-]+\$"
+            fi
+            # A trailing slash is not caught by the segment loop below, because
+            # splitting on '/' discards the trailing empty field. Left in, it
+            # would defeat the duplicate-dest rule: "x" and "x/" compare as
+            # different strings but name the same directory.
+            if [ "${dest: -1}" = "/" ]; then
+              fail "entry $i dest \"$dest\" must not end with \"/\""
+            fi
+            # Per segment, so that a legitimate "a..b" is kept and a "..", an
+            # empty segment from a doubled slash, or an option-like segment is
+            # rejected.
+            IFS='/' read -ra segments <<< "$dest"
+            for seg in ${segments[@]+"${segments[@]}"}; do
+              if [ -z "$seg" ]; then
+                fail "entry $i dest \"$dest\" has an empty path segment"
+              fi
+              if [ "$seg" = "." ] || [ "$seg" = ".." ]; then
+                fail "entry $i dest \"$dest\" contains a \"$seg\" segment"
+              fi
+              if [ "${seg:0:1}" = "-" ]; then
+                fail "entry $i dest \"$dest\" has a segment beginning with \"-\""
+              fi
+            done
+            if [ -n "${seen_dests[$dest]:-}" ]; then
+              fail "entry $i dest \"$dest\" is a duplicate"
+            fi
+            seen_dests[$dest]=1
+
+            names+=("$name")
+          done
+
+          # minimatch does not expand a one-element brace, so "{foo}" matches the
+          # literal string "{foo}" and would download nothing.
+          if [ "${#names[@]}" -eq 1 ]; then
+            pattern="${names[0]}"
+          else
+            joined="$(printf '%s,' "${names[@]}")"
+            pattern="{${joined%,}}"
+          fi
+
+          {
+            echo "count=$count"
+            echo "pattern=$pattern"
+            echo "entries=$(printf '%s' "$json" | jq -c '.')"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "Validated $count build-context artifact(s); download pattern: $pattern"
 
       - name: Install JFrog CLI
         id: jf
