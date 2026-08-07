@@ -32,16 +32,16 @@ jobs:
       - name: Install dependencies
         run: sudo apt-get update && sudo apt-get install -y python3-yaml
 
+      # The helper libraries are off because no bats suite in this repo uses
+      # them; every existing `load` is a local helper file.
       - name: Install bats
-        run: |
-          git init bats-core
-          cd bats-core
-          git remote add origin https://github.com/bats-core/bats-core.git
-          git fetch --depth 1 origin cf931b7b7c79998ded0f364126dbc9d46739a76f # v1.12.0
-          git checkout --detach FETCH_HEAD
-          sudo ./install.sh /usr/local
-          cd ..
-          rm -rf bats-core
+        uses: bats-core/bats-action@5b1e60c2ee94cb1b44a616ea4b1f466f9d6e38ef # 4.0.0
+        with:
+          bats-version: 1.12.0
+          support-install: false
+          assert-install: false
+          detik-install: false
+          file-install: false
 
       - name: Run build-context validation bats tests
         run: bats .github/workflows/docker-build-deploy/tests/bats/
