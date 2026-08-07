@@ -8,18 +8,18 @@ inputs:
     description: When true, print payload without HTTP POST
     required: false
     default: "false"
-outputs:
-  posted:
-    description: true when a message was posted (or dry-run printed)
-    value: ${{ steps.send.outputs.posted }}
 runs:
   using: composite
   steps:
     - name: Send Slack message
-      id: send
       shell: bash
       env:
         PAYLOAD_JSON_B64: ${{ inputs.payload-json-b64 }}
         DRY_RUN: ${{ inputs.dry-run }}
       run: |
-        ${{ github.action_path }}/entrypoint.sh
+        set -euo pipefail
+        args=(--payload-b64 "${PAYLOAD_JSON_B64}")
+        if [[ "${DRY_RUN}" == "true" ]]; then
+          args+=(--dry-run)
+        fi
+        python3 "${{ github.action_path }}/slack_post.py" "${args[@]}"

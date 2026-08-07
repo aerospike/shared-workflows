@@ -142,7 +142,7 @@ bats .github/workflows/deploy-artifacts/tests/bats/test_deb_rpm_upload.bats
 ```bash
 python3 -m unittest discover .github/actions/send-slack/tests
 python3 -m unittest discover .github/actions/notify-slack/tests
-bats .github/actions/send-slack/tests/test_entrypoint.bats
+bats .github/actions/send-slack/tests/test_slack_post.bats
 bats .github/actions/notify-slack/tests/test_prep_blockkit.bats
 ```
 

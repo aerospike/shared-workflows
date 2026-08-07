@@ -8,8 +8,9 @@ See [Slack notification docs](../../workflows/docs/notify-slack.md) for the full
 
 ## Prerequisites
 
-- `SLACK_BOT_TOKEN` must be available in the step or job environment (see [Authentication](#authentication)).
+- `SLACK_BOT_TOKEN` must be available in the step or job environment for live posts (see [Authentication](#authentication)).
 - Payload must be a valid `chat.postMessage` JSON object (typically includes `channel`, `text`, and `blocks`).
+- Callers should skip this action when there is nothing to send (empty payload) or when live posting is requested without a token. [`notify-slack`](../notify-slack/) handles those skips upstream.
 
 ## Inputs
 
@@ -20,9 +21,7 @@ See [Slack notification docs](../../workflows/docs/notify-slack.md) for the full
 
 ## Outputs
 
-| Output   | Description                                                                 |
-| -------- | --------------------------------------------------------------------------- |
-| `posted` | `true` when a message was posted (or dry-run printed); `false` when skipped |
+None. Step **success** means the payload was dry-run printed or posted to Slack. Step **failure** means an empty/invalid payload, missing token on a live post, or a Slack API error.
 
 ## Authentication
 
@@ -37,20 +36,15 @@ env:
 
 Repository admins must configure that secret before live posting works. Dry-run mode does not require a token.
 
-## Skip behavior
+## Failure behavior
 
-These conditions skip posting without failing the step:
-
-| Condition                             | Result                       |
-| ------------------------------------- | ---------------------------- |
-| Empty `payload-json-b64`              | Skip, `posted=false`         |
-| `dry-run=true`                        | Print payload, `posted=true` |
-| Missing `SLACK_BOT_TOKEN` (live post) | Skip, `posted=false`         |
-
-Hard failures:
-
-- Invalid base64 or JSON payload
-- Slack API error
+| Condition                             | Result        |
+| ------------------------------------- | ------------- |
+| Empty `payload-json-b64`              | Step fails    |
+| `dry-run=true`                        | Step succeeds |
+| Missing `SLACK_BOT_TOKEN` (live post) | Step fails    |
+| Invalid base64 / JSON payload         | Step fails    |
+| Slack API error                       | Step fails    |
 
 ## Example usage
 
@@ -64,6 +58,7 @@ steps:
       sparse-checkout-cone-mode: false
 
   - name: Send Slack message
+    if: steps.prep.outputs.payload-json-b64 != ''
     uses: ./.github/actions/send-slack
     env:
       SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
@@ -84,5 +79,5 @@ steps:
 
 ```bash
 python3 -m unittest discover .github/actions/send-slack/tests -p 'test_slack_post.py'
-bats .github/actions/send-slack/tests/test_entrypoint.bats
+bats .github/actions/send-slack/tests/test_slack_post.bats
 ```

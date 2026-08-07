@@ -22,6 +22,12 @@ def _env_str(name: str, default: str = "") -> str:
     return os.environ.get(name, default).strip()
 
 
+def _is_dry_run(args: argparse.Namespace) -> bool:
+    if args.dry_run:
+        return True
+    return _env_str("DRY_RUN").lower() == "true"
+
+
 def _slack_api_error_message(body: dict[str, Any]) -> str:
     error = body.get("error", "unknown")
     return f"Slack API error: {error}"
@@ -70,23 +76,21 @@ def load_payload(*, payload_json: str = "", payload_b64: str = "") -> dict[str, 
 
 
 def cmd_post(args: argparse.Namespace) -> int:
-    if args.skip:
-        print("Slack notify skipped: --skip set.")
-        return 0
+    dry_run = _is_dry_run(args)
     bot_token = args.bot_token or _env_str("SLACK_BOT_TOKEN")
-    if not bot_token and not args.dry_run:
-        print("Slack notify skipped: SLACK_BOT_TOKEN is not set.")
-        return 0
     try:
         payload = load_payload(payload_json=args.payload_json, payload_b64=args.payload_b64)
     except (ValueError, json.JSONDecodeError, UnicodeError) as exc:
         print(f"Invalid Slack payload: {exc}", file=sys.stderr)
         return 1
     if not payload:
-        print("Decoded Slack payload is empty.", file=sys.stderr)
+        print("Slack payload is empty.", file=sys.stderr)
+        return 1
+    if not bot_token and not dry_run:
+        print("SLACK_BOT_TOKEN is not set.", file=sys.stderr)
         return 1
     try:
-        post_to_slack(bot_token, payload, dry_run=args.dry_run)
+        post_to_slack(bot_token, payload, dry_run=dry_run)
     except SlackPostError:
         return 1
     return 0
@@ -97,7 +101,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--bot-token", default="", help="Slack bot token (xoxb-…)")
     parser.add_argument("--payload-b64", default="", help="Base64-encoded JSON payload")
     parser.add_argument("--payload-json", default="", help="Raw JSON payload")
-    parser.add_argument("--skip", action="store_true", help="Skip posting (log reason only)")
     parser.add_argument(
         "--dry-run",
         action="store_true",

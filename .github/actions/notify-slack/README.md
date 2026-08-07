@@ -37,19 +37,20 @@ Use this action when you want a consistent Aerospike Slack alert layout with a t
 | Output             | Description                                     |
 | ------------------ | ----------------------------------------------- |
 | `payload-json-b64` | Rendered Block Kit payload (empty when skipped) |
-| `posted`           | From `send-slack`                               |
+
+Send runs only when a payload was built and either `dry-run=true` or `SLACK_BOT_TOKEN` is set. Otherwise a notice is logged and the send step is skipped.
 
 ## Skip behavior
 
 Non-fatal skips:
 
 - Empty `slack-channel-id` → no payload built, send step skipped
+- Payload built but live post requested without `SLACK_BOT_TOKEN` → notice logged, send step skipped
 
-Hard failures:
+Hard failures (from `send-slack` when invoked):
 
-- Invalid `message-type`
-- `child-blocks` not valid JSON or not an array of objects
-- Slack API error (from `send-slack`)
+- Invalid `child-blocks` JSON during prep
+- Slack API error on live post
 
 ## Example usage
 

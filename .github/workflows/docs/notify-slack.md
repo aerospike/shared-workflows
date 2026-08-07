@@ -60,6 +60,20 @@ When you need custom steps between build and send, checkout actions and call [`n
 
 Configure `SLACK_BOT_TOKEN` on shared-workflows before live posting works. Dry-run mode does not require a token.
 
+## Skip and failure behavior
+
+Non-fatal skips (job succeeds):
+
+- Empty `slack-channel-id` → no payload built, send step skipped
+- Payload built but live post requested without `SLACK_BOT_TOKEN` → notice logged, send step skipped
+
+Hard failures:
+
+- Invalid `child-blocks` JSON during prep
+- Empty payload passed to `send-slack` (callers should skip upstream)
+- Missing `SLACK_BOT_TOKEN` on a live `send-slack` call (callers should skip upstream)
+- Slack API error on live post
+
 ## Examples and tests
 
 | Workflow                             | Purpose                                   |

@@ -30,11 +30,11 @@ jobs:
       - name: Run send-slack unit tests
         run: python3 -m unittest discover .github/actions/send-slack/tests -p 'test_slack_post.py' -v
 
-      - name: Run send-slack entrypoint tests
-        run: bats .github/actions/send-slack/tests/test_entrypoint.bats
+      - name: Run send-slack bats tests
+        run: bats .github/actions/send-slack/tests/test_slack_post.bats
 
       - name: Run notify-slack unit tests
         run: python3 -m unittest discover .github/actions/notify-slack/tests -v
 
-      - name: Run notify-slack entrypoint tests
+      - name: Run notify-slack bats tests
         run: bats .github/actions/notify-slack/tests/test_prep_blockkit.bats

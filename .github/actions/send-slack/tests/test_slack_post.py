@@ -66,15 +66,13 @@ class PostSlackTests(unittest.TestCase):
             with self.assertRaises(sp.SlackPostError):
                 sp.post_to_slack(self._TOKEN, self._PAYLOAD)
 
-    def test_cmd_post(self) -> None:
+    def test_cmd_post_dry_run(self) -> None:
         b64 = __import__("base64").b64encode(json.dumps(self._PAYLOAD).encode()).decode()
         buf = StringIO()
         with mock.patch.object(sys, "stdout", buf):
             code = sp.main(["--bot-token", "xoxb-test", "--payload-b64", b64, "--dry-run"])
         self.assertEqual(code, 0)
         self.assertEqual(json.loads(buf.getvalue().strip()), self._PAYLOAD)
-        self.assertEqual(sp.main(["--skip"]), 0)
-        self.assertEqual(sp.main(["--bot-token", "", "--payload-b64", b64]), 0)
 
     def test_cmd_post_dry_run_without_token(self) -> None:
         b64 = __import__("base64").b64encode(json.dumps(self._PAYLOAD).encode()).decode()
@@ -83,6 +81,13 @@ class PostSlackTests(unittest.TestCase):
             code = sp.main(["--payload-b64", b64, "--dry-run"])
         self.assertEqual(code, 0)
         self.assertEqual(json.loads(buf.getvalue().strip()), self._PAYLOAD)
+
+    def test_cmd_post_missing_token_fails(self) -> None:
+        b64 = __import__("base64").b64encode(json.dumps(self._PAYLOAD).encode()).decode()
+        self.assertEqual(sp.main(["--payload-b64", b64]), 1)
+
+    def test_cmd_post_empty_payload_fails(self) -> None:
+        self.assertEqual(sp.main(["--bot-token", "xoxb-test", "--payload-b64", ""]), 1)
 
 
 if __name__ == "__main__":

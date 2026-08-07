@@ -36,9 +36,9 @@ payload_output() {
   [ "$status" -eq 0 ]
   b64="$(payload_output)"
   [ -n "$b64" ]
-  decoded="$(B64="$b64" python3 -c 'import base64, json, os; print(json.dumps(json.loads(base64.b64decode(os.environ["B64"]))))')"
-  [[ "$decoded" == *'"channel": "C123"'* ]]
-  [[ "$decoded" == *'"block_id": "alert_fail"'* ]]
+  decoded="$(printf '%s' "$b64" | base64 --decode)"
+  [[ "$decoded" == *'"channel":"C123"'* ]]
+  [[ "$decoded" == *'"block_id":"alert_fail"'* ]]
 }
 
 @test "prep fails on invalid child-blocks JSON" {
