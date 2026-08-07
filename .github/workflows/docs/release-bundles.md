@@ -77,7 +77,7 @@ For a complete working example including bundle deletion and promotion, see [exa
 
 After deploy, `reusable_deploy-artifacts.yaml` can upload `structured_build_artifacts/.maven-bundle-metadata.json` as a separate GitHub artifact (see outputs `bundle-metadata-artifact-name` / `bundle-metadata-available`). Pass that name to `reusable_create-release-bundle.yaml` as `gh-bundle-metadata-artifact-name` so the bundle job downloads the JSON and runs `jf release-bundle-annotate` without checking out the consumer repository. Alternatively, set `bundle-metadata-path` when the JSON is already on disk in that job.
 
-Both the upload and the download target the current run, so neither needs an `actions` scope. Callers grant `contents: read` and `id-token: write` and nothing more. Set `gh-upload-bundle-metadata: false` on deploy when the metadata handoff is not needed at all.
+Set `gh-upload-bundle-metadata: false` on deploy when the metadata handoff is not needed.
 
 ## Troubleshooting
 

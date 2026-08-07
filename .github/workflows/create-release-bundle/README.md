@@ -55,9 +55,7 @@ The `gh-workflows-ref` input is **required** and must match the version in your 
 
 ## Permissions
 
-Workflow-level and job-level permissions are `contents: read` and `id-token: write` so composable callers validate without extra grants. The `create-release-bundle` job does not request `actions` scope; the optional Maven bundle metadata download (`gh-bundle-metadata-artifact-name`) targets the current run and needs no elevated permission.
-
-Callers grant only:
+Callers grant:
 
 ```yaml
 permissions:

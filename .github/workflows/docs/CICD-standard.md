@@ -45,7 +45,7 @@ permissions:
   id-token: write
 ```
 
-Deploy can upload optional Maven bundle metadata (`.maven-bundle-metadata.json`) for release-bundle annotation, and `reusable_create-release-bundle.yaml` downloads it. Both transfers happen inside the current run, so the two grants above are all a caller needs. No `actions` scope is involved.
+Deploy can upload optional Maven bundle metadata (`.maven-bundle-metadata.json`) for release-bundle annotation, and `reusable_create-release-bundle.yaml` downloads it.
 
 ## Standard Workflows for your project
 
@@ -360,8 +360,7 @@ See [Why gh-workflows-ref is required](https://github.com/aerospike/shared-workf
 
 ## Troubleshooting tips
 
-- **Workflow validation: "requesting 'actions: write' (or 'actions: read'), but is only allowed 'actions: none'"** → your pinned ref sits in the range where the deploy job requested `actions: write` and the create-release-bundle job requested `actions: read`. Move to a ref that no longer requests either. Callers of `reusable_artifacts-cicd.yaml` cannot fix this by granting the permission themselves, because the orchestrator caps its children at `contents: read` + `id-token: write`.
-- **Deploy fails on "Upload Maven bundle metadata"** → the upload targets the current run and needs no permission grant, so read the step log for the real cause: no `.maven-bundle-metadata.json` was produced, or structuring failed earlier in the job.
+- **Deploy fails on "Upload Maven bundle metadata"** → check the step log: either no `.maven-bundle-metadata.json` was produced, or structuring failed earlier in the job.
 - **Create-release-bundle fails on "Download Maven bundle metadata artifact"** → confirm deploy actually uploaded it (its `bundle-metadata-available` output is `true`) and that `gh-bundle-metadata-artifact-name` matches deploy's `bundle-metadata-artifact-name` output.
 - **Deploy fails (auth)** → confirm GitHub→JFrog **OIDC** trust/policy is configured and that the workflow's identity has deploy permission to the target project/repo. (example mistakes often around wrong audience or incorrect token permissions)
 - **Docker push fails** → ensure `tag` includes the full registry path (e.g., `artifact.aerospike.io/project-docker-dev-local/image:tag`). Verify JFrog registry permissions and OIDC authentication.

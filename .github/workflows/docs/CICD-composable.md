@@ -70,7 +70,7 @@ deploy  →  create-release-bundle  →  promote
 
 When you use `reusable_deploy-artifacts.yaml` followed by `reusable_create-release-bundle.yaml`, pass `gh-bundle-metadata-artifact-name: ${{ needs.<deploy-job>.outputs.bundle-metadata-artifact-name }}` so Maven bundle metadata (`.maven-bundle-metadata.json`) is carried between jobs as a small artifact; the deploy workflow sets `bundle-metadata-available` when that upload ran.
 
-**Permissions:** caller workflows need `contents: read` and `id-token: write`, and nothing else. The metadata artifact moves between jobs of the same run, which needs no `actions` scope. Set `gh-upload-bundle-metadata: false` on deploy if you do not want the metadata artifact at all.
+**Permissions:** caller workflows need `contents: read` and `id-token: write`.
 
 ### Key concepts
 
@@ -214,8 +214,7 @@ See [Why gh-workflows-ref is required](https://github.com/aerospike/shared-workf
 
 ## Troubleshooting tips
 
-- **Workflow validation: "requesting 'actions: write' (or 'actions: read'), but is only allowed 'actions: none'"** → your pinned ref sits in the range where the deploy job requested `actions: write` and the create-release-bundle job requested `actions: read`. Move to a ref that no longer requests either.
-- **Deploy fails on "Upload Maven bundle metadata"** → the upload targets the current run and needs no permission grant, so read the step log for the real cause: no `.maven-bundle-metadata.json` was produced, or structuring failed earlier in the job.
+- **Deploy fails on "Upload Maven bundle metadata"** → check the step log: either no `.maven-bundle-metadata.json` was produced, or structuring failed earlier in the job.
 - **Create-release-bundle fails on "Download Maven bundle metadata artifact"** → confirm deploy actually uploaded it (its `bundle-metadata-available` output is `true`) and that `gh-bundle-metadata-artifact-name` matches deploy's `bundle-metadata-artifact-name` output.
 - **Deploy fails (auth)** → confirm GitHub→JFrog **OIDC** trust/policy is configured and that the workflow's identity has deploy permission to the target project/repo. Common mistakes: wrong audience or incorrect token permissions.
 - **Docker push fails** → ensure `tag` includes the full registry path (e.g., `artifact.aerospike.io/project-docker-dev-local/image:tag`). Verify JFrog registry permissions and OIDC authentication.

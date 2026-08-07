@@ -20,7 +20,7 @@ permissions:
   id-token: write
 ```
 
-Those two grants cover every stage, including the Maven bundle metadata handoff. No `actions` scope is needed. See [deploy-artifacts README](../deploy-artifacts/README.md#permissions).
+Those two grants cover every stage. See [deploy-artifacts README](../deploy-artifacts/README.md#permissions).
 
 ## Usage
 
