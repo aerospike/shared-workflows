@@ -42,17 +42,17 @@ setup_file() {
   [ "$status" -eq 0 ]
 }
 
-@test "reusable_create-release-bundle declares job-scoped actions: read" {
+@test "reusable_create-release-bundle declares no job-scoped actions permission" {
   file="$WORKFLOWS_DIR/reusable_create-release-bundle.yaml"
   run awk '
-    BEGIN { in_jobs = 0; in_job_perms = 0; found = 0 }
+    BEGIN { in_jobs = 0; in_job_perms = 0; bad = 0 }
     /^jobs:[[:space:]]*$/ { in_jobs = 1; next }
     in_jobs {
       if ($0 ~ /^[^[:space:]]/) { exit }
       if ($0 ~ /^    permissions:[[:space:]]*$/) { in_job_perms = 1; next }
-      if (in_job_perms && $0 ~ /^      actions:[[:space:]]*read[[:space:]]*$/) { found = 1 }
+      if (in_job_perms && $0 ~ /^      actions:[[:space:]]*/) { bad = 1 }
     }
-    END { exit found ? 0 : 1 }
+    END { exit bad ? 1 : 0 }
   ' "$file"
   [ "$status" -eq 0 ]
 }
