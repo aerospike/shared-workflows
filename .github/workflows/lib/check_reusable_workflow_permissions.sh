@@ -5,10 +5,7 @@
 # - Workflow-level permissions may only grant contents: read and id-token: write.
 # - Elevated permissions (actions, packages, attestations, ...) must be job-scoped.
 # - Job scoping alone is not enough: a nested job cannot request more than its
-#   caller holds, so an elevated permission only works when every caller grants
-#   it too. deploy-artifacts and create-release-bundle therefore request no
-#   actions scope at all, since artifacts-cicd caps its children at
-#   {contents: read, id-token: write} (INFRA-670).
+#   caller holds, so an elevated permission only works when every caller grants it.
 # - reusable_*.yaml files with no workflow-level permissions block are allowed
 #   (e.g. reusable_docker-build-deploy.yaml inherits caller grants).
 

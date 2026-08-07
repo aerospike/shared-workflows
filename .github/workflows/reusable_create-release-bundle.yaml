@@ -85,9 +85,6 @@ permissions:
 jobs:
   create-release-bundle:
     runs-on: ${{ inputs.runs-on }}
-    # Callers that grant only {contents: read, id-token: write} cannot satisfy an
-    # actions scope, and a nested job may not exceed its caller. download-artifact
-    # against the current run needs no actions scope.
     permissions:
       contents: read
       id-token: write

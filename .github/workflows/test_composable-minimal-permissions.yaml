@@ -34,10 +34,7 @@ jobs:
       - name: Create test fixtures
         run: .github/workflows/deploy-artifacts/create-test-fixtures.sh composable-minimal-fixtures
 
-      # This test asserts the caller-to-callee permission chain, not Authenticode.
-      # NuGet packages make reusable_sign-artifacts require the SSL.com secrets and
-      # spend a real eSigner signature, so drop them. NuGet signing is covered by
-      # test_sign-artifacts-workflow.yaml.
+      # nupkg fixtures make reusable_sign-artifacts require SSL.com secrets this workflow does not pass.
       - name: Drop NuGet fixtures
         run: |
           find composable-minimal-fixtures \
