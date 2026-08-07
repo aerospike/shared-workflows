@@ -127,7 +127,6 @@ jobs:
     permissions:
       contents: read
       id-token: write
-      actions: write
     outputs:
       jf-build-id: ${{ steps.deploy.outputs.jf-build-id }}
       bundle-metadata-artifact-name: ${{ steps.bundle-metadata-state.outputs.artifact-name }}

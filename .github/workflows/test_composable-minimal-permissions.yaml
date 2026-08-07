@@ -34,6 +34,15 @@ jobs:
       - name: Create test fixtures
         run: .github/workflows/deploy-artifacts/create-test-fixtures.sh composable-minimal-fixtures
 
+      # nupkg fixtures make reusable_sign-artifacts require SSL.com secrets this workflow does not pass.
+      - name: Drop NuGet fixtures
+        run: |
+          find composable-minimal-fixtures \
+            \( -name '*.nupkg' -o -name '*.snupkg' \
+            -o -name '*.nupkg.asc' -o -name '*.snupkg.asc' \) -delete
+          echo "Remaining fixtures:"
+          find composable-minimal-fixtures -type f | sort
+
       - name: Upload unsigned fixtures
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

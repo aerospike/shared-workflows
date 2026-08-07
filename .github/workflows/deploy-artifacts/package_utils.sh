@@ -33,9 +33,20 @@ get_jar_metadata() {
         group_id=$(unzip -p "$jar" "$pom_props" | grep '^groupId=' | cut -d= -f2)
     fi
 
+    # Flat JAR + sibling POM (e.g. test.jar + test.pom): filename may not encode version.
+    local sibling_pom="$jar_dir/${base_no_ext}.pom"
+    if [[ -z $group_id && -f $sibling_pom ]]; then
+        if command -v xmllint >/dev/null 2>&1; then
+            pkgname=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='artifactId'])" "$sibling_pom" 2>/dev/null)
+            version=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='version'])" "$sibling_pom" 2>/dev/null)
+            group_id=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='groupId'])" "$sibling_pom" 2>/dev/null)
+        fi
+    fi
+
     # If groupId is still empty (e.g., javadoc/sources jars), locate main artifact in same folder
     if [[ -z $group_id ]]; then
         local main_jar=""
+        shopt -s nullglob
         for candidate_jar in "$jar_dir/$pkgname"-*.jar; do
             [ -e "$candidate_jar" ] || continue
             if [[ $candidate_jar != *javadoc* && $candidate_jar != *sources* ]]; then
@@ -50,6 +61,7 @@ get_jar_metadata() {
                 group_id=$(unzip -p "$main_jar" "$pom_props" | grep '^groupId=' | cut -d= -f2)
             fi
         fi
+        shopt -u nullglob
     fi
 
     # Return pkgname, version, groupId

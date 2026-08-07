@@ -238,18 +238,13 @@ The `gh-workflows-ref` input is **required** and must match the version in your 
 
 ## Permissions
 
-Workflow-level permissions are `contents: read` and `id-token: write` so nested calls from `reusable_artifacts-cicd.yaml` validate without extra caller grants.
-
-The `deploy` job requests `actions: write` at **job scope** only, for the optional Maven bundle metadata upload (`gh-upload-bundle-metadata`, default `true`). At runtime, that upload succeeds only when the **top-level caller workflow** also grants `actions: write`:
+Callers grant:
 
 ```yaml
 permissions:
   contents: read
   id-token: write
-  actions: write # required when gh-upload-bundle-metadata is true and Maven metadata is produced
 ```
-
-If you do not use Maven bundle metadata (no `.maven-bundle-metadata.json`, or `gh-upload-bundle-metadata: false`), callers can omit `actions: write`; deploy to JFrog still works and only the metadata upload step is skipped or not attempted.
 
 ## Prerequisites
 

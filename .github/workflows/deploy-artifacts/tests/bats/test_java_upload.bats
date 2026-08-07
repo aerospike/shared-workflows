@@ -65,20 +65,14 @@ teardown_file() {
   # opt-out is asserted in a dedicated test below.
   local jar_found=false
   for cmd in "${upload_cmd_array[@]}"; do
-    if [[ $cmd =~ \.jar ]] && [[ ! $cmd =~ \.jar\.(md5|sha1)([[:space:]]|$) ]]; then
+    if [[ $cmd =~ /test\.jar([[:space:]]|$) ]] && [[ ! $cmd =~ \.jar\.(md5|sha1)([[:space:]]|$) ]]; then
       jar_found=true
 
       # Java artifacts go to Maven repo
       local expected_repo="test-project-maven-dev-local"
 
-      # Extract filename from command
-      local filename
-      if [[ $cmd =~ ([^/]+\.jar) ]]; then
-        filename="${BASH_REMATCH[1]}"
-      fi
-
-      # Validate command structure with Maven target-props
-      assert_upload_command_valid "$cmd" "$filename" "$expected_repo" \
+      # Validate the flat test.jar fixture (maven-repo JARs are covered elsewhere)
+      assert_upload_command_valid "$cmd" "test.jar" "$expected_repo" \
         "version=v1.0.0;group_id=com.example.test;package_name=test" \
         "test-build" "12345-artifacts" "test-project"
     fi
