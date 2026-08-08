@@ -252,104 +252,63 @@ jobs:
             fail "input must be a JSON array, got $(printf '%s' "$json" | jq -r 'type')"
           fi
 
+          # Rules are ordered per entry, so the reported failure is the first one a
+          # reader would hit. An empty result means the input is good.
+          problem="$(printf '%s' "$json" | jq -r '
+            def prior($arr; $i; f): $arr[0:$i] | map(select(type == "object") | f);
+            . as $arr
+            | [ to_entries[]
+                | .key as $i | .value as $v
+                | "entry \($i) " as $at
+                | if ($v | type) != "object"
+                     or ($v.name | type) != "string" or ($v.dest | type) != "string"
+                     or $v.name == "" or $v.dest == ""
+                  then $at + "must be an object with non-empty string \"name\" and \"dest\""
+                elif ($v.name | test("^[A-Za-z0-9._-]+$") | not)
+                  then $at + "name \"\($v.name)\" must match ^[A-Za-z0-9._-]+$"
+                # "." and ".." are made only of permitted characters, and
+                # actions/download-artifact joins the name onto the staging path, so ".."
+                # resolves the per-artifact directory to RUNNER_TEMP itself.
+                elif ($v.name == "." or $v.name == "..")
+                  then $at + "name \"\($v.name)\" is a path traversal"
+                elif (prior($arr; $i; .name) | index($v.name)) != null
+                  then $at + "name \"\($v.name)\" is a duplicate"
+                elif ($v.dest | startswith("/"))
+                  then $at + "dest \"\($v.dest)\" must be relative to the build context root"
+                # A charset is not implied by the traversal rules: "-rf" passes them all.
+                elif ($v.dest | test("^[A-Za-z0-9._/-]+$") | not)
+                  then $at + "dest \"\($v.dest)\" must match ^[A-Za-z0-9._/-]+$"
+                # Splitting on "/" discards a trailing empty field, so this is not caught
+                # by the segment rules below. Left in, "x" and "x/" defeat the duplicate
+                # rule while naming one directory.
+                elif ($v.dest | endswith("/"))
+                  then $at + "dest \"\($v.dest)\" must not end with \"/\""
+                elif ($v.dest | split("/") | any(. == ""))
+                  then $at + "dest \"\($v.dest)\" has an empty path segment"
+                elif ($v.dest | split("/") | any(. == ".."))
+                  then $at + "dest \"\($v.dest)\" contains a \"..\" segment"
+                elif ($v.dest | split("/") | any(. == "."))
+                  then $at + "dest \"\($v.dest)\" contains a \".\" segment"
+                elif ($v.dest | split("/") | any(startswith("-")))
+                  then $at + "dest \"\($v.dest)\" has a segment beginning with \"-\""
+                elif (prior($arr; $i; .dest) | index($v.dest)) != null
+                  then $at + "dest \"\($v.dest)\" is a duplicate"
+                else empty end ]
+            | first // ""
+          ')"
+          if [ -n "$problem" ]; then
+            fail "$problem"
+          fi
+
           count="$(printf '%s' "$json" | jq 'length')"
           if [ "$count" -eq 0 ]; then
             echo "::notice::gh-context-artifacts-json is an empty array; no artifacts will be placed"
-            {
-              echo "count=0"
-              echo "pattern="
-              echo "entries=[]"
-            } >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          # Shape first, so the per-entry rules below can assume two strings.
-          malformed="$(printf '%s' "$json" | jq -r '
-            to_entries
-            | map(select(
-                (.value | type) != "object"
-                or (.value.name | type) != "string"
-                or (.value.dest | type) != "string"
-                or (.value.name == "")
-                or (.value.dest == "")
-              ))
-            | if length > 0 then (.[0].key | tostring) else "" end
-          ')"
-          if [ -n "$malformed" ]; then
-            fail "entry $malformed must be an object with non-empty string \"name\" and \"dest\""
-          fi
-
-          declare -A seen_names seen_dests
-          names=()
-
-          for i in $(seq 0 $((count - 1))); do
-            name="$(printf '%s' "$json" | jq -r --argjson i "$i" '.[$i].name')"
-            dest="$(printf '%s' "$json" | jq -r --argjson i "$i" '.[$i].dest')"
-
-            # The charset also keeps minimatch metacharacters out of the
-            # download pattern built at the end of this step.
-            if ! [[ $name =~ ^[A-Za-z0-9._-]+$ ]]; then
-              fail "entry $i name \"$name\" must match ^[A-Za-z0-9._-]+\$"
-            fi
-            # Separate from the charset rule, and not redundant with it: "." and
-            # ".." are made only of permitted characters. actions/download-artifact
-            # joins the name onto the staging path, so ".." would resolve the
-            # per-artifact directory to RUNNER_TEMP itself and the later
-            # "contains a regular file" assertion would pass against it.
-            if [ "$name" = "." ] || [ "$name" = ".." ]; then
-              fail "entry $i name \"$name\" is a path traversal"
-            fi
-            if [ -n "${seen_names[$name]:-}" ]; then
-              fail "entry $i name \"$name\" is a duplicate"
-            fi
-            seen_names[$name]=1
-
-            if [ "${dest:0:1}" = "/" ]; then
-              fail "entry $i dest \"$dest\" must be relative to the build context root"
-            fi
-            # Charset is not implied by the traversal rules below: "-rf" passes
-            # every one of them. Reaching a run: block through env: stops
-            # interpolation, not a leading dash being read as an option by mv.
-            if ! [[ $dest =~ ^[A-Za-z0-9._/-]+$ ]]; then
-              fail "entry $i dest \"$dest\" must match ^[A-Za-z0-9._/-]+\$"
-            fi
-            # A trailing slash is not caught by the segment loop below, because
-            # splitting on '/' discards the trailing empty field. Left in, it
-            # would defeat the duplicate-dest rule: "x" and "x/" compare as
-            # different strings but name the same directory.
-            if [ "${dest: -1}" = "/" ]; then
-              fail "entry $i dest \"$dest\" must not end with \"/\""
-            fi
-            # Per segment, so that a legitimate "a..b" is kept and a "..", an
-            # empty segment from a doubled slash, or an option-like segment is
-            # rejected.
-            IFS='/' read -ra segments <<< "$dest"
-            for seg in ${segments[@]+"${segments[@]}"}; do
-              if [ -z "$seg" ]; then
-                fail "entry $i dest \"$dest\" has an empty path segment"
-              fi
-              if [ "$seg" = "." ] || [ "$seg" = ".." ]; then
-                fail "entry $i dest \"$dest\" contains a \"$seg\" segment"
-              fi
-              if [ "${seg:0:1}" = "-" ]; then
-                fail "entry $i dest \"$dest\" has a segment beginning with \"-\""
-              fi
-            done
-            if [ -n "${seen_dests[$dest]:-}" ]; then
-              fail "entry $i dest \"$dest\" is a duplicate"
-            fi
-            seen_dests[$dest]=1
-
-            names+=("$name")
-          done
-
-          # minimatch does not expand a one-element brace, so "{foo}" matches the
-          # literal string "{foo}" and would download nothing.
-          if [ "${#names[@]}" -eq 1 ]; then
-            pattern="${names[0]}"
+            pattern=""
           else
-            joined="$(printf '%s,' "${names[@]}")"
-            pattern="{${joined%,}}"
+            # minimatch does not expand a one-element brace, so "{a}" would match that
+            # literal string and download nothing.
+            pattern="$(printf '%s' "$json" | jq -r '
+              if length == 1 then .[0].name else "{" + (map(.name) | join(",")) + "}" end')"
           fi
 
           {
@@ -359,7 +318,6 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
           echo "Validated $count build-context artifact(s); download pattern: $pattern"
-
       # An empty `count` means the validate step was skipped, so the caller
       # asked for nothing. A zero `count` means an explicit empty array.
       - name: Download build-context artifacts
