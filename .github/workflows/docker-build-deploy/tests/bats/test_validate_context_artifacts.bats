@@ -41,6 +41,14 @@ output_value() {
     [ -s "$SCRIPT_UNDER_TEST" ]
 }
 
+@test "no caller-supplied value is interpolated into the script" {
+    # Caller-supplied values reach these scripts through env: only. A
+    # "${{ inputs.x }}" spliced into a shell string is the Actions
+    # script-injection class, and the splice happens before bash sees a quote.
+    run grep -n '\${{' "$SCRIPT_UNDER_TEST"
+    [ "$status" -ne 0 ]
+}
+
 # --- accepted -------------------------------------------------------------
 
 @test "accepts a single entry" {

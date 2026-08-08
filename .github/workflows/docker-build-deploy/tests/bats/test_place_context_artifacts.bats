@@ -64,6 +64,11 @@ meta() {
     [ -s "$SCRIPT_UNDER_TEST" ]
 }
 
+@test "no caller-supplied value is interpolated into the script" {
+    run grep -n '\${{' "$SCRIPT_UNDER_TEST"
+    [ "$status" -ne 0 ]
+}
+
 # --- placement ------------------------------------------------------------
 
 @test "places an artifact's files at the destination" {
