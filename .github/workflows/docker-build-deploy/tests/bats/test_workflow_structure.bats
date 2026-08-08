@@ -13,24 +13,12 @@ DELIVERY_STEPS=(
 
 # step_names <job>
 step_names() {
-    python3 -c '
-import sys, yaml
-doc = yaml.safe_load(open(sys.argv[1]))
-for step in doc["jobs"][sys.argv[2]]["steps"]:
-    print(step.get("name") or step.get("uses", ""))
-' "$WORKFLOW" "$1"
+    yq -r ".jobs.\"$1\".steps[] | .name // .uses" "$WORKFLOW"
 }
 
 # step_field <step-name> <field>
 step_field() {
-    python3 -c '
-import sys, yaml
-doc = yaml.safe_load(open(sys.argv[1]))
-for step in doc["jobs"]["build"]["steps"]:
-    if (step.get("name") or "") == sys.argv[2]:
-        print(step.get(sys.argv[3], ""))
-        break
-' "$WORKFLOW" "$1" "$2"
+    yq -r ".jobs.build.steps[] | select(.name == \"$1\") | .[\"$2\"] // \"\"" "$WORKFLOW"
 }
 
 index_of() {
@@ -38,18 +26,13 @@ index_of() {
 }
 
 @test "the input is declared with an empty default" {
-    run python3 -c '
-import sys, yaml
-doc = yaml.safe_load(open(sys.argv[1]))
-# YAML 1.1 resolves a bare "on:" key to the boolean True, so it is not "on".
-triggers = doc.get("on", doc.get(True))
-i = triggers["workflow_call"]["inputs"]["gh-context-artifacts-json"]
-print(repr(i.get("default")))
-' "$WORKFLOW"
-    [ "$status" -eq 0 ]
     # "" and not "[]": the gate is an exact string comparison, and Actions
     # expressions cannot trim, so "[ ]" or a trailing newline would not match.
-    [ "$output" = "''" ]
+    local declared value
+    declared="$(yq -r '.on.workflow_call.inputs["gh-context-artifacts-json"] | has("default")' "$WORKFLOW")"
+    [ "$declared" = "true" ]
+    value="$(yq -r '.on.workflow_call.inputs["gh-context-artifacts-json"].default' "$WORKFLOW")"
+    [ -z "$value" ]
 }
 
 @test "every delivery step is in the matrixed build job" {
@@ -117,45 +100,28 @@ print(repr(i.get("default")))
 }
 
 @test "delivery leaves no artifact behind for consumers to pay for" {
-    run python3 -c '
-import sys, yaml
-doc = yaml.safe_load(open(sys.argv[1]))
-names = {"Validate build-context artifacts", "Download build-context artifacts",
-         "Place build-context artifacts"}
-for step in doc["jobs"]["build"]["steps"]:
-    if (step.get("name") or "") in names:
-        continue
-    if "upload-artifact" in step.get("uses", "") and "ctxmeta" in str(step.get("with", "")):
-        print("ctxmeta upload is back")
-        sys.exit(1)
-' "$WORKFLOW"
-    [ "$status" -eq 0 ]
+    local n
+    n="$(yq -r '[.jobs.build.steps[]
+        | select((.uses // "") | test("upload-artifact"))
+        | select((.with.name // "") | test("ctxmeta"))] | length' "$WORKFLOW")"
+    [ "$n" = "0" ]
 }
 
 # --- build and merge topology ---------------------------------------------
 
 @test "the image is attested exactly once" {
-    run python3 -c '
-import sys, yaml
-doc = yaml.safe_load(open(sys.argv[1]))
-n = sum(1 for job in doc["jobs"].values()
-        for step in (job.get("steps") or [])
-        if "attest-build-provenance" in (step.get("uses") or ""))
-print(n)
-' "$WORKFLOW"
-    [ "$output" = "1" ]
+    local n
+    n="$(yq -r '[.jobs[] | .steps[]?
+        | select((.uses // "") | test("attest-build-provenance"))] | length' "$WORKFLOW")"
+    [ "$n" = "1" ]
 }
 
 @test "attestation belongs to merge, not to a build leg" {
     # build is matrixed, so attesting there would attest each platform's image
     # separately instead of the manifest list consumers actually pull.
-    run python3 -c '
-import sys, yaml
-doc = yaml.safe_load(open(sys.argv[1]))
-for name, job in doc["jobs"].items():
-    for step in (job.get("steps") or []):
-        if "attest-build-provenance" in (step.get("uses") or ""):
-            print(name)
-' "$WORKFLOW"
-    [ "$output" = "merge" ]
+    local job
+    job="$(yq -r '.jobs | to_entries[]
+        | select(.value.steps[]?.uses // "" | test("attest-build-provenance"))
+        | .key' "$WORKFLOW")"
+    [ "$job" = "merge" ]
 }

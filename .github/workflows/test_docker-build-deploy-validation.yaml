@@ -30,7 +30,7 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y python3-yaml
+        run: sudo apt-get update && sudo apt-get install -y yq
 
       # The helper libraries are off because no bats suite in this repo uses
       # them; every existing `load` is a local helper file.

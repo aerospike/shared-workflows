@@ -8,17 +8,8 @@ STEP_NAME="Place build-context artifacts"
 
 setup_file() {
     export SCRIPT_UNDER_TEST="${BATS_FILE_TMPDIR}/place.sh"
-    python3 -c '
-import sys, yaml
-with open(sys.argv[1]) as fh:
-    doc = yaml.safe_load(fh)
-for step in doc["jobs"]["build"]["steps"]:
-    if step.get("name") == sys.argv[2]:
-        sys.stdout.write(step["run"])
-        sys.exit(0)
-sys.stderr.write("step not found: %s\n" % sys.argv[2])
-sys.exit(1)
-' "$WORKFLOW" "$STEP_NAME" > "$SCRIPT_UNDER_TEST"
+    yq -r ".jobs.build.steps[] | select(.name == \"$STEP_NAME\") | .run" \
+        "$WORKFLOW" > "$SCRIPT_UNDER_TEST"
 }
 
 setup() {
