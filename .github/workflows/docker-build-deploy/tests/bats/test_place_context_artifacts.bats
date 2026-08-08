@@ -19,19 +19,35 @@ setup() {
     mkdir -p "$STAGING" "$CONTEXT"
 }
 
+# Stages an artifact the way actions/download-artifact lays it out: a lone
+# artifact is extracted into the path root, and only when several match does
+# each get a directory named after it. Getting this wrong is what let a
+# single-entry delivery ship broken.
+#
 # artifact <name> [relative-file ...]; defaults to one regular file.
 artifact() {
     local name="$1"
     shift
-    mkdir -p "${STAGING}/${name}"
+    _stage_into "${STAGING}/${name}" "$@"
+}
+
+# solo <relative-file ...>; the layout a single requested artifact really gets.
+solo() {
+    _stage_into "$STAGING" "$@"
+}
+
+_stage_into() {
+    local root="$1"
+    shift
+    mkdir -p "$root"
     if [ "$#" -eq 0 ]; then
-        echo "payload" > "${STAGING}/${name}/file.txt"
+        echo "payload" > "${root}/file.txt"
         return
     fi
     local f
     for f in "$@"; do
-        mkdir -p "$(dirname "${STAGING}/${name}/${f}")"
-        echo "payload" > "${STAGING}/${name}/${f}"
+        mkdir -p "$(dirname "${root}/${f}")"
+        echo "payload" > "${root}/${f}"
     done
 }
 
@@ -54,7 +70,7 @@ place() {
 # --- placement ------------------------------------------------------------
 
 @test "places an artifact's files at the destination" {
-    artifact signed-artifacts app.jar app.jar.asc
+    solo app.jar app.jar.asc
     place '[{"name":"signed-artifacts","dest":"artifacts"}]'
     [ "$status" -eq 0 ]
     [ -f "${CONTEXT}/artifacts/app.jar" ]
@@ -62,21 +78,21 @@ place() {
 }
 
 @test "leaves nothing behind in staging" {
-    artifact a
+    solo
     place '[{"name":"a","dest":"x"}]'
     [ "$status" -eq 0 ]
     [ ! -e "${STAGING}/a" ]
 }
 
 @test "creates intermediate directories for a nested destination" {
-    artifact a
+    solo
     place '[{"name":"a","dest":"deploy/chart/files"}]'
     [ "$status" -eq 0 ]
     [ -f "${CONTEXT}/deploy/chart/files/file.txt" ]
 }
 
 @test "preserves the artifact's own directory structure" {
-    artifact a top.txt nested/deep/inner.txt
+    solo top.txt nested/deep/inner.txt
     place '[{"name":"a","dest":"x"}]'
     [ "$status" -eq 0 ]
     [ -f "${CONTEXT}/x/top.txt" ]
@@ -98,7 +114,7 @@ place() {
 # --- what the log reports -------------------------------------------------
 
 @test "reports the artifact, destination and counts" {
-    artifact a one.txt two.txt
+    solo one.txt two.txt
     place '[{"name":"a","dest":"x"}]'
     [ "$status" -eq 0 ]
     [[ $output == *'Placed "a" at "x"'* ]]
@@ -106,13 +122,13 @@ place() {
 }
 
 @test "counts files at any depth, not just the top level" {
-    artifact a top.txt nested/deep/inner.txt
+    solo top.txt nested/deep/inner.txt
     place '[{"name":"a","dest":"x"}]'
     [[ $output == *"2 file(s)"* ]]
 }
 
 @test "reports byte totals" {
-    artifact a
+    solo
     place '[{"name":"a","dest":"x"}]'
     [[ $output == *"8 byte(s)"* ]]
 }
@@ -127,16 +143,30 @@ place() {
 # --- refusals -------------------------------------------------------------
 
 @test "fails and names the artifact when it was never downloaded" {
+    # A pattern that matches nothing leaves no staging directory at all.
+    rm -rf "${STAGING:?}"
     place '[{"name":"signed-artifacts","dest":"x"}]'
     [ "$status" -ne 0 ]
     [[ $output == *"signed-artifacts"* ]]
     [[ $output == *"was not downloaded"* ]]
 }
 
+@test "fails when only some of several requested artifacts arrived" {
+    # Two requested means each should have its own directory. If only one
+    # matched, the action flattens it into the root and neither is where the
+    # placement step expects it, which must fail rather than place a partial set.
+    solo file.txt
+    place '[{"name":"a","dest":"x"},{"name":"b","dest":"y"}]'
+    [ "$status" -ne 0 ]
+    [[ $output == *"was not downloaded"* ]]
+    [ ! -e "${CONTEXT}/x" ]
+    [ ! -e "${CONTEXT}/y" ]
+}
+
 @test "fails when the artifact holds no regular files at any depth" {
     for shape in flat nested; do
         rm -rf "${STAGING:?}"/*
-        [ "$shape" = flat ] && mkdir -p "${STAGING}/a" || mkdir -p "${STAGING}/a/nested/deeper"
+        [ "$shape" = flat ] && mkdir -p "$STAGING" || mkdir -p "${STAGING}/nested/deeper"
         place '[{"name":"a","dest":"x"}]'
         if [ "$status" -eq 0 ]; then
             echo "accepted an artifact with no regular files ($shape)"
@@ -150,12 +180,12 @@ place() {
     # A lone regular file plus a symlink satisfies the emptiness check, so the
     # symlink would ride into the image with it.
     for where in top nested; do
-        rm -rf "${STAGING:?}"/* && artifact a real.txt
+        rm -rf "${STAGING:?}"/* && solo real.txt
         if [ "$where" = top ]; then
-            ln -s /etc/passwd "${STAGING}/a/escape"
+            ln -s /etc/passwd "${STAGING}/escape"
         else
-            mkdir -p "${STAGING}/a/nested"
-            ln -s ../../../../etc/passwd "${STAGING}/a/nested/escape"
+            mkdir -p "${STAGING}/nested"
+            ln -s ../../../../etc/passwd "${STAGING}/nested/escape"
         fi
         place '[{"name":"a","dest":"x"}]'
         if [ "$status" -eq 0 ]; then
@@ -177,7 +207,7 @@ place() {
 
 @test "fails when the destination already exists" {
     for setup in dir file dangling; do
-        rm -rf "${CONTEXT:?}"/* && artifact a
+        rm -rf "${CONTEXT:?}"/* && solo
         case "$setup" in
             dir) mkdir -p "${CONTEXT}/x" ;;
             file) echo existing > "${CONTEXT}/x" ;;
@@ -196,7 +226,7 @@ place() {
     # realpath -m resolves through existing symlinks, so following one would
     # land outside the context while still looking contained.
     for dest in vendor/out vendor/deep/out link/out; do
-        rm -rf "${CONTEXT:?}"/* && artifact a
+        rm -rf "${CONTEXT:?}"/* && solo
         ln -s /tmp "${CONTEXT}/vendor"
         mkdir -p "${CONTEXT}/real" && ln -s real "${CONTEXT}/link"
         place "[{\"name\":\"a\",\"dest\":\"$dest\"}]"
@@ -210,7 +240,7 @@ place() {
 
 @test "a sibling directory sharing the context root prefix is not inside it" {
     # /tmp/.../ctx-evil must not pass a containment check against /tmp/.../ctx
-    artifact a
+    solo
     mkdir -p "${CONTEXT}-evil"
     ln -s "${CONTEXT}-evil" "${CONTEXT}/out"
     place '[{"name":"a","dest":"out"}]'
@@ -222,7 +252,7 @@ place() {
 # directly to reach the containment guard behind it.
 
 @test "containment guard rejects a traversing dest that skipped validation" {
-    artifact a
+    solo
     place '[{"name":"a","dest":"../escape"}]'
     [ "$status" -ne 0 ]
     [[ $output == *"resolves outside the build context root"* ]]
@@ -230,7 +260,7 @@ place() {
 }
 
 @test "containment guard rejects an interior traversal that skipped validation" {
-    artifact a
+    solo
     place '[{"name":"a","dest":"good/../../escape"}]'
     [ "$status" -ne 0 ]
     [[ $output == *"resolves outside the build context root"* ]]
@@ -238,7 +268,7 @@ place() {
 
 @test "containment guard rejects a sibling whose name merely extends the context root" {
     # Resolves to <ctx>-evil/x, which a bare prefix test against <ctx> accepts.
-    artifact a
+    solo
     place "[{\"name\":\"a\",\"dest\":\"../$(basename "$CONTEXT")-evil/x\"}]"
     [ "$status" -ne 0 ]
     [[ $output == *"resolves outside the build context root"* ]]
@@ -246,7 +276,7 @@ place() {
 }
 
 @test "fails when the build context does not exist" {
-    artifact a
+    solo
     CONTEXT="${BATS_TEST_TMPDIR}/absent"
     place '[{"name":"a","dest":"x"}]'
     [ "$status" -ne 0 ]

@@ -360,7 +360,14 @@ jobs:
           for i in $(seq 0 $((count - 1))); do
             name="$(printf '%s' "$entries" | jq -r --argjson i "$i" '.[$i].name')"
             dest="$(printf '%s' "$entries" | jq -r --argjson i "$i" '.[$i].dest')"
-            src="${staging}/${name}"
+
+            # actions/download-artifact extracts a lone artifact into the path
+            # root and only gives each one its own directory when several match.
+            if [ "$count" -eq 1 ]; then
+              src="$staging"
+            else
+              src="${staging}/${name}"
+            fi
 
             if [ ! -d "$src" ]; then
               fail "artifact \"$name\" was not downloaded; no artifact by that name exists in this run"
