@@ -510,6 +510,9 @@ jobs:
           # to jq for safe URL-encoding below. Built from THIS leg's own token.
           OIDC_USER: ${{ steps.jf.outputs.oidc-user }}
           OIDC_TOKEN: ${{ steps.jf.outputs.oidc-token }}
+          BUILD_SECRETS_JSON: ${{ secrets.build-secrets-json }}
+          JF_GO_REPO: ${{ inputs.jf-go-repo }}
+          JF_REGISTRY_BASE: ${{ inputs.jf-registry-base }}
         run: |
           set -euo pipefail
           mkdir -p /tmp/docker-secrets
@@ -518,7 +521,7 @@ jobs:
           printf '%s' "$OIDC_TOKEN" > /tmp/docker-secrets/jfrog_token
 
           # Delta 2: Construct authenticated GOPROXY URL when jf-go-repo is set
-          jf_go_repo='${{ inputs.jf-go-repo }}'
+          jf_go_repo="${JF_GO_REPO:-}"
           if [ -n "$jf_go_repo" ]; then
             # Percent-encode the user and token before embedding them in the URL
             # userinfo component. OIDC users/tokens can contain reserved chars
@@ -526,12 +529,12 @@ jobs:
             # break the HTTP request to Artifactory.
             oidc_user_enc=$(jq -rn 'env.OIDC_USER | @uri')
             oidc_token_enc=$(jq -rn 'env.OIDC_TOKEN | @uri')
-            printf '%s' "https://${oidc_user_enc}:${oidc_token_enc}@${{ inputs.jf-registry-base }}/artifactory/api/go/${jf_go_repo}" \
+            printf '%s' "https://${oidc_user_enc}:${oidc_token_enc}@${JF_REGISTRY_BASE}/artifactory/api/go/${jf_go_repo}" \
               > /tmp/docker-secrets/goproxy
           fi
 
           # Delta 3: Write consumer-provided secrets from JSON
-          secrets_json='${{ secrets.build-secrets-json }}'
+          secrets_json="${BUILD_SECRETS_JSON:-}"
           if [ -n "$secrets_json" ] && [ "$secrets_json" != "{}" ]; then
             # Validate key names before using them as filenames. Keys become
             # paths under /tmp/docker-secrets, so reject anything outside a safe
@@ -540,10 +543,9 @@ jobs:
               echo "::error::build-secrets-json contains an invalid key name; keys must match ^[a-zA-Z0-9_-]+$"
               exit 1
             fi
-            echo "$secrets_json" | jq -r 'to_entries[] | "\(.key)\n\(.value)"' | \
-              while IFS= read -r key && IFS= read -r value; do
-                echo -n "$value" > "/tmp/docker-secrets/$key"
-              done
+            jq -r 'keys[]' <<<"$secrets_json" | while IFS= read -r key; do
+              jq -j --arg k "$key" '.[$k]' <<<"$secrets_json" > "/tmp/docker-secrets/$key"
+            done
           fi
 
           # Lock down secret files: readable only by the runner process user.
