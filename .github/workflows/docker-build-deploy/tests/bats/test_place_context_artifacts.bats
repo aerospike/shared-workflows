@@ -133,35 +133,37 @@ place() {
     [[ $output == *"was not downloaded"* ]]
 }
 
-@test "fails when the artifact holds no regular files" {
-    mkdir -p "${STAGING}/a"
-    place '[{"name":"a","dest":"x"}]'
-    [ "$status" -ne 0 ]
-    [[ $output == *"no regular files"* ]]
+@test "fails when the artifact holds no regular files at any depth" {
+    for shape in flat nested; do
+        rm -rf "${STAGING:?}"/*
+        [ "$shape" = flat ] && mkdir -p "${STAGING}/a" || mkdir -p "${STAGING}/a/nested/deeper"
+        place '[{"name":"a","dest":"x"}]'
+        if [ "$status" -eq 0 ]; then
+            echo "accepted an artifact with no regular files ($shape)"
+            return 1
+        fi
+        [[ $output == *"no regular files"* ]]
+    done
 }
 
-@test "fails when the artifact holds only empty subdirectories" {
-    mkdir -p "${STAGING}/a/nested/deeper"
-    place '[{"name":"a","dest":"x"}]'
-    [ "$status" -ne 0 ]
-    [[ $output == *"no regular files"* ]]
-}
-
-@test "fails when the artifact contains a symlink alongside a regular file" {
-    artifact a real.txt
-    ln -s /etc/passwd "${STAGING}/a/escape"
-    place '[{"name":"a","dest":"x"}]'
-    [ "$status" -ne 0 ]
-    [[ $output == *"non-regular file"* ]]
-}
-
-@test "fails when the artifact contains a symlink nested deep" {
-    artifact a real.txt
-    mkdir -p "${STAGING}/a/nested"
-    ln -s ../../../../etc/passwd "${STAGING}/a/nested/escape"
-    place '[{"name":"a","dest":"x"}]'
-    [ "$status" -ne 0 ]
-    [[ $output == *"non-regular file"* ]]
+@test "fails when the artifact contains a symlink at any depth" {
+    # A lone regular file plus a symlink satisfies the emptiness check, so the
+    # symlink would ride into the image with it.
+    for where in top nested; do
+        rm -rf "${STAGING:?}"/* && artifact a real.txt
+        if [ "$where" = top ]; then
+            ln -s /etc/passwd "${STAGING}/a/escape"
+        else
+            mkdir -p "${STAGING}/a/nested"
+            ln -s ../../../../etc/passwd "${STAGING}/a/nested/escape"
+        fi
+        place '[{"name":"a","dest":"x"}]'
+        if [ "$status" -eq 0 ]; then
+            echo "carried a symlink into the context ($where)"
+            return 1
+        fi
+        [[ $output == *"non-regular file"* ]]
+    done
 }
 
 @test "nothing is placed when one entry fails validation" {
@@ -173,53 +175,37 @@ place() {
 
 # --- destination safety ---------------------------------------------------
 
-@test "fails when the destination already exists as a directory" {
-    artifact a
-    mkdir -p "${CONTEXT}/x"
-    place '[{"name":"a","dest":"x"}]'
-    [ "$status" -ne 0 ]
-    [[ $output == *"already exists"* ]]
+@test "fails when the destination already exists" {
+    for setup in dir file dangling; do
+        rm -rf "${CONTEXT:?}"/* && artifact a
+        case "$setup" in
+            dir) mkdir -p "${CONTEXT}/x" ;;
+            file) echo existing > "${CONTEXT}/x" ;;
+            dangling) ln -s /nonexistent "${CONTEXT}/x" ;;
+        esac
+        place '[{"name":"a","dest":"x"}]'
+        if [ "$status" -eq 0 ]; then
+            echo "overwrote an existing destination ($setup)"
+            return 1
+        fi
+        [[ $output == *"already exists"* ]]
+    done
 }
 
-@test "fails when the destination already exists as a file" {
-    artifact a
-    echo "existing" > "${CONTEXT}/x"
-    place '[{"name":"a","dest":"x"}]'
-    [ "$status" -ne 0 ]
-    [[ $output == *"already exists"* ]]
-}
-
-@test "fails when the destination is a dangling symlink" {
-    artifact a
-    ln -s /nonexistent "${CONTEXT}/x"
-    place '[{"name":"a","dest":"x"}]'
-    [ "$status" -ne 0 ]
-    [[ $output == *"already exists"* ]]
-}
-
-@test "refuses a destination whose parent is a symlink out of the context" {
-    artifact a
-    ln -s /tmp "${CONTEXT}/vendor"
-    place '[{"name":"a","dest":"vendor/out"}]'
-    [ "$status" -ne 0 ]
-    [[ $output == *"traverses a symlink"* ]]
-}
-
-@test "refuses a destination whose grandparent is a symlink" {
-    artifact a
-    ln -s /tmp "${CONTEXT}/vendor"
-    place '[{"name":"a","dest":"vendor/deep/out"}]'
-    [ "$status" -ne 0 ]
-    [[ $output == *"traverses a symlink"* ]]
-}
-
-@test "a symlinked parent is refused even when it points back inside the context" {
-    artifact a
-    mkdir -p "${CONTEXT}/real"
-    ln -s real "${CONTEXT}/link"
-    place '[{"name":"a","dest":"link/out"}]'
-    [ "$status" -ne 0 ]
-    [[ $output == *"traverses a symlink"* ]]
+@test "refuses a destination reached through a symlinked parent" {
+    # realpath -m resolves through existing symlinks, so following one would
+    # land outside the context while still looking contained.
+    for dest in vendor/out vendor/deep/out link/out; do
+        rm -rf "${CONTEXT:?}"/* && artifact a
+        ln -s /tmp "${CONTEXT}/vendor"
+        mkdir -p "${CONTEXT}/real" && ln -s real "${CONTEXT}/link"
+        place "[{\"name\":\"a\",\"dest\":\"$dest\"}]"
+        if [ "$status" -eq 0 ]; then
+            echo "followed a symlinked parent: $dest"
+            return 1
+        fi
+        [[ $output == *"traverses a symlink"* ]]
+    done
 }
 
 @test "a sibling directory sharing the context root prefix is not inside it" {

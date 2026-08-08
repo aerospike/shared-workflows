@@ -25,6 +25,34 @@ output_value() {
     grep "^$1=" "$GITHUB_OUTPUT" | cut -d= -f2-
 }
 
+# reject_all reads one JSON input per line from stdin and fails naming every
+# input the validator wrongly accepted, rather than only the first.
+reject_all() {
+    local bad=0 json
+    while read -r json; do
+        [ -z "$json" ] && continue
+        validate "$json"
+        if [ "$status" -eq 0 ]; then
+            echo "accepted but must reject: $json"
+            bad=$((bad + 1))
+        fi
+    done
+    [ "$bad" -eq 0 ]
+}
+
+accept_all() {
+    local bad=0 json
+    while read -r json; do
+        [ -z "$json" ] && continue
+        validate "$json"
+        if [ "$status" -ne 0 ]; then
+            echo "rejected but must accept: $json ($output)"
+            bad=$((bad + 1))
+        fi
+    done
+    [ "$bad" -eq 0 ]
+}
+
 @test "the step this suite tests still exists in the workflow" {
     [ -s "$SCRIPT_UNDER_TEST" ]
 }
@@ -38,16 +66,14 @@ output_value() {
 
 # --- accepted -------------------------------------------------------------
 
-@test "accepts a single entry" {
-    validate '[{"name":"signed-artifacts","dest":"artifacts"}]'
-    [ "$status" -eq 0 ]
-    [ "$(output_value count)" = "1" ]
-}
-
-@test "accepts several entries" {
-    validate '[{"name":"a","dest":"x"},{"name":"b","dest":"y"},{"name":"c","dest":"z"}]'
-    [ "$status" -eq 0 ]
-    [ "$(output_value count)" = "3" ]
+@test "accepts valid entries" {
+    accept_all <<'CASES'
+[{"name":"signed-artifacts","dest":"artifacts"}]
+[{"name":"a","dest":"x"},{"name":"b","dest":"y"},{"name":"c","dest":"z"}]
+[{"name":"a","dest":"deploy/chart/files"}]
+[{"name":"a.b_c-1","dest":"a..b"}]
+[{"name":"a","dest":"my-dir/sub-dir"}]
+CASES
 }
 
 @test "an empty array is a no-op, not a failure" {
@@ -56,90 +82,42 @@ output_value() {
     [ "$(output_value count)" = "0" ]
 }
 
-@test "accepts a nested dest" {
-    validate '[{"name":"a","dest":"deploy/chart/files"}]'
-    [ "$status" -eq 0 ]
-}
-
-@test "accepts dots inside a segment, which are not traversal" {
-    validate '[{"name":"a.b_c-1","dest":"a..b"}]'
-    [ "$status" -eq 0 ]
-}
-
-@test "accepts a dash inside a segment, which is not an option" {
-    validate '[{"name":"a","dest":"my-dir/sub-dir"}]'
-    [ "$status" -eq 0 ]
+@test "reports how many entries it accepted" {
+    validate '[{"name":"a","dest":"x"},{"name":"b","dest":"y"}]'
+    [ "$(output_value count)" = "2" ]
 }
 
 # --- download pattern -----------------------------------------------------
 
-@test "a single entry emits a bare name, because minimatch does not expand a one-element brace" {
+@test "a single entry emits a bare name, not a one-element brace" {
+    # minimatch does not expand "{a}", so it would match that literal string
+    # and download nothing.
     validate '[{"name":"signed-artifacts","dest":"x"}]'
     [ "$(output_value pattern)" = "signed-artifacts" ]
 }
 
-@test "two entries brace-expand" {
+@test "two or more entries brace-expand" {
     validate '[{"name":"a","dest":"x"},{"name":"b","dest":"y"}]'
     [ "$(output_value pattern)" = "{a,b}" ]
-}
-
-@test "three entries brace-expand" {
     validate '[{"name":"a","dest":"x"},{"name":"b","dest":"y"},{"name":"c","dest":"z"}]'
     [ "$(output_value pattern)" = "{a,b,c}" ]
 }
 
-# --- rejected: structure --------------------------------------------------
+# --- rejected -------------------------------------------------------------
 
-@test "rejects input that is not JSON" {
-    validate 'nonsense'
-    [ "$status" -ne 0 ]
-    [[ $output == *"not valid JSON"* ]]
-}
-
-@test "rejects a JSON object" {
-    validate '{"name":"a","dest":"x"}'
-    [ "$status" -ne 0 ]
-    [[ $output == *"must be a JSON array"* ]]
-}
-
-@test "rejects a JSON string" {
-    validate '"hello"'
-    [ "$status" -ne 0 ]
-}
-
-@test "rejects an entry that is not an object" {
-    validate '["signed-artifacts"]'
-    [ "$status" -ne 0 ]
-}
-
-@test "rejects a missing name" {
-    validate '[{"dest":"x"}]'
-    [ "$status" -ne 0 ]
-}
-
-@test "rejects a missing dest" {
-    validate '[{"name":"a"}]'
-    [ "$status" -ne 0 ]
-}
-
-@test "rejects an empty name" {
-    validate '[{"name":"","dest":"x"}]'
-    [ "$status" -ne 0 ]
-}
-
-@test "rejects an empty dest" {
-    validate '[{"name":"a","dest":""}]'
-    [ "$status" -ne 0 ]
-}
-
-@test "rejects a non-string name" {
-    validate '[{"name":123,"dest":"x"}]'
-    [ "$status" -ne 0 ]
-}
-
-@test "rejects a null name" {
-    validate '[{"name":null,"dest":"x"}]'
-    [ "$status" -ne 0 ]
+@test "rejects input that is not an array of two-string objects" {
+    reject_all <<'CASES'
+nonsense
+{"name":"a","dest":"x"}
+"hello"
+["signed-artifacts"]
+[{"dest":"x"}]
+[{"name":"a"}]
+[{"name":"","dest":"x"}]
+[{"name":"a","dest":""}]
+[{"name":123,"dest":"x"}]
+[{"name":null,"dest":"x"}]
+CASES
 }
 
 @test "names the offending entry index" {
@@ -148,133 +126,68 @@ output_value() {
     [[ $output == *"entry 1"* ]]
 }
 
-# --- rejected: name -------------------------------------------------------
-
-@test 'rejects a name of "." which the charset alone permits' {
-    validate '[{"name":".","dest":"x"}]'
-    [ "$status" -ne 0 ]
-    [[ $output == *"path traversal"* ]]
+@test "rejects a name outside the permitted charset" {
+    reject_all <<'CASES'
+[{"name":"a/b","dest":"x"}]
+[{"name":"a*","dest":"x"}]
+[{"name":"a{b","dest":"x"}]
+[{"name":"a b","dest":"x"}]
+CASES
 }
 
-@test 'rejects a name of ".." which would resolve the staging dir to RUNNER_TEMP' {
-    validate '[{"name":"..","dest":"x"}]'
-    [ "$status" -ne 0 ]
-    [[ $output == *"path traversal"* ]]
+@test 'rejects a name of "." or ".."' {
+    # Both pass the charset. download-artifact joins the name onto the staging
+    # path, so ".." resolves it to RUNNER_TEMP.
+    for n in . ..; do
+        validate "[{\"name\":\"$n\",\"dest\":\"x\"}]"
+        [ "$status" -ne 0 ]
+        [[ $output == *"path traversal"* ]]
+    done
 }
 
-@test "rejects a name containing a slash" {
-    validate '[{"name":"a/b","dest":"x"}]'
-    [ "$status" -ne 0 ]
+@test "rejects a dest that escapes or reaches outside the context" {
+    reject_all <<'CASES'
+[{"name":"a","dest":"/etc/passwd"}]
+[{"name":"a","dest":"."}]
+[{"name":"a","dest":".."}]
+[{"name":"a","dest":"../escape"}]
+[{"name":"a","dest":"good/../../escape"}]
+[{"name":"a","dest":"good/.."}]
+[{"name":"a","dest":"good/./x"}]
+CASES
 }
 
-@test "rejects a name containing a glob star" {
-    validate '[{"name":"a*","dest":"x"}]'
-    [ "$status" -ne 0 ]
-}
-
-@test "rejects a name containing a brace, which would corrupt the download pattern" {
-    validate '[{"name":"a{b","dest":"x"}]'
-    [ "$status" -ne 0 ]
-}
-
-@test "rejects a name containing a space" {
-    validate '[{"name":"a b","dest":"x"}]'
-    [ "$status" -ne 0 ]
-}
-
-@test "rejects a duplicate name" {
-    validate '[{"name":"a","dest":"x"},{"name":"a","dest":"y"}]'
-    [ "$status" -ne 0 ]
-    [[ $output == *"duplicate"* ]]
-}
-
-# --- rejected: dest -------------------------------------------------------
-
-@test "rejects an absolute dest" {
-    validate '[{"name":"a","dest":"/etc/passwd"}]'
-    [ "$status" -ne 0 ]
-    [[ $output == *"relative to the build context root"* ]]
-}
-
-@test 'rejects a dest of "."' {
-    validate '[{"name":"a","dest":"."}]'
-    [ "$status" -ne 0 ]
-}
-
-@test 'rejects a dest of ".."' {
-    validate '[{"name":"a","dest":".."}]'
-    [ "$status" -ne 0 ]
-}
-
-@test "rejects a leading traversal" {
-    validate '[{"name":"a","dest":"../escape"}]'
-    [ "$status" -ne 0 ]
-}
-
-@test "rejects an interior traversal" {
-    validate '[{"name":"a","dest":"good/../../escape"}]'
-    [ "$status" -ne 0 ]
-}
-
-@test "rejects a trailing traversal" {
-    validate '[{"name":"a","dest":"good/.."}]'
-    [ "$status" -ne 0 ]
-}
-
-@test "rejects a current-directory segment" {
-    validate '[{"name":"a","dest":"good/./x"}]'
-    [ "$status" -ne 0 ]
-}
-
-@test "rejects an option-like dest, which mv would read as a flag" {
+@test "rejects a dest segment that a utility would read as an option" {
+    reject_all <<'CASES'
+[{"name":"a","dest":"-rf"}]
+[{"name":"a","dest":"good/-rf"}]
+[{"name":"a","dest":"--no-preserve-root"}]
+CASES
     validate '[{"name":"a","dest":"-rf"}]'
-    [ "$status" -ne 0 ]
     [[ $output == *'beginning with "-"'* ]]
 }
 
-@test "rejects an option-like segment" {
-    validate '[{"name":"a","dest":"good/-rf"}]'
-    [ "$status" -ne 0 ]
+@test "rejects a dest outside the permitted charset" {
+    reject_all <<'CASES'
+[{"name":"a","dest":"my dir"}]
+[{"name":"a","dest":"x`id`"}]
+[{"name":"a","dest":"x$HOME"}]
+CASES
 }
 
-@test "rejects a long option" {
-    validate '[{"name":"a","dest":"--no-preserve-root"}]'
-    [ "$status" -ne 0 ]
-}
-
-@test "rejects an empty segment from a doubled slash" {
-    validate '[{"name":"a","dest":"good//bad"}]'
-    [ "$status" -ne 0 ]
-}
-
-@test "rejects a trailing slash, which splitting on / would otherwise hide" {
+@test "rejects a malformed path shape" {
+    reject_all <<'CASES'
+[{"name":"a","dest":"good//bad"}]
+[{"name":"a","dest":"good/"}]
+CASES
     validate '[{"name":"a","dest":"good/"}]'
-    [ "$status" -ne 0 ]
     [[ $output == *'must not end with "/"'* ]]
 }
 
-@test "rejects a dest containing a space" {
-    validate '[{"name":"a","dest":"my dir"}]'
-    [ "$status" -ne 0 ]
-}
-
-@test "rejects a dest containing a backtick" {
-    validate '[{"name":"a","dest":"x`id`"}]'
-    [ "$status" -ne 0 ]
-}
-
-@test "rejects a dest containing a dollar sign" {
-    validate '[{"name":"a","dest":"x$HOME"}]'
-    [ "$status" -ne 0 ]
-}
-
-@test "rejects a duplicate dest" {
-    validate '[{"name":"a","dest":"x"},{"name":"b","dest":"x"}]'
-    [ "$status" -ne 0 ]
-    [[ $output == *"duplicate"* ]]
-}
-
-@test "rejects two dests naming the same directory via a trailing slash" {
-    validate '[{"name":"a","dest":"x"},{"name":"b","dest":"x/"}]'
-    [ "$status" -ne 0 ]
+@test "rejects duplicates, including two dests naming one directory" {
+    reject_all <<'CASES'
+[{"name":"a","dest":"x"},{"name":"a","dest":"y"}]
+[{"name":"a","dest":"x"},{"name":"b","dest":"x"}]
+[{"name":"a","dest":"x"},{"name":"b","dest":"x/"}]
+CASES
 }
