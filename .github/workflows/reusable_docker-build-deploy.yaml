@@ -383,8 +383,6 @@ jobs:
         env:
           CONTEXT_ARTIFACTS_ENTRIES: ${{ steps.ctx_artifacts.outputs.entries }}
           BUILD_CONTEXT: ${{ inputs.context }}
-          PLATFORM: ${{ matrix.platform }}
-          SANITIZED: ${{ matrix.sanitized }}
         run: |
           set -euo pipefail
 
@@ -401,9 +399,6 @@ jobs:
             fail "build context \"$context\" is not a directory"
           fi
           context_root="$(realpath -- "$context")"
-
-          mkdir -p -- "${RUNNER_TEMP}/ctxmeta"
-          placed='[]'
 
           count="$(printf '%s' "$entries" | jq 'length')"
           for i in $(seq 0 $((count - 1))); do
@@ -456,32 +451,8 @@ jobs:
             mkdir -p -- "$(dirname -- "$target")"
             mv -- "$src" "$target"
 
-            placed="$(printf '%s' "$placed" | jq -c \
-              --arg name "$name" \
-              --arg dest "$dest" \
-              --argjson file_count "$file_count" \
-              --argjson bytes "$bytes" \
-              '. + [{name: $name, dest: $dest, file_count: $file_count, bytes: $bytes}]')"
-
             echo "Placed \"$name\" at \"$dest\": $file_count file(s), $bytes byte(s)"
           done
-
-          jq -nc \
-            --arg platform "$PLATFORM" \
-            --arg sanitized "$SANITIZED" \
-            --argjson placed "$placed" \
-            '{platform: $platform, sanitized: $sanitized, placed: $placed}' \
-            > "${RUNNER_TEMP}/ctxmeta/${SANITIZED}.json"
-
-      # Uploaded before the build so the evidence survives a build failure.
-      - name: Upload build-context evidence
-        if: ${{ steps.ctx_artifacts.outputs.count != '' && steps.ctx_artifacts.outputs.count != '0' }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: ctxmeta-${{ inputs.image-name }}--${{ matrix.sanitized }}
-          path: ${{ runner.temp }}/ctxmeta/*
-          if-no-files-found: error
-          retention-days: 1
 
       - name: Install JFrog CLI
         id: jf

@@ -50,14 +50,8 @@ artifact() {
 place() {
     RUNNER_TEMP="$RUNNER_TEMP" \
         BUILD_CONTEXT="$CONTEXT" \
-        PLATFORM="linux/amd64" \
-        SANITIZED="linux-amd64" \
         CONTEXT_ARTIFACTS_ENTRIES="$1" \
         run bash "$SCRIPT_UNDER_TEST"
-}
-
-meta() {
-    jq -r "$1" "${RUNNER_TEMP}/ctxmeta/linux-amd64.json"
 }
 
 @test "the step this suite tests still exists in the workflow" {
@@ -113,35 +107,36 @@ meta() {
     [ ! -e "${CONTEXT}/two/a.txt" ]
 }
 
-# --- leg evidence ---------------------------------------------------------
+# --- what the log reports -------------------------------------------------
+#
+# The log line is the only record of what was placed, so it is what a consumer
+# reads when a build looks wrong. These assert it says something true.
 
-@test "records platform, destination and counts" {
+@test "reports the artifact, destination and counts" {
     artifact a one.txt two.txt
     place '[{"name":"a","dest":"x"}]'
     [ "$status" -eq 0 ]
-    [ "$(meta '.platform')" = "linux/amd64" ]
-    [ "$(meta '.placed[0].name')" = "a" ]
-    [ "$(meta '.placed[0].dest')" = "x" ]
-    [ "$(meta '.placed[0].file_count')" = "2" ]
+    [[ $output == *'Placed "a" at "x"'* ]]
+    [[ $output == *"2 file(s)"* ]]
 }
 
 @test "counts files at any depth, not just the top level" {
     artifact a top.txt nested/deep/inner.txt
     place '[{"name":"a","dest":"x"}]'
-    [ "$(meta '.placed[0].file_count')" = "2" ]
+    [[ $output == *"2 file(s)"* ]]
 }
 
-@test "records byte totals" {
+@test "reports byte totals" {
     artifact a
     place '[{"name":"a","dest":"x"}]'
-    [ "$(meta '.placed[0].bytes')" = "8" ]
+    [[ $output == *"8 byte(s)"* ]]
 }
 
-@test "records one entry per artifact" {
+@test "reports one line per artifact" {
     artifact a
     artifact b
     place '[{"name":"a","dest":"x"},{"name":"b","dest":"y"}]'
-    [ "$(meta '.placed | length')" = "2" ]
+    [ "$(grep -c '^Placed ' <<<"$output")" = "2" ]
 }
 
 # --- refusals -------------------------------------------------------------
