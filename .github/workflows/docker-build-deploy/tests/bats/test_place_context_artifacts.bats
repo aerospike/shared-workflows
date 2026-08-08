@@ -2,9 +2,6 @@
 #
 # Placement rules for gh-context-artifacts-json: what reaches the build context
 # and what is refused before it can.
-#
-# As with the validation suite, the script is extracted from the workflow rather
-# than copied, so these cases exercise the text that ships.
 
 WORKFLOW="${BATS_TEST_DIRNAME}/../../../reusable_docker-build-deploy.yaml"
 STEP_NAME="Place build-context artifacts"
@@ -108,9 +105,6 @@ place() {
 }
 
 # --- what the log reports -------------------------------------------------
-#
-# The log line is the only record of what was placed, so it is what a consumer
-# reads when a build looks wrong. These assert it says something true.
 
 @test "reports the artifact, destination and counts" {
     artifact a one.txt two.txt
@@ -247,10 +241,8 @@ place() {
     [ ! -e "${CONTEXT}-evil/file.txt" ]
 }
 
-# The validate step rejects these destinations before placement ever sees them.
-# These cases feed them in directly, so the containment guard is exercised as
-# the independent second layer it exists to be. Without them, deleting that
-# guard breaks no test.
+# Validation rejects these before placement sees them, so they are fed in
+# directly to reach the containment guard behind it.
 
 @test "containment guard rejects a traversing dest that skipped validation" {
     artifact a

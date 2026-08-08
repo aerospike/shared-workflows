@@ -2,11 +2,6 @@
 #
 # Structural rules for reusable_docker-build-deploy.yaml: where steps sit, what
 # gates them, and which job owns them.
-#
-# The other two suites in this directory test what each step's script does.
-# Placement is what makes the delivery refusals cheap: a rejected input costs
-# nothing because it is rejected before an OIDC token is minted, and a caller
-# that asks for nothing runs none of it.
 
 WORKFLOW="${BATS_TEST_DIRNAME}/../../../reusable_docker-build-deploy.yaml"
 

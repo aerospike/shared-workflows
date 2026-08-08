@@ -226,11 +226,9 @@ jobs:
 
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
-      # Bytes a caller asks for are placed in the build context here, between
-      # the checkout that creates the context and the build that reads it. That
-      # is the only window a caller cannot reach itself: COPY cannot read
-      # outside the context, and a job invoked with `uses:` cannot add steps.
-      # Running before the OIDC token is minted means a bad input costs nothing.
+      # Keep these three steps between checkout and Install JFrog CLI: the
+      # context does not exist before checkout, and running after the token is
+      # minted makes a rejected input cost one.
       - name: Validate build-context artifacts
         id: ctx_artifacts
         if: ${{ inputs.gh-context-artifacts-json != '' }}

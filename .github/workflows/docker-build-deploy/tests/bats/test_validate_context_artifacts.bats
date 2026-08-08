@@ -2,11 +2,8 @@
 #
 # Rules for the gh-context-artifacts-json input.
 #
-# The script under test is extracted from the workflow rather than copied here,
-# so these cases exercise the text that actually ships. The validator has to
-# live inline in the workflow: a reusable workflow cannot check out its own
-# repository to reach a script file (see docs/why-gh-workflows-ref.md), and this
-# workflow deliberately takes no gh-workflows-ref input.
+# Do not move this script to a .sh file: a reusable workflow cannot check out
+# its own repository to reach one. See docs/why-gh-workflows-ref.md.
 
 WORKFLOW="${BATS_TEST_DIRNAME}/../../../reusable_docker-build-deploy.yaml"
 STEP_NAME="Validate build-context artifacts"
@@ -42,9 +39,8 @@ output_value() {
 }
 
 @test "no caller-supplied value is interpolated into the script" {
-    # Caller-supplied values reach these scripts through env: only. A
-    # "${{ inputs.x }}" spliced into a shell string is the Actions
-    # script-injection class, and the splice happens before bash sees a quote.
+    # Interpolation happens before bash sees a quote, so env: is the only
+    # safe channel for a caller-supplied value.
     run grep -n '\${{' "$SCRIPT_UNDER_TEST"
     [ "$status" -ne 0 ]
 }
