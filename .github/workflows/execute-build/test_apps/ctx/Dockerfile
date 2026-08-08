@@ -7,11 +7,13 @@ FROM artifact.aerospike.io/test-docker-virtual/distroless/cc-debian12:debug-nonr
 # exits 0. That failure mode is what this fixture exists to catch, so the
 # fixture must not contain it.
 #
-# There is no `artifacts/` directory in the repository. It is created in the
-# build context by the caller's gh-context-artifacts-json delivery, so a build
-# that reaches here without delivery fails on a missing source path.
+# Neither directory exists in the repository. Both are created in the build
+# context by the caller's gh-context-artifacts-json delivery, so a build that
+# reaches here without delivery fails on a missing source path. Two of them, so
+# one image proves each entry lands at its own destination rather than merging.
 COPY artifacts/ /delivered/
+COPY extra/ /extra/
 
 USER nonroot
 
-ENTRYPOINT ["/busybox/sh", "-c", "find /delivered -type f | sort && echo --- && find /delivered -type f -exec cat {} +"]
+ENTRYPOINT ["/busybox/sh", "-c", "find /delivered /extra -type f | sort && echo --- && find /delivered /extra -type f -exec cat {} +"]

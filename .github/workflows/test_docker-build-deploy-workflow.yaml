@@ -72,6 +72,69 @@ jobs:
       oidc-provider-name: gh-aerospike
       oidc-audience: aerospike
 
+  # Produces the artifacts the build-context delivery call consumes. `ctx-decoy`
+  # is deliberately not requested, so the image can be checked for its absence.
+  produce-context-fixtures:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          egress-policy: audit
+
+      - name: Build fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p fixture/nested extra decoy
+          echo "delivered-jar-content" > fixture/app.jar
+          echo "delivered-sig-content" > fixture/app.jar.asc
+          echo "delivered-nested-content" > fixture/nested/inner.txt
+          echo "delivered-extra-content" > extra/extra.txt
+          echo "decoy-must-not-appear" > decoy/decoy.txt
+
+      - name: Upload requested fixture
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ctx-fixture
+          path: fixture/
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Upload second requested fixture
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ctx-extra
+          path: extra/
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Upload decoy
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ctx-decoy
+          path: decoy/
+          if-no-files-found: error
+          retention-days: 1
+
+  # Build-context delivery. The context is a subdirectory, so a dest that
+  # resolved against the workspace root instead of the context would fail the
+  # Dockerfile's COPY.
+  test-docker-build-deploy-ctx:
+    uses: ./.github/workflows/reusable_docker-build-deploy.yaml
+    needs: [extract-version, produce-context-fixtures]
+    with:
+      jf-project: test
+      image-name: test-image-ctx
+      app-version: ${{ needs.extract-version.outputs.version }}
+      context: ./.github/workflows/execute-build/test_apps/ctx
+      file: ./.github/workflows/execute-build/test_apps/ctx/Dockerfile
+      jf-build-name: test-container-ctx
+      oidc-provider-name: gh-aerospike
+      oidc-audience: aerospike
+      gh-context-artifacts-json: |
+        [{"name": "ctx-fixture", "dest": "artifacts"}, {"name": "ctx-extra", "dest": "extra"}]
+
   # AC12 (negative): attestation runs only in the merge job. A definition-level
   # lint so re-adding attest to a leg fails fast, no build needed.
   ac12-no-per-leg-attest:
@@ -108,6 +171,7 @@ jobs:
         extract-version,
         test-docker-build-deploy,
         test-docker-build-deploy-single,
+        test-docker-build-deploy-ctx,
       ]
     runs-on: ubuntu-22.04
     permissions:
@@ -253,3 +317,63 @@ jobs:
             echo "::error::JFROG_TOKEN found in image history"; exit 1
           fi
           echo "AC11: ok (no JFROG_TOKEN in history)"
+
+      - name: Download per-leg metadata (build-context delivery)
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          path: ${{ runner.temp }}/ctxlegmeta
+          pattern: legmeta-test-image-ctx--*
+          merge-multiple: true
+
+      # Extracting from each leg's own image proves COPY saw the delivered bytes
+      # on that platform. Reading a file the workflow wrote would only prove the
+      # workflow wrote a file. docker create does not execute the image, so a
+      # foreign architecture needs no emulation.
+      - name: Delivered artifacts are present in every leg's image
+        shell: bash
+        env:
+          CTX_IMAGE: artifact.aerospike.io/test-docker-dev-local/test-image-ctx
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=("${RUNNER_TEMP}/ctxlegmeta"/*.json)
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "::error::no leg metadata found for the build-context delivery build"; exit 1
+          fi
+
+          for f in "${files[@]}"; do
+            platform="$(jq -r '.platform' "$f")"
+            digest="$(jq -r '.digest' "$f")"
+            ref="${CTX_IMAGE}@${digest}"
+            echo "--- $platform ($digest)"
+
+            cid="$(docker create --platform "$platform" "$ref")"
+            rm -rf /tmp/extracted && mkdir -p /tmp/extracted
+            docker cp "${cid}:/delivered" /tmp/extracted/delivered
+            docker cp "${cid}:/extra" /tmp/extracted/extra
+            docker rm -f "$cid" >/dev/null
+
+            # AC1: the requested bytes arrived, contents intact, at any depth.
+            grep -qx "delivered-jar-content" /tmp/extracted/delivered/app.jar \
+              || { echo "::error::$platform: app.jar content missing or wrong"; exit 1; }
+            grep -qx "delivered-sig-content" /tmp/extracted/delivered/app.jar.asc \
+              || { echo "::error::$platform: app.jar.asc content missing or wrong"; exit 1; }
+            grep -qx "delivered-nested-content" /tmp/extracted/delivered/nested/inner.txt \
+              || { echo "::error::$platform: nested file missing or wrong"; exit 1; }
+
+            # AC3: each entry landed at its own dest, not merged or swapped.
+            grep -qx "delivered-extra-content" /tmp/extracted/extra/extra.txt \
+              || { echo "::error::$platform: extra entry missing or wrong"; exit 1; }
+            if [ -e /tmp/extracted/extra/app.jar ] || [ -e /tmp/extracted/delivered/extra.txt ]; then
+              echo "::error::$platform: entries were merged across destinations"; exit 1
+            fi
+
+            # AC4: an artifact that exists in the run but was not requested must
+            # not be pulled in by an over-broad download pattern.
+            if grep -rqx "decoy-must-not-appear" /tmp/extracted 2>/dev/null; then
+              echo "::error::$platform: decoy artifact reached the build context"; exit 1
+            fi
+
+            echo "    ok"
+          done
+          echo "build-context delivery: ok on ${#files[@]} leg(s)"
