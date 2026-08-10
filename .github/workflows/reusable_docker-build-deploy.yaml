@@ -38,6 +38,15 @@ on:
         type: string
         default: Dockerfile
         description: Path to Dockerfile (relative to context)
+      gh-context-artifacts-json:
+        type: string
+        default: ""
+        description: >-
+          JSON array of same-run GitHub artifacts to place inside the Docker
+          build context before the image build, e.g.
+          [{"name":"signed-artifacts","dest":"artifacts"}]. Each dest is a
+          relative path under the build context root and must not already
+          exist. Unset means no artifacts are placed.
       jf-build-name:
         type: string
         required: false
@@ -217,6 +226,197 @@ jobs:
 
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
+      # Keep these three steps between checkout and Install JFrog CLI: the
+      # context does not exist before checkout, and running after the token is
+      # minted makes a rejected input cost one.
+      - name: Validate build-context artifacts
+        id: ctx_artifacts
+        if: ${{ inputs.gh-context-artifacts-json != '' }}
+        shell: bash
+        env:
+          CONTEXT_ARTIFACTS_JSON: ${{ inputs.gh-context-artifacts-json }}
+        run: |
+          set -euo pipefail
+
+          json="${CONTEXT_ARTIFACTS_JSON:-}"
+
+          fail() {
+            echo "::error::gh-context-artifacts-json: $*"
+            exit 1
+          }
+
+          if ! printf '%s' "$json" | jq -e . >/dev/null 2>&1; then
+            fail "input is not valid JSON"
+          fi
+          if ! printf '%s' "$json" | jq -e 'type == "array"' >/dev/null 2>&1; then
+            fail "input must be a JSON array, got $(printf '%s' "$json" | jq -r 'type')"
+          fi
+
+          # Rules are ordered per entry, so the reported failure is the first one a
+          # reader would hit. An empty result means the input is good.
+          problem="$(printf '%s' "$json" | jq -r '
+            def prior($arr; $i; f): $arr[0:$i] | map(select(type == "object") | f);
+            . as $arr
+            | [ to_entries[]
+                | .key as $i | .value as $v
+                | "entry \($i) " as $at
+                | if ($v | type) != "object"
+                     or ($v.name | type) != "string" or ($v.dest | type) != "string"
+                     or $v.name == "" or $v.dest == ""
+                  then $at + "must be an object with non-empty string \"name\" and \"dest\""
+                elif ($v.name | test("^[A-Za-z0-9._-]+$") | not)
+                  then $at + "name \"\($v.name)\" must match ^[A-Za-z0-9._-]+$"
+                # "." and ".." are made only of permitted characters, and
+                # actions/download-artifact joins the name onto the staging path, so ".."
+                # resolves the per-artifact directory to RUNNER_TEMP itself.
+                elif ($v.name == "." or $v.name == "..")
+                  then $at + "name \"\($v.name)\" is a path traversal"
+                elif (prior($arr; $i; .name) | index($v.name)) != null
+                  then $at + "name \"\($v.name)\" is a duplicate"
+                elif ($v.dest | startswith("/"))
+                  then $at + "dest \"\($v.dest)\" must be relative to the build context root"
+                # A charset is not implied by the traversal rules: "-rf" passes them all.
+                elif ($v.dest | test("^[A-Za-z0-9._/-]+$") | not)
+                  then $at + "dest \"\($v.dest)\" must match ^[A-Za-z0-9._/-]+$"
+                # Splitting on "/" discards a trailing empty field, so this is not caught
+                # by the segment rules below. Left in, "x" and "x/" defeat the duplicate
+                # rule while naming one directory.
+                elif ($v.dest | endswith("/"))
+                  then $at + "dest \"\($v.dest)\" must not end with \"/\""
+                elif ($v.dest | split("/") | any(. == ""))
+                  then $at + "dest \"\($v.dest)\" has an empty path segment"
+                elif ($v.dest | split("/") | any(. == ".."))
+                  then $at + "dest \"\($v.dest)\" contains a \"..\" segment"
+                elif ($v.dest | split("/") | any(. == "."))
+                  then $at + "dest \"\($v.dest)\" contains a \".\" segment"
+                elif ($v.dest | split("/") | any(startswith("-")))
+                  then $at + "dest \"\($v.dest)\" has a segment beginning with \"-\""
+                elif (prior($arr; $i; .dest) | index($v.dest)) != null
+                  then $at + "dest \"\($v.dest)\" is a duplicate"
+                else empty end ]
+            | first // ""
+          ')"
+          if [ -n "$problem" ]; then
+            fail "$problem"
+          fi
+
+          count="$(printf '%s' "$json" | jq 'length')"
+          if [ "$count" -eq 0 ]; then
+            echo "::notice::gh-context-artifacts-json is an empty array; no artifacts will be placed"
+            pattern=""
+          else
+            # minimatch does not expand a one-element brace, so "{a}" would match that
+            # literal string and download nothing.
+            pattern="$(printf '%s' "$json" | jq -r '
+              if length == 1 then .[0].name else "{" + (map(.name) | join(",")) + "}" end')"
+          fi
+
+          {
+            echo "count=$count"
+            echo "pattern=$pattern"
+            echo "entries=$(printf '%s' "$json" | jq -c '.')"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "Validated $count build-context artifact(s); download pattern: $pattern"
+      # An empty `count` means the validate step was skipped, so the caller
+      # asked for nothing. A zero `count` means an explicit empty array.
+      - name: Download build-context artifacts
+        if: ${{ steps.ctx_artifacts.outputs.count != '' && steps.ctx_artifacts.outputs.count != '0' }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          path: ${{ runner.temp }}/context-artifacts
+          pattern: ${{ steps.ctx_artifacts.outputs.pattern }}
+          # One directory per artifact, named after it, which is what the next
+          # step resolves each entry against.
+          merge-multiple: false
+
+      # A pattern matching nothing is silent in actions/download-artifact, so
+      # the assertions here are the only thing standing between an artifact the
+      # caller named and a green build with an empty COPY.
+      - name: Place build-context artifacts
+        if: ${{ steps.ctx_artifacts.outputs.count != '' && steps.ctx_artifacts.outputs.count != '0' }}
+        shell: bash
+        env:
+          CONTEXT_ARTIFACTS_ENTRIES: ${{ steps.ctx_artifacts.outputs.entries }}
+          BUILD_CONTEXT: ${{ inputs.context }}
+        run: |
+          set -euo pipefail
+
+          entries="${CONTEXT_ARTIFACTS_ENTRIES:-}"
+          context="${BUILD_CONTEXT:-.}"
+          staging="${RUNNER_TEMP}/context-artifacts"
+
+          fail() {
+            echo "::error::gh-context-artifacts-json: $*"
+            exit 1
+          }
+
+          if [ ! -d "$context" ]; then
+            fail "build context \"$context\" is not a directory"
+          fi
+          context_root="$(realpath -- "$context")"
+
+          count="$(printf '%s' "$entries" | jq 'length')"
+          for i in $(seq 0 $((count - 1))); do
+            name="$(printf '%s' "$entries" | jq -r --argjson i "$i" '.[$i].name')"
+            dest="$(printf '%s' "$entries" | jq -r --argjson i "$i" '.[$i].dest')"
+
+            # actions/download-artifact extracts a lone artifact into the path
+            # root and only gives each one its own directory when several match.
+            if [ "$count" -eq 1 ]; then
+              src="$staging"
+            else
+              src="${staging}/${name}"
+            fi
+
+            if [ ! -d "$src" ]; then
+              fail "artifact \"$name\" was not downloaded; no artifact by that name exists in this run"
+            fi
+
+            # Symlinks, fifos and sockets never enter the build context. A
+            # directory holding one regular file plus a symlink would satisfy
+            # the emptiness check below and carry the symlink in with it.
+            irregular="$(find "$src" -mindepth 1 ! -type d ! -type f -print -quit)"
+            if [ -n "$irregular" ]; then
+              fail "artifact \"$name\" contains a non-regular file: ${irregular#"${src}/"}"
+            fi
+
+            file_count="$(find "$src" -type f -printf '.' | wc -c | tr -d ' ')"
+            if [ "$file_count" -eq 0 ]; then
+              fail "artifact \"$name\" contains no regular files"
+            fi
+            bytes="$(find "$src" -type f -printf '%s\n' | awk '{ total += $1 } END { print total + 0 }')"
+
+            target="${context_root}/${dest}"
+            if [ -e "$target" ] || [ -L "$target" ]; then
+              fail "destination \"$dest\" already exists in the build context"
+            fi
+
+            # realpath -m resolves through existing symlinks, so a committed
+            # "vendor -> /" plus a dest of "vendor/out" would land outside the
+            # context while still looking contained. Refuse rather than follow.
+            probe="$(dirname -- "$target")"
+            while [ "$probe" != "$context_root" ] && [ "$probe" != "/" ]; do
+              if [ -L "$probe" ]; then
+                fail "destination \"$dest\" traverses a symlink at \"${probe#"${context_root}/"}\""
+              fi
+              probe="$(dirname -- "$probe")"
+            done
+
+            # Exact comparison. A bare prefix test would accept a sibling whose
+            # name merely starts with the context root, such as /w/repo-evil
+            # against /w/repo.
+            resolved="$(realpath -m -- "$target")"
+            if [ "$resolved" != "$context_root" ] && [ "${resolved#"${context_root}/"}" = "$resolved" ]; then
+              fail "destination \"$dest\" resolves outside the build context root"
+            fi
+
+            mkdir -p -- "$(dirname -- "$target")"
+            mv -- "$src" "$target"
+
+            echo "Placed \"$name\" at \"$dest\": $file_count file(s), $bytes byte(s)"
+          done
+
       - name: Install JFrog CLI
         id: jf
         uses: step-security/setup-jfrog-cli@3054b554c0fb4915b3d58847fb7730c593dbb934 # v5.0.0
@@ -310,6 +510,9 @@ jobs:
           # to jq for safe URL-encoding below. Built from THIS leg's own token.
           OIDC_USER: ${{ steps.jf.outputs.oidc-user }}
           OIDC_TOKEN: ${{ steps.jf.outputs.oidc-token }}
+          BUILD_SECRETS_JSON: ${{ secrets.build-secrets-json }}
+          JF_GO_REPO: ${{ inputs.jf-go-repo }}
+          JF_REGISTRY_BASE: ${{ inputs.jf-registry-base }}
         run: |
           set -euo pipefail
           mkdir -p /tmp/docker-secrets
@@ -318,7 +521,7 @@ jobs:
           printf '%s' "$OIDC_TOKEN" > /tmp/docker-secrets/jfrog_token
 
           # Delta 2: Construct authenticated GOPROXY URL when jf-go-repo is set
-          jf_go_repo='${{ inputs.jf-go-repo }}'
+          jf_go_repo="${JF_GO_REPO:-}"
           if [ -n "$jf_go_repo" ]; then
             # Percent-encode the user and token before embedding them in the URL
             # userinfo component. OIDC users/tokens can contain reserved chars
@@ -326,12 +529,12 @@ jobs:
             # break the HTTP request to Artifactory.
             oidc_user_enc=$(jq -rn 'env.OIDC_USER | @uri')
             oidc_token_enc=$(jq -rn 'env.OIDC_TOKEN | @uri')
-            printf '%s' "https://${oidc_user_enc}:${oidc_token_enc}@${{ inputs.jf-registry-base }}/artifactory/api/go/${jf_go_repo}" \
+            printf '%s' "https://${oidc_user_enc}:${oidc_token_enc}@${JF_REGISTRY_BASE}/artifactory/api/go/${jf_go_repo}" \
               > /tmp/docker-secrets/goproxy
           fi
 
           # Delta 3: Write consumer-provided secrets from JSON
-          secrets_json='${{ secrets.build-secrets-json }}'
+          secrets_json="${BUILD_SECRETS_JSON:-}"
           if [ -n "$secrets_json" ] && [ "$secrets_json" != "{}" ]; then
             # Validate key names before using them as filenames. Keys become
             # paths under /tmp/docker-secrets, so reject anything outside a safe
@@ -340,10 +543,9 @@ jobs:
               echo "::error::build-secrets-json contains an invalid key name; keys must match ^[a-zA-Z0-9_-]+$"
               exit 1
             fi
-            echo "$secrets_json" | jq -r 'to_entries[] | "\(.key)\n\(.value)"' | \
-              while IFS= read -r key && IFS= read -r value; do
-                echo -n "$value" > "/tmp/docker-secrets/$key"
-              done
+            jq -r 'keys[]' <<<"$secrets_json" | while IFS= read -r key; do
+              jq -j --arg k "$key" '.[$k]' <<<"$secrets_json" > "/tmp/docker-secrets/$key"
+            done
           fi
 
           # Lock down secret files: readable only by the runner process user.

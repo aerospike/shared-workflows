@@ -32,6 +32,7 @@ jobs:
 - `build-args-json` (string, default `{}`): JSON object of build-args passed to docker build (e.g., `{"VERSION":"7.0.0","BUILD_DATE":"2024-01-15T10:30:00Z","SOURCE_VERSION":"abc123"}`)
 - `context` (string, default `.`): Docker build context directory
 - `file` (string, default `Dockerfile`): Path to Dockerfile (relative to context)
+- `gh-context-artifacts-json` (string, optional): JSON array of same-run GitHub artifacts to place inside the build context before the image build, e.g. `[{"name":"signed-artifacts","dest":"artifacts"}]`. See [Delivering artifacts into the build context](#delivering-artifacts-into-the-build-context)
 - `jf-build-name` (string, optional): Build name for JFrog build-info (defaults to workflow name)
 - `jf-registry` (string, optional): Full Docker registry URL including repository path (e.g., `artifact.aerospike.io/database-docker-dev-local`)
 - `jf-registry-base` (string, default `artifact.aerospike.io`): Registry hostname (no repo path)
@@ -94,6 +95,59 @@ The workflow automatically generates tags based on the `app-version` input:
 3. **Custom tags** (when `versions-override` is provided): Only the immutable tag plus the override tags are generated (e.g., with `versions-override: "dev"`, for app version `7.0.0`, the tag portions would be `7.0.0_20251202T021054Z, dev`).
 
 The registry is automatically constructed from `jf-registry` (if provided) or `{jf-registry-base}/{jf-project}{repo-scope}`.
+
+## Delivering artifacts into the build context
+
+An image that ships an artifact built earlier in the same run needs those bytes inside the Docker
+build context. `COPY` cannot read outside the context, the context is sealed at this workflow's own
+checkout, and a job invoked with `uses:` cannot declare `steps:`, so a caller cannot place them
+itself.
+
+`gh-context-artifacts-json` names same-run GitHub artifacts and where each should land:
+
+```yaml
+jobs:
+  artifacts:
+    # ... a job that ends by uploading an artifact named "signed-artifacts"
+
+  container:
+    needs: [artifacts]
+    uses: aerospike/shared-workflows/.github/workflows/reusable_docker-build-deploy.yaml@<sha>
+    with:
+      jf-project: connect
+      image-name: my-app
+      app-version: ${{ needs.version.outputs.version }}
+      gh-context-artifacts-json: |
+        [{"name": "signed-artifacts", "dest": "artifacts"}]
+```
+
+The Dockerfile then copies from the destination path:
+
+```dockerfile
+COPY artifacts/ /opt/my-app/lib/
+```
+
+Each `dest` is relative to the build context root, must not already exist, and must not escape the
+context. Names and destinations are rejected rather than sanitised, and the run fails naming the
+entry when an artifact is missing, holds no regular files, or contains anything that is not a
+regular file. There is no silent empty directory: an unset `COPY` argument expands to `COPY  /dest`,
+which copies the whole context into a directory and exits 0, so delivery fails loudly instead.
+
+Three things this does not do:
+
+- **Bytes from a different run.** Published artifacts are reachable over the network from inside the
+  build, which is how [aerospike-tools.docker](https://github.com/aerospike/aerospike-tools.docker/blob/master/Dockerfile#L26)
+  and [aerospike-server.docker](https://github.com/aerospike/aerospike-server.docker/blob/master/scripts/deb/install.sh#L49-L50)
+  install a released package: take the URL as a build arg, fetch it, verify a pinned checksum. For
+  authenticated fetches from Artifactory the `jfrog_token` build secret is already mounted (see
+  [Build Secrets](#build-secrets)).
+- **Verify what it delivers.** Integrity is the caller's. Verify signatures or checksums in the job
+  that produces the artifact, before the image build consumes it.
+- **Vouch for delivered bytes in the attestation.** The SLSA build-provenance attestation covers the
+  build process and git revision, not the provenance of artifacts injected this way.
+
+Artifact access is scoped to the **run**, not to the caller's `permissions:` block. Same-run artifact
+traffic uses the runtime token that every job receives, which is why this needs no `actions:` scope.
 
 ## Build Secrets
 

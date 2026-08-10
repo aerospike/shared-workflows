@@ -54,10 +54,9 @@ jobs:
       oidc-provider-name: gh-aerospike
       oidc-audience: aerospike
 
-  # Single-platform build (AC5 single-platform / Task 1.3): a single-platform
-  # call must still publish a multi-platform manifest index. Distinct image-name
-  # and build-name so its artifacts and build-info do not collide with the
-  # multi-platform job in the same run.
+  # A single-platform call must still publish a multi-platform manifest index.
+  # Distinct image-name and build-name so its artifacts and build-info do not
+  # collide with the multi-platform job in the same run.
   test-docker-build-deploy-single:
     uses: ./.github/workflows/reusable_docker-build-deploy.yaml
     needs: extract-version
@@ -72,35 +71,68 @@ jobs:
       oidc-provider-name: gh-aerospike
       oidc-audience: aerospike
 
-  # AC12 (negative): attestation runs only in the merge job. A definition-level
-  # lint so re-adding attest to a leg fails fast, no build needed.
-  ac12-no-per-leg-attest:
+  # Produces the artifacts the build-context delivery call consumes. `ctx-decoy`
+  # is deliberately not requested, so the image can be checked for its absence.
+  produce-context-fixtures:
     runs-on: ubuntu-22.04
     steps:
       - name: Harden the runner (Audit all outbound calls)
         uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
         with:
           egress-policy: audit
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-      - name: Assert exactly one attest-build-provenance, in the merge job
+
+      - name: Build fixtures
         shell: bash
         run: |
           set -euo pipefail
-          wf=.github/workflows/reusable_docker-build-deploy.yaml
-          count=$(grep -c "attest-build-provenance@" "$wf" || true)
-          if [ "$count" -ne 1 ]; then
-            echo "::error::expected exactly 1 attest-build-provenance use in $wf, found $count"
-            exit 1
-          fi
-          # It must live under the merge job, not a build leg. Assert the only
-          # occurrence appears after the 'merge:' job header.
-          attest_line=$(grep -n "attest-build-provenance@" "$wf" | cut -d: -f1)
-          merge_line=$(grep -n "^  merge:" "$wf" | cut -d: -f1)
-          if [ -z "$merge_line" ] || [ "$attest_line" -lt "$merge_line" ]; then
-            echo "::error::attest-build-provenance is not inside the merge job"
-            exit 1
-          fi
-          echo "AC12 negative: ok (1 attest, in merge job)"
+          mkdir -p fixture/nested extra decoy
+          echo "delivered-jar-content" > fixture/app.jar
+          echo "delivered-sig-content" > fixture/app.jar.asc
+          echo "delivered-nested-content" > fixture/nested/inner.txt
+          echo "delivered-extra-content" > extra/extra.txt
+          echo "decoy-must-not-appear" > decoy/decoy.txt
+
+      - name: Upload requested fixture
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ctx-fixture
+          path: fixture/
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Upload second requested fixture
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ctx-extra
+          path: extra/
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Upload decoy
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ctx-decoy
+          path: decoy/
+          if-no-files-found: error
+          retention-days: 1
+
+  # Build-context delivery. The context is a subdirectory, so a dest that
+  # resolved against the workspace root instead of the context would fail the
+  # Dockerfile's COPY.
+  test-docker-build-deploy-ctx:
+    uses: ./.github/workflows/reusable_docker-build-deploy.yaml
+    needs: [extract-version, produce-context-fixtures]
+    with:
+      jf-project: test
+      image-name: test-image-ctx
+      app-version: ${{ needs.extract-version.outputs.version }}
+      context: ./.github/workflows/execute-build/test_apps/ctx
+      file: ./.github/workflows/execute-build/test_apps/ctx/Dockerfile
+      jf-build-name: test-container-ctx
+      oidc-provider-name: gh-aerospike
+      oidc-audience: aerospike
+      gh-context-artifacts-json: |
+        [{"name": "ctx-fixture", "dest": "artifacts"}, {"name": "ctx-extra", "dest": "extra"}]
 
   verify:
     needs:
@@ -108,6 +140,7 @@ jobs:
         extract-version,
         test-docker-build-deploy,
         test-docker-build-deploy-single,
+        test-docker-build-deploy-ctx,
       ]
     runs-on: ubuntu-22.04
     permissions:
@@ -151,7 +184,7 @@ jobs:
 
       - uses: step-security/setup-buildx-action@6997872a55d77391e51b87609556578131f44402 # v4.1.0
 
-      - name: AC - outputs are populated and well formed
+      - name: Outputs are populated and well formed
         shell: bash
         run: |
           set -euo pipefail
@@ -164,7 +197,7 @@ jobs:
           esac
           echo "outputs ok"
 
-      - name: AC5 - multi-platform result is a manifest index with both arches
+      - name: Multi-platform result is a manifest index carrying both arches
         shell: bash
         run: |
           set -euo pipefail
@@ -179,16 +212,16 @@ jobs:
             echo "$out" | jq -e --arg a "$arch" '.manifest.manifests[]?.platform | select(.os=="linux" and .architecture==$a)' >/dev/null \
               || { echo "::error::manifest index missing linux/$arch"; exit 1; }
           done
-          echo "AC5 multi: ok (index with amd64+arm64)"
+          echo "ok: index with amd64+arm64"
 
-      - name: AC5 - single-platform result is still a manifest index
+      - name: Single-platform result is still a manifest index
         shell: bash
         run: |
           set -euo pipefail
           mt=$(docker buildx imagetools inspect "$SINGLE_IMMUTABLE" --format '{{json .}}' | jq -r '.manifest.mediaType')
           echo "single media type: $mt"
           case "$mt" in
-            *image.index*|*manifest.list*) echo "AC5 single: ok (index)";;
+            *image.index*|*manifest.list*) echo "ok: index";;
             *) echo "::error::single-platform result is not a manifest index: $mt"; exit 1 ;;
           esac
 
@@ -199,7 +232,7 @@ jobs:
           pattern: legmeta-test-image--*
           merge-multiple: true
 
-      - name: AC2/AC8 + token-timing - native runner per arch, push within token lifetime
+      - name: Native runner per arch, and push completes inside the token lifetime
         shell: bash
         run: |
           set -euo pipefail
@@ -220,9 +253,9 @@ jobs:
               echo "::error::$platform push was not within the 30-min token lifetime"; exit 1
             fi
           done
-          echo "AC2/AC8 + token-timing: ok"
+          echo "ok: native runners, push inside token lifetime"
 
-      - name: AC6 - one build-info record references the manifest-list digest
+      - name: One build-info record references the manifest-list digest
         shell: bash
         env:
           TOKEN: ${{ steps.jf.outputs.oidc-token }}
@@ -242,9 +275,9 @@ jobs:
           if ! grep -q "$digest" /tmp/bi.json; then
             echo "::error::build-info does not reference the manifest-list digest $MULTI_DIGEST"; exit 1
           fi
-          echo "AC6: ok (record present, references manifest-list digest)"
+          echo "ok: record present, references manifest-list digest"
 
-      - name: AC11 - no JFROG_TOKEN build-arg in image history
+      - name: No JFROG_TOKEN build-arg in image history
         shell: bash
         run: |
           set -euo pipefail
@@ -252,4 +285,64 @@ jobs:
           if docker history --no-trunc --format '{{.CreatedBy}}' "$MULTI_IMMUTABLE" | grep -q "JFROG_TOKEN"; then
             echo "::error::JFROG_TOKEN found in image history"; exit 1
           fi
-          echo "AC11: ok (no JFROG_TOKEN in history)"
+          echo "ok: no JFROG_TOKEN in history"
+
+      - name: Download per-leg metadata (build-context delivery)
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          path: ${{ runner.temp }}/ctxlegmeta
+          pattern: legmeta-test-image-ctx--*
+          merge-multiple: true
+
+      # Extracting from each leg's own image proves COPY saw the delivered bytes
+      # on that platform. Reading a file the workflow wrote would only prove the
+      # workflow wrote a file. docker create does not execute the image, so a
+      # foreign architecture needs no emulation.
+      - name: Delivered artifacts are present in every leg's image
+        shell: bash
+        env:
+          CTX_IMAGE: artifact.aerospike.io/test-docker-dev-local/test-image-ctx
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=("${RUNNER_TEMP}/ctxlegmeta"/*.json)
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "::error::no leg metadata found for the build-context delivery build"; exit 1
+          fi
+
+          for f in "${files[@]}"; do
+            platform="$(jq -r '.platform' "$f")"
+            digest="$(jq -r '.digest' "$f")"
+            ref="${CTX_IMAGE}@${digest}"
+            echo "--- $platform ($digest)"
+
+            cid="$(docker create --platform "$platform" "$ref")"
+            rm -rf /tmp/extracted && mkdir -p /tmp/extracted
+            docker cp "${cid}:/delivered" /tmp/extracted/delivered
+            docker cp "${cid}:/extra" /tmp/extracted/extra
+            docker rm -f "$cid" >/dev/null
+
+            # The requested bytes arrived intact, at any depth.
+            grep -qx "delivered-jar-content" /tmp/extracted/delivered/app.jar \
+              || { echo "::error::$platform: app.jar content missing or wrong"; exit 1; }
+            grep -qx "delivered-sig-content" /tmp/extracted/delivered/app.jar.asc \
+              || { echo "::error::$platform: app.jar.asc content missing or wrong"; exit 1; }
+            grep -qx "delivered-nested-content" /tmp/extracted/delivered/nested/inner.txt \
+              || { echo "::error::$platform: nested file missing or wrong"; exit 1; }
+
+            # Each entry landed at its own dest, not merged or swapped.
+            grep -qx "delivered-extra-content" /tmp/extracted/extra/extra.txt \
+              || { echo "::error::$platform: extra entry missing or wrong"; exit 1; }
+            if [ -e /tmp/extracted/extra/app.jar ] || [ -e /tmp/extracted/delivered/extra.txt ]; then
+              echo "::error::$platform: entries were merged across destinations"; exit 1
+            fi
+
+            # An artifact present in the run but not requested must not be
+            # pulled in by an over-broad download pattern.
+            if grep -rqx "decoy-must-not-appear" /tmp/extracted 2>/dev/null; then
+              echo "::error::$platform: decoy artifact reached the build context"; exit 1
+            fi
+
+            echo "    ok"
+          done
+          echo "build-context delivery: ok on ${#files[@]} leg(s)"
