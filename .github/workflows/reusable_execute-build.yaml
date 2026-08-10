@@ -196,11 +196,11 @@ jobs:
       jf-build-name: ${{ steps.build-info.outputs.jf-build-name }}
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
         with:
           egress-policy: audit
       - name: Checkout shared-workflows repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: aerospike/shared-workflows
           ref: ${{ inputs.gh-workflows-ref }}
@@ -209,7 +209,7 @@ jobs:
 
       - name: Checkout source repository
         if: inputs.gh-source-path != ''
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ inputs.gh-source-repository }}
           ref: ${{ inputs.gh-source-ref }}
@@ -220,7 +220,7 @@ jobs:
 
       - name: Set up Java
         if: inputs.setup-java
-        uses: actions/setup-java@0f481fcb613427c0f801b606911222b5b6f3083a # v5.5.0
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
         with:
           distribution: ${{ inputs.java-distribution }}
           java-version: ${{ inputs.java-version }}
@@ -249,7 +249,7 @@ jobs:
           version: ${{ inputs.helm-version }}
 
       - name: Set up JFrog CLI
-        uses: step-security/setup-jfrog-cli@3054b554c0fb4915b3d58847fb7730c593dbb934 # v5.0.0
+        uses: step-security/setup-jfrog-cli@53aeacb709fce45d0baf69a13ec3342f7e2d71a9 # v5.1.0
         env:
           JF_URL: ${{ inputs.jf-url }}
           JF_PROJECT: ${{ inputs.jf-project }}

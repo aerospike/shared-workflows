@@ -64,10 +64,10 @@ jobs:
       version: ${{ steps.extract.outputs.version }}
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
         with:
           egress-policy: audit
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Extract Version
         id: extract
         uses: ./.github/actions/extract-version-from-tag
@@ -281,11 +281,11 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
         with:
           egress-policy: audit
       - name: Checkout shared-workflows (actions)
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           sparse-checkout: .github/actions
           sparse-checkout-cone-mode: false
@@ -305,7 +305,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
         with:
           egress-policy: audit
       - name: Download build artifacts
@@ -377,16 +377,16 @@ jobs:
     if: always() && !cancelled() && needs.sign.result == 'success' && github.event_name == 'workflow_dispatch'
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
         with:
           egress-policy: audit
       - name: Checkout shared-workflows (actions)
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           sparse-checkout: .github/actions
           sparse-checkout-cone-mode: false
       - name: Setup JFrog CLI
-        uses: step-security/setup-jfrog-cli@3054b554c0fb4915b3d58847fb7730c593dbb934 # v5.0.0
+        uses: step-security/setup-jfrog-cli@53aeacb709fce45d0baf69a13ec3342f7e2d71a9 # v5.1.0
         env:
           JF_URL: https://artifact.aerospike.io
           JF_PROJECT: test
@@ -423,16 +423,16 @@ jobs:
     if: always() && !cancelled() && needs.create-release-bundle.result == 'success' && github.event_name == 'workflow_dispatch'
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
         with:
           egress-policy: audit
       - name: Checkout shared-workflows (actions)
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           sparse-checkout: .github/actions
           sparse-checkout-cone-mode: false
       - name: Setup JFrog CLI
-        uses: step-security/setup-jfrog-cli@3054b554c0fb4915b3d58847fb7730c593dbb934 # v5.0.0
+        uses: step-security/setup-jfrog-cli@53aeacb709fce45d0baf69a13ec3342f7e2d71a9 # v5.1.0
         env:
           JF_URL: https://artifact.aerospike.io
           JF_PROJECT: test
