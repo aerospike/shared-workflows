@@ -47,7 +47,7 @@ When a JAR embeds **multiple** `META-INF/maven/**/pom.properties` files (typical
 pom_props=$(unzip -Z1 "$jar" | awk '/pom\.properties$/ {print; exit}')
 ```
 
-**Not fixed** as of INFRA-673. That ticket only addressed sibling-POM inheritance (Stage ③).
+**Not fixed** as of INFRA-673. Latest fixes only address sibling-POM inheritance (Stage ③).
 
 | Aspect              | Detail                                                                                                                                                                                                   |
 | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -57,7 +57,11 @@ pom_props=$(unzip -Z1 "$jar" | awk '/pom\.properties$/ {print; exit}')
 | Stage ③ interaction | Does not apply when embedded props set `groupId`; sibling POM is skipped                                                                                                                                 |
 | Test coverage       | **None** — nothing asserts zip entry order                                                                                                                                                               |
 
-Possible future fixes: prefer the entry whose `artifactId` matches the filename stem; cross-check against a sibling `.pom`; scan and rank all embedded `pom.properties` paths.
+Possible strategies, in rough preference:
+
+1. Prefer entry matching filename stem — e.g. for bulk-loader-1.2.3.jar, pick pom.properties whose artifactId matches bulk-loader
+2. Prefer sibling POM GAV when {stem}.pom exists — cross-check embedded props against sibling POM
+3. Scan all pom.properties and rank — e.g. prefer paths under the module’s expected groupId/artifactId, or the lexicographically “shallowest” META-INF/maven/... path
 
 ---
 
