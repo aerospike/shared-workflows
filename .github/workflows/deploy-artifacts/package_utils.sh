@@ -34,12 +34,17 @@ get_jar_metadata() {
     fi
 
     # Flat JAR + sibling POM (e.g. test.jar + test.pom): filename may not encode version.
+    # _maven_read_pom_coordinates (../lib/maven-helpers.sh) resolves parent inheritance;
+    # only overwrite filename-derived fields when the POM supplies non-empty values.
     local sibling_pom="$jar_dir/${base_no_ext}.pom"
     if [[ -z $group_id && -f $sibling_pom ]]; then
         if command -v xmllint >/dev/null 2>&1; then
-            pkgname=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='artifactId'])" "$sibling_pom" 2>/dev/null)
-            version=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='version'])" "$sibling_pom" 2>/dev/null)
-            group_id=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='groupId'])" "$sibling_pom" 2>/dev/null)
+            local pom_artifact_id pom_group_id pom_version _pom_packaging _pom_module_count
+            read -r pom_artifact_id pom_group_id pom_version _pom_packaging _pom_module_count \
+                < <(_maven_read_pom_coordinates "$sibling_pom")
+            [[ -n $pom_artifact_id ]] && pkgname="$pom_artifact_id"
+            [[ -n $pom_version ]] && version="$pom_version"
+            [[ -n $pom_group_id ]] && group_id="$pom_group_id"
         fi
     fi
 
@@ -485,6 +490,9 @@ process_go() { copy_to_structured "$1" "$2"; }
 # is_helm_chart and _extract_helm_chart_yaml are defined in ../lib/helm-helpers.sh,
 # sourced by entrypoint.sh (and by sign-artifacts/entrypoint.sh) so the two stages
 # stay in sync.
+#
+# get_jar_metadata sibling-POM path uses _maven_read_pom_coordinates from
+# ../lib/maven-helpers.sh (sourced before this file in entrypoint.sh / detect_types.sh).
 
 # Validate a Helm chart name.
 # Helm chart names use DNS-1123-style identifiers (lowercase, alphanumeric, hyphens,

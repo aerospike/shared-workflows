@@ -8,6 +8,7 @@ DEPLOY_DIR="$GIT_ROOT/.github/workflows/deploy-artifacts"
 setup() {
     # Need package_utils.sh for metadata extraction used by props functions
     source "$DEPLOY_DIR/../lib/helm-helpers.sh"
+    source "$DEPLOY_DIR/../lib/maven-helpers.sh"
     source "$DEPLOY_DIR/package_utils.sh"
     source "$DEPLOY_DIR/type_registry.sh"
     # package_utils.sh sets strict mode and an ERR trap that interferes with bats assertions

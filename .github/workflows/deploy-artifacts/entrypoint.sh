@@ -145,6 +145,8 @@ run_optional() {
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/../lib/helm-helpers.sh"
 # shellcheck disable=SC1091
+source "$SCRIPT_DIR/../lib/maven-helpers.sh"
+# shellcheck disable=SC1091
 source "$SCRIPT_DIR/package_utils.sh"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/type_registry.sh"
@@ -261,9 +263,12 @@ upload_jar_packages() {
             version="${metadata[1]}"
             group_id="${metadata[2]-${JAR_GROUP_ID-}}"
         elif [[ -f $pom_file ]]; then
-            pkgname=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='artifactId'])" "$pom_file" 2>/dev/null)
-            version=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='version'])" "$pom_file" 2>/dev/null)
-            group_id=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='groupId'])" "$pom_file" 2>/dev/null)
+            local pom_artifact_id pom_group_id pom_version _pom_packaging _pom_module_count
+            read -r pom_artifact_id pom_group_id pom_version _pom_packaging _pom_module_count \
+                < <(_maven_read_pom_coordinates "$pom_file")
+            pkgname="$pom_artifact_id"
+            version="$pom_version"
+            group_id="$pom_group_id"
         fi
 
         [[ -z ${group_id-} ]] && group_id="${JAR_GROUP_ID-}"

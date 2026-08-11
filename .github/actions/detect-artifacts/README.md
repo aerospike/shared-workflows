@@ -5,7 +5,7 @@ Runs [`detect_types.sh`](../../workflows/deploy-artifacts/detect_types.sh): cont
 ## Prerequisites
 
 - Merged build tree on disk (for example from [`collect-build-artifacts`](../collect-build-artifacts) or a `download-artifact` step with the same layout).
-- `detect_types.sh` and its sibling scripts (`package_utils.sh`, `type_registry.sh`, `upload_utils.sh`, `type_detection.sh`) plus `../lib/helm-helpers.sh` (sourced for Helm chart detection) available. Checkout **shared-workflows** at `gh-workflows-ref` (full or sparse-checkout including both `.github/workflows/deploy-artifacts/` and `.github/workflows/lib/`).
+- `detect_types.sh` and its sibling scripts (`package_utils.sh`, `type_registry.sh`, `upload_utils.sh`, `type_detection.sh`) plus `../lib/helm-helpers.sh` and `../lib/maven-helpers.sh` available. Checkout **shared-workflows** at `gh-workflows-ref` (full or sparse-checkout including both `.github/workflows/deploy-artifacts/` and `.github/workflows/lib/`).
 
 Runner tools used by detectors: `jq`, `tar`, `unzip`, `xmllint` (for Maven POM detection). Typical GitHub-hosted Ubuntu images include these.
 

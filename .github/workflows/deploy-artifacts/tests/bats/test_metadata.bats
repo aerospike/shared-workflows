@@ -7,6 +7,7 @@ DEPLOY_DIR="$GIT_ROOT/.github/workflows/deploy-artifacts"
 
 setup() {
     source "$DEPLOY_DIR/../lib/helm-helpers.sh"
+    source "$DEPLOY_DIR/../lib/maven-helpers.sh"
     source "$DEPLOY_DIR/package_utils.sh"
     source "$DEPLOY_DIR/type_detection.sh"
     # package_utils.sh sets strict mode and an ERR trap that interferes with bats assertions
@@ -491,4 +492,38 @@ YAML
 
 @test "_validate_helm_name accepts name with dots" {
     _validate_helm_name "my.chart"
+}
+
+# --- get_jar_metadata ---
+
+@test "get_jar_metadata: sibling POM with parent inheritance keeps filename version and resolves groupId" {
+    command -v xmllint >/dev/null 2>&1 || skip "xmllint required"
+
+    local test_dir
+    test_dir=$(mktemp -d)
+
+    mkdir -p "$test_dir/META-INF"
+    echo "Manifest-Version: 1.0" >"$test_dir/META-INF/MANIFEST.MF"
+    (cd "$test_dir" && zip -q child-one-1.0.0.jar META-INF/MANIFEST.MF)
+
+    cat >"$test_dir/child-one-1.0.0.pom" <<'POM'
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>com.example.parent</groupId>
+    <artifactId>parent-proj</artifactId>
+    <version>1.0.0</version>
+  </parent>
+  <artifactId>child-one</artifactId>
+  <packaging>jar</packaging>
+</project>
+POM
+
+    read -r -a meta < <(get_jar_metadata "$test_dir/child-one-1.0.0.jar")
+    [[ "${meta[0]}" == "child-one" ]]
+    [[ "${meta[1]}" == "1.0.0" ]]
+    [[ "${meta[2]}" == "com.example.parent" ]]
+
+    rm -rf "$test_dir"
 }
