@@ -5,6 +5,8 @@
 GIT_ROOT="$(git rev-parse --show-toplevel)"
 DEPLOY_DIR="$GIT_ROOT/.github/workflows/deploy-artifacts"
 
+load '../helpers/maven_fixtures'
+
 setup() {
     source "$DEPLOY_DIR/../lib/helm-helpers.sh"
     source "$DEPLOY_DIR/../lib/maven-helpers.sh"
@@ -494,36 +496,49 @@ YAML
     _validate_helm_name "my.chart"
 }
 
-# --- get_jar_metadata ---
+# --- get_jar_metadata (flat jar + sibling POM) ---
 
-@test "get_jar_metadata: sibling POM with parent inheritance keeps filename version and resolves groupId" {
+@test "get_jar_metadata reads name, version and group from a sibling POM" {
     command -v xmllint >/dev/null 2>&1 || skip "xmllint required"
 
-    local test_dir
-    test_dir=$(mktemp -d)
+    local dir="$BATS_TEST_TMPDIR/direct"
+    mkdir -p "$dir"
+    make_flat_jar_with_pom "$dir" "  <artifactId>my-app</artifactId>
+  <version>2.1.0</version>
+  <groupId>com.example.direct</groupId>"
 
-    mkdir -p "$test_dir/META-INF"
-    echo "Manifest-Version: 1.0" >"$test_dir/META-INF/MANIFEST.MF"
-    (cd "$test_dir" && zip -q child-one-1.0.0.jar META-INF/MANIFEST.MF)
+    result=$(get_jar_metadata "$dir/test.jar")
+    [[ $result == "my-app 2.1.0 com.example.direct" ]]
+}
 
-    cat >"$test_dir/child-one-1.0.0.pom" <<'POM'
-<?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0">
-  <modelVersion>4.0.0</modelVersion>
-  <parent>
+@test "get_jar_metadata keeps filename pkgname when sibling POM inherits all GAV from parent" {
+    command -v xmllint >/dev/null 2>&1 || skip "xmllint required"
+
+    local dir="$BATS_TEST_TMPDIR/inherited-parent-only"
+    mkdir -p "$dir"
+    make_flat_jar_with_pom "$dir" "  <parent>
+    <groupId>com.example.parent</groupId>
+    <artifactId>parent-pom</artifactId>
+    <version>1.0.0</version>
+  </parent>"
+
+    result=$(get_jar_metadata "$dir/test.jar")
+    [[ $result == "test 1.0.0 com.example.parent" ]]
+}
+
+@test "get_jar_metadata resolves child module GAV when sibling POM inherits groupId and version from parent" {
+    command -v xmllint >/dev/null 2>&1 || skip "xmllint required"
+
+    local dir="$BATS_TEST_TMPDIR/inherited-child"
+    mkdir -p "$dir"
+    make_flat_jar_with_pom "$dir" "  <parent>
     <groupId>com.example.parent</groupId>
     <artifactId>parent-proj</artifactId>
     <version>1.0.0</version>
   </parent>
   <artifactId>child-one</artifactId>
-  <packaging>jar</packaging>
-</project>
-POM
+  <packaging>jar</packaging>" "child-one-1.0.0"
 
-    read -r -a meta < <(get_jar_metadata "$test_dir/child-one-1.0.0.jar")
-    [[ "${meta[0]}" == "child-one" ]]
-    [[ "${meta[1]}" == "1.0.0" ]]
-    [[ "${meta[2]}" == "com.example.parent" ]]
-
-    rm -rf "$test_dir"
+    result=$(get_jar_metadata "$dir/child-one-1.0.0.jar")
+    [[ $result == "child-one 1.0.0 com.example.parent" ]]
 }

@@ -7,7 +7,7 @@
 # This file should contain only pure helpers (no globals, no side effects on source).
 
 # _maven_read_pom_coordinates <pom>
-# Prints: artifact_id group_id version packaging module_count (space-separated on stdout).
+# Prints: artifact_id|group_id|version|packaging|module_count (pipe-separated on stdout).
 # groupId and version fall back to <parent> when absent on <project> (child modules).
 _maven_read_pom_coordinates() {
     local pom="$1"
@@ -29,5 +29,15 @@ _maven_read_pom_coordinates() {
         module_count=0
     fi
 
-    echo "$artifact_id $group_id $version $packaging $module_count"
+    printf '%s|%s|%s|%s|%s\n' "$artifact_id" "$group_id" "$version" "$packaging" "$module_count"
+}
+
+# _maven_read_pom_gav <pom>
+# Prints: artifact_id|group_id|version (pipe-separated on stdout).
+_maven_read_pom_gav() {
+    local pom="$1"
+    local artifact_id group_id version packaging module_count
+    IFS='|' read -r artifact_id group_id version packaging module_count \
+        < <(_maven_read_pom_coordinates "$pom")
+    printf '%s|%s|%s\n' "$artifact_id" "$group_id" "$version"
 }

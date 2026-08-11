@@ -263,9 +263,9 @@ upload_jar_packages() {
             version="${metadata[1]}"
             group_id="${metadata[2]-${JAR_GROUP_ID-}}"
         elif [[ -f $pom_file ]]; then
-            local pom_artifact_id pom_group_id pom_version _pom_packaging _pom_module_count
-            read -r pom_artifact_id pom_group_id pom_version _pom_packaging _pom_module_count \
-                < <(_maven_read_pom_coordinates "$pom_file")
+            local pom_artifact_id pom_group_id pom_version
+            IFS='|' read -r pom_artifact_id pom_group_id pom_version \
+                < <(_maven_read_pom_gav "$pom_file")
             pkgname="$pom_artifact_id"
             version="$pom_version"
             group_id="$pom_group_id"

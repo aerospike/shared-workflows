@@ -28,6 +28,19 @@ EOF
         rm -rf "$tmp"
 }
 
+# Flat JAR without pom.properties plus a sibling POM (exercises get_jar_metadata sibling path).
+# Args: <dir> <pom_body> [stem without extension, default: test]
+make_flat_jar_with_pom() {
+        local dir="$1" pom_body="$2" stem="${3:-test}"
+        printf 'placeholder' >"$dir/payload.txt"
+        (cd "$dir" && zip -q "${stem}.jar" payload.txt)
+        cat >"$dir/${stem}.pom" <<POM
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+$pom_body
+</project>
+POM
+}
+
 # Populate <base>/build-artifacts with three Maven shapes in JFrog download layout:
 #   1. jar+pom+asc (my-app)
 #   2. parent aggregator + two children (jar+pom+asc each)

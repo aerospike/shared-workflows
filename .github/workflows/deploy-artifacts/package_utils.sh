@@ -34,14 +34,14 @@ get_jar_metadata() {
     fi
 
     # Flat JAR + sibling POM (e.g. test.jar + test.pom): filename may not encode version.
-    # _maven_read_pom_coordinates (../lib/maven-helpers.sh) resolves parent inheritance;
+    # _maven_read_pom_gav (../lib/maven-helpers.sh) resolves parent inheritance;
     # only overwrite filename-derived fields when the POM supplies non-empty values.
     local sibling_pom="$jar_dir/${base_no_ext}.pom"
     if [[ -z $group_id && -f $sibling_pom ]]; then
         if command -v xmllint >/dev/null 2>&1; then
-            local pom_artifact_id pom_group_id pom_version _pom_packaging _pom_module_count
-            read -r pom_artifact_id pom_group_id pom_version _pom_packaging _pom_module_count \
-                < <(_maven_read_pom_coordinates "$sibling_pom")
+            local pom_artifact_id pom_group_id pom_version
+            IFS='|' read -r pom_artifact_id pom_group_id pom_version \
+                < <(_maven_read_pom_gav "$sibling_pom")
             [[ -n $pom_artifact_id ]] && pkgname="$pom_artifact_id"
             [[ -n $pom_version ]] && version="$pom_version"
             [[ -n $pom_group_id ]] && group_id="$pom_group_id"
@@ -491,7 +491,7 @@ process_go() { copy_to_structured "$1" "$2"; }
 # sourced by entrypoint.sh (and by sign-artifacts/entrypoint.sh) so the two stages
 # stay in sync.
 #
-# get_jar_metadata sibling-POM path uses _maven_read_pom_coordinates from
+# get_jar_metadata sibling-POM path uses _maven_read_pom_gav from
 # ../lib/maven-helpers.sh (sourced before this file in entrypoint.sh / detect_types.sh).
 
 # Validate a Helm chart name.

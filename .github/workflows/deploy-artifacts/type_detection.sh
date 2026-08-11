@@ -143,9 +143,8 @@ is_maven_package() {
         ;;
     esac
 
-    local artifact_id group_id version _packaging _module_count
-    read -r artifact_id group_id version _packaging _module_count \
-        < <(_maven_read_pom_coordinates "$file")
+    local artifact_id group_id version
+    IFS='|' read -r artifact_id group_id version < <(_maven_read_pom_gav "$file")
 
     if [[ -n $artifact_id && -n $group_id && -n $version ]]; then
         return 0
@@ -319,10 +318,10 @@ _pom_has_flatten_maven_plugin_marker() {
 # strongest signal for flattened BOMs.
 _pom_matches_flatten_resolved_heuristic() {
     local pom="$1"
-    is_maven_package "$pom" || return 1
-    local _artifact_id _group_id _version packaging _module_count
-    read -r _artifact_id _group_id _version packaging _module_count \
+    local artifact_id group_id version packaging module_count
+    IFS='|' read -r artifact_id group_id version packaging module_count \
         < <(_maven_read_pom_coordinates "$pom")
+    [[ -n $artifact_id && -n $group_id && -n $version ]] || return 1
     if [[ ${packaging,,} == pom ]]; then
         return 1
     fi
@@ -364,7 +363,7 @@ _write_maven_bundle_metadata_json() {
         [[ -f $pom ]] || continue
         is_maven_package "$pom" || continue
         local group_id artifact_id version packaging module_count
-        read -r artifact_id group_id version packaging module_count \
+        IFS='|' read -r artifact_id group_id version packaging module_count \
             < <(_maven_read_pom_coordinates "$pom")
         if [[ -z ${group_id-} || -z ${artifact_id-} || -z ${version-} ]]; then
             echo "Notice: excluding POM from Maven bundle metadata (incomplete GAV after coordinate read): $pom (group_id='${group_id-}' artifact_id='${artifact_id-}' version='${version-}')" >&2
@@ -421,7 +420,7 @@ _detect_structure_maven_poms() {
         fi
 
         local group_id artifact_id version _packaging _module_count
-        read -r artifact_id group_id version _packaging _module_count \
+        IFS='|' read -r artifact_id group_id version _packaging _module_count \
             < <(_maven_read_pom_coordinates "$pom")
         group_path="${group_id//./\/}"
         target="./structured_build_artifacts/jar/${group_path}/${artifact_id}/${version}"
