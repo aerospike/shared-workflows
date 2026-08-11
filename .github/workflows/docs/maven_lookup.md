@@ -23,7 +23,7 @@ Resolution runs in **four stages** (each stage can override earlier values, with
 
 ---
 
-## Stage ② — `META-INF/maven/.../pom.properties` inside JAR
+## Stage 2 — pom.properties inside JAR
 
 **Condition:** JAR contains a `pom.properties` entry  
 **Effect:** Overwrites **all three** fields (`artifactId`, `version`, `groupId`)  
@@ -34,6 +34,30 @@ Resolution runs in **four stages** (each stage can override earlier values, with
 | Embedded coords    | `my-app-1.0.0.jar` + internal `pom.properties` | from props  | from props | from props           | `make_maven_jar_with_coords`      |
 | Nested repo layout | `maven-repo/.../child-one-1.0.0.jar`           | `child-one` | `1.0.0`    | `com.example.parent` | `create_jfrog_maven_fixture_tree` |
 | Flat, no props     | `test.jar` (zip only)                          | —           | —          | —                    | Falls through to stage ③          |
+
+---
+
+## Shaded uber JARs — Stage 2 limitation
+
+See [Stage 2](#stage-2--pomproperties-inside-jar).
+
+When a JAR embeds **multiple** `META-INF/maven/**/pom.properties` files (typical of `maven-shade` uber JARs), `get_jar_metadata` takes the **first** entry in zip listing order and stops:
+
+```bash
+pom_props=$(unzip -Z1 "$jar" | awk '/pom\.properties$/ {print; exit}')
+```
+
+**Not fixed** as of INFRA-673. That ticket only addressed sibling-POM inheritance (Stage ③).
+
+| Aspect              | Detail                                                                                                                                                                                                   |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Current behavior    | Whichever `pom.properties` appears first in `unzip -Z1` output supplies all three coordinates                                                                                                            |
+| Why AGS works today | Shaded JARs (e.g. aerospike-graph-service bulk-loader with 311 entries, graph JAR with 113) carry their own `pom.properties`; `maven-shade` places the module's POM first, so the first match is correct |
+| Risk                | If shade plugin ordering changed, the JAR could publish under a **transitive dependency's** coordinates — same class of silently-wrong metadata as the sibling-POM bug, but in Stage ②                   |
+| Stage ③ interaction | Does not apply when embedded props set `groupId`; sibling POM is skipped                                                                                                                                 |
+| Test coverage       | **None** — nothing asserts zip entry order                                                                                                                                                               |
+
+Possible future fixes: prefer the entry whose `artifactId` matches the filename stem; cross-check against a sibling `.pom`; scan and rank all embedded `pom.properties` paths.
 
 ---
 
@@ -118,16 +142,17 @@ flowchart TD
 
 ## Test coverage map
 
-| Variation                                | Covered by                                            |
-| ---------------------------------------- | ----------------------------------------------------- |
-| Direct sibling POM GAV                   | `test_metadata.bats` — reads name, version and group  |
-| Parent-only sibling POM                  | `test_metadata.bats` — keeps filename pkgname…        |
-| Child module + parent inheritance        | `test_metadata.bats` — resolves child module GAV…     |
-| Embedded `pom.properties`                | `make_maven_jar_with_coords`, maven structuring tests |
-| POM structuring (not `get_jar_metadata`) | `test_maven_structuring.bats` — detect_types paths    |
-| Javadoc main-jar `groupId` lookup        | **No dedicated unit test**                            |
-| Filename-only / no metadata              | **No dedicated unit test**                            |
-| Missing `xmllint`                        | **No dedicated unit test**                            |
+| Variation                                   | Covered by                                                                                       |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Direct sibling POM GAV                      | `test_metadata.bats` — reads name, version and group                                             |
+| Parent-only sibling POM                     | `test_metadata.bats` — keeps filename pkgname…                                                   |
+| Child module + parent inheritance           | `test_metadata.bats` — resolves child module GAV…                                                |
+| Embedded `pom.properties`                   | `make_maven_jar_with_coords`, maven structuring tests                                            |
+| Shaded uber JAR (multiple `pom.properties`) | **No test** — see [Shaded uber JARs — Stage 2 limitation](#shaded-uber-jars--stage-2-limitation) |
+| POM structuring (not `get_jar_metadata`)    | `test_maven_structuring.bats` — detect_types paths                                               |
+| Javadoc main-jar `groupId` lookup           | **No dedicated unit test**                                                                       |
+| Filename-only / no metadata                 | **No dedicated unit test**                                                                       |
+| Missing `xmllint`                           | **No dedicated unit test**                                                                       |
 
 ---
 
