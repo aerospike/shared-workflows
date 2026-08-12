@@ -82,7 +82,11 @@ record_bundle_metadata_available() {
   <packaging>jar</packaging>
 </project>
 POM
-    echo "placeholder" >"$wd/build-artifacts/hello-world-1.0.0.jar"
+    tmp_jar="$wd/build-artifacts/hello-world-1.0.0.jar"
+    mkdir -p "$wd/tmp-jar/META-INF"
+    echo "Manifest-Version: 1.0" >"$wd/tmp-jar/META-INF/MANIFEST.MF"
+    (cd "$wd/tmp-jar" && zip -q -r "$tmp_jar" .)
+    rm -rf "$wd/tmp-jar"
 
     (cd "$wd" && "$DEPLOY_ARTIFACTS_DIR/detect_types.sh" --artifacts-dir build-artifacts >/dev/null)
 
@@ -139,4 +143,5 @@ POM
     "$GIT_ROOT/.github/workflows/deploy-artifacts/create-maven-bundle-metadata-fixtures.sh" "$wd/fixtures"
     [[ -f "$wd/fixtures/hello-world-1.0.0.pom" ]]
     [[ -f "$wd/fixtures/hello-world-1.0.0.jar" ]]
+    zipinfo "$wd/fixtures/hello-world-1.0.0.jar" >/dev/null
 }
