@@ -500,4 +500,4 @@ jobs:
       oidc-provider-name: gh-dev-test
       oidc-audience: aerospike/testing
       dry-run: false
-      gh-bundle-metadata-artifact-name: ${{ needs.deploy-artifacts.outputs.bundle-metadata-artifact-name }}
+      gh-bundle-metadata-artifact-name: ${{ needs.deploy-artifacts.outputs.bundle-metadata-available == 'true' && needs.deploy-artifacts.outputs.bundle-metadata-artifact-name || '' }}
