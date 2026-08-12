@@ -148,14 +148,14 @@ record_test_result "Test 4: Error handling - invalid build name format (missing 
 
 # Test 5: Bundle metadata path triggers release-bundle-annotate in dry-run
 echo ""
-echo "Test 5: Bundle metadata path triggers annotate (dry-run)"
+echo "Test 5: Bundle metadata dotfile path triggers annotate (dry-run)"
 test5_success=true
 
 cd "$TEST_DIR"
-cat >"$TEST_DIR/maven-bundle-metadata.json" <<'JSON'
+cat >"$TEST_DIR/.maven-bundle-metadata.json" <<'JSON'
 {"is_multi_package":true,"maven_module_count":2,"maven_aggregator_present":true,"is_flattened":false}
 JSON
-output=$("$SCRIPT_DIR/entrypoint.sh" --project test-project --build-names "test-build:1728052628123" --bundle-name meta-bundle --version v3.0.0 --bundle-metadata "$TEST_DIR/maven-bundle-metadata.json" --dry-run 2>&1)
+output=$("$SCRIPT_DIR/entrypoint.sh" --project test-project --build-names "test-build:1728052628123" --bundle-name meta-bundle --version v3.0.0 --bundle-metadata "$TEST_DIR/.maven-bundle-metadata.json" --dry-run 2>&1)
 
 if ! echo "$output" | grep -q "jf release-bundle-annotate"; then
     test5_success=false
@@ -167,7 +167,7 @@ if ! echo "$output" | grep -q "maven_module_count=2"; then
     test5_success=false
 fi
 
-record_test_result "Test 5: Bundle metadata path triggers annotate (dry-run)" "$test5_success"
+record_test_result "Test 5: Bundle metadata dotfile path triggers annotate (dry-run)" "$test5_success"
 
 # Summary
 echo ""
