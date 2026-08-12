@@ -11,6 +11,9 @@ on:
 jobs:
   release:
     runs-on: ubuntu-latest
+    # A fork's head branch does not exist on this remote, and semantic-release
+    # rejects a --branches value it cannot find there.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     steps:
       - name: Harden the runner (Audit all outbound calls)
         uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
@@ -21,19 +24,68 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+          # The default merge ref leaves a detached HEAD, and semantic-release
+          # matches --branches against the checked-out branch name.
+          ref: ${{ github.head_ref || github.ref }}
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 20
 
       - name: Semantic Release
+        id: release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT_NAME: ${{ github.event_name }}
+          HEAD_REF: ${{ github.head_ref }}
         run: |
+          set -euo pipefail
+          args=()
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            # --no-ci because semantic-release otherwise declines to analyse a
+            # pull request at all, even for a dry run.
+            args=(--dry-run --no-ci --branches "$HEAD_REF")
+          fi
           npx -p semantic-release@24 \
               -p @semantic-release/commit-analyzer@13 \
               -p @semantic-release/release-notes-generator@14 \
               -p @semantic-release/github@11 \
+              -p @semantic-release/exec@7 \
               -p conventional-changelog@7 \
               -p conventional-changelog-conventionalcommits@8 \
-              semantic-release
+              semantic-release "${args[@]}" | tee "$RUNNER_TEMP/release.log"
+
+      - name: Show the projected release on the pull request
+        if: github.event_name == 'pull_request'
+        run: |
+          set -euo pipefail
+          {
+            echo "## Projected release"
+            echo
+            if grep -q "Release note for version" "$RUNNER_TEMP/release.log"; then
+              # These are the branch's own commits. A squash merge publishes the
+              # pull request title instead, so the landed entry may differ.
+              sed -n '/Release note for version/,$p' "$RUNNER_TEMP/release.log" |
+                tail -n +2
+            else
+              echo "No release would be published from these commits."
+            fi
+          } >>"$GITHUB_STEP_SUMMARY"
+
+      - name: Append the full change list to the release
+        if: github.event_name != 'pull_request' && steps.release.outputs.version != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: v${{ steps.release.outputs.version }}
+        run: |
+          set -euo pipefail
+          # Generated from merged pull requests, so it also covers commits whose
+          # subject the conventional-commit parser cannot categorise.
+          gh api -X POST "repos/${GITHUB_REPOSITORY}/releases/generate-notes" \
+            -f tag_name="$TAG" --jq .body >"$RUNNER_TEMP/generated.md"
+          {
+            gh release view "$TAG" --json body --jq .body
+            printf '\n\n---\n\n'
+            cat "$RUNNER_TEMP/generated.md"
+          } >"$RUNNER_TEMP/final.md"
+          gh release edit "$TAG" --notes-file "$RUNNER_TEMP/final.md"

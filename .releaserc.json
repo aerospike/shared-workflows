@@ -53,9 +53,29 @@
 		[
 			"@semantic-release/release-notes-generator",
 			{
-				"preset": "conventionalcommits"
+				"preset": "conventionalcommits",
+				"presetConfig": {
+					"types": [
+						{ "type": "feat", "section": "Features" },
+						{ "type": "fix", "section": "Bug Fixes" },
+						{ "type": "perf", "section": "Performance" },
+						{ "type": "revert", "section": "Reverts" },
+						{ "type": "refactor", "section": "Refactoring", "hidden": false },
+						{ "type": "docs", "section": "Documentation", "hidden": false },
+						{ "type": "test", "section": "Tests", "hidden": false },
+						{ "type": "build", "section": "Build System", "hidden": false },
+						{ "type": "ci", "section": "CI", "hidden": false },
+						{ "type": "chore", "section": "Chores", "hidden": false }
+					]
+				}
 			}
 		],
-		"@semantic-release/github"
+		"@semantic-release/github",
+		[
+			"@semantic-release/exec",
+			{
+				"successCmd": "echo \"version=${nextRelease.version}\" >> \"$GITHUB_OUTPUT\""
+			}
+		]
 	]
 }
