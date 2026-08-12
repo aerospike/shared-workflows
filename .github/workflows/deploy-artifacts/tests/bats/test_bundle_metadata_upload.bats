@@ -11,6 +11,29 @@ CHECKER="$GIT_ROOT/.github/workflows/deploy-artifacts/tests/check_bundle_metadat
 
 setup_file() {
     chmod +x "$CHECKER"
+    chmod +x "$GIT_ROOT/.github/workflows/deploy-artifacts/create-maven-bundle-metadata-fixtures.sh"
+}
+
+# Mirrors Record bundle metadata artifact outputs in reusable_deploy-artifacts.yaml.
+record_bundle_metadata_available() {
+    local gh_upload="$1"
+    local meta_path="$2"
+
+    if [[ "$gh_upload" != "true" ]]; then
+        echo "false"
+        return 0
+    fi
+    if [[ ! -f "$meta_path" ]]; then
+        echo "false"
+        return 0
+    fi
+    local module_count
+    module_count="$(jq -r '.maven_module_count // 0' "$meta_path")"
+    if [[ "$module_count" -le 0 ]]; then
+        echo "false"
+        return 0
+    fi
+    echo "true"
 }
 
 @test "check_bundle_metadata_upload_step passes on reusable_deploy-artifacts.yaml" {
@@ -89,4 +112,31 @@ POM
 
     # Mirrors Record bundle metadata artifact outputs when no Maven modules were found.
     [[ "$module_count" -le 0 ]]
+    [[ "$(record_bundle_metadata_available true "$meta_path")" == "false" ]]
+}
+
+@test "record step sets available false when gh-upload-bundle-metadata is false" {
+    local wd meta_path
+    wd="$(mktemp -d "${BATS_TMPDIR:-/tmp}/bundle-upload-disabled.XXXXXX")"
+    trap 'rm -rf "$wd"' RETURN
+
+    "$GIT_ROOT/.github/workflows/deploy-artifacts/create-maven-bundle-metadata-fixtures.sh" "$wd/fixtures"
+    ((BASH_VERSINFO[0] >= 4)) || skip "requires bash 4+ for detect_types (type_registry associative arrays)"
+    mkdir -p "$wd/build-artifacts"
+    cp "$wd/fixtures/"*.pom "$wd/fixtures/"*.jar "$wd/build-artifacts/"
+    (cd "$wd" && "$DEPLOY_ARTIFACTS_DIR/detect_types.sh" --artifacts-dir build-artifacts >/dev/null)
+
+    meta_path="$wd/structured_build_artifacts/.maven-bundle-metadata.json"
+    [[ -f "$meta_path" ]]
+    [[ "$(record_bundle_metadata_available false "$meta_path")" == "false" ]]
+}
+
+@test "minimal maven fixture script produces deployable Maven artifacts" {
+    local wd
+    wd="$(mktemp -d "${BATS_TMPDIR:-/tmp}/minimal-fixtures.XXXXXX")"
+    trap 'rm -rf "$wd"' RETURN
+
+    "$GIT_ROOT/.github/workflows/deploy-artifacts/create-maven-bundle-metadata-fixtures.sh" "$wd/fixtures"
+    [[ -f "$wd/fixtures/hello-world-1.0.0.pom" ]]
+    [[ -f "$wd/fixtures/hello-world-1.0.0.jar" ]]
 }

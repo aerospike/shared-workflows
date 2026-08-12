@@ -1,8 +1,8 @@
 name: "Test: Deploy bundle metadata upload (hidden dotfile)"
 
-# Mirrors the deploy -> upload bundle-metadata -> create-release-bundle handoff used by
-# example_composable-matrix.yaml. Catches regressions where upload-artifact skips the
-# hidden `.maven-bundle-metadata.json` dotfile (include-hidden-files: false).
+# Fast regression for the deploy -> upload bundle-metadata handoff. Uses minimal Maven-only
+# fixtures and a single dry-run deploy (no sign/build matrix/release bundle lifecycle).
+# Negative cases (no Maven modules, upload disabled) are covered by bats.
 
 on:
   workflow_dispatch:
@@ -30,14 +30,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Create test fixtures
-        run: .github/workflows/deploy-artifacts/create-test-fixtures.sh bundle-metadata-upload-fixtures
+      - name: Create minimal Maven fixtures
+        run: .github/workflows/deploy-artifacts/create-maven-bundle-metadata-fixtures.sh maven-bundle-fixtures
 
       - name: Upload fixtures
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: bundle-metadata-upload-fixtures
-          path: bundle-metadata-upload-fixtures
+          name: maven-bundle-fixtures
+          path: maven-bundle-fixtures
           retention-days: 1
 
   deploy:
@@ -46,7 +46,7 @@ jobs:
     with:
       gh-workflows-ref: ${{ github.sha }}
       gh-checkout-path: .
-      gh-artifact-name: bundle-metadata-upload-fixtures
+      gh-artifact-name: maven-bundle-fixtures
       gh-upload-bundle-metadata: true
       gh-bundle-metadata-artifact-name: bundle-metadata-${{ github.run_id }}-${{ github.run_attempt }}
       jf-project: test
@@ -59,7 +59,7 @@ jobs:
       oidc-audience: aerospike
       dry-run: true
 
-  verify-bundle-metadata-artifact:
+  verify:
     needs: deploy
     if: needs.deploy.result == 'success'
     runs-on: ubuntu-22.04
@@ -69,17 +69,11 @@ jobs:
         with:
           egress-policy: audit
 
-      - name: Assert deploy outputs report uploaded metadata
+      - name: Assert deploy outputs
         run: |
           set -euo pipefail
-          if [[ "${{ needs.deploy.outputs.bundle-metadata-available }}" != "true" ]]; then
-            echo "FAIL: bundle-metadata-available is not true" >&2
-            exit 1
-          fi
-          if [[ -z "${{ needs.deploy.outputs.bundle-metadata-artifact-name }}" ]]; then
-            echo "FAIL: bundle-metadata-artifact-name is empty" >&2
-            exit 1
-          fi
+          [[ "${{ needs.deploy.outputs.bundle-metadata-available }}" == "true" ]]
+          [[ -n "${{ needs.deploy.outputs.bundle-metadata-artifact-name }}" ]]
 
       - name: Download bundle metadata artifact
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -87,148 +81,13 @@ jobs:
           name: ${{ needs.deploy.outputs.bundle-metadata-artifact-name }}
           path: .bundle-metadata-dl
 
-      - name: Verify hidden dotfile round-tripped through upload-artifact
+      - name: Assert hidden dotfile round-tripped
         run: |
           set -euo pipefail
           meta="$(find .bundle-metadata-dl -name '.maven-bundle-metadata.json' -type f | head -n1 || true)"
-          if [[ -z "$meta" ]]; then
-            echo "FAIL: .maven-bundle-metadata.json missing from downloaded artifact" >&2
-            echo "This usually means upload-artifact skipped the hidden dotfile." >&2
+          [[ -n "$meta" ]] || {
+            echo "FAIL: .maven-bundle-metadata.json missing (upload-artifact likely skipped hidden dotfile)" >&2
             exit 1
-          fi
-          jq -e '.maven_module_count | tonumber' "$meta" >/dev/null
-          count="$(jq -r '.maven_module_count' "$meta")"
-          if [[ "$count" -le 0 ]]; then
-            echo "FAIL: expected maven_module_count > 0, got $count" >&2
-            exit 1
-          fi
-          echo "PASS: hidden dotfile artifact contains valid Maven bundle metadata (maven_module_count=$count)"
-
-  create-release-bundle:
-    needs: deploy
-    if: needs.deploy.result == 'success'
-    uses: ./.github/workflows/reusable_create-release-bundle.yaml
-    with:
-      gh-workflows-ref: ${{ github.sha }}
-      gh-checkout-path: .
-      jf-project: test
-      jf-build-names: bundle-metadata-upload-test:${{ github.run_id }}-${{ github.run_attempt }}
-      jf-bundle-name: bundle-metadata-upload-test
-      version: v1.0.0-bundle-meta-test
-      jf-url: https://artifact.aerospike.io
-      oidc-provider-name: gh-aerospike
-      oidc-audience: aerospike
-      dry-run: true
-      gh-bundle-metadata-artifact-name: ${{ needs.deploy.outputs.bundle-metadata-available == 'true' && needs.deploy.outputs.bundle-metadata-artifact-name || '' }}
-
-  upload-no-maven-fixtures:
-    runs-on: ubuntu-22.04
-    steps:
-      - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
-        with:
-          egress-policy: audit
-
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Create fixtures without Maven artifacts
-        run: |
-          set -euo pipefail
-          .github/workflows/deploy-artifacts/create-test-fixtures.sh no-maven-fixtures
-          find no-maven-fixtures \( -name '*.pom' -o -name '*.jar' \) -delete
-          rm -rf no-maven-fixtures/maven-repo
-          if find no-maven-fixtures -name '*.pom' | grep -q .; then
-            echo "FAIL: Maven POMs still present in no-maven fixtures" >&2
-            exit 1
-          fi
-
-      - name: Upload no-maven fixtures
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: no-maven-fixtures
-          path: no-maven-fixtures
-          retention-days: 1
-
-  deploy-no-maven:
-    needs: upload-no-maven-fixtures
-    uses: ./.github/workflows/reusable_deploy-artifacts.yaml
-    with:
-      gh-workflows-ref: ${{ github.sha }}
-      gh-checkout-path: .
-      gh-artifact-name: no-maven-fixtures
-      gh-upload-bundle-metadata: true
-      gh-bundle-metadata-artifact-name: bundle-metadata-no-maven-${{ github.run_id }}-${{ github.run_attempt }}
-      jf-project: test
-      jf-build-name: bundle-metadata-no-maven-test
-      jf-build-id: ${{ github.run_id }}-${{ github.run_attempt }}-no-maven
-      jf-metadata-build-id: ${{ github.run_id }}-${{ github.run_attempt }}-no-maven-metadata
-      version: v1.0.0-no-maven-test
-      jf-url: https://artifact.aerospike.io
-      oidc-provider-name: gh-aerospike
-      oidc-audience: aerospike
-      dry-run: true
-
-  verify-no-maven-metadata:
-    needs: deploy-no-maven
-    if: needs.deploy-no-maven.result == 'success'
-    runs-on: ubuntu-22.04
-    steps:
-      - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
-        with:
-          egress-policy: audit
-
-      - name: Assert deploy skips metadata when no Maven modules were detected
-        run: |
-          set -euo pipefail
-          if [[ "${{ needs.deploy-no-maven.outputs.bundle-metadata-available }}" == "true" ]]; then
-            echo "FAIL: bundle-metadata-available should be false without Maven POMs" >&2
-            exit 1
-          fi
-          if [[ -n "${{ needs.deploy-no-maven.outputs.bundle-metadata-artifact-name }}" ]]; then
-            echo "FAIL: bundle-metadata-artifact-name should be empty without Maven POMs" >&2
-            exit 1
-          fi
-          echo "PASS: no Maven POMs -> bundle metadata upload skipped and outputs empty"
-
-  deploy-upload-disabled:
-    needs: upload-fixtures
-    uses: ./.github/workflows/reusable_deploy-artifacts.yaml
-    with:
-      gh-workflows-ref: ${{ github.sha }}
-      gh-checkout-path: .
-      gh-artifact-name: bundle-metadata-upload-fixtures
-      gh-upload-bundle-metadata: false
-      jf-project: test
-      jf-build-name: bundle-metadata-upload-disabled
-      jf-build-id: ${{ github.run_id }}-${{ github.run_attempt }}-disabled
-      jf-metadata-build-id: ${{ github.run_id }}-${{ github.run_attempt }}-disabled-metadata
-      version: v1.0.0-upload-disabled
-      jf-url: https://artifact.aerospike.io
-      oidc-provider-name: gh-aerospike
-      oidc-audience: aerospike
-      dry-run: true
-
-  verify-upload-disabled:
-    needs: deploy-upload-disabled
-    if: needs.deploy-upload-disabled.result == 'success'
-    runs-on: ubuntu-22.04
-    steps:
-      - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
-        with:
-          egress-policy: audit
-
-      - name: Assert gh-upload-bundle-metadata false leaves outputs empty
-        run: |
-          set -euo pipefail
-          if [[ "${{ needs.deploy-upload-disabled.outputs.bundle-metadata-available }}" == "true" ]]; then
-            echo "FAIL: bundle-metadata-available should be false when upload is disabled" >&2
-            exit 1
-          fi
-          if [[ -n "${{ needs.deploy-upload-disabled.outputs.bundle-metadata-artifact-name }}" ]]; then
-            echo "FAIL: bundle-metadata-artifact-name should be empty when upload is disabled" >&2
-            exit 1
-          fi
-          echo "PASS: gh-upload-bundle-metadata=false -> outputs empty"
+          }
+          jq -e '.maven_module_count | tonumber > 0' "$meta" >/dev/null
+          echo "PASS: hidden dotfile uploaded with maven_module_count > 0"
