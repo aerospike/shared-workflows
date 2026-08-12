@@ -53,3 +53,8 @@ updates:
     directory: /.github/workflows/execute-build/test_apps/GoHelloWorld
     schedule:
       interval: daily
+
+  - package-ecosystem: docker
+    directory: /.github/workflows/execute-build/test_apps/ctx
+    schedule:
+      interval: weekly
