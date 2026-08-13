@@ -1,0 +1,82 @@
+name: Release Evidence
+description: >
+  Produce a release evidence document for a published artifact or release bundle: digests,
+  the bundle seal, promotion history with approvers, SLSA provenance, and the authorizing
+  pull request. Reads signed records only; publishes nothing.
+inputs:
+  target:
+    description: >
+      What to trace. A repo/path, a full Artifactory URL, sha256:HEX, or
+      bundle:NAME/VERSION@PROJECT when you already know the release bundle.
+    required: true
+  format:
+    description: markdown (default) or json
+    required: false
+    default: markdown
+  about:
+    description: One clause describing what the thing is, used in the opening sentence
+    required: false
+    default: ""
+  output-path:
+    description: Write the document here instead of stdout
+    required: false
+    default: ""
+  jf-url:
+    description: JFrog platform URL
+    required: false
+    default: https://aerospike.jfrog.io
+  jfrog-token:
+    description: >
+      JFrog access token. Leave unset to inherit JFROG_TOKEN from the environment, or to
+      derive it from an already-configured JFrog CLI.
+    required: false
+    default: ""
+outputs:
+  document:
+    description: Path to the written document, empty when the document went to stdout
+    value: ${{ steps.evidence.outputs.document }}
+runs:
+  using: composite
+  steps:
+    - name: Generate release evidence
+      id: evidence
+      shell: bash
+      env:
+        JF_BASE: ${{ inputs.jf-url }}
+        INPUT_TARGET: ${{ inputs.target }}
+        INPUT_FORMAT: ${{ inputs.format }}
+        INPUT_ABOUT: ${{ inputs.about }}
+        INPUT_OUTPUT_PATH: ${{ inputs.output-path }}
+        INPUT_JFROG_TOKEN: ${{ inputs.jfrog-token }}
+      run: |
+        set -euo pipefail
+
+        # Token precedence: explicit input, then the environment, then an already-configured
+        # JFrog CLI. The last case is what most callers hit, since setup-jfrog-cli has
+        # usually run for OIDC before this action.
+        token="${INPUT_JFROG_TOKEN:-${JFROG_TOKEN:-}}"
+        if [[ -z "$token" ]] && command -v jf >/dev/null 2>&1; then
+          token=$(jf config export setup-jfrog-cli-server 2>/dev/null | base64 -d 2>/dev/null | jq -r '.accessToken // empty' || true)
+        fi
+        if [[ -z "$token" || "$token" == "null" ]]; then
+          echo "::error::release-evidence: no JFrog token. Set the jfrog-token input, export JFROG_TOKEN, or configure the JFrog CLI first." >&2
+          exit 1
+        fi
+        echo "::add-mask::${token}"
+        export JFROG_TOKEN="$token"
+
+        args=("$INPUT_TARGET" --format "$INPUT_FORMAT")
+        if [[ -n "$INPUT_ABOUT" ]]; then
+          args+=(--about "$INPUT_ABOUT")
+        fi
+
+        script="${GITHUB_ACTION_PATH}/release-evidence.py"
+        if [[ -n "$INPUT_OUTPUT_PATH" ]]; then
+          mkdir -p "$(dirname "$INPUT_OUTPUT_PATH")"
+          python3 "$script" "${args[@]}" >"$INPUT_OUTPUT_PATH"
+          echo "document=${INPUT_OUTPUT_PATH}" >>"$GITHUB_OUTPUT"
+          echo "Wrote ${INPUT_FORMAT} evidence to ${INPUT_OUTPUT_PATH}"
+        else
+          python3 "$script" "${args[@]}"
+          echo "document=" >>"$GITHUB_OUTPUT"
+        fi
