@@ -38,6 +38,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           EVENT_NAME: ${{ github.event_name }}
           HEAD_REF: ${{ github.head_ref }}
+          # semantic-release takes the branch from GITHUB_REF, which on a pull
+          # request is refs/pull/N/merge and matches no configured branch.
+          GITHUB_REF: ${{ github.event_name == 'pull_request' && format('refs/heads/{0}', github.head_ref) || github.ref }}
         run: |
           set -euo pipefail
           args=()
@@ -59,14 +62,20 @@ jobs:
         if: github.event_name == 'pull_request'
         run: |
           set -euo pipefail
+          log="$RUNNER_TEMP/release.log"
+          # A branch semantic-release declined to analyse otherwise reports the
+          # same way as one with nothing releasable in it.
+          if grep -q "configured to only publish from" "$log"; then
+            echo "::error::semantic-release did not analyse this branch, so there is no preview"
+            exit 1
+          fi
           {
             echo "## Projected release"
             echo
-            if grep -q "Release note for version" "$RUNNER_TEMP/release.log"; then
+            if grep -q "Release note for version" "$log"; then
               # These are the branch's own commits. A squash merge publishes the
               # pull request title instead, so the landed entry may differ.
-              sed -n '/Release note for version/,$p' "$RUNNER_TEMP/release.log" |
-                tail -n +2
+              sed -n '/Release note for version/,$p' "$log" | tail -n +2
             else
               echo "No release would be published from these commits."
             fi
