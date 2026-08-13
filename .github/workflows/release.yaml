@@ -93,13 +93,18 @@ jobs:
           TAG: v${{ steps.release.outputs.version }}
         run: |
           set -euo pipefail
+          # Lookup by tag returns published releases only, so find the draft in
+          # the list instead.
+          id=$(gh api "repos/${GITHUB_REPOSITORY}/releases" \
+            --jq "map(select(.tag_name == \"$TAG\")) | .[0].id")
           # Generated from merged pull requests, so it also covers commits whose
           # subject the conventional-commit parser cannot categorise.
           gh api -X POST "repos/${GITHUB_REPOSITORY}/releases/generate-notes" \
             -f tag_name="$TAG" --jq .body >"$RUNNER_TEMP/generated.md"
           {
-            gh release view "$TAG" --json body --jq .body
+            gh api "repos/${GITHUB_REPOSITORY}/releases/${id}" --jq .body
             printf '\n\n---\n\n'
             cat "$RUNNER_TEMP/generated.md"
           } >"$RUNNER_TEMP/final.md"
-          gh release edit "$TAG" --notes-file "$RUNNER_TEMP/final.md"
+          gh api -X PATCH "repos/${GITHUB_REPOSITORY}/releases/${id}" \
+            -F body=@"$RUNNER_TEMP/final.md" --silent
