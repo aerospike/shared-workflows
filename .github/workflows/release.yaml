@@ -76,11 +76,11 @@ jobs:
             if grep -q "Release note for version" "$log"; then
               # These are the branch's own commits. A squash merge publishes the
               # pull request title instead, so the landed entry may differ.
-              # The logger indents list items by four spaces, which markdown
-              # would otherwise render as a code block.
+              # Other log lines interleave with the notes, and the logger
+              # indents list items by four spaces, which markdown would
+              # otherwise render as a code block.
               sed -n '/Release note for version/,$p' "$log" |
-                tail -n +2 |
-                sed 's/^    //'
+                sed -e '/\[semantic-release\] ›/d' -e 's/^    //'
             else
               echo "No release would be published from these commits."
             fi
