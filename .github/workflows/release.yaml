@@ -33,7 +33,6 @@ jobs:
           node-version: 20
 
       - name: Semantic Release
-        id: release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           EVENT_NAME: ${{ github.event_name }}
@@ -54,7 +53,6 @@ jobs:
               -p @semantic-release/commit-analyzer@13 \
               -p @semantic-release/release-notes-generator@14 \
               -p @semantic-release/github@11 \
-              -p @semantic-release/exec@7 \
               -p conventional-changelog@7 \
               -p conventional-changelog-conventionalcommits@8 \
               semantic-release "${args[@]}" | tee "$RUNNER_TEMP/release.log"
@@ -85,26 +83,3 @@ jobs:
               echo "No release would be published from these commits."
             fi
           } >>"$GITHUB_STEP_SUMMARY"
-
-      - name: Append the full change list to the release
-        if: github.event_name != 'pull_request' && steps.release.outputs.version != ''
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: v${{ steps.release.outputs.version }}
-        run: |
-          set -euo pipefail
-          # Lookup by tag returns published releases only, so find the draft in
-          # the list instead.
-          id=$(gh api "repos/${GITHUB_REPOSITORY}/releases" \
-            --jq "map(select(.tag_name == \"$TAG\")) | .[0].id")
-          # Generated from merged pull requests, so it also covers commits whose
-          # subject the conventional-commit parser cannot categorise.
-          gh api -X POST "repos/${GITHUB_REPOSITORY}/releases/generate-notes" \
-            -f tag_name="$TAG" --jq .body >"$RUNNER_TEMP/generated.md"
-          {
-            gh api "repos/${GITHUB_REPOSITORY}/releases/${id}" --jq .body
-            printf '\n\n---\n\n'
-            cat "$RUNNER_TEMP/generated.md"
-          } >"$RUNNER_TEMP/final.md"
-          gh api -X PATCH "repos/${GITHUB_REPOSITORY}/releases/${id}" \
-            -F body=@"$RUNNER_TEMP/final.md" --silent
