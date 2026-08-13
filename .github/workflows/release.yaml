@@ -38,13 +38,14 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           EVENT_NAME: ${{ github.event_name }}
           HEAD_REF: ${{ github.head_ref }}
-          # semantic-release takes the branch from GITHUB_REF, which on a pull
-          # request is refs/pull/N/merge and matches no configured branch.
-          GITHUB_REF: ${{ github.event_name == 'pull_request' && format('refs/heads/{0}', github.head_ref) || github.ref }}
         run: |
           set -euo pipefail
           args=()
           if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            # semantic-release reads the branch from GITHUB_REF, which the
+            # runner sets to refs/pull/N/merge. Exporting it here rather than in
+            # env: because the runner overrides GITHUB_-prefixed keys there.
+            export GITHUB_REF="refs/heads/$HEAD_REF"
             # --no-ci because semantic-release otherwise declines to analyse a
             # pull request at all, even for a dry run.
             args=(--dry-run --no-ci --branches "$HEAD_REF")
