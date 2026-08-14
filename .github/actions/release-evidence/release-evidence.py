@@ -631,6 +631,11 @@ def gap_rows(evidence):
                      f'That this passed through {phrase(derived["skipped_stages"])}. It has '
                      f'reached {phrase(derived["stages_reached"])}, so those gates were passed '
                      "over rather than not yet reached."])
+    if derived["pending_stages"]:
+        rows.append([f'A recorded {phrase(derived["pending_stages"])} transition',
+                     f'That this cleared {phrase(derived["pending_stages"])}. It has reached '
+                     f'{phrase(derived["stages_reached"]) or "no stage"}, so those gates lie ahead '
+                     "of it and the approvals they record do not exist yet."])
     if evidence["pr"] and not derived["independently_approved"]:
         pr = evidence["pr"]
         rows.append(["An approving review on the authorizing pull request",
@@ -657,7 +662,7 @@ def position_blocks(evidence):
     text = f"This has reached {reached}."
     if derived["pending_stages"]:
         text += (f' It has not been promoted to {phrase(derived["pending_stages"])} yet, so the '
-                 "records those stages would produce do not exist and are not counted against it.")
+                 "records those stages would produce do not exist.")
     if derived["skipped_stages"]:
         text += (f' No promotion record exists for {phrase(derived["skipped_stages"])}, which sits '
                  "below where it has got to. That is a gap rather than work still to come.")

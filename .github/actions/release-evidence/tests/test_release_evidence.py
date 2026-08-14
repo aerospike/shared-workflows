@@ -166,6 +166,17 @@ class ClaimsRequireRecords(unittest.TestCase):
         rows = rev.claim_rows(self.pr_evidence(["reviewer"], "2026-01-01T00:00:00Z"))
         self.assertEqual(len([r for r in rows if "approved by someone" in r[0]]), 1)
 
+    def test_stages_not_yet_reached_are_named_as_gaps(self):
+        rows = rev.gap_rows(self.evidence(None, [], False))
+        titles = [r[0] for r in rows]
+        self.assertIn("A recorded TEST, STAGE, PREVIEW and PROD transition", titles)
+
+    def test_a_pending_gap_reads_as_ahead_rather_than_passed_over(self):
+        row = next(r for r in rev.gap_rows(self.evidence(None, [], False))
+                   if r[0].startswith("A recorded TEST"))
+        self.assertIn("lie ahead of it", row[1])
+        self.assertNotIn("passed over", row[1])
+
     def test_a_missing_approval_is_named_as_a_gap_rather_than_left_silent(self):
         rows = rev.gap_rows(self.pr_evidence([], None))
         self.assertIn("An approving review on the authorizing pull request", [r[0] for r in rows])
