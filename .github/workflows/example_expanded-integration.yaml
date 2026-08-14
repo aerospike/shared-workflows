@@ -27,9 +27,16 @@ concurrency:
 jobs:
   # Manual dispatches should not take arguments.
   # here we use a file (VERSION.example) to set the test version that will be used.
-  # Since this action actually produces an immutable release bundle you must remove it or change the version
-  # to remove the test bundle use the command `jf release-bundle-delete-local test-release 1.2.9 --project=test`
   # In a real CI/CD pipeline you could trigger on version tag or commit also. Here we use the file so we can show the behaviour on demand.
+  #
+  # Because the version is fixed, re-running this example needs the previous bundle
+  # gone first: it is immutable, and once promoted it locks its artifacts in
+  # dev-local so the next deploy cannot overwrite them. Delete it by hand with
+  # `jf release-bundle-delete-local test-release 1.2.9 --project=test`.
+  #
+  # WARNING: never do that in a real pipeline. A release bundle is the immutable
+  # record of what shipped, and deleting one throws away its promotion history and
+  # the guarantee that what was tested is what ships. Publish a new version instead.
   extract-version:
     runs-on: ubuntu-latest
     steps:
@@ -501,3 +508,48 @@ jobs:
       oidc-audience: aerospike/testing
       dry-run: false
       gh-bundle-metadata-artifact-name: ${{ needs.deploy-artifacts.outputs.bundle-metadata-available == 'true' && needs.deploy-artifacts.outputs.bundle-metadata-artifact-name || '' }}
+
+  # Report what the bundle can prove: digests, the bundle seal, promotion history,
+  # SLSA provenance, and the authorizing pull request. Reads signed records only.
+  release-evidence:
+    needs: [create-release-bundle, extract-version]
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: read
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
+        with:
+          egress-policy: audit
+      - name: Checkout shared-workflows (actions)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: .github/actions
+          sparse-checkout-cone-mode: false
+      - name: Setup JFrog CLI
+        uses: step-security/setup-jfrog-cli@53aeacb709fce45d0baf69a13ec3342f7e2d71a9 # v5.1.0
+        env:
+          JF_URL: https://artifact.aerospike.io
+          JF_PROJECT: test
+        with:
+          oidc-provider-name: gh-dev-test
+          oidc-audience: aerospike/testing
+      - name: Record release evidence
+        uses: ./.github/actions/release-evidence
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          target: bundle:test-release/${{ needs.extract-version.outputs.version }}@test
+          about: the multi-ecosystem release published by this example
+          output-path: release-evidence.md
+          jf-url: https://artifact.aerospike.io
+      - name: Publish evidence to the run summary
+        run: cat release-evidence.md >>"$GITHUB_STEP_SUMMARY"
+      - name: Upload evidence document
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-evidence
+          path: release-evidence.md
