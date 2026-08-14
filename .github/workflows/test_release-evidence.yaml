@@ -24,3 +24,60 @@ jobs:
 
       - name: Check verify-artifact.sh syntax
         run: bash -n .github/actions/release-evidence/verify-artifact.sh
+
+  # Exercises the runner-only parts (OIDC token derivation, gh attestation lookups)
+  # against the bundle the examples publish, in about a minute and without building
+  # or publishing anything. Dispatch only, so pull requests stay independent of JFrog.
+  # The version comes from VERSION.example, as it does in the examples themselves.
+  live-evidence:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+      id-token: write
+      attestations: read
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Extract Version
+        id: extract
+        uses: ./.github/actions/extract-version-from-tag
+        with:
+          version-file: .github/workflows/VERSION.example
+
+      - name: Setup JFrog CLI
+        uses: step-security/setup-jfrog-cli@53aeacb709fce45d0baf69a13ec3342f7e2d71a9 # v5.1.0
+        env:
+          JF_URL: https://artifact.aerospike.io
+          JF_PROJECT: test
+        with:
+          oidc-provider-name: gh-dev-test
+          oidc-audience: aerospike/testing
+
+      - name: Record release evidence
+        uses: ./.github/actions/release-evidence
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          target: bundle:test-release/${{ steps.extract.outputs.version }}@test
+          output-path: release-evidence.md
+          jf-url: https://artifact.aerospike.io
+
+      - name: Publish evidence to the run summary
+        run: cat release-evidence.md >>"$GITHUB_STEP_SUMMARY"
+
+      - name: Fail if the document came back hollow
+        run: |
+          set -euo pipefail
+          missing=0
+          for section in "## The release" "## Chain of custody"; do
+            grep -qF "$section" release-evidence.md || { echo "missing section: $section" >&2; missing=1; }
+          done
+          grep -qE 'sha256 [0-9a-f]{64}' release-evidence.md || { echo "no digest reported" >&2; missing=1; }
+          exit "$missing"
