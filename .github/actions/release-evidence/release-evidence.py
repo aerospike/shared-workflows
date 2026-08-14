@@ -35,6 +35,16 @@ NOUN = {"docker": "container", "maven": "jar", "helm": "Helm chart", "debian": "
         "yum": "rpm package", "pypi": "Python package", "npm": "npm package", "go": "Go module"}
 # An immutable promoted tag carries a build timestamp; the clean tag is what a consumer pulls.
 TIMESTAMPED_TAG = re.compile(r"_\d{8}T\d{6}Z")
+# Promotion stages in maturity order. INTERNAL and PROD are alternative terminal stages, so
+# neither implies the other is missing.
+STAGE_ORDER = ["DEV", "TEST", "STAGE", "PREVIEW", "PROD"]
+# The environment segment of a repository key names the stage its contents have reached, which
+# is how an artifact that was never sealed into a bundle can still be placed in the pipeline.
+REPO_ENV_STAGE = {"dev": "DEV", "test": "TEST", "stage": "STAGE",
+                  "preview-public": "PREVIEW", "preview-restricted": "PREVIEW",
+                  "prod-internal": "INTERNAL", "prod-public": "PROD"}
+# The type segment of a repository key, mapped to the package_type a bundle record would use.
+REPO_TYPE_PACKAGE = {"deb": "debian", "rpm": "yum", "container": "docker", "cargo": "cargo"}
 
 
 # ----------------------------------------------------------------- transport
@@ -90,30 +100,94 @@ def statement(envelope):
 
 
 # ------------------------------------------------------------------- collect
-def find_release(target):
+def normalize(target):
     path = re.sub(r"^.*?/artifactory/", "", target)
-    path = re.sub(r"^api/[^/]+/", "", path)
+    return re.sub(r"^api/[^/]+/", "", path)
+
+
+def stage_of_repo(repo):
+    """The promotion stage a repository key represents, or None if it names no stage."""
+    base = repo[: -len("-local")] if repo.endswith("-local") else repo
+    # Longest first, so prod-public is not mistaken for a repo merely ending in a shorter token.
+    for env in sorted(REPO_ENV_STAGE, key=len, reverse=True):
+        if base.endswith(f"-{env}"):
+            return REPO_ENV_STAGE[env]
+    return None
+
+
+def resolve_sha(path):
+    """The digest for a target, whether it was given as a path or already as a digest."""
+    if path.startswith("sha256:"):
+        return path[len("sha256:"):]
+    info = jf(f"artifactory/api/storage/{path}")
+    if not info or "checksums" not in info:
+        sys.exit(f"no artifact at {path}")
+    return info["checksums"]["sha256"]
+
+
+def find_release(target):
+    """The release bundle holding a target, or None when it has not been sealed into one.
+
+    An artifact in DEV has usually not been bundled yet, which is a stage in its life rather
+    than an error, so the caller reports on the artifact alone instead of giving up.
+    """
+    path = normalize(target)
 
     if path.startswith("bundle:"):
         spec = path[len("bundle:"):]
         name_version, _, project = spec.partition("@")
         return f"{project}-release-bundles-v2", name_version, project
 
-    if path.startswith("sha256:"):
-        sha = path[len("sha256:"):]
-    else:
-        info = jf(f"artifactory/api/storage/{path}")
-        if not info or "checksums" not in info:
-            sys.exit(f"no artifact at {path}")
-        sha = info["checksums"]["sha256"]
-
+    sha = resolve_sha(path)
     hits = aql(f'items.find({{"sha256":"{sha}"}}).include("repo","path")')
     found = next((h for h in hits["results"]
                   if h["repo"].endswith("-release-bundles-v2")), None)
     if not found:
-        sys.exit(f"{path} is in no release bundle")
+        return None
     project = found["repo"][: -len("-release-bundles-v2")]
     return found["repo"], "/".join(found["path"].split("/")[:2]), project
+
+
+def package_type_of_repo(repo):
+    """The package_type a bundle record would use, read from the repository key's type segment."""
+    base = repo[: -len("-local")] if repo.endswith("-local") else repo
+    for env in sorted(REPO_ENV_STAGE, key=len, reverse=True):
+        if base.endswith(f"-{env}"):
+            base = base[: -len(f"-{env}")]
+            break
+    segment = base.rsplit("-", 1)[-1]
+    return REPO_TYPE_PACKAGE.get(segment, segment)
+
+
+def unbundled_artifact(target):
+    """One artifact, shaped like an entry in a bundle record.
+
+    Returns the entry and the repository it was read from, so an artifact that no bundle
+    holds walks the same path below as one that a bundle does.
+    """
+    path = normalize(target)
+    sha = resolve_sha(path)
+
+    if path.startswith("sha256:"):
+        hits = aql(f'items.find({{"sha256":"{sha}"}}).include("repo","path","name")')
+        found = next((h for h in (hits.get("results") or [])
+                      if not h["repo"].endswith("-release-bundles-v2")), None)
+        if not found:
+            sys.exit(f"no artifact with digest {sha}")
+        repo = found["repo"]
+        inner = f'{found["path"]}/{found["name"]}'.lstrip("./")
+    else:
+        repo, _, inner = path.partition("/")
+
+    props = (jf(f"artifactory/api/storage/{repo}/{inner}?properties") or {}).get("properties", {})
+    return {
+        "package_type": package_type_of_repo(repo),
+        # Repository-qualified, so the verify command printed at the end of the document is
+        # one a reader can paste. A bundled artifact's path is relative to the bundle instead.
+        "path": f"{repo}/{inner}",
+        "checksum": sha,
+        "properties": [{"key": k, "values": v} for k, v in props.items()],
+    }, repo
 
 
 def where_published(sha, pkg_type):
@@ -152,9 +226,8 @@ def build_origin(name, number, project):
     return vcs, run, env
 
 
-def image_labels(bundle_repo, bundle, pkg_type, path):
+def image_labels(root, path):
     """OCI labels, which carry a container's origin when the manifest has no build.* properties."""
-    root = f"artifactory/{bundle_repo}/{bundle}/artifacts/{pkg_type}"
     image, directory = path.rsplit("/", 2)[0], path.rsplit("/", 1)[0]
     manifest = jf(f"{root}/{path}")
     if manifest and "manifests" in manifest:
@@ -184,10 +257,26 @@ def primary_artifacts(record):
 
 
 def collect(target, about):
-    bundle_repo, bundle, project = find_release(target)
-    record = jf(f"lifecycle/api/v2/release_bundle/records/{bundle}?project={project}") or {}
-    seal = statement(jf(f"artifactory/{bundle_repo}/{bundle}/release-bundle.json.evd")) or {}
-    sealed_digests = {s["digest"]["sha256"] for s in seal.get("subject", [])}
+    release_ref = find_release(target)
+    labels_root = None
+
+    if release_ref:
+        bundle_repo, bundle, project = release_ref
+        record = jf(f"lifecycle/api/v2/release_bundle/records/{bundle}?project={project}") or {}
+        seal = statement(jf(f"artifactory/{bundle_repo}/{bundle}/release-bundle.json.evd")) or {}
+        sealed_digests = {s["digest"]["sha256"] for s in seal.get("subject", [])}
+        entries = primary_artifacts(record)
+    else:
+        # No bundle holds this artifact, which is where everything sits before the first
+        # promotion. Report the artifact on its own rather than refusing, and let the absent
+        # records show up as absent.
+        entry, origin_repo = unbundled_artifact(target)
+        bundle_repo, bundle = None, None
+        project = origin_repo.split("-")[0]
+        record, seal, sealed_digests = {}, {}, set()
+        entries = [entry]
+        # The entry's path already carries its repository, unlike a bundled one.
+        labels_root = "artifactory"
 
     signatures = {}
     for art in record.get("artifacts", []):
@@ -196,24 +285,28 @@ def collect(target, about):
                 signatures[ext] = signatures.get(ext, 0) + 1
 
     promotions = []
-    listing = jf(f"artifactory/api/storage/{bundle_repo}/{bundle}") or {}
-    for child in listing.get("children", []):
-        if not child["uri"].startswith("/promotion-"):
-            continue
-        pred = (statement(jf(f"artifactory/{bundle_repo}/{bundle}{child['uri']}"))
-                or {}).get("predicate", {})
-        promotions.append({
-            "stage": pred.get("target", {}).get("environment"),
-            "when": pred.get("timestamp"),
-            "by": pred.get("createdBy"),
-            "repos": pred.get("target", {}).get("includedRepositoryKeys", []),
-            "mutable": pred.get("mutable"),
-            "seals": (pred.get("provenance") or [{}])[0].get("digest", {}).get("sha256"),
-        })
-    promotions.sort(key=lambda p: p["when"] or "")
+    if release_ref:
+        listing = jf(f"artifactory/api/storage/{bundle_repo}/{bundle}") or {}
+        for child in listing.get("children", []):
+            if not child["uri"].startswith("/promotion-"):
+                continue
+            pred = (statement(jf(f"artifactory/{bundle_repo}/{bundle}{child['uri']}"))
+                    or {}).get("predicate", {})
+            promotions.append({
+                # An attestation we cannot read or attribute is still a promotion that
+                # happened. Naming it UNKNOWN keeps it visible without letting it count as
+                # a stage reached, which dropping it silently would not.
+                "stage": pred.get("target", {}).get("environment") or "UNKNOWN",
+                "when": pred.get("timestamp"),
+                "by": pred.get("createdBy"),
+                "repos": pred.get("target", {}).get("includedRepositoryKeys", []),
+                "mutable": pred.get("mutable"),
+                "seals": (pred.get("provenance") or [{}])[0].get("digest", {}).get("sha256"),
+            })
+        promotions.sort(key=lambda p: p["when"] or "")
 
     artifacts, source = [], None
-    for art in primary_artifacts(record):
+    for art in entries:
         props = {p["key"]: p["values"][0] for p in (art.get("properties") or [])}
         sha = art["checksum"]
         public, repos = where_published(sha, art["package_type"])
@@ -231,7 +324,9 @@ def collect(target, about):
 
         labels = {}
         if not repo and art["package_type"] == "docker":
-            labels = image_labels(bundle_repo, bundle, art["package_type"], art["path"])
+            root = labels_root or (f"artifactory/{bundle_repo}/{bundle}/artifacts/"
+                                   f'{art["package_type"]}')
+            labels = image_labels(root, art["path"])
             repo = re.sub(r"^https://github\.com/", "",
                           labels.get("org.opencontainers.image.source", "")) or None
 
@@ -298,25 +393,44 @@ def collect(target, about):
     types = sorted({a["type"] for a in artifacts})
     attested = sorted({a["type"] for a in artifacts if a["attestation"]})
     stages = [p["stage"] for p in promotions]
-    # INTERNAL and PROD are alternative terminal stages; neither implies the other is missing.
-    expected = ["DEV", "TEST", "STAGE"] if "INTERNAL" in stages else ["DEV", "TEST", "STAGE", "PROD"]
+
+    # Where the bytes sit is a second, independent reading of maturity, and the only one
+    # available before a bundle exists. A promotion record is the stronger claim; repository
+    # residence still places the artifact in the pipeline.
+    resident = sorted({stage_of_repo(r) for a in artifacts for r in a["repos"]} - {None},
+                      key=lambda s: STAGE_ORDER.index(s) if s in STAGE_ORDER else len(STAGE_ORDER))
+    reached = [s for s in STAGE_ORDER if s in set(stages) | set(resident)]
+    if "INTERNAL" in stages or "INTERNAL" in resident:
+        reached.append("INTERNAL")
+
+    # INTERNAL and PROD are alternative terminal stages, so neither implies the other is due.
+    expected = STAGE_ORDER[:-1] if "INTERNAL" in reached else STAGE_ORDER
+    furthest = max((expected.index(s) for s in reached if s in expected), default=-1)
 
     return {
         "about": about,
+        "project": project,
         "release": {
             "name": bundle.split("/")[0], "version": bundle.split("/")[1], "bundle": bundle,
             "repo": bundle_repo, "project": project, "created": record.get("created"),
             "created_by": record.get("created_by"), "files": record.get("total_artifacts_count"),
             "seal": {"statement": seal.get("_type"), "predicate": seal.get("predicateType"),
                      "subjects": len(seal.get("subject", []))},
-        },
+        } if release_ref else None,
         "signatures": signatures, "pr": pull_request, "promotions": promotions,
         "artifacts": artifacts, "source": source,
         "derived": {
             "types": types, "attested_types": attested,
             "unattested_types": [t for t in types if t not in attested],
             "stages": stages, "terminal_stage": stages[-1] if stages else None,
-            "missing_stages": [s for s in expected if s not in stages],
+            "sealed": bool(release_ref),
+            # Where the artifact has got to, however it got there.
+            "stages_reached": reached,
+            "resident_stages": resident,
+            # Absent below the furthest point reached, so a gate was passed over. An anomaly.
+            "skipped_stages": [s for s in expected[:furthest + 1] if s not in reached],
+            # Absent above it, so simply not promoted there yet. Expected, not an anomaly.
+            "pending_stages": [s for s in expected[furthest + 1:]],
             "self_approved": bool(pull_request
                                   and pull_request["author"] in pull_request["approvers"]),
             "unlinked_published": sorted({a["type"] for a in artifacts
@@ -382,13 +496,18 @@ def custody_rows(evidence):
                      f'Build-info records `vcs.revision {src["commit"]}` and '
                      f'[the CI run]({src["run"]}), alongside {src["env"]} captured environment '
                      f"values", "JFrog build-info"])
-    detail = (f'including {phrase(f"{n} `{ext}` file" + ("s" if n > 1 else "") for ext, n in sorted(evidence["signatures"].items()))}'
-              if evidence["signatures"] else "each addressed by digest")
-    rows.append(["Artifacts sealed", f'{release["files"]} files, {detail}', "Stage repositories"])
-    rows.append(["Bundle sealed",
-                 f'{when(release["created"])} UTC by `{release["created_by"]}`. A DSSE envelope '
-                 f'carrying an in-toto Statement v1, naming all {release["seal"]["subjects"]} '
-                 f"files by SHA-256", "`release-bundle.json.evd`"])
+    if release:
+        detail = (f'including {phrase(f"{n} `{ext}` file" + ("s" if n > 1 else "") for ext, n in sorted(evidence["signatures"].items()))}'
+                  if evidence["signatures"] else "each addressed by digest")
+        rows.append(["Artifacts sealed", f'{release["files"]} files, {detail}',
+                     "Stage repositories"])
+        rows.append(["Bundle sealed",
+                     f'{when(release["created"])} UTC by `{release["created_by"]}`. A DSSE envelope '
+                     f'carrying an in-toto Statement v1, naming all {release["seal"]["subjects"]} '
+                     f"files by SHA-256", "`release-bundle.json.evd`"])
+    else:
+        rows.append(["Artifacts sealed", "No release bundle holds these bytes yet, so nothing "
+                     "binds them together or fixes their contents", "Not yet recorded"])
     if gated:
         rows.append([phrase(p["stage"] for p in gated),
                      "Promoted " + phrase(f'{when(p["when"])} UTC by `{p["by"]}`' for p in gated),
@@ -408,8 +527,9 @@ def duty_rows(evidence):
         for approver in pr["approvers"]:
             rows.append(["Approved the change", f"`{approver}`",
                          "GitHub review, required by branch protection"])
-    rows.append(["Built and sealed", f'`{evidence["release"]["created_by"]}`',
-                 "A short-lived CI OIDC token, with no stored secret"])
+    if evidence["release"]:
+        rows.append(["Built and sealed", f'`{evidence["release"]["created_by"]}`',
+                     "A short-lived CI OIDC token, with no stored secret"])
     for p in evidence["promotions"][:-1]:
         rows.append([f'Promoted to {p["stage"]}', f'`{p["by"]}`', "Signed promotion attestation"])
     last = terminal(evidence)
@@ -422,17 +542,23 @@ def duty_rows(evidence):
 def claim_rows(evidence):
     derived, scope, rows = evidence["derived"], type_scope(evidence), []
     last = terminal(evidence)
-    rows.append(["These bytes are the ones a named identity authorized for release",
-                 f'The {last["stage"] if last else "terminal"} promotion attestation names the '
-                 "seal by digest, and the seal names this file by SHA-256", scope])
-    rows.append(["The contents could not change after sealing",
-                 f'A DSSE in-toto statement over all {evidence["release"]["seal"]["subjects"]} '
-                 "digests, and promotion records carrying `mutable: false`", scope])
-    rows.append(["The same bytes moved through every stage",
-                 "The identical SHA-256 is present in each stage repository and is a subject of "
-                 "the seal", scope])
-    rows.append(["Every stage transition has an identity and a timestamp",
-                 "One signed promotion attestation per stage", scope])
+    # Only claims with a record behind them belong here. An artifact that has not been sealed
+    # or promoted supports none of the custody claims, and saying otherwise would be the one
+    # failure this document cannot afford.
+    if last:
+        rows.append(["These bytes are the ones a named identity authorized for release",
+                     f'The {last["stage"]} promotion attestation names the seal by digest, and '
+                     "the seal names this file by SHA-256", scope])
+    if evidence["release"]:
+        rows.append(["The contents could not change after sealing",
+                     f'A DSSE in-toto statement over all {evidence["release"]["seal"]["subjects"]} '
+                     "digests, and promotion records carrying `mutable: false`", scope])
+    if evidence["promotions"]:
+        rows.append(["The same bytes moved through every stage reached so far",
+                     "The identical SHA-256 is present in each stage repository and is a subject "
+                     "of the seal", scope])
+        rows.append(["Every stage transition so far has an identity and a timestamp",
+                     "One signed promotion attestation per stage", scope])
     if evidence["pr"]:
         pr = evidence["pr"]
         rows.append(["The change was approved by someone other than its author before merge",
@@ -467,9 +593,9 @@ def gap_rows(evidence):
                      "run URL."])
     if derived["unattested_types"]:
         rows.append(["An attestation step in the shared artifacts pipeline",
-                     f'That the {phrase(noun(t) for t in derived["unattested_types"])} were '
-                     "produced by our shared CI from a given commit, signed by the build platform "
-                     "rather than recorded by the build."])
+                     "That our shared CI produced the "
+                     f'{phrase(noun(t) for t in derived["unattested_types"])} from a given commit, '
+                     "signed by the build platform rather than recorded by the build."])
     if derived["attested_types"]:
         rows.append(["An evidence precondition at the customer-facing gates",
                      "That nothing reaches customers without valid provenance. Today the gate "
@@ -483,37 +609,87 @@ def gap_rows(evidence):
                      "keeps `build.name` and `build.number`, but the promoted copy carries only "
                      "registry metadata, so a consumer starting from the registry has to fall back "
                      "to OCI labels."])
-    if derived["missing_stages"]:
-        rows.append([f'A recorded {phrase(derived["missing_stages"])} transition',
-                     f'That the bundle entered {phrase(derived["missing_stages"])}. This bundle '
-                     f'records only {phrase(derived["stages"])}.'])
+    if not derived["sealed"]:
+        rows.append(["A release bundle holding these bytes",
+                     "That these bytes are fixed and travel as a unit. Nothing has been sealed "
+                     "yet, so there is no seal to name them and no promotion record can refer "
+                     "to them. Every custody claim below depends on this one."])
+    if derived["skipped_stages"]:
+        rows.append([f'A recorded {phrase(derived["skipped_stages"])} transition',
+                     f'That this passed through {phrase(derived["skipped_stages"])}. It has '
+                     f'reached {phrase(derived["stages_reached"])}, so those gates were passed '
+                     "over rather than not yet reached."])
     return rows
+
+
+def subject(evidence):
+    """What this document is about: a release when there is one, otherwise the artifact."""
+    release = evidence["release"]
+    if release:
+        return f'{release["name"]} {release["version"]}'
+    art = evidence["artifacts"][0]
+    return art["path"].rsplit("/", 1)[-1]
+
+
+def position_blocks(evidence):
+    """Where this has got to, stated before any claim that depends on having got there."""
+    derived = evidence["derived"]
+    reached = phrase(derived["stages_reached"]) if derived["stages_reached"] else "no stage"
+    text = f"This has reached {reached}."
+    if derived["pending_stages"]:
+        text += (f' It has not been promoted to {phrase(derived["pending_stages"])} yet, so the '
+                 "records those stages would produce do not exist and are not counted against it.")
+    if derived["skipped_stages"]:
+        text += (f' No promotion record exists for {phrase(derived["skipped_stages"])}, which sits '
+                 "below where it has got to. That is a gap rather than work still to come.")
+    if not derived["sealed"]:
+        text += (" Nothing has been sealed into a release bundle, so the custody claims below are "
+                 "limited to what the build itself recorded.")
+    return [("h2", "Where this is"), ("p", text)]
 
 
 def document(evidence):
     """The document as blocks, so markdown and Confluence cannot drift apart."""
     release, last = evidence["release"], terminal(evidence)
-    ui = (f'{JF}/ui/artifactory/release-lifecycle/{release["name"]}/{release["version"]}'
-          f'?repoKey={release["repo"]}')
-    blocks = [
-        ("panel", "info",
-         f'{release["name"]} {release["version"]} shipped as {nouns(evidence)} from a single '
-         "commit. Because they share one commit, one release bundle and one set of approvals, the "
-         "evidence differs only where the pipeline differs."),
-        ("h2", "The release"),
-        ("p", f'[{release["name"]} {release["version"]}]({ui})'
-              + (f', {evidence["about"]}' if evidence["about"] else "")
-              + f". One commit produced {nouns(evidence)}, and every step of that path left a "
-                "signed record."),
-        ("h2", "Release chain of custody"),
+    if release:
+        ui = (f'{JF}/ui/artifactory/release-lifecycle/{release["name"]}/{release["version"]}'
+              f'?repoKey={release["repo"]}')
+        blocks = [
+            ("panel", "info",
+             f'{release["name"]} {release["version"]} shipped as {nouns(evidence)} from a single '
+             "commit. Because they share one commit, one release bundle and one set of approvals, "
+             "the evidence differs only where the pipeline differs."),
+            ("h2", "The release"),
+            ("p", f'[{release["name"]} {release["version"]}]({ui})'
+                  + (f', {evidence["about"]}' if evidence["about"] else "")
+                  + f". One commit produced {nouns(evidence)}, and every step of that path left a "
+                    "signed record."),
+        ]
+    else:
+        blocks = [
+            ("panel", "info",
+             f"{subject(evidence)} has not been sealed into a release bundle. What follows is "
+             "what the build recorded about it, and what is absent because it has not travelled "
+             "far enough to produce it."),
+            ("h2", "The artifact"),
+            ("p", f"`{evidence['artifacts'][0]['path']}` in the "
+                  f"`{evidence['project']}` project"
+                  + (f', {evidence["about"]}' if evidence["about"] else "") + "."),
+        ]
+    blocks += position_blocks(evidence)
+    blocks += [
+        ("h2", "Chain of custody"),
         ("table", ["Step", "What the record says", "Where it lives"], custody_rows(evidence)),
-        ("h2", "Why the chain holds"),
-        ("p", "Each link is bound to the previous one by a value that cannot be edited after the "
-              f'fact. The seal names all {release["seal"]["subjects"]} files by SHA-256, so any '
-              "change to any file breaks the signature. The "
-              f'{last["stage"] if last else "terminal"} attestation names the seal by its own '
-              "digest, and covers every artifact in one action:"),
     ]
+    if release:
+        blocks += [
+            ("h2", "Why the chain holds"),
+            ("p", "Each link is bound to the previous one by a value that cannot be edited after "
+                  f'the fact. The seal names all {release["seal"]["subjects"]} files by SHA-256, '
+                  "so any change to any file breaks the signature. The "
+                  f'{last["stage"] if last else "terminal"} attestation names the seal by its own '
+                  "digest, and covers every artifact in one action:"),
+        ]
     if last:
         indent = "\n" + " " * 18
         blocks.append(("code",
@@ -522,29 +698,43 @@ def document(evidence):
                        f'createdBy:  {last["by"]}\n'
                        f'target:     {last["stage"]}, {indent.join(last["repos"])}\n'
                        f'mutable:    {str(last["mutable"]).lower()}'))
-    reached = ("a public repository" if last and any("prod-public" in r for r in last["repos"])
-               else f'the {last["stage"].lower() if last else "internal"} registry')
-    blocks += [
-        ("p", f"An auditor can therefore start at any of these artifacts in {reached} and walk "
-              "back to the pull request that authorized it, checking a hash at every hop."),
-        ("h2", "Segregation of duties, as recorded"),
-        ("p", f'{len({r[1] for r in duty_rows(evidence)})} identities appear in this release, and '
-              "the system recorded each one at the moment it acted."),
-        ("table", ["Role", "Identity", "Recorded by"], duty_rows(evidence)),
-    ]
+    if last and last["stage"] != "UNKNOWN":
+        where = ("a public repository" if any("prod-public" in r for r in last["repos"])
+                 else f'the {last["stage"].lower()} registry')
+        blocks.append(("p", f"An auditor can therefore start at any of these artifacts in {where} "
+                            "and walk back to the pull request that authorized it, checking a hash "
+                            "at every hop."))
+    duties = duty_rows(evidence)
+    if duties:
+        blocks += [
+            ("h2", "Segregation of duties, as recorded"),
+            ("p", f'{len({r[1] for r in duties})} identities appear so far, and the system '
+                  "recorded each one at the moment it acted."),
+            ("table", ["Role", "Identity", "Recorded by"], duties),
+        ]
     if evidence["pr"] and not evidence["derived"]["self_approved"]:
         blocks.append(("p", "The author could not approve their own change, and neither the author "
                             "nor the reviewer authorized the publish."))
+    claims = claim_rows(evidence)
+    if claims:
+        blocks += [
+            ("h2", "What the evidence proves"),
+            ("p", "Each row is a claim an auditor might make, the record that backs it, and which "
+                  "of the artifacts it holds for."),
+            ("table", ["Claim", "Backed by", "Holds for"], claims),
+        ]
+    else:
+        blocks += [
+            ("h2", "What the evidence proves"),
+            ("p", "Nothing yet beyond what the build recorded about itself. Every custody claim "
+                  "needs a seal or a promotion record, and neither exists for this artifact."),
+        ]
     blocks += [
-        ("h2", "What the evidence proves"),
-        ("p", "Each row is a claim an auditor might make about this release, the record that backs "
-              "it, and which of the artifacts it holds for."),
-        ("table", ["Claim", "Backed by", "Holds for"], claim_rows(evidence)),
         ("h2", "Verify it yourself"),
-        ("p", "One command per artifact, against the public virtual repositories a customer "
-              "downloads from. Reading the build, seal and promotion records needs an account with "
-              f'read access to the `{release["project"]}` project, and the review and provenance '
-              "steps need the GitHub CLI."),
+        ("p", "One command per artifact, against the most public location each one has reached. "
+              "Reading the build, seal and promotion records needs an account with read access to "
+              f'the `{evidence["project"]}` project, and the review and provenance steps need the '
+              "GitHub CLI."),
         ("code", 'export JFROG_TOKEN="<a JFrog access token>"\n\n'
                  + "\n".join(f'./verify-artifact.sh {a["public"] or a["path"]}'
                              for a in evidence["artifacts"]), "bash"),
@@ -560,8 +750,8 @@ def document(evidence):
 
 # -------------------------------------------------------------------- render
 def render_markdown(evidence, blocks):
-    release = evidence["release"]
-    out = [f'# {release["name"]} {release["version"]}: release evidence', ""]
+    kind = "release evidence" if evidence["release"] else "artifact evidence"
+    out = [f"# {subject(evidence)}: {kind}", ""]
     for block in blocks:
         kind = block[0]
         if kind == "h2":

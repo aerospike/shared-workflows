@@ -64,6 +64,22 @@ SLSA provenance lookups use `gh`, so the job needs a token that can read attesta
     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
 
+## Any Artifact, Any Promotion Stage
+
+The target does not have to be public, in a virtual repository, or in a release bundle. An artifact sitting in a `*-dev-local` repository straight off a build is a valid target, and reports on what exists so far rather than refusing.
+
+Maturity is read two ways. A promotion attestation is the strong signal. Failing that, the environment segment of the repositories holding the bytes places the artifact in the pipeline, which is the only signal available before a bundle exists.
+
+That produces three distinct lists, and the difference between the last two is the point:
+
+| Field            | Meaning                                                                |
+| ---------------- | ---------------------------------------------------------------------- |
+| `stages_reached` | Stages reached, by promotion record or by repository residence         |
+| `pending_stages` | Stages above that point. Not promoted there yet, so no records are due |
+| `skipped_stages` | Stages below that point with no record. A gate was passed over         |
+
+A document for an unsealed artifact is mostly absences, and that is the correct result rather than a failure. Claims are only rendered when the record backing them exists, so an artifact with no seal and no promotions makes no custody claims at all. Reporting less than we would like is the honest output; reporting more than the records support is the one failure this tool cannot afford.
+
 ## Reading The Output
 
 Two distinctions matter when interpreting a document:
@@ -71,4 +87,12 @@ Two distinctions matter when interpreting a document:
 - JFrog build-info is not SLSA provenance. Build-info records what a build declared about itself; provenance is an attestation signed by the builder.
 - The bundle seal proves custody, not origin. It proves the bytes in the bundle are the bytes that were sealed, not where they came from.
 
-An absent record is not automatically a gap. A promoted container tag loses its build properties, and INTERNAL is a valid terminal stage rather than a missing PROD.
+An absent record is not automatically a gap. A promoted container tag loses its build properties, INTERNAL is a valid terminal stage rather than a missing PROD, and a stage listed under `pending_stages` is work still to come rather than a hole.
+
+## Tests
+
+```sh
+python3 -m unittest discover .github/actions/release-evidence/tests -v
+```
+
+Transport is stubbed, so the tests cover what decides a document's claims: stage classification, the pending-versus-skipped distinction, and the rule that no claim renders without its record.
