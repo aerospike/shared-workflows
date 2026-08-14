@@ -135,7 +135,8 @@ class ClaimsRequireRecords(unittest.TestCase):
                         "stages": [], "terminal_stage": None, "sealed": sealed,
                         "stages_reached": ["DEV"], "resident_stages": ["DEV"],
                         "skipped_stages": [], "pending_stages": ["TEST", "STAGE", "PREVIEW", "PROD"],
-                        "self_approved": False, "unlinked_published": [], "any_commit": False},
+                        "self_approved": False, "independently_approved": False,
+                        "unlinked_published": [], "any_commit": False},
         }
 
     def test_an_unsealed_artifact_claims_nothing_about_custody(self):
@@ -146,6 +147,8 @@ class ClaimsRequireRecords(unittest.TestCase):
         ev = self.evidence(None, [], False)
         ev["pr"] = {"number": 7, "title": "t", "author": "writer", "merged_at": merged_at,
                     "repo": "aerospike/shared-workflows", "approvers": approvers}
+        ev["derived"]["independently_approved"] = any(a != "writer" for a in approvers)
+        ev["derived"]["self_approved"] = "writer" in approvers
         ev["source"] = {"repo": "aerospike/shared-workflows", "commit": "abcdef1234567890",
                         "run": "https://github.com/aerospike/shared-workflows/actions/runs/1",
                         "env": 12}
@@ -162,6 +165,19 @@ class ClaimsRequireRecords(unittest.TestCase):
     def test_an_independently_approved_merged_pr_makes_the_claim(self):
         rows = rev.claim_rows(self.pr_evidence(["reviewer"], "2026-01-01T00:00:00Z"))
         self.assertEqual(len([r for r in rows if "approved by someone" in r[0]]), 1)
+
+    def test_a_missing_approval_is_named_as_a_gap_rather_than_left_silent(self):
+        rows = rev.gap_rows(self.pr_evidence([], None))
+        self.assertIn("An approving review on the authorizing pull request", [r[0] for r in rows])
+
+    def test_an_approved_pr_raises_no_approval_gap(self):
+        rows = rev.gap_rows(self.pr_evidence(["reviewer"], "2026-01-01T00:00:00Z"))
+        self.assertNotIn("An approving review on the authorizing pull request", [r[0] for r in rows])
+
+    def test_no_approvals_does_not_read_as_declining_to_self_approve(self):
+        ev = self.pr_evidence([], None)
+        out = rev.render_markdown(ev, rev.document(ev))
+        self.assertNotIn("could not approve their own change", out)
 
     def test_an_open_pr_is_described_as_open_rather_than_merged_at_no_date(self):
         rows = rev.custody_rows(self.pr_evidence([], None))

@@ -263,6 +263,10 @@ def collect(target, about):
     if release_ref:
         bundle_repo, bundle, project = release_ref
         record = jf(f"lifecycle/api/v2/release_bundle/records/{bundle}?project={project}") or {}
+        # An empty record renders as a sealed bundle of zero files signed by nobody, which reads
+        # as evidence rather than as its absence. Refuse instead.
+        if not record.get("artifacts"):
+            sys.exit(f"no release bundle {bundle} in project {project}")
         seal = statement(jf(f"artifactory/{bundle_repo}/{bundle}/release-bundle.json.evd")) or {}
         sealed_digests = {s["digest"]["sha256"] for s in seal.get("subject", [])}
         entries = primary_artifacts(record)
@@ -433,6 +437,10 @@ def collect(target, about):
             "pending_stages": [s for s in expected[furthest + 1:]],
             "self_approved": bool(pull_request
                                   and pull_request["author"] in pull_request["approvers"]),
+            # An approval from anyone but the author. Absent approvals are not evidence that
+            # the author declined to self-approve, so nothing may be inferred from an empty list.
+            "independently_approved": bool(pull_request and any(
+                a != pull_request["author"] for a in pull_request["approvers"])),
             "unlinked_published": sorted({a["type"] for a in artifacts
                                           if a["public"] and a["published_build_linked"] is False}),
             "any_commit": any(a["commit"] for a in artifacts),
@@ -561,14 +569,14 @@ def claim_rows(evidence):
                      "of the seal", scope])
         rows.append(["Every stage transition so far has an identity and a timestamp",
                      "One signed promotion attestation per stage", scope])
-    if evidence["pr"]:
+    if evidence["pr"] and evidence["derived"]["independently_approved"] \
+            and evidence["pr"]["merged_at"]:
         pr = evidence["pr"]
         independent = [a for a in pr["approvers"] if a != pr["author"]]
-        if independent and pr["merged_at"]:
-            rows.append(["The change was approved by someone other than its author before merge",
-                         f'PR #{pr["number"]}, approved by '
-                         f'{phrase(f"`{a}`" for a in independent)} against author '
-                         f'`{pr["author"]}`', scope])
+        rows.append(["The change was approved by someone other than its author before merge",
+                     f'PR #{pr["number"]}, approved by '
+                     f'{phrase(f"`{a}`" for a in independent)} against author '
+                     f'`{pr["author"]}`', scope])
     for pkg_type in derived["attested_types"]:
         art = next(a for a in evidence["artifacts"]
                    if a["type"] == pkg_type and a["attestation"])
@@ -623,6 +631,13 @@ def gap_rows(evidence):
                      f'That this passed through {phrase(derived["skipped_stages"])}. It has '
                      f'reached {phrase(derived["stages_reached"])}, so those gates were passed '
                      "over rather than not yet reached."])
+    if evidence["pr"] and not derived["independently_approved"]:
+        pr = evidence["pr"]
+        rows.append(["An approving review on the authorizing pull request",
+                     f'That someone other than `{pr["author"]}` examined this change. PR '
+                     f'#{pr["number"]} carries no approval from a second identity, so the '
+                     "segregation of duties recorded above covers who built and published these "
+                     "bytes but not who agreed to the change itself."])
     return rows
 
 
@@ -716,7 +731,7 @@ def document(evidence):
                   "recorded each one at the moment it acted."),
             ("table", ["Role", "Identity", "Recorded by"], duties),
         ]
-    if evidence["pr"] and not evidence["derived"]["self_approved"]:
+    if evidence["pr"] and evidence["derived"]["independently_approved"]:
         blocks.append(("p", "The author could not approve their own change, and neither the author "
                             "nor the reviewer authorized the publish."))
     claims = claim_rows(evidence)
