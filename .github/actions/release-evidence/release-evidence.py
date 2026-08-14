@@ -31,8 +31,9 @@ COMPANION = (".asc", ".prov", ".sig", ".sha256", ".md5")
 # The public virtual repository for each JFrog package type.
 VIRTUAL = {"docker": "docker", "maven": "maven", "helm": "helm", "debian": "deb", "yum": "rpm",
            "pypi": "pypi", "npm": "npm", "go": "go", "nuget": "nuget", "gems": "gems"}
-NOUN = {"docker": "container", "maven": "jar", "helm": "Helm chart", "debian": "deb package",
-        "yum": "rpm package", "pypi": "Python package", "npm": "npm package", "go": "Go module"}
+NOUN = {"docker": "container", "oci": "container", "maven": "jar", "helm": "Helm chart",
+        "debian": "deb package", "yum": "rpm package", "pypi": "Python package",
+        "npm": "npm package", "go": "Go module"}
 # An immutable promoted tag carries a build timestamp; the clean tag is what a consumer pulls.
 TIMESTAMPED_TAG = re.compile(r"_\d{8}T\d{6}Z")
 # Promotion stages in maturity order. INTERNAL and PROD are alternative terminal stages, so
@@ -244,13 +245,28 @@ def image_labels(root, path):
     return (blob or {}).get("config", {}).get("Labels") or {}
 
 
+def container_tag_manifest(path):
+    """True for the manifest under a tag folder, which is the image as a consumer names it.
+
+    A digest folder holds one architecture, `_uploads` holds staging copies, and everything
+    else under an image is a blob. Listing any of them presents storage as if it shipped.
+    """
+    parts = path.split("/")
+    if len(parts) < 2 or parts[-1] not in ("manifest.json", "list.manifest.json"):
+        return False
+    tag = parts[-2]
+    return not tag.startswith("sha256:") and tag != "_uploads"
+
+
 def primary_artifacts(record):
     """One entry per shipped thing: no signatures, container blobs or per-arch manifests."""
     out = []
     for art in record.get("artifacts", []):
         if art["path"].endswith(COMPANION):
             continue
-        if art["package_type"] == "docker" and not art["path"].endswith("/list.manifest.json"):
+        # JFrog types OCI-native repositories `oci` and Docker ones `docker`. Both store an
+        # image as a manifest plus blobs, so both need collapsing to the image itself.
+        if art["package_type"] in ("docker", "oci") and not container_tag_manifest(art["path"]):
             continue
         out.append(art)
     return out

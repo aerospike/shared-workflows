@@ -121,6 +121,42 @@ class StageClassification(unittest.TestCase):
         self.assertEqual(d["pending_stages"], rev.STAGE_ORDER)
 
 
+class ContainersCollapseToTheImage(unittest.TestCase):
+    """An image is one shipped thing, whether its repository is typed docker or oci."""
+
+    def record(self, package_type):
+        paths = [
+            "img/1.0.0/manifest.json",
+            "img/1.0.0/sha256__aaaa",
+            "img/_uploads/manifest-sha256__bbbb.json",
+            "img/_uploads/sha256__cccc",
+            "img/sha256:dddd/manifest.json",
+            "img/sha256:dddd/sha256__eeee",
+        ]
+        return {"artifacts": [{"path": p, "package_type": package_type} for p in paths]}
+
+    def test_an_oci_image_collapses_to_its_tag_manifest(self):
+        kept = [a["path"] for a in rev.primary_artifacts(self.record("oci"))]
+        self.assertEqual(kept, ["img/1.0.0/manifest.json"])
+
+    def test_a_docker_image_collapses_the_same_way(self):
+        kept = [a["path"] for a in rev.primary_artifacts(self.record("docker"))]
+        self.assertEqual(kept, ["img/1.0.0/manifest.json"])
+
+    def test_a_multi_arch_list_manifest_is_kept(self):
+        record = {"artifacts": [{"path": "img/1.0.0_20260101T000000Z/list.manifest.json",
+                                 "package_type": "docker"}]}
+        self.assertEqual(len(rev.primary_artifacts(record)), 1)
+
+    def test_upload_staging_is_never_a_shipped_thing(self):
+        kept = [a["path"] for a in rev.primary_artifacts(self.record("oci"))]
+        self.assertFalse([p for p in kept if "_uploads" in p])
+
+    def test_a_non_container_type_is_untouched(self):
+        record = {"artifacts": [{"path": "a/b/c-1.0.jar", "package_type": "maven"}]}
+        self.assertEqual(len(rev.primary_artifacts(record)), 1)
+
+
 class ClaimsRequireRecords(unittest.TestCase):
     """No claim may appear without the record that backs it."""
 
