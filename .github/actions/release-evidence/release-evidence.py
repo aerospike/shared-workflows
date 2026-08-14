@@ -485,11 +485,13 @@ def custody_rows(evidence):
 
     if pr:
         commit = evidence["source"]["commit"][:8]
+        approval = (f'approved by {phrase(f"`{a}`" for a in pr["approvers"])}'
+                    if pr["approvers"] else "not approved")
+        state = (f'merged {when(pr["merged_at"])} UTC as commit `{commit}`'
+                 if pr["merged_at"] else f'still open, head at commit `{commit}`')
         rows.append(["Peer review",
                      f'[PR #{pr["number"]}](https://github.com/{pr["repo"]}/pull/{pr["number"]}), '
-                     f'written by `{pr["author"]}`, approved by '
-                     f'{phrase(f"`{a}`" for a in pr["approvers"])}, merged '
-                     f'{when(pr["merged_at"])} UTC as commit `{commit}`', "GitHub"])
+                     f'written by `{pr["author"]}`, {approval}, {state}', "GitHub"])
     if evidence["source"]:
         src = evidence["source"]
         rows.append(["Build from that commit",
@@ -561,10 +563,12 @@ def claim_rows(evidence):
                      "One signed promotion attestation per stage", scope])
     if evidence["pr"]:
         pr = evidence["pr"]
-        rows.append(["The change was approved by someone other than its author before merge",
-                     f'PR #{pr["number"]}, approved by '
-                     f'{phrase(f"`{a}`" for a in pr["approvers"])} against author '
-                     f'`{pr["author"]}`', scope])
+        independent = [a for a in pr["approvers"] if a != pr["author"]]
+        if independent and pr["merged_at"]:
+            rows.append(["The change was approved by someone other than its author before merge",
+                         f'PR #{pr["number"]}, approved by '
+                         f'{phrase(f"`{a}`" for a in independent)} against author '
+                         f'`{pr["author"]}`', scope])
     for pkg_type in derived["attested_types"]:
         art = next(a for a in evidence["artifacts"]
                    if a["type"] == pkg_type and a["attestation"])

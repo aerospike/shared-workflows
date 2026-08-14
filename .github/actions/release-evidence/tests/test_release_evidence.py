@@ -142,6 +142,40 @@ class ClaimsRequireRecords(unittest.TestCase):
         rows = rev.claim_rows(self.evidence(None, [], False))
         self.assertEqual(rows, [])
 
+    def pr_evidence(self, approvers, merged_at):
+        ev = self.evidence(None, [], False)
+        ev["pr"] = {"number": 7, "title": "t", "author": "writer", "merged_at": merged_at,
+                    "repo": "aerospike/shared-workflows", "approvers": approvers}
+        ev["source"] = {"repo": "aerospike/shared-workflows", "commit": "abcdef1234567890",
+                        "run": "https://github.com/aerospike/shared-workflows/actions/runs/1",
+                        "env": 12}
+        return ev
+
+    def test_an_unapproved_pr_makes_no_approval_claim(self):
+        rows = rev.claim_rows(self.pr_evidence([], None))
+        self.assertEqual([r for r in rows if "approved by someone" in r[0]], [])
+
+    def test_a_pr_approved_only_by_its_author_makes_no_approval_claim(self):
+        rows = rev.claim_rows(self.pr_evidence(["writer"], "2026-01-01T00:00:00Z"))
+        self.assertEqual([r for r in rows if "approved by someone" in r[0]], [])
+
+    def test_an_independently_approved_merged_pr_makes_the_claim(self):
+        rows = rev.claim_rows(self.pr_evidence(["reviewer"], "2026-01-01T00:00:00Z"))
+        self.assertEqual(len([r for r in rows if "approved by someone" in r[0]]), 1)
+
+    def test_an_open_pr_is_described_as_open_rather_than_merged_at_no_date(self):
+        rows = rev.custody_rows(self.pr_evidence([], None))
+        review = next(r[1] for r in rows if r[0] == "Peer review")
+        self.assertIn("not approved", review)
+        self.assertIn("still open", review)
+        self.assertNotIn("merged  UTC", review)
+
+    def test_a_merged_pr_still_reports_its_merge_time(self):
+        rows = rev.custody_rows(self.pr_evidence(["reviewer"], "2026-01-01T00:00:00Z"))
+        review = next(r[1] for r in rows if r[0] == "Peer review")
+        self.assertIn("approved by `reviewer`", review)
+        self.assertIn("merged 2026-01-01 00:00:00 UTC", review)
+
     def test_an_unsealed_artifact_names_the_missing_bundle_as_the_root_gap(self):
         rows = rev.gap_rows(self.evidence(None, [], False))
         self.assertIn("A release bundle holding these bytes", [r[0] for r in rows])
