@@ -17,3 +17,4 @@ obj
 target
 .claude/settings.local.json
 **/*.pyc
+**/__pycache__/
