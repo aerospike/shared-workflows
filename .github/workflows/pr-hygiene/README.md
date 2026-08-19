@@ -157,41 +157,11 @@ End-to-end jobs live in [`test_pr-hygiene.yaml`](test_pr-hygiene.yaml) (also run
 
 Helpers in `tests/helpers/setup.bash` reimplement allowlist matching, Jira extraction, type extraction, and the type gate. They are not the workflow YAML.
 
-| Group             | Test                                                       | Asserts                                                    |
-| ----------------- | ---------------------------------------------------------- | ---------------------------------------------------------- |
-| Default allowlist | Dependabot title matches default pattern                   | `Build(deps): …` matches                                   |
-| Default allowlist | Dependabot dev-deps title matches default pattern          | `Build(deps-dev): …` matches                               |
-| Default allowlist | StepSecurity title matches default pattern                 | `[StepSecurity] …` matches                                 |
-| Default allowlist | Revert with quotes matches default pattern                 | `Revert "…"` matches                                       |
-| Default allowlist | lowercase revert matches default pattern                   | `revert: …` matches                                        |
-| Default allowlist | lowercase build(deps) matches default pattern              | `build(deps): …` matches                                   |
-| Default allowlist | chore(deps) matches default pattern                        | `chore(deps): …` matches                                   |
-| Default allowlist | fix(deps-dev) matches default pattern                      | `fix(deps-dev): …` matches                                 |
-| Non-matching      | conventional commit with JIRA does not match allowlist     | Normal `feat(scope): [KEY-n] …` is not allowlisted         |
-| Non-matching      | plain text title does not match allowlist                  | `fix some bug` is not allowlisted                          |
-| Non-matching      | partial pattern match at wrong position does not match     | `deps` not at start does not match                         |
-| Non-matching      | empty title does not match allowlist                       | Empty string is not allowlisted                            |
-| Non-matching      | Revert with single quotes does not match default pattern   | `Revert '…'` does not match `^[Rr]evert "`                 |
-| Non-matching      | Build without deps scope does not match Dependabot pattern | `Build: …` does not match                                  |
-| Non-matching      | empty patterns array matches nothing                       | No patterns → no match                                     |
-| Custom patterns   | custom pattern matches when added                          | Extra `^chore\(release\):` matches `chore(release): 2.0.0` |
-| Custom patterns   | custom pattern does not affect default rejections          | Extra pattern still rejects `feat: no jira ticket`         |
-| Custom patterns   | custom-only patterns match when defaults are overridden    | `^my-bot:` matches `my-bot: …`                             |
-| Custom patterns   | default titles rejected when patterns are overridden       | Dependabot title rejected if defaults dropped              |
-| Jira extraction   | valid title extracts JIRA ticket                           | `feat(workflows): [INFRA-378] …` → `INFRA-378`             |
-| Jira extraction   | breaking change title without scope extracts JIRA ticket   | `feat!: [INFRA-649] …` → `INFRA-649`                       |
-| Jira extraction   | breaking change title with scope extracts JIRA ticket      | `feat(workflows)!: [INFRA-649] …` → `INFRA-649`            |
-| Jira extraction   | missing JIRA ticket returns empty                          | `feat: missing jira ticket` → empty                        |
-| Jira extraction   | JIRA without brackets returns empty                        | Bare `INFRA-123` → empty                                   |
-| Commit type       | extract_commit_type returns feat from conventional commit  | `feat(workflows): …` → `feat`                              |
-| Commit type       | extract_commit_type returns chore from scopeless commit    | `chore: …` → `chore`                                       |
-| Type gate         | feat type requires JIRA with default types                 | `feat` is required                                         |
-| Type gate         | fix type requires JIRA with default types                  | `fix` is required                                          |
-| Type gate         | refactor type requires JIRA with default types             | Helper default list includes `refactor`                    |
-| Type gate         | chore type does not require JIRA with default types        | `chore` is not required                                    |
-| Type gate         | build type does not require JIRA with default types        | `build` is not required                                    |
-| Type gate         | perf type does not require JIRA with default types         | `perf` is not required                                     |
-| Type gate         | test type does not require JIRA with default types         | `test` is not required                                     |
-| Type gate         | empty jira-required-types means JIRA never required        | Empty list → `feat` not required                           |
-| Type gate         | custom jira-required-types list is respected               | `chore` required when list is `chore, test`                |
-| Type gate         | type not in custom list does not require JIRA              | `feat` not required when list is `chore, test`             |
+Tests themselves are broken down into sections:
+
+- Default allowlist
+- Non-matching checks
+- Custom patterns
+- Jira extraction subroutine
+- Commit type
+- Type gate validations
