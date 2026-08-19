@@ -63,12 +63,15 @@ SLSA provenance lookups use `gh`, so the job needs a token that can read attesta
   env:
     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
+
 ## All artifacts and promotion stages
+
 The target does not have to be public, in a virtual repository, or in a release bundle. An artifact sitting in a `*-dev-local` repository straight from a build is still a valid target, and reports on what it can prove today.
 
 Maturity is read two ways. A promotion attestation is the strong signal. If there is no promotion attestation, the environment segment of the repositories holding the bytes places the artifact in the pipeline.
 
 That produces three distinct lists.
+
 | Field            | Meaning                                                                |
 | ---------------- | ---------------------------------------------------------------------- |
 | `stages_reached` | Stages reached, by promotion record or by repository residence         |
