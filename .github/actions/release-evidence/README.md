@@ -1,6 +1,6 @@
 # Release Evidence
 
-Trace what a published artifact or release can prove, using the signed records JFrog and GitHub already hold. Reads only; it publishes nothing and changes nothing.
+Trace what a published artifact or release can prove from the signed records JFrog and GitHub already hold. It reads only.
 
 For any target it reports the digest, every repository holding those bytes, the release bundle seal, the promotion history with approvers, SLSA provenance where it exists, and the pull request that authorized the change.
 
@@ -18,7 +18,7 @@ JFROG_TOKEN=<token> ./verify-artifact.sh clients-pypi-dev-local/aerospike/16.0.1
 JFROG_TOKEN=<token> ./release-evidence.py bundle:my-release/1.2.3@myproject --format json
 ```
 
-`release-evidence.py` accepts a `repo/path`, a full Artifactory URL, `sha256:HEX`, or `bundle:NAME/VERSION@PROJECT` when the release bundle is already known. For a container, point it at the tag's `list.manifest.json`, whose sha256 is the index digest GitHub attests.
+`release-evidence.py` accepts a `repo/path`, a full Artifactory URL, `sha256:HEX`, or `bundle:NAME/VERSION@PROJECT` when the release bundle is already known. For a container, point it at the tag's `list.manifest.json`.
 
 JFrog auth comes from `JFROG_TOKEN`. GitHub auth comes from the `gh` CLI or `GITHUB_TOKEN`.
 
@@ -39,7 +39,7 @@ JFrog auth comes from `JFROG_TOKEN`. GitHub auth comes from the `gh` CLI or `GIT
 
 ## Prerequisites
 
-A JFrog token, resolved in this order: the `jfrog-token` input, then `JFROG_TOKEN` in the environment, then an already-configured JFrog CLI. The last case covers most callers, since `setup-jfrog-cli` has usually run for OIDC before this step.
+A JFrog token, resolved in this order: the `jfrog-token` input, then `JFROG_TOKEN` in the environment, then an already-configured JFrog CLI.
 
 SLSA provenance lookups use `gh`, so the job needs a token that can read attestations on the repository that built the artifact.
 
@@ -63,22 +63,19 @@ SLSA provenance lookups use `gh`, so the job needs a token that can read attesta
   env:
     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
+## All artifacts and promotion stages
+The target does not have to be public, in a virtual repository, or in a release bundle. An artifact sitting in a `*-dev-local` repository straight from a build is still a valid target, and reports on what it can prove today.
 
-## Any Artifact, Any Promotion Stage
+Maturity is read two ways. A promotion attestation is the strong signal. If there is no promotion attestation, the environment segment of the repositories holding the bytes places the artifact in the pipeline.
 
-The target does not have to be public, in a virtual repository, or in a release bundle. An artifact sitting in a `*-dev-local` repository straight off a build is a valid target, and reports on what exists so far rather than refusing.
-
-Maturity is read two ways. A promotion attestation is the strong signal. Failing that, the environment segment of the repositories holding the bytes places the artifact in the pipeline, which is the only signal available before a bundle exists.
-
-That produces three distinct lists, and the difference between the last two is the point:
-
+That produces three distinct lists.
 | Field            | Meaning                                                                |
 | ---------------- | ---------------------------------------------------------------------- |
 | `stages_reached` | Stages reached, by promotion record or by repository residence         |
 | `pending_stages` | Stages above that point. Not promoted there yet, so no records are due |
 | `skipped_stages` | Stages below that point with no record. A gate was passed over         |
 
-A document for an unsealed artifact is mostly absences, and that is the correct result rather than a failure. Claims are only rendered when the record backing them exists, so an artifact with no seal and no promotions makes no custody claims at all. Reporting less than we would like is the honest output; reporting more than the records support is the one failure this tool cannot afford.
+For an unsealed artifact, the document will mostly show absences. Claims are only rendered when the record backing them exists, so an artifact with no supporting record will not imply one.
 
 ## Reading The Output
 
@@ -87,12 +84,4 @@ Two distinctions matter when interpreting a document:
 - JFrog build-info is not SLSA provenance. Build-info records what a build declared about itself; provenance is an attestation signed by the builder.
 - The bundle seal proves custody, not origin. It proves the bytes in the bundle are the bytes that were sealed, not where they came from.
 
-An absent record is not automatically a gap. A promoted container tag loses its build properties, INTERNAL is a valid terminal stage rather than a missing PROD, and a stage listed under `pending_stages` is work still to come rather than a hole.
-
-## Tests
-
-```sh
-python3 -m unittest discover .github/actions/release-evidence/tests -v
-```
-
-Transport is stubbed, so the tests cover what decides a document's claims: stage classification, the pending-versus-skipped distinction, and the rule that no claim renders without its record.
+An absent record is not always a gap. A promoted container tag may lose its build properties, INTERNAL is a valid terminal stage, and a stage listed under `pending_stages` is simply not reached yet.
