@@ -98,13 +98,13 @@ jobs:
 
 ## Inputs
 
-| Input                  | Required | Default                                                              | Description                                                                                                               |
-| ---------------------- | -------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `pr_title`             | Yes      |                                                                      | PR title to validate                                                                                                      |
-| `allowed-patterns`     | No       | Dependabot, StepSecurity, revert, Bump (see [Allowlist](#allowlist)) | Newline-delimited ERE patterns. Matching titles bypass all validation.                                                    |
-| `types-requiring-jira` | No       | `feat, fix`                                                          | Comma-separated conventional commit types that require a Jira ticket. Empty string disables Jira.                         |
-| `skip-jira-label`      | No       | `skip-jira`                                                          | PR label that bypasses Jira validation. Commitlint still runs.                                                            |
-| `pr-labels`            | No       | `""`                                                                 | JSON array of PR label names (`toJSON(github.event.pull_request.labels.*.name)`). Required for the skip-jira label check. |
+| Input                  | Required | Default                                                                                | Description                                                                                                               |
+| ---------------------- | -------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `pr_title`             | Yes      |                                                                                        | PR title to validate                                                                                                      |
+| `allowed-patterns`     | No       | Dependabot, StepSecurity, revert, Bump (see [Allowlist](#allowlist-for-automated-prs)) | Newline-delimited ERE patterns. Matching titles bypass all validation.                                                    |
+| `types-requiring-jira` | No       | `feat, fix`                                                                            | Comma-separated conventional commit types that require a Jira ticket. Empty string disables Jira.                         |
+| `skip-jira-label`      | No       | `skip-jira`                                                                            | PR label that bypasses Jira validation. Commitlint still runs.                                                            |
+| `pr-labels`            | No       | `""`                                                                                   | JSON array of PR label names (`toJSON(github.event.pull_request.labels.*.name)`). Required for the skip-jira label check. |
 
 ## Example Usage
 
