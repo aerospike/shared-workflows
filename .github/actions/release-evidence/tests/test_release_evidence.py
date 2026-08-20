@@ -253,6 +253,45 @@ class ClaimsRequireRecords(unittest.TestCase):
         # The claim that would be a lie if it appeared.
         self.assertNotIn("could not change after sealing", out)
 
+    def sealed_evidence(self, promotions):
+        ev = self.evidence({"name": "r", "version": "1.0.0", "bundle": "r/1.0.0",
+                            "repo": "clients-release-bundles-v2", "project": "clients",
+                            "created": "2026-01-01T00:00:00Z", "created_by": "token:ci",
+                            "files": 2,
+                            "seal": {"statement": "https://in-toto.io/Statement/v1",
+                                     "predicate": "https://jfrog.com/evidence/release-bundle/v1",
+                                     "subjects": 2}},
+                           promotions, True)
+        ev["artifacts"][0]["sealed"] = True
+        return ev
+
+    def promotion(self, stage):
+        return {"stage": stage, "when": "2026-01-02T00:00:00Z", "by": "releaser@aerospike.com",
+                "repos": [f"clients-pypi-{stage.lower()}-local"], "mutable": False,
+                "seals": "f" * 64}
+
+    def test_a_sealed_bundle_with_no_promotion_names_no_attestation(self):
+        ev = self.sealed_evidence([])
+        out = rev.render_markdown(ev, rev.document(ev))
+        self.assertIn("No promotion attestation names the seal yet", out)
+        self.assertNotIn("attestation names the seal by its own digest", out)
+        self.assertNotIn("terminal attestation", out)
+        # The dangling colon that used to introduce an attestation block that never rendered.
+        self.assertNotIn("in one action:", out)
+
+    def test_immutability_cites_promotion_records_only_where_they_exist(self):
+        unpromoted = rev.claim_rows(self.sealed_evidence([]))
+        promoted = rev.claim_rows(self.sealed_evidence([self.promotion("DEV")]))
+        title = "The contents could not change after sealing"
+        self.assertNotIn("promotion records", next(r[1] for r in unpromoted if r[0] == title))
+        self.assertIn("promotion records", next(r[1] for r in promoted if r[0] == title))
+
+    def test_a_promoted_bundle_names_the_stage_that_authorized_it(self):
+        ev = self.sealed_evidence([self.promotion("DEV")])
+        out = rev.render_markdown(ev, rev.document(ev))
+        self.assertIn("The DEV attestation names the seal by its own digest", out)
+        self.assertNotIn("No promotion attestation", out)
+
 
 class CollectUnbundled(unittest.TestCase):
     """collect() end to end against stubbed transport, for an artifact still in DEV.

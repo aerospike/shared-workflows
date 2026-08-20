@@ -576,9 +576,11 @@ def claim_rows(evidence):
                      f'The {last["stage"]} promotion attestation names the seal by digest, and '
                      "the seal names this file by SHA-256", scope])
     if evidence["release"]:
-        rows.append(["The contents could not change after sealing",
-                     f'A DSSE in-toto statement over all {evidence["release"]["seal"]["subjects"]} '
-                     "digests, and promotion records carrying `mutable: false`", scope])
+        backing = ("A DSSE in-toto statement over all "
+                   f'{evidence["release"]["seal"]["subjects"]} digests')
+        if evidence["promotions"]:
+            backing += ", and promotion records carrying `mutable: false`"
+        rows.append(["The contents could not change after sealing", backing, scope])
     if evidence["promotions"]:
         rows.append(["The same bytes moved through every stage reached so far",
                      "The identical SHA-256 is present in each stage repository and is a subject "
@@ -722,13 +724,15 @@ def document(evidence):
         ("table", ["Step", "What the record says", "Where it lives"], custody_rows(evidence)),
     ]
     if release:
+        bound = ("Each link is bound to the previous one by a value that cannot be edited after "
+                 f'the fact. The seal names all {release["seal"]["subjects"]} files by SHA-256, '
+                 "so any change to any file breaks the signature.")
         blocks += [
             ("h2", "Why the chain holds"),
-            ("p", "Each link is bound to the previous one by a value that cannot be edited after "
-                  f'the fact. The seal names all {release["seal"]["subjects"]} files by SHA-256, '
-                  "so any change to any file breaks the signature. The "
-                  f'{last["stage"] if last else "terminal"} attestation names the seal by its own '
-                  "digest, and covers every artifact in one action:"),
+            ("p", bound + (
+                f' The {last["stage"]} attestation names the seal by its own digest, and covers '
+                "every artifact in one action:" if last else
+                " No promotion attestation names the seal yet, so the chain stops at the seal.")),
         ]
     if last:
         indent = "\n" + " " * 18
