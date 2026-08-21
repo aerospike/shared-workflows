@@ -74,9 +74,8 @@ runs:
       run: |
         set -euo pipefail
 
-        # Token precedence: explicit input, then the environment, then an already-configured
-        # JFrog CLI. The last case is what most callers hit, since setup-jfrog-cli has
-        # usually run for OIDC before this action.
+        # Deriving from the JFrog CLI config is the common path: setup-jfrog-cli has usually
+        # run for OIDC before this action, and callers pass no token of their own.
         token="${INPUT_JFROG_TOKEN:-${JFROG_TOKEN:-}}"
         if [[ -z "$token" ]] && command -v jf >/dev/null 2>&1; then
           token=$(jf config export setup-jfrog-cli-server 2>/dev/null | base64 -d 2>/dev/null | jq -r '.accessToken // empty' || true)
@@ -105,8 +104,7 @@ runs:
           echo "document=" >>"$GITHUB_OUTPUT"
         fi
 
-        # One line per output. gsub keeps a stray newline in a finding from writing a second
-        # key into GITHUB_OUTPUT.
+        # gsub stops a newline in a finding from writing a second key into GITHUB_OUTPUT.
         jq -r 'def flat: (. // "") | tostring | gsub("[\r\n]+"; " ");
                "verdict=\(.status | flat)",
                "reason=\(.reason | flat)",

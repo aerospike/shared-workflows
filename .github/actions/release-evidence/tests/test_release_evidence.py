@@ -360,7 +360,7 @@ class ClaimsRequireRecords(unittest.TestCase):
         self.assertIn("No promotion attestation names the seal yet", out)
         self.assertNotIn("attestation names the seal by its own digest", out)
         self.assertNotIn("terminal attestation", out)
-        # The dangling colon that used to introduce an attestation block that never rendered.
+        # A colon introducing an attestation block that does not exist.
         self.assertNotIn("in one action:", out)
 
     def test_immutability_cites_promotion_records_only_where_they_exist(self):
@@ -550,15 +550,15 @@ class Verdict(unittest.TestCase):
         self.assertIn("STAGE and PROD lie ahead", line)
 
     def test_the_keys_the_action_publishes_as_outputs_all_exist(self):
-        # action.yaml reads these by name out of --verdict-path. A rename here has to break a
-        # test rather than silently empty a gate's `if:`.
+        # action.yaml reads these by name, so a rename must break a test rather than silently
+        # empty a gate's `if:`.
         call = rev.verdict(self.evidence(["DEV", "TEST"], ["STAGE", "PROD"]))
         self.assertEqual(set(call), {"status", "reason", "finding", "problems", "gaps",
                                      "warnings", "complete"})
 
     def test_the_verdict_travels_in_the_evidence_so_markdown_callers_can_gate(self):
-        # --verdict-path serves it whatever --format is, which only works because collect()
-        # stores it rather than the renderer computing it.
+        # The verdict has to live in the evidence, not in the renderer, for --verdict-path to
+        # serve it under --format markdown.
         ev = self.evidence(["DEV", "TEST", "STAGE", "PROD"], [])
         ev["verdict"] = rev.verdict(ev)
         self.assertEqual(rev.verdict_block(ev, [], [])[1], "info")
@@ -580,8 +580,7 @@ class TheVerifyCommandRuns(unittest.TestCase):
         self.assertEqual(rev.pasteable(art), "maven/com/aerospike/x/1.0/x-1.0.jar")
 
     def test_a_type_with_no_virtual_falls_back_to_the_most_public_repository(self):
-        # generic is absent from VIRTUAL, so `public` is None and the bundle-relative path alone
-        # resolves to nothing.
+        # generic is absent from VIRTUAL, so `public` is None.
         art = self.art(repos=["connect-generic-dev-local", "connect-generic-prod-public-local",
                               "connect-generic-stage-local", "connect-release-bundles-v2"],
                        path="aerospike-trino/4.7.4-483/aerospike-trino-4.7.4-483.zip")
@@ -591,11 +590,8 @@ class TheVerifyCommandRuns(unittest.TestCase):
             "aerospike-trino-4.7.4-483.zip")
 
     def test_a_repository_naming_no_stage_is_still_named_rather_than_dropped(self):
-        # absctl really ships from ecosystem-container-prod-local, whose key names no stage this
-        # rule recognizes. JFrog labels that repository PROD in its `environments` field, which
-        # the key cannot be made to say: devops-containers-prod-local is labelled DEV. So the
-        # unranked repository sorts last and the command names a copy that resolves, rather than
-        # a bare path that resolves to nothing.
+        # ecosystem-container-prod-local is real and its key names no stage. Do not add `prod`
+        # to REPO_ENV_STAGE to fix that: devops-containers-prod-local is labelled DEV.
         art = self.art(type="docker", repos=["ecosystem-container-dev-local",
                                              "ecosystem-container-prod-local",
                                              "ecosystem-release-bundles-v2"],
@@ -635,8 +631,7 @@ class TheTagTheReaderNamedWins(unittest.TestCase):
     """A floating tag is shorter than the release version, so length alone picks the wrong one."""
 
     def published(self, paths, version):
-        # aerospike-server 7.1.0.25 really sits under 7.1, 7.1.0.25 and 7.1.0.25-20260603181409
-        # in database-docker-prod-public-local.
+        # The three tag shapes aerospike-server 7.1.0.25 actually has in prod-public.
         hits = {"results": [{"repo": "database-docker-prod-public-local", "path": path,
                              "name": "list.manifest.json", "properties": []} for path in paths]}
         saved = rev.aql
@@ -882,9 +877,8 @@ class SeparationOfDuties(unittest.TestCase):
         self.assertEqual(ev["duties"]["violations"], [])
 
     def test_an_unreadable_map_warns_rather_than_failing_for_a_missing_record(self):
-        # Every promotion record exists and names an identity. What is absent is the step from
-        # an identity to a person, which is a reader capability, not evidence. Treating it as a
-        # gap failed all 30 of the audited PROD releases when run on a CI GITHUB_TOKEN.
+        # The records exist and name identities. Only the identity-to-person step is missing,
+        # which is a reader capability, not evidence.
         rev.saml_identities = lambda _org: {}
         ev = self.evidence(pr=self.pr("abhilashmandaliya", ["mphanias"]),
                            created_by="token:gh-citrusleaf/pvinh-spike",
@@ -897,8 +891,8 @@ class SeparationOfDuties(unittest.TestCase):
         self.assertEqual(rev.verdict(ev)["status"], "PASS WITH WARNING")
 
     def test_a_readable_map_missing_one_login_says_so_differently(self):
-        # A login the directory does not hold is a bot or an ops account, not a missing scope,
-        # so the warning must not send a reader looking for a permission to grant.
+        # A login the directory lacks is a bot or ops account, not a missing scope, so the
+        # warning must not send a reader hunting for a permission to grant.
         rev.saml_identities = lambda _org: {
             "mphanias": {"email": "pmokrala@aerospike.com", "emails": {"pmokrala@aerospike.com"},
                          "name": "Phaniram Mokrala"}}

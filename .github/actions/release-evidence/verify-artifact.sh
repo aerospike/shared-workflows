@@ -3,9 +3,8 @@
 #
 #   JFROG_TOKEN=<jfrog token> ./verify-artifact.sh <repo/path | full URL | sha256:HEX>
 #
-# For a container, point it at the tag's list.manifest.json, whose sha256 is the
-# index digest that GitHub attests. Set REPO=owner/name if the artifact carries
-# nothing that identifies its source repository.
+# For a container, point it at the tag's list.manifest.json: that index digest is the one
+# GitHub attests. Set REPO=owner/name when the artifact identifies no source repository.
 #
 # Needs curl, jq, and gh.
 set -uo pipefail
@@ -24,7 +23,6 @@ aql() { curl -sS -H "Authorization: Bearer $TOKEN" -H "Content-Type: text/plain"
 uri() { jq -rn --arg s "$1" '$s|@uri'; }
 step() { printf '\n===== %s =====\n' "$1"; }
 
-# ------------------------------------------------------------------- gather
 if [[ $path == sha256:* ]]; then
     sha="${path#sha256:}"
     props='{}'
@@ -37,8 +35,7 @@ else
     props=$(jf "artifactory/api/storage/$path?properties" | jq '.properties // {}')
 fi
 
-# Find every physical repo holding these bytes. This resolves a public virtual to the
-# locals behind it, and the release bundle repo names the JFrog project.
+# Resolves a public virtual to the locals behind it. The release bundle repo names the project.
 hits=$(aql "items.find({\"sha256\":\"$sha\"}).include(\"repo\",\"path\",\"name\")")
 rb_repo=$(jq -r '[.results[] | select(.repo|endswith("-release-bundles-v2"))][0].repo // empty' <<<"$hits")
 rb_path=$(jq -r '[.results[] | select(.repo|endswith("-release-bundles-v2"))][0].path // empty' <<<"$hits")
@@ -66,7 +63,6 @@ if [[ -n $bname && -n $bnum ]]; then
     fi
 fi
 
-# Source repository: the VCS block, else the CI run URL, else an override.
 gh_repo="${REPO-}"
 [[ -z $gh_repo ]] && gh_repo=$(jq -r 'if (.["vcs.provider"]//[""])[0] == "github"
   then ((.["vcs.org"]//[""])[0] + "/" + (.["vcs.repo"]//[""])[0]) else "" end
@@ -75,8 +71,7 @@ gh_repo="${REPO-}"
     sed -E 's#^https://github.com/##; s#\.git$##')
 [[ -z $gh_repo && -n $run ]] && gh_repo=$(sed -E 's#^https://github.com/([^/]+/[^/]+)/.*#\1#' <<<"$run")
 
-# A container carries its own origin in OCI labels, which survives when the
-# manifest has no build.* properties.
+# OCI labels carry the origin when a manifest has no build.* properties.
 labels='{}'
 if [[ -z $gh_repo && $path == *manifest.json ]]; then
     img="${path%/*/*}"
@@ -97,7 +92,6 @@ att=''
 [[ -n $gh_repo ]] && att=$(gh api "repos/$gh_repo/attestations/sha256:$sha" 2>/dev/null |
     jq -r '.attestations[0].bundle.dsseEnvelope.payload // empty' | base64 -d 2>/dev/null)
 
-# The commit: the VCS block, else the OCI label, else the attestation.
 commit=''
 source='nowhere: no VCS block, no image label, no attestation'
 [[ -n $vcs ]] && {
@@ -110,7 +104,6 @@ source='nowhere: no VCS block, no image label, no attestation'
     '.predicate.buildDefinition.resolvedDependencies[0].digest.gitCommit // ""' <<<"$att") &&
     [[ -n $commit ]] && source='GitHub attestation, not in build-info'
 
-# ------------------------------------------------------------------- report
 step "The artifact"
 jq -n --arg p "$path" --arg s "$sha" --arg b "${bname-}" --arg n "${bnum-}" --arg r "${gh_repo-}" \
     '{path: $p, sha256: $s, build: $b, number: $n, source_repo: $r}'

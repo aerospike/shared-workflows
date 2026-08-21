@@ -7,13 +7,9 @@
     --about     one clause describing what the thing is, used in the opening sentence
     --format    markdown (default) | json
     --as-of     the date to report as, default today, since records accrue as a release moves
-    --verdict-path  also write the verdict object here, whatever --format is, so a caller
-                can gate on it without asking for the JSON document
+    --verdict-path  write the verdict object here as well, whatever --format is
 
 JFrog auth comes from JFROG_TOKEN. GitHub auth comes from the gh CLI, or GITHUB_TOKEN.
-
-The document is assembled as a list of blocks, then rendered, so the shape of the
-document stays separate from how it is laid out.
 """
 import argparse
 import base64
@@ -30,41 +26,31 @@ import urllib.request
 
 JF = os.environ.get("JF_BASE", "https://aerospike.jfrog.io")
 
-# A companion file describes a primary artifact rather than being one.
 COMPANION = (".asc", ".prov", ".sig", ".sha256", ".md5")
-# The public virtual repository for each JFrog package type.
 VIRTUAL = {"docker": "docker", "maven": "maven", "helm": "helm", "debian": "deb", "yum": "rpm",
            "pypi": "pypi", "npm": "npm", "go": "go", "nuget": "nuget", "gems": "gems"}
-# Every package type JFrog can report, because an absent key falls through to the raw type and
-# renders as "shipped as a generic" or "2 nugets".
+# An absent key falls through to the raw package type, so every type JFrog reports needs one.
 NOUN = {"docker": "container", "oci": "container", "maven": "jar", "helm": "Helm chart",
         "debian": "deb package", "yum": "rpm package", "pypi": "Python package",
         "npm": "npm package", "go": "Go module", "generic": "file",
         "nuget": "NuGet package", "gems": "Ruby gem", "cargo": "Rust crate"}
-# An immutable promoted tag carries a build timestamp; the clean tag is what a consumer pulls.
-# Both separators occur: `8.1.3.0_20260721T101500Z` and `8.1.3.0-20260721101500`.
+# Both separators are in use: `8.1.3.0_20260721T101500Z` and `8.1.3.0-20260721101500`.
 TIMESTAMPED_TAG = re.compile(r"_\d{8}T\d{6}Z|-\d{14}(?!\d)")
-# Promotion stages in maturity order. INTERNAL and PROD are alternative terminal stages, so
-# neither implies the other is missing.
+# INTERNAL is absent because it is an alternative terminal stage to PROD, not a step after it.
 STAGE_ORDER = ["DEV", "TEST", "STAGE", "PREVIEW", "PROD"]
-# DEV and PREVIEW are optional by policy: a release may be built straight into TEST, and may reach
-# a customer without a preview step. Their absence is never a finding.
+# Optional by policy. Their absence is never a finding.
 OPTIONAL_STAGES = {"DEV", "PREVIEW"}
-# Separation of duties is a property of the gates a person stands at. CI building bytes and
-# promoting them to TEST is the normal path, so one identity doing both is only a finding once
-# the release has been moved somewhere a human vouched for it.
+# TEST is absent: CI building bytes and promoting them there is one identity on every release.
 SEPARATION_STAGES = {"STAGE", "PREVIEW", "PROD", "INTERNAL"}
 # A CI identity in a JFrog record: `token:[<project>-]gh-<org>/<github-actor>`.
 TOKEN_ACTOR = re.compile(r"^token:(?:[a-z0-9]+-)?gh-(?P<org>[a-z0-9-]+)/(?P<actor>.+)$")
-# The environment segment of a repository key names the stage its contents have reached, which
-# is how an artifact that was never sealed into a bundle can still be placed in the pipeline.
+# Keys naming no stage here resolve to None; JFrog's own `environments` field is authoritative
+# and disagrees for the `ecosystem-*-prod-local` family.
 REPO_ENV_STAGE = {"dev": "DEV", "test": "TEST", "stage": "STAGE",
                   "preview-public": "PREVIEW", "preview-restricted": "PREVIEW",
                   "prod-internal": "INTERNAL", "prod-public": "PROD"}
-# The type segment of a repository key, mapped to the package_type a bundle record would use.
 REPO_TYPE_PACKAGE = {"deb": "debian", "rpm": "yum", "container": "docker", "cargo": "cargo"}
-# How reachable a stage is, most public first. Deliberately not STAGE_ORDER, which is maturity:
-# INTERNAL is a terminal stage but is not somewhere a customer can pull from.
+# Reachability, not maturity: STAGE_ORDER would rank INTERNAL above STAGE.
 PUBLICITY = ["PROD", "PREVIEW", "INTERNAL", "STAGE", "TEST", "DEV"]
 
 
@@ -164,15 +150,12 @@ _SAML = {}
 def saml_identities(org):
     """A GitHub login to {email, emails, name} map from the org's directory.
 
-    Two sources, because neither alone is enough. The SAML identity provider gives the address a
-    person signs in with, which is the one JFrog usually records. The verified-domain emails give
-    every company address that person holds, and a promotion record may carry any of them, so
-    without them jmartin@ and joem@ read as two people and a one-person chain hides.
+    Both sources are needed: SAML gives the sign-in address, verified-domain gives every company
+    address, and a promotion record may carry any of them.
 
-    An Aerospike account carries its work email here rather than as a public profile email, so
-    `users/<login>` returns null for nearly everyone and no string rule links a login to a person:
-    `Klaven` is mcounts@aerospike.com. Reading either query needs an org-scoped token, which a CI
-    GITHUB_TOKEN does not have, so an empty map means unproven rather than unrelated.
+    `users/<login>` is not a substitute; its profile email is null for nearly everyone, and no
+    string rule links a login to a person (`Klaven` is mcounts@aerospike.com). Both queries need
+    read:org, which a CI GITHUB_TOKEN lacks, so an empty map means unproven, not unrelated.
     """
     if org in _SAML:
         return _SAML[org]
@@ -241,15 +224,12 @@ def classify_stages(promoted, resident):
     reached = [s for s in STAGE_ORDER if s in set(promoted) | set(resident)]
     if "INTERNAL" in promoted or "INTERNAL" in resident:
         reached.append("INTERNAL")
-    # INTERNAL and PROD are alternative terminal stages, so neither implies the other is due.
     expected = STAGE_ORDER[:-1] if "INTERNAL" in reached else STAGE_ORDER
     furthest = max((expected.index(s) for s in reached if s in expected), default=-1)
     return {
         "stages_reached": reached,
-        # Absent below the furthest point reached, so a required gate was passed over.
         "skipped_stages": [s for s in expected[:furthest + 1]
                            if s not in reached and s not in OPTIONAL_STAGES],
-        # Absent above it, so simply not promoted there yet. Expected, not an anomaly.
         "pending_stages": [s for s in expected[furthest + 1:] if s not in OPTIONAL_STAGES],
     }
 
@@ -331,8 +311,7 @@ def unbundled_artifact(target):
     props = (jf(f"artifactory/api/storage/{repo}/{inner}?properties") or {}).get("properties", {})
     return {
         "package_type": package_type_of_repo(repo),
-        # Repository-qualified, so the verify command printed at the end of the document is
-        # one a reader can paste. A bundled artifact's path is relative to the bundle instead.
+        # Repository-qualified here; a bundled artifact's path is bundle-relative instead.
         "path": f"{repo}/{inner}",
         "checksum": sha,
         "properties": [{"key": k, "values": v} for k, v in props.items()],
@@ -342,9 +321,7 @@ def unbundled_artifact(target):
 def version_hint(bundle, entry):
     """The version the caller named, used to prefer their tag over a floating one.
 
-    A bundled target states it. An unbundled one carries it as the folder holding the file, which
-    is the tag for a container and the version directory for everything else. A hint that names
-    no version scores every candidate alike, so the ordering falls back to what it was.
+    A hint that names no version scores every candidate alike, so the ordering is unaffected.
     """
     if bundle and "/" in bundle:
         return bundle.split("/", 1)[1]
@@ -353,11 +330,10 @@ def version_hint(bundle, entry):
 
 
 def project_of(repo, sha):
-    """The JFrog project holding these bytes, which a virtual repository key does not name.
+    """The JFrog project holding these bytes.
 
-    A target given as a public top-level virtual (`docker/...`, `maven/...`) carries no project
-    in its path, so the first segment reports a project that does not exist and every build-info
-    lookup made with it comes back empty.
+    A public top-level virtual (`docker/...`, `maven/...`) names no project, so its first path
+    segment is not one.
     """
     if repo.endswith("-local"):
         return repo.split("-")[0]
@@ -375,10 +351,9 @@ def project_of(repo, sha):
 def where_published(sha, pkg_type, version=None):
     """The path a consumer pulls, every repository holding these bytes, and the build link.
 
-    The link is looked up by digest rather than on one path. A container's identity is its
-    digest, and retagging on promotion leaves the clean tag without build properties while the
-    timestamped tag beside it in the same public repository keeps them, so a per-path answer
-    reports a break that a consumer holding the digest does not experience.
+    The link is looked up by digest, not per path: retagging on promotion strips build properties
+    from the clean tag while the timestamped tag beside it keeps them, so a per-path answer would
+    report a break the consumer does not experience.
     """
     hits = aql(f'items.find({{"sha256":"{sha}"}}).include('
                f'"repo","path","name","property.key","property.value")')
@@ -389,8 +364,8 @@ def where_published(sha, pkg_type, version=None):
     virtual = VIRTUAL.get(pkg_type)
     if not public or not virtual:
         return None, repos, linked
-    # The version asked about first, then a clean tag over an immutable timestamped one. Without
-    # the version check a floating `8.1` wins on length over the `8.1.3.0` the reader named.
+    # Version first, then a clean tag over a timestamped one. Dropping the version key lets a
+    # floating `8.1` win on length over the `8.1.3.0` asked for.
     public.sort(key=lambda h: (bool(version) and version not in h["path"],
                                bool(TIMESTAMPED_TAG.search(h["path"])),
                                len(h["path"])))
@@ -399,11 +374,10 @@ def where_published(sha, pkg_type, version=None):
 
 
 def most_public(repos):
-    """The furthest-promoted repository holding these bytes, which is the one to name to a reader.
+    """The furthest-promoted repository holding these bytes.
 
-    A release-bundles repository holds the record rather than the artifact, so it is never the
-    answer. A repository whose key names no stage still holds the bytes, so it ranks last rather
-    than being discarded.
+    A release-bundles repository holds the record, not the artifact, so it is never the answer.
+    A key naming no stage ranks last rather than being discarded.
     """
     candidates = [r for r in repos if not r.endswith("-release-bundles-v2")]
     if not candidates:
@@ -417,10 +391,8 @@ def most_public(repos):
 def pasteable(art):
     """A repository-qualified path for the verify command, for every artifact.
 
-    `public` names a top-level virtual and is the best answer when it exists, but it is only
-    built for a package type in VIRTUAL whose bytes reached a `prod-public` repository. Without
-    it a bundled artifact's path carries no repository, so the printed command names a path
-    nothing resolves and fails with `no sha256 for <path>`.
+    `public` exists only for a type in VIRTUAL whose bytes reached a `prod-public` repository.
+    A bundled artifact's own path carries no repository.
     """
     if art["public"]:
         return art["public"]
@@ -506,17 +478,15 @@ def collect(target, about, as_of=None):
     if release_ref:
         bundle_repo, bundle, project = release_ref
         record = jf(f"lifecycle/api/v2/release_bundle/records/{bundle}?project={project}") or {}
-        # An empty record renders as a sealed bundle of zero files signed by nobody, which reads
-        # as evidence rather than as its absence. Refuse instead.
+        # An empty record would render as a bundle of zero files signed by nobody, which reads
+        # as evidence rather than its absence.
         if not record.get("artifacts"):
             sys.exit(f"no release bundle {bundle} in project {project}")
         seal = statement(jf(f"artifactory/{bundle_repo}/{bundle}/release-bundle.json.evd")) or {}
         sealed_digests = {s["digest"]["sha256"] for s in seal.get("subject", [])}
         entries = primary_artifacts(record)
     else:
-        # No bundle holds this artifact, which is where everything sits before the first
-        # promotion. Report the artifact on its own rather than refusing, and let the absent
-        # records show up as absent.
+        # Nothing is bundled before its first promotion, so this is a stage, not an error.
         entry, origin_repo = unbundled_artifact(target)
         bundle_repo, bundle = None, None
         project = project_of(origin_repo, entry["checksum"])
@@ -540,9 +510,8 @@ def collect(target, about, as_of=None):
             pred = (statement(jf(f"artifactory/{bundle_repo}/{bundle}{child['uri']}"))
                     or {}).get("predicate", {})
             promotions.append({
-                # An attestation we cannot read or attribute is still a promotion that
-                # happened. Naming it UNKNOWN keeps it visible without letting it count as
-                # a stage reached, which dropping it silently would not.
+                # UNKNOWN keeps an unreadable attestation visible without counting it as a
+                # stage reached. Dropping it silently would hide a promotion that happened.
                 "stage": pred.get("target", {}).get("environment") or "UNKNOWN",
                 "when": pred.get("timestamp"),
                 "by": pred.get("createdBy"),
@@ -644,9 +613,8 @@ def collect(target, about, as_of=None):
     attested = sorted({a["type"] for a in artifacts if a["attestation"]})
     stages = [p["stage"] for p in promotions]
 
-    # Where the bytes sit is a second, independent reading of maturity, and the only one
-    # available before a bundle exists. A promotion record is the stronger claim; repository
-    # residence still places the artifact in the pipeline.
+    # Residence is the only reading available before a bundle exists. A promotion record is the
+    # stronger claim.
     resident = sorted({stage_of_repo(r) for a in artifacts for r in a["repos"]} - {None},
                       key=lambda s: STAGE_ORDER.index(s) if s in STAGE_ORDER else len(STAGE_ORDER))
     evidence = {
@@ -789,8 +757,8 @@ def resolve_identities(evidence):
     Every address a person holds folds onto one of them, so a promotion recorded against a second
     company address still reads as the same person as the token that built the bytes.
 
-    Also reports whether the directory could be read at all. An empty directory and a directory
-    missing one login mean different things, and only the first is fixable by granting a scope.
+    Also reports whether the directory was readable: an empty one and one missing a single login
+    mean different things.
     """
     orgs = {t.group("org") for t in
             (TOKEN_ACTOR.match(who) for _, who in acting_roles(evidence)) if t}
@@ -860,9 +828,8 @@ def duties(evidence):
         # A second login is not a second person, so the identity map overrides a login comparison.
         evidence["derived"]["independently_approved"] = False
 
-    # A failure is a control that did not happen: nobody but the author looked at this before it
-    # shipped. A warning is a thinner chain that still had a second person in it, which costs
-    # depth rather than the control itself, so it must not read like the same thing.
+    # A failure means nobody but the author looked at this. A warning means a second person was
+    # in the chain and only depth was lost, so the two must not read alike.
     failures, warnings = [], []
     if last and publisher and len(roles) > 1 and len(resolved) == 1 and not unproven:
         idents = phrase(f"`{w}`" for w in dict.fromkeys(w for _, w in roles))
@@ -938,9 +905,8 @@ def duty_rows(evidence):
 def claim_rows(evidence):
     derived, scope, rows = evidence["derived"], type_scope(evidence), []
     last = terminal(evidence)
-    # Only claims with a record behind them belong here. An artifact that has not been sealed
-    # or promoted supports none of the custody claims, and saying otherwise would be the one
-    # failure this document cannot afford.
+    # An unsealed, unpromoted artifact supports none of these claims. Rendering one anyway is
+    # the one failure this document cannot afford.
     if last:
         rows.append(["These bytes are the ones a named identity authorized for release",
                      f'The {last["stage"]} promotion attestation names the seal by digest, and '
@@ -993,8 +959,7 @@ def gap_rows(evidence):
     """
     derived, rows = evidence["derived"], []
     reached = set(derived["stages_reached"])
-    # A bundle is cut at the DEV to TEST gate, so an artifact still in DEV has nothing to seal it
-    # yet and that absence is the normal state rather than a defect.
+    # A bundle is cut at the DEV to TEST gate, so nothing in DEV has one yet.
     if not derived["sealed"] and reached - {"DEV"}:
         rows.append(["A release bundle holding these bytes",
                      "That these bytes are fixed and travel as a unit. Nothing has been sealed, "
@@ -1004,8 +969,7 @@ def gap_rows(evidence):
         rows.append(["A recorded source commit",
                      "That these bytes came from a known revision. No build-info VCS block, image "
                      "label or attestation records one, so nothing ties this release to source."])
-    # A candidate can be built from a branch before its merge, so a pull request is only due once
-    # somebody has vouched for the bytes by moving them to STAGE or beyond.
+    # A candidate can be built from a branch pre-merge, so a PR is only due from STAGE up.
     elif not evidence["pr"] and reached & SEPARATION_STAGES:
         rows.append(["The pull request that authorized the change",
                      "That a review preceded the build. The commit is recorded, but no merged "
@@ -1079,9 +1043,7 @@ def failures(evidence):
 def warning_rows(evidence):
     """Thinner than it should be, and not a control failure.
 
-    Where a record is recoverable by another route, or a control held with less depth than it
-    could have, the release still stands. Only what is genuinely absent or genuinely wrong may
-    reach the verdict as a failure.
+    Only what is genuinely absent or genuinely wrong may reach the verdict as a failure.
     """
     duty = evidence.get("duties") or {}
     rows = list(duty.get("warnings", []))
@@ -1116,10 +1078,8 @@ def warning_rows(evidence):
 def verdict(evidence):
     """The call on this release, and the one finding that decided it.
 
-    Missing evidence fails: a claim nobody can check is worth no more than a claim that is false.
-    But a release that has not reached the stages which would produce more evidence has nothing
-    missing, so it is ON TRACK rather than passed. A server build sitting in TEST with no commit
-    recorded is already wrong; the same build with everything TEST requires is simply not finished.
+    Missing evidence fails, but a release that has not reached the stages which would produce
+    that evidence is ON TRACK rather than passed.
     """
     problems, gaps = failures(evidence), gap_rows(evidence)
     warnings = warning_rows(evidence)
