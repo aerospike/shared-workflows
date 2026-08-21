@@ -6,6 +6,7 @@
     <target>    repo/path, a full URL, sha256:HEX, or bundle:NAME/VERSION@PROJECT
     --about     one clause describing what the thing is, used in the opening sentence
     --format    markdown (default) | json
+    --as-of     the date to report as, default today, since records accrue as a release moves
 
 JFrog auth comes from JFROG_TOKEN. GitHub auth comes from the gh CLI, or GITHUB_TOKEN.
 
@@ -14,6 +15,7 @@ document stays separate from how it is laid out.
 """
 import argparse
 import base64
+import datetime
 import json
 import os
 import re
@@ -381,7 +383,7 @@ def primary_artifacts(record):
     return out
 
 
-def collect(target, about):
+def collect(target, about, as_of=None):
     release_ref = find_release(target)
     labels_root = None
 
@@ -507,12 +509,18 @@ def collect(target, about):
         if found:
             head = found[0]
             reviews = gh(f'repos/{source["repo"]}/pulls/{head["number"]}/reviews') or []
+            approved = [r for r in reviews if r.get("state") == "APPROVED"]
             pull_request = {
                 "number": head["number"], "title": head["title"],
                 "author": head["user"]["login"], "merged_at": head.get("merged_at"),
+                "opened_at": head.get("created_at"),
                 "repo": head["base"]["repo"]["full_name"],
-                "approvers": sorted({r["user"]["login"] for r in reviews
-                                     if r.get("state") == "APPROVED"}),
+                "approvers": sorted({r["user"]["login"] for r in approved}),
+                # The first approval each person gave, so the recorded time is the one that
+                # cleared the gate rather than a later re-review.
+                "approved_at": {r["user"]["login"]: r.get("submitted_at") for r in
+                                sorted(approved, key=lambda r: r.get("submitted_at") or "",
+                                       reverse=True)},
             }
 
     types = sorted({a["type"] for a in artifacts})
@@ -526,6 +534,7 @@ def collect(target, about):
                       key=lambda s: STAGE_ORDER.index(s) if s in STAGE_ORDER else len(STAGE_ORDER))
     evidence = {
         "about": about,
+        "as_of": as_of or datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d"),
         "project": project,
         "release": {
             "name": bundle.split("/")[0], "version": bundle.split("/")[1], "bundle": bundle,
@@ -589,7 +598,8 @@ def type_scope(evidence):
 
 
 def when(timestamp):
-    return (timestamp or "").replace("T", " ")[:19]
+    """A record's own timestamp, to the second, or an em space where the record carries none."""
+    return (timestamp or "").replace("T", " ")[:19] or "not recorded"
 
 
 def terminal(evidence):
@@ -770,19 +780,23 @@ def duty_rows(evidence):
 
     pr, rows = evidence["pr"], []
     if pr:
-        rows.append(["Wrote the change", named(pr["author"]), "GitHub commit authorship"])
+        rows.append(["Wrote the change", named(pr["author"]), when(pr.get("opened_at")),
+                     "GitHub commit authorship"])
         for approver in pr["approvers"]:
             rows.append(["Approved the change", named(approver),
+                         when((pr.get("approved_at") or {}).get(approver)),
                          "GitHub review, required by branch protection"])
     if evidence["release"]:
         rows.append(["Built and sealed", named(evidence["release"]["created_by"]),
+                     when(evidence["release"].get("created")),
                      "A short-lived CI OIDC token, with no stored secret"])
     for p in evidence["promotions"][:-1]:
-        rows.append([f'Promoted to {p["stage"]}', named(p["by"]), "Signed promotion attestation"])
+        rows.append([f'Promoted to {p["stage"]}', named(p["by"]), when(p["when"]),
+                     "Signed promotion attestation"])
     last = terminal(evidence)
     if last:
         rows.append([f'Authorized the {last["stage"]} publish', named(last["by"]),
-                     f'Signed {last["stage"]} promotion attestation'])
+                     when(last["when"]), f'Signed {last["stage"]} promotion attestation'])
     return rows
 
 
@@ -1012,6 +1026,24 @@ def verdict_block(evidence, problems, gaps):
     return ("panel", "warning", f'**{lead}. {rows[0][0]}.** {rows[0][1]}{more}{trailer}')
 
 
+def as_of_line(evidence):
+    """When this was reported, and the newest record it rests on.
+
+    A release keeps accruing records after it ships, so an evidence document is only true as of
+    a moment. Saying which moment, and what the newest record was then, lets a reader tell a
+    stale report from a release that never moved again.
+    """
+    last, release = terminal(evidence), evidence["release"]
+    if last and last["when"]:
+        newest = f'the {last["stage"]} promotion of {when(last["when"])} UTC'
+    elif release and release.get("created"):
+        newest = f'the bundle seal of {when(release["created"])} UTC'
+    else:
+        newest = "the build itself"
+    return (f'Reported as of {evidence.get("as_of", "an unrecorded date")}, when the newest '
+            f'record behind it was {newest}.')
+
+
 def document(evidence):
     """The document as blocks, so markdown and Confluence cannot drift apart."""
     release, last = evidence["release"], terminal(evidence)
@@ -1023,7 +1055,8 @@ def document(evidence):
         blocks = [
             verdict_block(evidence, problems, gaps),
             ("p", f'{release["name"]} {release["version"]} shipped as {nouns(evidence)}'
-                  + (f' from commit `{commit[:8]}`.' if commit else ", no commit recorded.")),
+                  + (f' from commit `{commit[:8]}`.' if commit else ", no commit recorded.")
+                  + f" {as_of_line(evidence)}"),
             ("h2", "The release"),
             ("p", f'[{release["name"]} {release["version"]}]({ui})'
                   + (f', {evidence["about"]}' if evidence["about"] else "") + "."),
@@ -1032,7 +1065,7 @@ def document(evidence):
         blocks = [
             verdict_block(evidence, problems, gaps),
             ("p", f"{subject(evidence)} has not been sealed into a release bundle, so what "
-                  "follows is what the build recorded about it."),
+                  f"follows is what the build recorded about it. {as_of_line(evidence)}"),
             ("h2", "The artifact"),
             ("p", f"`{evidence['artifacts'][0]['path']}` in the "
                   f"`{evidence['project']}` project"
@@ -1077,7 +1110,7 @@ def document(evidence):
                   + ("person appears" if duty.get("distinct") == 1 else "people appear")
                   + " so far, resolved through the org identity map, so a CI token and a user "
                     "account naming one human count once."),
-            ("table", ["Role", "Identity", "Recorded by"], held),
+            ("table", ["Role", "Identity", "When (UTC)", "Recorded by"], held),
         ]
     if duty.get("separated"):
         blocks.append(("p", "The publish was authorized by someone who did not write, approve or "
@@ -1156,9 +1189,10 @@ def main():
     parser.add_argument("target")
     parser.add_argument("--about", default="")
     parser.add_argument("--format", choices=("markdown", "json"), default="markdown")
+    parser.add_argument("--as-of", default=None)
     args = parser.parse_args()
 
-    evidence = collect(args.target, args.about)
+    evidence = collect(args.target, args.about, args.as_of)
     if args.format == "json":
         print(json.dumps(evidence, indent=2))
     else:

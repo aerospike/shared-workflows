@@ -550,6 +550,52 @@ class Verdict(unittest.TestCase):
         self.assertIn("STAGE and PROD lie ahead", line)
 
 
+class TimesComeFromTheRecords(unittest.TestCase):
+    """Every time shown is the timestamp of the record that names the actor, not a guess."""
+
+    def evidence(self):
+        return {
+            "release": {"created_by": "token:gh-citrusleaf/builder",
+                        "created": "2026-08-07T16:36:27.000Z"},
+            "pr": {"number": 7, "title": "t", "author": "writer", "approvers": ["reviewer"],
+                   "merged_at": "2026-08-06T09:00:00Z", "opened_at": "2026-08-05T08:00:00Z",
+                   "approved_at": {"reviewer": "2026-08-06T08:30:00Z"},
+                   "repo": "citrusleaf/a-repo"},
+            "promotions": [{"stage": "TEST", "when": "2026-08-07T16:42:02.000Z", "by": "ci",
+                            "repos": [], "mutable": False, "seals": "f" * 64},
+                           {"stage": "PROD", "when": "2026-08-17T17:52:22.000Z", "by": "releaser",
+                            "repos": [], "mutable": False, "seals": "f" * 64}],
+            "as_of": "2026-08-21", "artifacts": [], "duties": {"people": {}, "names": {}},
+            "derived": {"stages_reached": ["TEST", "PROD"]},
+        }
+
+    def test_each_role_carries_the_time_of_its_own_record(self):
+        times = {r[0]: r[2] for r in rev.duty_rows(self.evidence())}
+        self.assertEqual(times["Wrote the change"], "2026-08-05 08:00:00")
+        self.assertEqual(times["Approved the change"], "2026-08-06 08:30:00")
+        self.assertEqual(times["Built and sealed"], "2026-08-07 16:36:27")
+        self.assertEqual(times["Promoted to TEST"], "2026-08-07 16:42:02")
+        self.assertEqual(times["Authorized the PROD publish"], "2026-08-17 17:52:22")
+
+    def test_a_record_with_no_timestamp_says_so_rather_than_showing_blank(self):
+        ev = self.evidence()
+        ev["pr"]["approved_at"] = {}
+        times = {r[0]: r[2] for r in rev.duty_rows(ev)}
+        self.assertEqual(times["Approved the change"], "not recorded")
+
+    def test_the_as_of_line_names_the_newest_record(self):
+        line = rev.as_of_line(self.evidence())
+        self.assertIn("Reported as of 2026-08-21", line)
+        self.assertIn("the PROD promotion of 2026-08-17 17:52:22 UTC", line)
+
+    def test_the_as_of_line_falls_back_to_the_seal_then_the_build(self):
+        ev = self.evidence()
+        ev["promotions"] = []
+        self.assertIn("the bundle seal of 2026-08-07 16:36:27 UTC", rev.as_of_line(ev))
+        ev["release"] = None
+        self.assertIn("the build itself", rev.as_of_line(ev))
+
+
 class SeparationOfDuties(unittest.TestCase):
     """A CI token and a user account can name one human, and only the identity map can tell.
 
