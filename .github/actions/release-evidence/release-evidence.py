@@ -850,7 +850,7 @@ def claim_rows(evidence):
 
 
 def gap_rows(evidence):
-    """What an auditor would ask for that no record answers, given where this has got to.
+    """What should exist at this point and does not.
 
     Every row has to be false for a release doing everything right at its current position. A
     record a later stage would produce is not missing, it is simply not due, and reporting it
@@ -1001,7 +1001,7 @@ def verdict_block(evidence, problems, gaps):
     if call["status"] == "PASS":
         return ("panel", "info",
                 "**PASS.** Every step left a record, every claim below has one behind it, and "
-                "nothing an auditor would ask for is absent.")
+                "no record that should exist is absent.")
     if call["status"] == "ON TRACK":
         return ("panel", "info",
                 "**ON TRACK.** Correct so far. Everything the pipeline should have recorded by "
@@ -1019,9 +1019,8 @@ def verdict_block(evidence, problems, gaps):
         f' {extra} further {"problems" if problems else "records"} below.')
     trailer = ""
     if problems and gaps:
-        trailer = (f' {len(gaps)} record an auditor would ask for also does not exist.'
-                   if len(gaps) == 1 else
-                   f' {len(gaps)} records an auditor would ask for also do not exist.')
+        trailer = (f' {len(gaps)} record that should exist also does not.' if len(gaps) == 1
+                   else f' {len(gaps)} records that should exist also do not.')
     lead = "FAIL" if problems else "FAIL, evidence incomplete"
     return ("panel", "warning", f'**{lead}. {rows[0][0]}.** {rows[0][1]}{more}{trailer}')
 
@@ -1098,9 +1097,8 @@ def document(evidence):
     if last and last["stage"] != "UNKNOWN":
         where = ("a public repository" if any("prod-public" in r for r in last["repos"])
                  else f'the {last["stage"].lower()} registry')
-        blocks.append(("p", f"An auditor can therefore start at any of these artifacts in {where} "
-                            "and walk back to the pull request that authorized it, checking a hash "
-                            "at every hop."))
+        blocks.append(("p", f"Start at any of these artifacts in {where} and the chain walks back "
+                            "to the pull request that authorized it, one checkable hash per hop."))
     held = duty_rows(evidence)
     duty = evidence.get("duties") or {}
     if held:
@@ -1119,8 +1117,7 @@ def document(evidence):
     if claims:
         blocks += [
             ("h2", "What we can verify"),
-            ("p", "Each row is a claim an auditor might make, the record that backs it, and which "
-                  "of the artifacts it holds for."),
+            ("p", "Each claim, the record behind it, and which of the artifacts it holds for."),
             ("table", ["Claim", "Backed by", "Holds for"], claims),
         ]
     else:
@@ -1137,9 +1134,9 @@ def document(evidence):
     if gaps:
         blocks += [
             ("h2", "EVIDENCE MISSING"),
-            ("p", "Each row is something an auditor would ask for that no record answers. A "
-                  "release that did everything right has none of these."),
-            ("table", ["Missing", "What it would let us verify"], gaps),
+            ("p", "Each record that should exist and does not. A release that did everything "
+                  "right has none of these."),
+            ("table", ["Missing", "What it would prove"], gaps),
         ]
     if warning_rows(evidence):
         blocks += [
