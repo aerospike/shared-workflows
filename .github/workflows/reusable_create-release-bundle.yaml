@@ -205,7 +205,9 @@ jobs:
             --repository "${{ github.repository }}"
             --run-id "${{ github.run_id }}"
             --job-name "${{ github.job }}"
+            --called-workflow "reusable_create-release-bundle.yaml"
             --called-workflow-ref "${{ inputs.gh-workflows-ref }}"
+            --called-detail-label "Bundle"
             --bundle-name "${{ inputs.jf-bundle-name }}"
             --bundle-version "${{ inputs.version }}"
           )

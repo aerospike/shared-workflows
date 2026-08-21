@@ -138,6 +138,7 @@ jobs:
           egress-policy: audit
 
       - name: Install xmllint and Verify
+        id: install-xmllint
         shell: bash
         run: |
           echo "Attempting to install libxml2-utils for xmllint..."
@@ -171,6 +172,7 @@ jobs:
           oidc-audience: ${{ inputs.oidc-audience }}
 
       - name: Check JFrog Configuration
+        id: jf-check
         run: |
           jf c show
           jf rt ping
@@ -298,3 +300,38 @@ jobs:
           path: structured_build_artifacts/.maven-bundle-metadata.json
           include-hidden-files: true
           if-no-files-found: error
+
+      - name: Build Slack failure child blocks
+        id: slack_fail_detail
+        if: failure() && github.repository != 'aerospike/shared-workflows' && vars.SLACK_CHANNEL_ID != ''
+        run: |
+          set -euo pipefail
+          args=(
+            --repository "${{ github.repository }}"
+            --run-id "${{ github.run_id }}"
+            --job-name "${{ github.job }}"
+            --called-workflow "reusable_deploy-artifacts.yaml"
+            --called-workflow-ref "${{ inputs.gh-workflows-ref }}"
+            --called-detail-label "Build"
+            --bundle-name "${{ inputs.jf-build-name }}"
+            --bundle-version "${{ inputs.version }}"
+          )
+          [[ "${{ steps.install-xmllint.outcome }}" == "failure" ]] && args+=(--failed-step "Install xmllint and Verify")
+          [[ "${{ steps.jf-check.outcome }}" == "failure" ]] && args+=(--failed-step "Check JFrog Configuration")
+          [[ "${{ steps.detect-artifacts.outcome }}" == "failure" ]] && args+=(--failed-step "Detect artifact types")
+          [[ "${{ steps.deploy.outcome }}" == "failure" ]] && args+=(--failed-step "Deploy Artifacts")
+          [[ "${{ steps.upload-bundle-metadata.outcome }}" == "failure" ]] && args+=(--failed-step "Upload Maven bundle metadata")
+          python3 "${{ inputs.gh-checkout-path }}/.github/workflows/lib/build_slack_failure_child_blocks.py" "${args[@]}"
+
+      - name: Notify Slack on failure
+        if: failure() && github.repository != 'aerospike/shared-workflows' && vars.SLACK_CHANNEL_ID != '' && steps.slack_fail_detail.outcome == 'success'
+        continue-on-error: true
+        uses: ./.github/actions/notify-slack
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+        with:
+          message-type: fail
+          title: Deploy failed
+          subtitle: ${{ inputs.jf-build-name }}@${{ inputs.version }}
+          slack-channel-id: ${{ vars.SLACK_CHANNEL_ID }}
+          child-blocks: ${{ steps.slack_fail_detail.outputs.child_blocks_json }}

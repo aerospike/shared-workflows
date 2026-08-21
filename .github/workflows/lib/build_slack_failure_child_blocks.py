@@ -56,14 +56,19 @@ def _called_info(
     *,
     called_workflow: str,
     called_workflow_ref: str,
-    bundle_name: str,
-    bundle_version: str,
+    detail_label: str,
+    detail_name: str,
+    detail_version: str,
 ) -> str:
-    return (
-        f"*Workflow*\n`{called_workflow}`\n"
-        f"*shared-workflows ref*\n`{called_workflow_ref}`\n"
-        f"*Bundle*\n`{bundle_name}` @ `{bundle_version}`"
-    )
+    lines = [f"*Workflow*\n`{called_workflow}`"]
+    if called_workflow_ref:
+        lines.append(f"*shared-workflows ref*\n`{called_workflow_ref}`")
+    if detail_name:
+        if detail_version:
+            lines.append(f"*{detail_label}*\n`{detail_name}` @ `{detail_version}`")
+        else:
+            lines.append(f"*{detail_label}*\n`{detail_name}`")
+    return "\n".join(lines)
 
 
 def build_child_blocks(
@@ -142,14 +147,19 @@ def build_parser() -> argparse.ArgumentParser:
         help="shared-workflows ref used by the caller (gh-workflows-ref).",
     )
     parser.add_argument(
+        "--called-detail-label",
+        default="Bundle",
+        help="Label for the called-workflow detail line in Slack child blocks.",
+    )
+    parser.add_argument(
         "--bundle-name",
         default=_env_str("JF_BUNDLE_NAME"),
-        help="Release bundle name for the called workflow context.",
+        help="Primary detail value for the called workflow context.",
     )
     parser.add_argument(
         "--bundle-version",
         default=_env_str("JF_VERSION"),
-        help="Release bundle version for the called workflow context.",
+        help="Secondary detail value for the called workflow context.",
     )
     parser.add_argument(
         "--failed-summary-max-chars",
@@ -211,8 +221,9 @@ def main(argv: list[str] | None = None) -> int:
     called = _called_info(
         called_workflow=args.called_workflow,
         called_workflow_ref=args.called_workflow_ref,
-        bundle_name=args.bundle_name,
-        bundle_version=args.bundle_version,
+        detail_label=args.called_detail_label,
+        detail_name=args.bundle_name,
+        detail_version=args.bundle_version,
     )
     blocks = build_child_blocks(
         run_url=_run_url(server_url, args.repository, args.run_id),

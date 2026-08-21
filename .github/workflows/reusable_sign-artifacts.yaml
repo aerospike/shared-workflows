@@ -59,6 +59,8 @@ on:
         required: false
       es-totp_secret:
         required: false
+      SLACK_BOT_TOKEN:
+        required: false
 
     outputs:
       gh-artifact-name:
@@ -78,7 +80,16 @@ jobs:
         with:
           egress-policy: audit
 
+      - name: Checkout shared-workflows repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: aerospike/shared-workflows
+          ref: ${{ inputs.gh-workflows-ref }}
+          path: ${{ inputs.gh-checkout-path }}
+          fetch-depth: 1
+
       - name: Download Unsigned Artifacts
+        id: download-artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: ${{ inputs.gh-unsigned-artifacts }}
@@ -146,14 +157,6 @@ jobs:
             exit 0
           fi
           echo "enabled=true" >> "$GITHUB_OUTPUT"
-      - name: Checkout shared-workflows repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: aerospike/shared-workflows
-          ref: ${{ inputs.gh-workflows-ref }}
-          path: ${{ inputs.gh-checkout-path }}
-          fetch-depth: 1
-
       - name: Set up GPG
         if: steps.gpg-signing.outputs.enabled == 'true'
         uses: aerospike/shared-workflows/.github/actions/setup-gpg@90708afc10e3ba52dfcb7857732c796eff6d3f37 # v3.8.2
@@ -162,6 +165,7 @@ jobs:
           gpg-public-key: ${{ secrets.gpg-public-key }}
           gpg-key-pass: ${{ secrets.gpg-key-pass }}
       - name: Prepare NuGet signing
+        id: prepare-nuget-signing
         if: steps.nuget-packages.outputs.count > 0
         run: |
           if [ -z "${{ secrets.es-username }}" ] || [ -z "${{ secrets.es-password }}" ] || [ -z "${{ secrets.credential_id }}" ] || [ -z "${{ secrets.es-totp_secret }}" ]; then
@@ -170,6 +174,7 @@ jobs:
           fi
           mkdir -p ${{ inputs.gh-artifact-name }}/nuget
       - name: Sign NuGet Packages with SSL.com
+        id: sign-nuget-packages
         uses: step-security/esigner-codesign@389e3735dd2b2a0b6c3daa02fac03723ac17ffe0 # v1.0.1
         if: steps.nuget-packages.outputs.count > 0
         with:
@@ -190,6 +195,7 @@ jobs:
         run: |
           sudo apt-get update && sudo apt-get install dpkg-sig dpkg-dev -y
       - name: Sign Artifacts
+        id: sign-artifacts-gpg
         if: steps.gpg-signing.outputs.enabled == 'true'
         run: |
           entrypoint="${{ inputs.gh-checkout-path }}/.github/workflows/sign-artifacts/entrypoint.sh"
@@ -218,6 +224,7 @@ jobs:
           cp -a unsigned-windows-staging/. "$dest/"
           echo "Restored ${{ steps.windows-binaries.outputs.count }} Windows file(s) under $dest"
       - name: Upload Artifacts
+        id: upload-artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ${{ inputs.gh-artifact-name }}
@@ -228,3 +235,38 @@ jobs:
         id: sign-outputs
         run: |
           echo "gh-artifact-name=${{ inputs.gh-artifact-name }}" >> $GITHUB_OUTPUT
+
+      - name: Build Slack failure child blocks
+        id: slack_fail_detail
+        if: failure() && github.repository != 'aerospike/shared-workflows' && vars.SLACK_CHANNEL_ID != ''
+        run: |
+          set -euo pipefail
+          args=(
+            --repository "${{ github.repository }}"
+            --run-id "${{ github.run_id }}"
+            --job-name "${{ github.job }}"
+            --called-workflow "reusable_sign-artifacts.yaml"
+            --called-workflow-ref "${{ inputs.gh-workflows-ref }}"
+            --called-detail-label "Artifact"
+            --bundle-name "${{ inputs.gh-artifact-name }}"
+          )
+          [[ "${{ steps.download-artifacts.outcome }}" == "failure" ]] && args+=(--failed-step "Download Unsigned Artifacts")
+          [[ "${{ steps.nuget-packages.outcome }}" == "failure" ]] && args+=(--failed-step "Get nuget packages")
+          [[ "${{ steps.prepare-nuget-signing.outcome }}" == "failure" ]] && args+=(--failed-step "Prepare NuGet signing")
+          [[ "${{ steps.sign-nuget-packages.outcome }}" == "failure" ]] && args+=(--failed-step "Sign NuGet Packages with SSL.com")
+          [[ "${{ steps.sign-artifacts-gpg.outcome }}" == "failure" ]] && args+=(--failed-step "Sign Artifacts")
+          [[ "${{ steps.upload-artifacts.outcome }}" == "failure" ]] && args+=(--failed-step "Upload Artifacts")
+          python3 "${{ inputs.gh-checkout-path }}/.github/workflows/lib/build_slack_failure_child_blocks.py" "${args[@]}"
+
+      - name: Notify Slack on failure
+        if: failure() && github.repository != 'aerospike/shared-workflows' && vars.SLACK_CHANNEL_ID != '' && steps.slack_fail_detail.outcome == 'success'
+        continue-on-error: true
+        uses: ./.github/actions/notify-slack
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+        with:
+          message-type: fail
+          title: Sign failed
+          subtitle: ${{ inputs.gh-artifact-name }}
+          slack-channel-id: ${{ vars.SLACK_CHANNEL_ID }}
+          child-blocks: ${{ steps.slack_fail_detail.outputs.child_blocks_json }}

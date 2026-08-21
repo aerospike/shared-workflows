@@ -49,6 +49,17 @@ class BuildSlackFailureChildBlocksTests(unittest.TestCase):
         self.assertIn("Failed jobs/steps", blocks[0]["text"]["text"])
         self.assertIn("View workflow run", blocks[2]["text"]["text"])
 
+    def test_called_info_without_version(self) -> None:
+        called = mod._called_info(
+            called_workflow="reusable_sign-artifacts.yaml",
+            called_workflow_ref="abc123",
+            detail_label="Artifact",
+            detail_name="signed-artifacts",
+            detail_version="",
+        )
+        self.assertIn("*Artifact*\n`signed-artifacts`", called)
+        self.assertNotIn("@", called)
+
     def test_main_writes_json(self) -> None:
         buf = StringIO()
         with mock.patch.dict(
