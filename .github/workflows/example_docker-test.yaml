@@ -36,8 +36,14 @@ jobs:
       version: ${{ steps.extract.outputs.version }}
       git_tag: ${{ steps.extract.outputs.git_tag }}
 
-  # Delete existing bundle before deploy. Promoted bundles can lock artifacts
-  # in dev-local repos, causing deploy uploads to fail.
+  # WARNING: do not copy this job into a real pipeline.
+  #
+  # A release bundle is the immutable record of what shipped. Deleting one throws
+  # away its promotion history and the guarantee that what was tested is what
+  # ships, and nothing restores it. This job exists only because the example
+  # republishes the same fixed version on every run, and the previous run's bundle
+  # locks its artifacts in dev-local so the next deploy cannot overwrite them.
+  # A real pipeline publishes a new version instead of deleting the old bundle.
   delete-existing-bundle:
     needs: [extract-version]
     runs-on: ubuntu-22.04
@@ -90,3 +96,48 @@ jobs:
       version: ${{ needs.extract-version.outputs.version }}
       oidc-provider-name: gh-dev-test
       oidc-audience: aerospike/testing
+
+  # Report what the bundle can prove: digests, the bundle seal, promotion history,
+  # SLSA provenance, and the authorizing pull request. Reads signed records only.
+  release-evidence:
+    needs: [create-release-bundle, extract-version]
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+      id-token: write
+      attestations: read
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
+        with:
+          egress-policy: audit
+      - name: Checkout shared-workflows (actions)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: .github/actions
+          sparse-checkout-cone-mode: false
+      - name: Setup JFrog CLI
+        uses: step-security/setup-jfrog-cli@53aeacb709fce45d0baf69a13ec3342f7e2d71a9 # v5.1.0
+        env:
+          JF_URL: https://artifact.aerospike.io
+          JF_PROJECT: test
+        with:
+          oidc-provider-name: gh-dev-test
+          oidc-audience: aerospike/testing
+      - name: Record release evidence
+        uses: ./.github/actions/release-evidence
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          target: bundle:test-docker-release/${{ needs.extract-version.outputs.version }}@test
+          about: the container image published by this example
+          output-path: release-evidence.md
+          jf-url: https://artifact.aerospike.io
+      - name: Publish evidence to the run summary
+        run: cat release-evidence.md >>"$GITHUB_STEP_SUMMARY"
+      - name: Upload evidence document
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-evidence
+          path: release-evidence.md

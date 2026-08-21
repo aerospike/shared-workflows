@@ -1,0 +1,112 @@
+name: "Test: Release Evidence"
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  run-tests:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Run release-evidence unit tests
+        run: python3 -m unittest discover .github/actions/release-evidence/tests -v
+
+      - name: Check verify-artifact.sh syntax
+        run: bash -n .github/actions/release-evidence/verify-artifact.sh
+
+  # Exercises the runner-only parts (OIDC token derivation, gh attestation lookups)
+  # in about a minute, without building or publishing anything. Dispatch only, so
+  # pull requests stay independent of JFrog.
+  #
+  # The target is a long-lived bundle rather than one the examples publish. Every
+  # example bundle is deleted and rebuilt by the workflows that own it, and
+  # test_deploy-artifacts-integration removes every version of test-release in an
+  # `if: always()` teardown, so a target from that set is absent more often than not.
+  live-evidence:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+      id-token: write
+      attestations: read
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup JFrog CLI
+        uses: step-security/setup-jfrog-cli@53aeacb709fce45d0baf69a13ec3342f7e2d71a9 # v5.1.0
+        env:
+          JF_URL: https://artifact.aerospike.io
+          JF_PROJECT: test
+        with:
+          oidc-provider-name: gh-dev-test
+          oidc-audience: aerospike/testing
+
+      - name: Record release evidence
+        id: evidence
+        uses: ./.github/actions/release-evidence
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          target: bundle:ako-rerel-demo/rev2@test
+          output-path: release-evidence.md
+          jf-url: https://artifact.aerospike.io
+
+      - name: Publish evidence to the run summary
+        run: cat release-evidence.md >>"$GITHUB_STEP_SUMMARY"
+
+      - name: Fail if the document came back hollow
+        run: |
+          set -euo pipefail
+          missing=0
+          # Only sections that render for every bundle target. A gaps or warnings section
+          # depends on what the release did, so asserting one couples this check to the data.
+          for section in "## The release" "## Where this is" "## Chain of custody" "## Verify it yourself"; do
+            grep -qF "$section" release-evidence.md || { echo "missing section: $section" >&2; missing=1; }
+          done
+          grep -qE 'sha256 [0-9a-f]{64}' release-evidence.md || { echo "no digest reported" >&2; missing=1; }
+          exit "$missing"
+
+      # A caller gates on these, so an empty one is a silently open gate. Any of the five
+      # statuses is a pass here: this bundle sits in a test project and GITHUB_TOKEN cannot read
+      # the org identity map, so the verdict itself is not the thing under test.
+      - name: Fail if the verdict outputs came back empty
+        env:
+          VERDICT: ${{ steps.evidence.outputs.verdict }}
+          REASON: ${{ steps.evidence.outputs.reason }}
+          PROBLEMS: ${{ steps.evidence.outputs.problems }}
+          GAPS: ${{ steps.evidence.outputs.gaps }}
+          WARNINGS: ${{ steps.evidence.outputs.warnings }}
+          COMPLETE: ${{ steps.evidence.outputs.complete }}
+        run: |
+          set -euo pipefail
+          echo "verdict=${VERDICT} reason=${REASON}"
+          case "$VERDICT" in
+            FAIL | "PASS WITH WARNING" | "ON TRACK WITH WARNING" | "ON TRACK" | PASS) ;;
+            *) echo "unexpected verdict: '${VERDICT}'" >&2; exit 1 ;;
+          esac
+          [[ -n "$REASON" ]] || { echo "reason came back empty" >&2; exit 1; }
+          for counter in "problems=${PROBLEMS}" "gaps=${GAPS}" "warnings=${WARNINGS}"; do
+            name="${counter%%=*}"
+            value="${counter#*=}"
+            [[ "$value" =~ ^[0-9]+$ ]] \
+              || { echo "${name} is not a count: '${value}'" >&2; exit 1; }
+          done
+          [[ "$COMPLETE" == "true" || "$COMPLETE" == "false" ]] \
+            || { echo "complete is not a boolean: '${COMPLETE}'" >&2; exit 1; }

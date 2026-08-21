@@ -362,6 +362,11 @@ jobs:
           # Promoted bundles lock their artifacts and block re-deployment to the same
           # paths. Delete all versions of test-release before wiping the repos so the
           # artifact deletes below don't silently 409.
+          #
+          # WARNING: teardown for a test fixture, not a pattern to copy. A release
+          # bundle is the immutable record of what shipped, and deleting one throws
+          # away its promotion history. Never do this to a bundle outside the test
+          # project.
           versions=$(jf release-bundle-search versions test-release \
             --project=test --format=json 2>/dev/null \
             || echo '{"release_bundles":[]}')

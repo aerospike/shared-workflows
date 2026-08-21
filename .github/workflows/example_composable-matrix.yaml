@@ -14,6 +14,9 @@ name: Example Composable Matrix CI/CD
 # up the old bundle before deploy (promoted bundles can lock artifacts in
 # dev-local repos, so deletion must happen before new artifacts are uploaded).
 #
+# WARNING: the delete-existing-bundle job is scaffolding for this example and must
+# not be copied into a real pipeline. See the warning above that job.
+#
 # WORKFLOW FLOW:
 #  1. extract-version        - read version from file or input
 #  2. build (matrix)         - DEB/RPM builds across distros using FPM for packaging
@@ -31,6 +34,7 @@ name: Example Composable Matrix CI/CD
 #  8. deploy                 - upload to JFrog Artifactory (reusable_deploy-artifacts.yaml)
 #  9. create-release-bundle  - create bundle (reusable_create-release-bundle.yaml, workflow_dispatch only)
 # 10. promote-release-bundle - promote bundle to DEV (workflow_dispatch only)
+# 11. release-evidence       - report digests, seal, promotions, provenance, PR
 #
 # npm, Java, and Mac are separate jobs because they use different working
 # directories, runners, and toolchains. They could also be folded into a matrix
@@ -369,8 +373,14 @@ jobs:
       oidc-audience: aerospike/testing
     secrets: inherit
 
-  # Delete existing bundle before deploy. Promoted bundles can lock artifacts
-  # in dev-local repos, causing deploy uploads to fail.
+  # WARNING: do not copy this job into a real pipeline.
+  #
+  # A release bundle is the immutable record of what shipped. Deleting one throws
+  # away its promotion history and the guarantee that what was tested is what
+  # ships, and nothing restores it. This job exists only because the example
+  # republishes the same fixed version on every run, and the previous run's bundle
+  # locks its artifacts in dev-local so the next deploy cannot overwrite them.
+  # A real pipeline publishes a new version instead of deleting the old bundle.
   delete-existing-bundle:
     needs: [sign, extract-version]
     runs-on: ubuntu-22.04
@@ -447,3 +457,49 @@ jobs:
           environment: DEV
           jf-project: test
           include-repos: test-deb-dev-local;test-rpm-dev-local;test-maven-dev-local;test-npm-dev-local;test-pypi-dev-local;test-go-dev-local;test-helm-dev-local;test-generic-dev-local
+
+  # Report what the bundle can prove: digests, the bundle seal, promotion history,
+  # SLSA provenance, and the authorizing pull request. Reads signed records only.
+  # Runs after promotion so the promotion history has an entry to report.
+  release-evidence:
+    needs: [promote-release-bundle, extract-version]
+    runs-on: ubuntu-22.04
+    if: always() && !cancelled() && needs.promote-release-bundle.result == 'success' && github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: read
+      id-token: write
+      attestations: read
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
+        with:
+          egress-policy: audit
+      - name: Checkout shared-workflows (actions)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: .github/actions
+          sparse-checkout-cone-mode: false
+      - name: Setup JFrog CLI
+        uses: step-security/setup-jfrog-cli@53aeacb709fce45d0baf69a13ec3342f7e2d71a9 # v5.1.0
+        env:
+          JF_URL: https://artifact.aerospike.io
+          JF_PROJECT: test
+        with:
+          oidc-provider-name: gh-dev-test
+          oidc-audience: aerospike/testing
+      - name: Record release evidence
+        uses: ./.github/actions/release-evidence
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          target: bundle:test-release/${{ needs.extract-version.outputs.version }}@test
+          about: the multi-ecosystem release published by this example
+          output-path: release-evidence.md
+          jf-url: https://artifact.aerospike.io
+      - name: Publish evidence to the run summary
+        run: cat release-evidence.md >>"$GITHUB_STEP_SUMMARY"
+      - name: Upload evidence document
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-evidence
+          path: release-evidence.md
