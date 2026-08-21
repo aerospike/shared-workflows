@@ -75,7 +75,9 @@ jobs:
         run: |
           set -euo pipefail
           missing=0
-          for section in "## The release" "## Chain of custody" "## What we could prove with more evidence"; do
+          # Only sections that render for every bundle target. A gaps or warnings section
+          # depends on what the release did, so asserting one couples this check to the data.
+          for section in "## The release" "## Where this is" "## Chain of custody" "## Verify it yourself"; do
             grep -qF "$section" release-evidence.md || { echo "missing section: $section" >&2; missing=1; }
           done
           grep -qE 'sha256 [0-9a-f]{64}' release-evidence.md || { echo "no digest reported" >&2; missing=1; }
