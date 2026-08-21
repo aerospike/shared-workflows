@@ -292,17 +292,26 @@ def unbundled_artifact(target):
 
 
 def where_published(sha, pkg_type):
-    """The path a consumer pulls, plus every repository holding these bytes."""
-    hits = aql(f'items.find({{"sha256":"{sha}"}}).include("repo","path","name")')
+    """The path a consumer pulls, every repository holding these bytes, and the build link.
+
+    The link is looked up by digest rather than on one path. A container's identity is its
+    digest, and retagging on promotion leaves the clean tag without build properties while the
+    timestamped tag beside it in the same public repository keeps them, so a per-path answer
+    reports a break that a consumer holding the digest does not experience.
+    """
+    hits = aql(f'items.find({{"sha256":"{sha}"}}).include('
+               f'"repo","path","name","property.key","property.value")')
     repos = sorted({h["repo"] for h in hits["results"]})
+    linked = any(p.get("key") == "build.name"
+                 for h in hits["results"] for p in (h.get("properties") or []))
     public = [h for h in hits["results"] if "prod-public" in h["repo"]]
     virtual = VIRTUAL.get(pkg_type)
     if not public or not virtual:
-        return None, repos
+        return None, repos, linked
     # Prefer a clean tag over an immutable timestamped one.
     public.sort(key=lambda h: (bool(TIMESTAMPED_TAG.search(h["path"])), len(h["path"])))
     inner = f'{public[0]["path"]}/{public[0]["name"]}'.lstrip("/")
-    return f"{virtual}/{inner}", repos
+    return f"{virtual}/{inner}", repos, linked
 
 
 def build_origin(name, number, project):
@@ -429,7 +438,7 @@ def collect(target, about):
     for art in entries:
         props = {p["key"]: p["values"][0] for p in (art.get("properties") or [])}
         sha = art["checksum"]
-        public, repos = where_published(sha, art["package_type"])
+        public, repos, digest_linked = where_published(sha, art["package_type"])
 
         vcs, run, env = None, "", 0
         if props.get("build.name") and props.get("build.number"):
@@ -478,11 +487,7 @@ def collect(target, about):
             commit = deps[0].get("digest", {}).get("gitCommit")
             commit_from = "GitHub attestation" if commit else None
 
-        # The bundle record keeps build.* even where the promoted copy does not.
-        published_linked = None
-        if public:
-            props_public = (jf(f"artifactory/api/storage/{public}?properties") or {})
-            published_linked = "build.name" in (props_public.get("properties") or {})
+        published_linked = digest_linked if public else None
 
         if commit and not source:
             source = {"repo": repo, "commit": commit, "run": run, "env": env,

@@ -132,6 +132,52 @@ class StageClassification(unittest.TestCase):
         self.assertEqual(d["pending_stages"], ["TEST", "STAGE", "PROD"])
 
 
+class BuildLinkFollowsTheDigest(unittest.TestCase):
+    """Retagging on promotion strips build properties from the clean tag only.
+
+    The timestamped tag beside it in the same public repository keeps them, and a consumer holding
+    the clean tag holds the digest, so the link is intact and must not be reported as lost.
+    """
+
+    MANIFEST = "aerospike-graph-service/3.3.0/list.manifest.json"
+
+    def setUp(self):
+        self._real = rev.aql
+        self.hits = []
+
+        def fake_aql(_query):
+            return {"results": self.hits}
+
+        rev.aql = fake_aql
+
+    def tearDown(self):
+        rev.aql = self._real
+
+    def hit(self, repo, path, props=None):
+        return {"repo": repo, "path": path, "name": "list.manifest.json",
+                "properties": [{"key": k, "value": v} for k, v in (props or {}).items()]}
+
+    def test_a_build_link_on_the_timestamped_tag_counts_for_the_clean_one(self):
+        self.hits = [
+            self.hit("connect-docker-prod-public-local", "aerospike-graph-service/3.3.0"),
+            self.hit("connect-docker-prod-public-local",
+                     "aerospike-graph-service/3.3.0_20260811T222346Z",
+                     {"build.name": "aerospike-graph-service", "build.number": "27"}),
+        ]
+        public, _repos, linked = rev.where_published("abc123", "docker")
+        self.assertTrue(linked)
+        # The consumer-facing path is still the clean tag.
+        self.assertEqual(public, "docker/aerospike-graph-service/3.3.0/list.manifest.json")
+
+    def test_no_build_link_anywhere_is_still_reported(self):
+        self.hits = [
+            self.hit("database-docker-prod-public-local", "aerospike-server-enterprise/8.1"),
+            self.hit("database-docker-dev-local", "aerospike-server-enterprise/8.1.2.4"),
+        ]
+        _public, _repos, linked = rev.where_published("abc123", "docker")
+        self.assertFalse(linked)
+
+
 class ContainersCollapseToTheImage(unittest.TestCase):
     """An image is one shipped thing, whether its repository is typed docker or oci."""
 
