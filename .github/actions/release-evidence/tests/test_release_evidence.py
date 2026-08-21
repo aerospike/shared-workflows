@@ -474,6 +474,17 @@ class Verdict(unittest.TestCase):
         self.assertFalse(call["complete"])
         self.assertEqual(call["gaps"], 0)
 
+    def test_a_retagged_container_warns_rather_than_fails(self):
+        # Promotion retags the manifest, so every promoted container loses its build properties.
+        # The join still works from the bundle record, so this cannot fail a release.
+        ev = self.evidence(["DEV", "TEST", "STAGE", "PROD"], [],
+                           {"unlinked_published": ["docker"], "types": ["docker"]})
+        call = rev.verdict(ev)
+        self.assertEqual(call["status"], "PASS WITH WARNING")
+        self.assertEqual(call["gaps"], 0)
+        self.assertIn("The public copy carries no build link",
+                      [w[0] for w in rev.warning_rows(ev)])
+
     def test_a_clean_release_in_prod_passes(self):
         call = rev.verdict(self.evidence(["DEV", "TEST", "STAGE", "PROD"], []))
         self.assertEqual(call["status"], "PASS")

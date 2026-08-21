@@ -856,12 +856,6 @@ def gap_rows(evidence):
         rows.append(["The pull request that authorized the change",
                      "That a review preceded the build. The commit is recorded, but no merged "
                      "pull request was found for it, so no approval can be shown."])
-    if derived["unlinked_published"]:
-        rows.append(["A build link on the public copy",
-                     f'That the {phrase(noun(t) for t in derived["unlinked_published"])} a '
-                     "customer pulls can be joined to its build. The promoted copy carries only "
-                     "registry metadata, so the join works from the bundle record and fails from "
-                     "the registry."])
     # Once it has reached a customer the same absence is a failure, reported there instead.
     if derived["skipped_stages"] and not shipped_untested(evidence):
         rows.append([f'A recorded {phrase(derived["skipped_stages"])} transition',
@@ -933,6 +927,25 @@ def failures(evidence):
     return (evidence.get("duties") or {}).get("violations", []) + shipped_untested(evidence)
 
 
+def warning_rows(evidence):
+    """Thinner than it should be, and not a control failure.
+
+    Where a record is recoverable by another route, or a control held with less depth than it
+    could have, the release still stands. Only what is genuinely absent or genuinely wrong may
+    reach the verdict as a failure.
+    """
+    rows = list((evidence.get("duties") or {}).get("warnings", []))
+    unlinked = evidence["derived"]["unlinked_published"]
+    if unlinked:
+        rows.append([
+            "The public copy carries no build link",
+            f'The {phrase(noun(t) for t in unlinked)} a customer pulls holds only registry '
+            "metadata, because promotion retags the manifest. The join to the build still works "
+            "from the bundle record and from the immutable timestamped tag, so this costs a step "
+            "rather than the evidence."])
+    return rows
+
+
 def verdict(evidence):
     """The call on this release, and the one finding that decided it.
 
@@ -942,7 +955,7 @@ def verdict(evidence):
     recorded is already wrong; the same build with everything TEST requires is simply not finished.
     """
     problems, gaps = failures(evidence), gap_rows(evidence)
-    warnings = (evidence.get("duties") or {}).get("warnings", [])
+    warnings = warning_rows(evidence)
     done = bool(set(evidence["derived"]["stages_reached"]) & {"PROD", "INTERNAL"})
     if problems:
         status, reason, finding = "FAIL", "a control did not happen", problems[0][0]
@@ -964,7 +977,7 @@ def verdict(evidence):
 def verdict_block(evidence, problems, gaps):
     """The worst news first, before anything reassuring, and a word for how bad it is."""
     call = evidence.get("verdict") or verdict(evidence)
-    warnings = (evidence.get("duties") or {}).get("warnings", [])
+    warnings = warning_rows(evidence)
     ahead = phrase(evidence["derived"]["pending_stages"])
     if call["status"] == "PASS":
         return ("panel", "info",
@@ -1090,13 +1103,13 @@ def document(evidence):
                   "release that did everything right has none of these."),
             ("table", ["Missing", "What it would let us verify"], gaps),
         ]
-    if duty.get("warnings"):
+    if warning_rows(evidence):
         blocks += [
             ("h2", "WARNING"),
             ("p", "Nothing here blocks the release. The control held, a second person is in the "
                   "chain, and nobody shipped their own change. These are the places it is thinner "
                   "than it should be."),
-            ("table", ["Observation", "What the records show"], duty["warnings"]),
+            ("table", ["Observation", "What the records show"], warning_rows(evidence)),
         ]
     blocks += [
         ("h2", "Verify it yourself"),
