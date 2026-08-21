@@ -98,7 +98,7 @@ blocks on `ON TRACK` will block every healthy pre-PROD promotion.
 ```
 
 Separation of duties is judged against people, resolved through the org SAML identity map, which
-needs `admin:org`. A job running on `GITHUB_TOKEN` gets an empty map, so those findings read as
+needs `read:org`. A job running on `GITHUB_TOKEN` gets an empty map, so those findings read as
 unproven rather than as a violation and cannot fire. A gate on `GITHUB_TOKEN` alone therefore
 covers the record-shaped findings only.
 

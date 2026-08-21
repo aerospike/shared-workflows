@@ -788,6 +788,9 @@ def resolve_identities(evidence):
 
     Every address a person holds folds onto one of them, so a promotion recorded against a second
     company address still reads as the same person as the token that built the bytes.
+
+    Also reports whether the directory could be read at all. An empty directory and a directory
+    missing one login mean different things, and only the first is fixable by granting a scope.
     """
     orgs = {t.group("org") for t in
             (TOKEN_ACTOR.match(who) for _, who in acting_roles(evidence)) if t}
@@ -822,7 +825,7 @@ def resolve_identities(evidence):
         people[who] = email
         if email:
             names[email] = (entry or {}).get("name") or named.get(email)
-    return people, names
+    return people, names, bool(directory)
 
 
 def person_label(email, names):
@@ -839,7 +842,7 @@ def duties(evidence):
     every separation claim is made against resolved people, never against identity strings.
     """
     roles = acting_roles(evidence)
-    people, names = resolve_identities(evidence)
+    people, names, directory_read = resolve_identities(evidence)
     last = terminal(evidence)
     unresolved = sorted({who for _, who in roles if not people.get(who)})
     resolved = {people[who] for _, who in roles if people.get(who)}
@@ -885,6 +888,7 @@ def duties(evidence):
     return {
         "people": people,
         "names": names,
+        "directory_read": directory_read,
         "distinct": len(resolved) + len(unresolved),
         "unproven": unproven,
         "violations": failures,
@@ -1021,11 +1025,6 @@ def gap_rows(evidence):
         rows.append([f'An identity on the {phrase(unattributed)} promotion',
                      "Who authorized it. The promotion is recorded but names nobody, so that "
                      "transition has no accountable person."])
-    for who in (evidence.get("duties") or {}).get("unproven", []):
-        rows.append([f'A person behind `{who}`',
-                     "That this identity is not the same human as the one who authorized the "
-                     "publish. The org SAML identity map could not be read, which needs "
-                     "admin:org, so no separation of duties can be shown."])
     return rows
 
 
@@ -1084,7 +1083,25 @@ def warning_rows(evidence):
     could have, the release still stands. Only what is genuinely absent or genuinely wrong may
     reach the verdict as a failure.
     """
-    rows = list((evidence.get("duties") or {}).get("warnings", []))
+    duty = evidence.get("duties") or {}
+    rows = list(duty.get("warnings", []))
+    unproven = duty.get("unproven") or []
+    if unproven:
+        who = phrase(f"`{w}`" for w in unproven)
+        if duty.get("directory_read"):
+            rows.append([
+                "Separation of duties could not be judged",
+                f'{who} resolves to nobody in the org directory, which is what a bot or an ops '
+                "account looks like. The promotion records exist and name it, so nothing here is "
+                "missing; what cannot be shown is whether that identity is a different person "
+                "from the one who authorized the publish."])
+        else:
+            rows.append([
+                "Separation of duties could not be judged",
+                f'The org SAML identity map could not be read, so {who} resolves to nobody. '
+                "Reading it needs read:org, which a CI GITHUB_TOKEN does not have. Every "
+                "promotion record exists and names an identity; only the step from an identity "
+                "to a person is missing, so this report cannot tell one human from two."])
     unlinked = evidence["derived"]["unlinked_published"]
     if unlinked:
         rows.append([

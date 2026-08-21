@@ -880,8 +880,35 @@ class SeparationOfDuties(unittest.TestCase):
         self.assertEqual(ev["duties"]["unproven"], ["token:gh-citrusleaf/pvinh-spike"])
         self.assertFalse(ev["duties"]["separated"])
         self.assertEqual(ev["duties"]["violations"], [])
-        self.assertIn("A person behind `token:gh-citrusleaf/pvinh-spike`",
-                      [r[0] for r in rev.gap_rows(ev)])
+
+    def test_an_unreadable_map_warns_rather_than_failing_for_a_missing_record(self):
+        # Every promotion record exists and names an identity. What is absent is the step from
+        # an identity to a person, which is a reader capability, not evidence. Treating it as a
+        # gap failed all 30 of the audited PROD releases when run on a CI GITHUB_TOKEN.
+        rev.saml_identities = lambda _org: {}
+        ev = self.evidence(pr=self.pr("abhilashmandaliya", ["mphanias"]),
+                           created_by="token:gh-citrusleaf/pvinh-spike",
+                           promotions=[self.promotion("PROD", "pvinh@aerospike.com")])
+        self.assertNotIn("A person behind `token:gh-citrusleaf/pvinh-spike`",
+                         [r[0] for r in rev.gap_rows(ev)])
+        warning = next(r for r in rev.warning_rows(ev)
+                       if r[0] == "Separation of duties could not be judged")
+        self.assertIn("read:org", warning[1])
+        self.assertEqual(rev.verdict(ev)["status"], "PASS WITH WARNING")
+
+    def test_a_readable_map_missing_one_login_says_so_differently(self):
+        # A login the directory does not hold is a bot or an ops account, not a missing scope,
+        # so the warning must not send a reader looking for a permission to grant.
+        rev.saml_identities = lambda _org: {
+            "mphanias": {"email": "pmokrala@aerospike.com", "emails": {"pmokrala@aerospike.com"},
+                         "name": "Phaniram Mokrala"}}
+        ev = self.evidence(pr=self.pr("abhilashmandaliya", ["mphanias"]),
+                           created_by="token:gh-citrusleaf/some-bot",
+                           promotions=[self.promotion("PROD", "pmokrala@aerospike.com")])
+        warning = next(r for r in rev.warning_rows(ev)
+                       if r[0] == "Separation of duties could not be judged")
+        self.assertNotIn("read:org", warning[1])
+        self.assertIn("ops account", warning[1])
 
     def test_ci_building_and_promoting_to_test_is_not_a_finding(self):
         # Every healthy release looks like this on its way up, so it cannot be a problem.
