@@ -75,39 +75,50 @@ class StageClassification(unittest.TestCase):
         return artifacts, promotions, sealed
 
     def derive(self, promotion_stages, resident_repos, sealed=True):
-        # Mirrors the derivation in collect() so the classification can be tested without
-        # standing up the whole transport layer.
-        artifacts, promotions, sealed = self.build(promotion_stages, resident_repos, sealed)
-        stages = [p["stage"] for p in promotions]
+        artifacts, promotions, _ = self.build(promotion_stages, resident_repos, sealed)
         resident = sorted({rev.stage_of_repo(r) for a in artifacts for r in a["repos"]} - {None},
                           key=lambda s: rev.STAGE_ORDER.index(s) if s in rev.STAGE_ORDER
                           else len(rev.STAGE_ORDER))
-        reached = [s for s in rev.STAGE_ORDER if s in set(stages) | set(resident)]
-        if "INTERNAL" in stages or "INTERNAL" in resident:
-            reached.append("INTERNAL")
-        expected = rev.STAGE_ORDER[:-1] if "INTERNAL" in reached else rev.STAGE_ORDER
-        furthest = max((expected.index(s) for s in reached if s in expected), default=-1)
-        return {
-            "stages_reached": reached,
-            "skipped_stages": [s for s in expected[:furthest + 1] if s not in reached],
-            "pending_stages": list(expected[furthest + 1:]),
-        }
+        return rev.classify_stages([p["stage"] for p in promotions], resident)
 
     def test_an_artifact_only_in_dev_has_everything_pending_and_nothing_skipped(self):
         d = self.derive([], ["clients-pypi-dev-local"], sealed=False)
         self.assertEqual(d["stages_reached"], ["DEV"])
         self.assertEqual(d["skipped_stages"], [])
-        self.assertEqual(d["pending_stages"], ["TEST", "STAGE", "PREVIEW", "PROD"])
+        self.assertEqual(d["pending_stages"], ["TEST", "STAGE", "PROD"])
 
     def test_repository_residence_counts_when_no_promotion_record_exists(self):
         d = self.derive([], ["clients-pypi-dev-local", "clients-pypi-test-local"])
         self.assertEqual(d["stages_reached"], ["DEV", "TEST"])
-        self.assertEqual(d["pending_stages"], ["STAGE", "PREVIEW", "PROD"])
+        self.assertEqual(d["pending_stages"], ["STAGE", "PROD"])
 
-    def test_a_gate_passed_over_is_reported_as_skipped(self):
+    def test_a_required_gate_passed_over_is_reported_as_skipped(self):
         d = self.derive(["DEV", "TEST", "PROD"], ["clients-pypi-prod-public-local"])
-        self.assertEqual(d["skipped_stages"], ["STAGE", "PREVIEW"])
+        self.assertEqual(d["skipped_stages"], ["STAGE"])
         self.assertEqual(d["pending_stages"], [])
+
+    def test_preview_is_optional_so_passing_it_over_is_not_a_gap(self):
+        d = self.derive(["TEST", "STAGE", "PROD"], ["clients-pypi-prod-public-local"])
+        self.assertEqual(d["skipped_stages"], [])
+        self.assertEqual(d["pending_stages"], [])
+
+    def test_dev_is_optional_so_starting_at_test_is_not_a_gap(self):
+        d = self.derive(["TEST"], ["clients-pypi-test-local"])
+        self.assertEqual(d["stages_reached"], ["TEST"])
+        self.assertEqual(d["skipped_stages"], [])
+        self.assertEqual(d["pending_stages"], ["STAGE", "PROD"])
+
+    def test_an_optional_stage_that_happened_is_still_named(self):
+        # Optional means no error when absent, not invisible when present.
+        d = self.derive(["DEV", "TEST", "STAGE", "PREVIEW", "PROD"],
+                        ["clients-pypi-prod-public-local"])
+        self.assertEqual(d["stages_reached"], ["DEV", "TEST", "STAGE", "PREVIEW", "PROD"])
+        self.assertEqual(d["skipped_stages"], [])
+        self.assertEqual(d["pending_stages"], [])
+
+    def test_dev_residence_is_still_named_while_the_rest_is_pending(self):
+        d = self.derive([], ["clients-pypi-dev-local"])
+        self.assertIn("DEV", d["stages_reached"])
 
     def test_internal_is_terminal_so_prod_is_not_counted_against_it(self):
         d = self.derive(["DEV", "TEST", "STAGE", "INTERNAL"], [])
@@ -118,7 +129,7 @@ class StageClassification(unittest.TestCase):
         d = self.derive([], [])
         self.assertEqual(d["stages_reached"], [])
         self.assertEqual(d["skipped_stages"], [])
-        self.assertEqual(d["pending_stages"], rev.STAGE_ORDER)
+        self.assertEqual(d["pending_stages"], ["TEST", "STAGE", "PROD"])
 
 
 class ContainersCollapseToTheImage(unittest.TestCase):
@@ -170,7 +181,7 @@ class ClaimsRequireRecords(unittest.TestCase):
             "derived": {"types": ["pypi"], "attested_types": [], "unattested_types": ["pypi"],
                         "stages": [], "terminal_stage": None, "sealed": sealed,
                         "stages_reached": ["DEV"], "resident_stages": ["DEV"],
-                        "skipped_stages": [], "pending_stages": ["TEST", "STAGE", "PREVIEW", "PROD"],
+                        "skipped_stages": [], "pending_stages": ["TEST", "STAGE", "PROD"],
                         "self_approved": False, "independently_approved": False,
                         "unlinked_published": [], "any_commit": False},
         }
@@ -202,16 +213,19 @@ class ClaimsRequireRecords(unittest.TestCase):
         rows = rev.claim_rows(self.pr_evidence(["reviewer"], "2026-01-01T00:00:00Z"))
         self.assertEqual(len([r for r in rows if "approved by someone" in r[0]]), 1)
 
-    def test_stages_not_yet_reached_are_named_as_gaps(self):
-        rows = rev.gap_rows(self.evidence(None, [], False))
-        titles = [r[0] for r in rows]
-        self.assertIn("A recorded TEST, STAGE, PREVIEW and PROD transition", titles)
+    def test_stages_not_yet_reached_are_not_reported_as_missing_evidence(self):
+        # A release still working its way up the pipeline is not missing anything.
+        titles = [r[0] for r in rev.gap_rows(self.evidence(None, [], False))]
+        self.assertEqual([t for t in titles if "transition" in t], [])
 
-    def test_a_pending_gap_reads_as_ahead_rather_than_passed_over(self):
-        row = next(r for r in rev.gap_rows(self.evidence(None, [], False))
-                   if r[0].startswith("A recorded TEST"))
-        self.assertIn("lie ahead of it", row[1])
-        self.assertNotIn("passed over", row[1])
+    def test_a_required_gate_passed_over_is_reported_as_missing_evidence(self):
+        ev = self.evidence(None, [], False)
+        ev["derived"]["stages_reached"] = ["DEV", "PROD"]
+        ev["derived"]["pending_stages"] = []
+        ev["derived"]["skipped_stages"] = ["TEST", "STAGE"]
+        row = next(r for r in rev.gap_rows(ev) if "transition" in r[0])
+        self.assertEqual(row[0], "A recorded TEST and STAGE transition")
+        self.assertIn("passed over", row[1])
 
     def test_a_missing_approval_is_named_as_a_gap_rather_than_left_silent(self):
         rows = rev.gap_rows(self.pr_evidence([], None))
@@ -304,7 +318,7 @@ class CollectUnbundled(unittest.TestCase):
 
     def setUp(self):
         self.calls = []
-        self._real = (rev.jf, rev.aql, rev.gh)
+        self._real = (rev.jf, rev.aql, rev.gh, rev.gh_graphql)
 
         def fake_jf(path):
             self.calls.append(path)
@@ -321,9 +335,10 @@ class CollectUnbundled(unittest.TestCase):
                                  "name": "aerospike-16.0.1.whl"}]}
 
         rev.jf, rev.aql, rev.gh = fake_jf, fake_aql, lambda _p: None
+        rev.gh_graphql = lambda _q, **_v: None
 
     def tearDown(self):
-        rev.jf, rev.aql, rev.gh = self._real
+        rev.jf, rev.aql, rev.gh, rev.gh_graphql = self._real
 
     def test_reports_on_an_artifact_that_is_in_no_release_bundle(self):
         ev = rev.collect(self.TARGET, "")
@@ -337,14 +352,14 @@ class CollectUnbundled(unittest.TestCase):
         derived = rev.collect(self.TARGET, "")["derived"]
         self.assertEqual(derived["stages_reached"], ["DEV"])
         self.assertEqual(derived["skipped_stages"], [])
-        self.assertEqual(derived["pending_stages"], ["TEST", "STAGE", "PREVIEW", "PROD"])
+        self.assertEqual(derived["pending_stages"], ["TEST", "STAGE", "PROD"])
         self.assertFalse(derived["sealed"])
 
     def test_renders_a_document_that_claims_nothing_it_cannot_back(self):
         ev = rev.collect(self.TARGET, "")
         out = rev.render_markdown(ev, rev.document(ev))
         self.assertIn("has reached DEV", out)
-        self.assertIn("not been promoted to TEST, STAGE, PREVIEW and PROD", out)
+        self.assertIn("not been promoted to TEST, STAGE and PROD", out)
         self.assertIn("A release bundle holding these bytes", out)
         for lie in ("could not change after sealing", "promotion attestation names the seal"):
             self.assertNotIn(lie, out)
@@ -357,7 +372,7 @@ class CollectBundled(unittest.TestCase):
             "subject": [{"digest": {"sha256": "abc123"}}]}
 
     def setUp(self):
-        self._real = (rev.jf, rev.aql, rev.gh)
+        self._real = (rev.jf, rev.aql, rev.gh, rev.gh_graphql)
 
         def fake_jf(path):
             if "lifecycle/api/v2/release_bundle/records" in path:
@@ -384,7 +399,7 @@ class CollectBundled(unittest.TestCase):
         rev.gh = lambda _p: None
 
     def tearDown(self):
-        rev.jf, rev.aql, rev.gh = self._real
+        rev.jf, rev.aql, rev.gh, rev.gh_graphql = self._real
 
     def test_a_bundled_release_still_reports_its_release_block(self):
         ev = rev.collect("bundle:my-release/1.2.3@clients", "")
@@ -412,6 +427,106 @@ class CollectBundled(unittest.TestCase):
         self.assertEqual([p["stage"] for p in ev["promotions"]], ["UNKNOWN"])
         self.assertNotIn("UNKNOWN", ev["derived"]["stages_reached"])
         rev.render_markdown(ev, rev.document(ev))  # must not raise
+
+
+class SeparationOfDuties(unittest.TestCase):
+    """A CI token and a user account can name one human, and only the identity map can tell.
+
+    No string rule links a login to a person here: `Klaven` is mcounts@aerospike.com in the real
+    directory, so every claim about who acted rests on the org SAML map.
+    """
+
+    DIRECTORY = {"pvinh-spike": "pvinh@aerospike.com",
+                 "mphanias": "pmokrala@aerospike.com",
+                 "abhilashmandaliya": "abhilash@aerospike.com"}
+
+    def setUp(self):
+        self._real = rev.saml_identities
+        rev.saml_identities = lambda _org: dict(self.DIRECTORY)
+
+    def tearDown(self):
+        rev.saml_identities = self._real
+
+    def promotion(self, stage, by):
+        return {"stage": stage, "when": "2026-01-01T00:00:00Z", "by": by, "repos": [],
+                "mutable": False, "seals": "f" * 64}
+
+    def pr(self, author, approvers):
+        return {"number": 272, "title": "t", "author": author, "approvers": approvers,
+                "merged_at": "2026-01-01T00:00:00Z", "repo": "citrusleaf/a-repo"}
+
+    def evidence(self, pr=None, created_by=None, promotions=()):
+        ev = {
+            "release": {"created_by": created_by} if created_by else None,
+            "pr": pr, "promotions": list(promotions), "artifacts": [],
+            "derived": {"independently_approved": bool(pr and pr["approvers"]),
+                        "sealed": bool(created_by), "any_commit": True,
+                        "unlinked_published": [], "skipped_stages": [], "stages_reached": []},
+        }
+        ev["duties"] = rev.duties(ev)
+        return ev
+
+    def test_a_token_and_a_user_account_for_one_human_count_as_one_person(self):
+        ev = self.evidence(
+            created_by="token:gh-citrusleaf/pvinh-spike",
+            promotions=[self.promotion("TEST", "token:database-gh-citrusleaf/pvinh-spike"),
+                        self.promotion("PROD", "pvinh@aerospike.com")])
+        self.assertEqual(ev["duties"]["distinct"], 1)
+        self.assertFalse(ev["duties"]["separated"])
+        self.assertEqual([v[0] for v in ev["duties"]["violations"]],
+                         ["One person performed every recorded step"])
+
+    def test_the_approver_who_publishes_is_named(self):
+        ev = self.evidence(pr=self.pr("abhilashmandaliya", ["mphanias"]),
+                           created_by="token:gh-citrusleaf/abhilashmandaliya",
+                           promotions=[self.promotion("PROD", "pmokrala@aerospike.com")])
+        self.assertIn("The person who approved the change also authorized the publish",
+                      [v[0] for v in ev["duties"]["violations"]])
+        self.assertFalse(ev["duties"]["separated"])
+
+    def test_distinct_people_at_every_step_read_as_separated(self):
+        ev = self.evidence(pr=self.pr("abhilashmandaliya", ["mphanias"]),
+                           created_by="token:gh-citrusleaf/abhilashmandaliya",
+                           promotions=[self.promotion("PROD", "ramya@aerospike.com")])
+        self.assertEqual(ev["duties"]["violations"], [])
+        self.assertTrue(ev["duties"]["separated"])
+
+    def test_an_unreadable_identity_map_withholds_the_separation_claim(self):
+        rev.saml_identities = lambda _org: {}
+        ev = self.evidence(created_by="token:gh-citrusleaf/pvinh-spike",
+                           promotions=[self.promotion("PROD", "pvinh@aerospike.com")])
+        self.assertEqual(ev["duties"]["unproven"], ["token:gh-citrusleaf/pvinh-spike"])
+        self.assertFalse(ev["duties"]["separated"])
+        self.assertEqual(ev["duties"]["violations"], [])
+        self.assertIn("A person behind `token:gh-citrusleaf/pvinh-spike`",
+                      [r[0] for r in rev.gap_rows(ev)])
+
+    def test_ci_building_and_promoting_to_test_is_not_a_finding(self):
+        # Every healthy release looks like this on its way up, so it cannot be a problem.
+        ev = self.evidence(created_by="token:gh-citrusleaf/pvinh-spike",
+                           promotions=[self.promotion("TEST",
+                                                      "token:database-gh-citrusleaf/pvinh-spike")])
+        self.assertEqual(ev["duties"]["violations"], [])
+        self.assertFalse(ev["duties"]["separated"])
+
+    def test_the_same_hand_at_stage_is_a_finding(self):
+        ev = self.evidence(created_by="token:gh-citrusleaf/pvinh-spike",
+                           promotions=[self.promotion("TEST", "token:gh-citrusleaf/pvinh-spike"),
+                                       self.promotion("STAGE", "pvinh@aerospike.com")])
+        self.assertEqual([v[0] for v in ev["duties"]["violations"]],
+                         ["One person performed every recorded step"])
+
+    def test_a_self_approval_survives_a_second_login(self):
+        # One human with two logins is still one approval, so the login comparison cannot stand.
+        rev.saml_identities = lambda _org: {"writer": "one@aerospike.com",
+                                            "writer-alt": "one@aerospike.com"}
+        ev = self.evidence(pr=self.pr("writer", ["writer-alt"]),
+                           promotions=[self.promotion("PROD", "other@aerospike.com")])
+        self.assertIn("The author approved their own change",
+                      [v[0] for v in ev["duties"]["violations"]])
+        self.assertFalse(ev["derived"]["independently_approved"])
+        self.assertIn("An approving review on the authorizing pull request",
+                      [r[0] for r in rev.gap_rows(ev)])
 
 
 if __name__ == "__main__":
