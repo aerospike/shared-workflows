@@ -87,20 +87,20 @@ runs:
         echo "::add-mask::${token}"
         export JFROG_TOKEN="$token"
 
-        verdict="${RUNNER_TEMP:-/tmp}/release-evidence-verdict.json"
-        args=("$INPUT_TARGET" --format "$INPUT_FORMAT" --verdict-path "$verdict")
+        verdict_file="${RUNNER_TEMP:-/tmp}/release-evidence-verdict.json"
+        args=("$INPUT_TARGET" --format "$INPUT_FORMAT" --verdict-path "$verdict_file")
         if [[ -n "$INPUT_ABOUT" ]]; then
           args+=(--about "$INPUT_ABOUT")
         fi
 
-        script="${GITHUB_ACTION_PATH}/release-evidence.py"
+        generator="${GITHUB_ACTION_PATH}/release-evidence.py"
         if [[ -n "$INPUT_OUTPUT_PATH" ]]; then
           mkdir -p "$(dirname "$INPUT_OUTPUT_PATH")"
-          python3 "$script" "${args[@]}" >"$INPUT_OUTPUT_PATH"
+          python3 "$generator" "${args[@]}" >"$INPUT_OUTPUT_PATH"
           echo "document=${INPUT_OUTPUT_PATH}" >>"$GITHUB_OUTPUT"
           echo "Wrote ${INPUT_FORMAT} evidence to ${INPUT_OUTPUT_PATH}"
         else
-          python3 "$script" "${args[@]}"
+          python3 "$generator" "${args[@]}"
           echo "document=" >>"$GITHUB_OUTPUT"
         fi
 
@@ -112,5 +112,5 @@ runs:
                "problems=\(.problems)",
                "gaps=\(.gaps)",
                "warnings=\(.warnings)",
-               "complete=\(.complete)"' "$verdict" >>"$GITHUB_OUTPUT"
-        echo "Verdict: $(jq -r '.status' "$verdict")"
+               "complete=\(.complete)"' "$verdict_file" >>"$GITHUB_OUTPUT"
+        echo "Verdict: $(jq -r '.status' "$verdict_file")"
