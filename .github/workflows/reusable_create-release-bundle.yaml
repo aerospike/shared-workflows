@@ -78,6 +78,17 @@ on:
         required: false
         type: string
         default: ubuntu-22.04
+      slack-notify-on-failure:
+        description: |
+          When true, post a Slack alert if this job fails. Requires vars.SLACK_CHANNEL_ID
+          and secrets.SLACK_BOT_TOKEN on the caller (via secrets: inherit).
+        required: false
+        type: boolean
+        default: false
+
+    secrets:
+      SLACK_BOT_TOKEN:
+        required: false
 
 permissions:
   contents: read
@@ -196,37 +207,27 @@ jobs:
             "${meta_arg[@]}" \
             $dry_run_arg
 
-      - name: Build Slack failure child blocks
-        id: slack_fail_detail
-        if: failure() && github.repository != 'aerospike/shared-workflows' && vars.SLACK_CHANNEL_ID != ''
-        run: |
-          set -euo pipefail
-          args=(
-            --repository "${{ github.repository }}"
-            --run-id "${{ github.run_id }}"
-            --job-name "${{ github.job }}"
-            --called-workflow "reusable_create-release-bundle.yaml"
-            --called-workflow-ref "${{ inputs.gh-workflows-ref }}"
-            --called-detail-label "Bundle"
-            --bundle-name "${{ inputs.jf-bundle-name }}"
-            --bundle-version "${{ inputs.version }}"
-          )
-          [[ "${{ steps.jf-check.outcome }}" == "failure" ]] && args+=(--failed-step "Check JFrog Configuration")
-          [[ "${{ steps.download-bundle-metadata.outcome }}" == "failure" ]] && args+=(--failed-step "Download Maven bundle metadata artifact")
-          [[ "${{ steps.verify-bundle-metadata.outcome }}" == "failure" ]] && args+=(--failed-step "Verify Maven bundle metadata download")
-          [[ "${{ steps.bundle-meta.outcome }}" == "failure" ]] && args+=(--failed-step "Resolve bundle metadata path")
-          [[ "${{ steps.create-release-bundle.outcome }}" == "failure" ]] && args+=(--failed-step "Create Release Bundle")
-          python3 "${{ inputs.gh-checkout-path }}/.github/workflows/lib/build_slack_failure_child_blocks.py" "${args[@]}"
-
       - name: Notify Slack on failure
-        if: failure() && github.repository != 'aerospike/shared-workflows' && vars.SLACK_CHANNEL_ID != '' && steps.slack_fail_detail.outcome == 'success'
+        if: failure() && inputs.slack-notify-on-failure && github.repository != 'aerospike/shared-workflows' && vars.SLACK_CHANNEL_ID != ''
         continue-on-error: true
-        uses: ./.github/actions/notify-slack
+        uses: ./.github/actions/notify-workflow-failure
         env:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
         with:
-          message-type: fail
+          gh-checkout-path: ${{ inputs.gh-checkout-path }}
+          called-workflow: reusable_create-release-bundle.yaml
+          called-workflow-ref: ${{ inputs.gh-workflows-ref }}
           title: Release bundle failed
           subtitle: ${{ inputs.jf-bundle-name }}@${{ inputs.version }}
+          detail-label: Bundle
+          detail-name: ${{ inputs.jf-bundle-name }}
+          detail-version: ${{ inputs.version }}
           slack-channel-id: ${{ vars.SLACK_CHANNEL_ID }}
-          child-blocks: ${{ steps.slack_fail_detail.outputs.child_blocks_json }}
+          failed-step-checks-json: |
+            [
+              {"name":"Check JFrog Configuration","outcome":"${{ steps.jf-check.outcome }}"},
+              {"name":"Download Maven bundle metadata artifact","outcome":"${{ steps.download-bundle-metadata.outcome }}"},
+              {"name":"Verify Maven bundle metadata download","outcome":"${{ steps.verify-bundle-metadata.outcome }}"},
+              {"name":"Resolve bundle metadata path","outcome":"${{ steps.bundle-meta.outcome }}"},
+              {"name":"Create Release Bundle","outcome":"${{ steps.create-release-bundle.outcome }}"}
+            ]

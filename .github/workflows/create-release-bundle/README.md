@@ -23,6 +23,13 @@ This workflow creates JFrog release bundles by bundling one or more builds into 
 | `dry-run`                          | Whether to run in dry-run mode                                                                                                                                                                                               | No       | `false`                         |
 | `bundle-metadata-path`             | Optional path to `.maven-bundle-metadata.json` (e.g. detect-artifacts `bundle-metadata-path`). Applied as bundle properties after create.                                                                                    | No       | _(empty)_                       |
 | `gh-bundle-metadata-artifact-name` | When set, downloads this GitHub artifact and uses the contained `.maven-bundle-metadata.json` (e.g. `reusable_deploy-artifacts` output `bundle-metadata-artifact-name`). Overrides `bundle-metadata-path` when both are set. | No       | _(empty)_                       |
+| `slack-notify-on-failure`          | When true, post a Slack alert if this job fails (requires `vars.SLACK_CHANNEL_ID` and `secrets.SLACK_BOT_TOKEN`).                                                                                                            | No       | `false`                         |
+
+## Slack failure notifications
+
+Set `slack-notify-on-failure: true` to post a fail alert when this job fails. Requires `vars.SLACK_CHANNEL_ID` and `secrets.SLACK_BOT_TOKEN` on the caller (`secrets: inherit`).
+
+This workflow is usually a standalone tail job after deploy. If your caller also defines a `notify-failure` job, keep `slack-notify-on-failure: false` here to avoid duplicate alerts. See [Failure notifications in pipelines](../docs/notify-slack.md#failure-notifications-in-pipelines).
 
 ## Example Usage
 

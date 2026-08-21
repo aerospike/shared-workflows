@@ -43,6 +43,13 @@ on:
         required: false
         type: string
         default: PROD
+      slack-notify-on-failure:
+        description: |
+          When true, post a Slack alert if this job fails. Requires vars.SLACK_CHANNEL_ID
+          and secrets.SLACK_BOT_TOKEN on the caller (via secrets: inherit).
+        required: false
+        type: boolean
+        default: false
 
     secrets:
       gpg-private-key:
@@ -236,37 +243,27 @@ jobs:
         run: |
           echo "gh-artifact-name=${{ inputs.gh-artifact-name }}" >> $GITHUB_OUTPUT
 
-      - name: Build Slack failure child blocks
-        id: slack_fail_detail
-        if: failure() && github.repository != 'aerospike/shared-workflows' && vars.SLACK_CHANNEL_ID != ''
-        run: |
-          set -euo pipefail
-          args=(
-            --repository "${{ github.repository }}"
-            --run-id "${{ github.run_id }}"
-            --job-name "${{ github.job }}"
-            --called-workflow "reusable_sign-artifacts.yaml"
-            --called-workflow-ref "${{ inputs.gh-workflows-ref }}"
-            --called-detail-label "Artifact"
-            --bundle-name "${{ inputs.gh-artifact-name }}"
-          )
-          [[ "${{ steps.download-artifacts.outcome }}" == "failure" ]] && args+=(--failed-step "Download Unsigned Artifacts")
-          [[ "${{ steps.nuget-packages.outcome }}" == "failure" ]] && args+=(--failed-step "Get nuget packages")
-          [[ "${{ steps.prepare-nuget-signing.outcome }}" == "failure" ]] && args+=(--failed-step "Prepare NuGet signing")
-          [[ "${{ steps.sign-nuget-packages.outcome }}" == "failure" ]] && args+=(--failed-step "Sign NuGet Packages with SSL.com")
-          [[ "${{ steps.sign-artifacts-gpg.outcome }}" == "failure" ]] && args+=(--failed-step "Sign Artifacts")
-          [[ "${{ steps.upload-artifacts.outcome }}" == "failure" ]] && args+=(--failed-step "Upload Artifacts")
-          python3 "${{ inputs.gh-checkout-path }}/.github/workflows/lib/build_slack_failure_child_blocks.py" "${args[@]}"
-
       - name: Notify Slack on failure
-        if: failure() && github.repository != 'aerospike/shared-workflows' && vars.SLACK_CHANNEL_ID != '' && steps.slack_fail_detail.outcome == 'success'
+        if: failure() && inputs.slack-notify-on-failure && github.repository != 'aerospike/shared-workflows' && vars.SLACK_CHANNEL_ID != ''
         continue-on-error: true
-        uses: ./.github/actions/notify-slack
+        uses: ./.github/actions/notify-workflow-failure
         env:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
         with:
-          message-type: fail
+          gh-checkout-path: ${{ inputs.gh-checkout-path }}
+          called-workflow: reusable_sign-artifacts.yaml
+          called-workflow-ref: ${{ inputs.gh-workflows-ref }}
           title: Sign failed
           subtitle: ${{ inputs.gh-artifact-name }}
+          detail-label: Artifact
+          detail-name: ${{ inputs.gh-artifact-name }}
           slack-channel-id: ${{ vars.SLACK_CHANNEL_ID }}
-          child-blocks: ${{ steps.slack_fail_detail.outputs.child_blocks_json }}
+          failed-step-checks-json: |
+            [
+              {"name":"Download Unsigned Artifacts","outcome":"${{ steps.download-artifacts.outcome }}"},
+              {"name":"Get nuget packages","outcome":"${{ steps.nuget-packages.outcome }}"},
+              {"name":"Prepare NuGet signing","outcome":"${{ steps.prepare-nuget-signing.outcome }}"},
+              {"name":"Sign NuGet Packages with SSL.com","outcome":"${{ steps.sign-nuget-packages.outcome }}"},
+              {"name":"Sign Artifacts","outcome":"${{ steps.sign-artifacts-gpg.outcome }}"},
+              {"name":"Upload Artifacts","outcome":"${{ steps.upload-artifacts.outcome }}"}
+            ]

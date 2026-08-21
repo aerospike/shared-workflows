@@ -65,6 +65,13 @@ The deploy pipeline uses a centralized type registry (`type_registry.sh`). To ad
 | `runs-on`                          | The runner to use                                                                                                                                                                                    | No       | `ubuntu-22.04`                  |
 | `gh-upload-bundle-metadata`        | When true and `structured_build_artifacts/.maven-bundle-metadata.json` exists after deploy, upload it as a workflow artifact for downstream jobs (e.g. release bundle annotate).                     | No       | `true`                          |
 | `gh-bundle-metadata-artifact-name` | GitHub artifact name for the uploaded `.maven-bundle-metadata.json`.                                                                                                                                 | No       | `bundle-metadata`               |
+| `slack-notify-on-failure`          | When true, post a Slack alert if this job fails (requires `vars.SLACK_CHANNEL_ID` and `secrets.SLACK_BOT_TOKEN`).                                                                                    | No       | `false`                         |
+
+## Slack failure notifications
+
+Set `slack-notify-on-failure: true` to post a fail alert when this job fails. Requires `vars.SLACK_CHANNEL_ID` and `secrets.SLACK_BOT_TOKEN` on the caller (`secrets: inherit`).
+
+When this workflow is invoked from [`reusable_artifacts-cicd`](../artifacts-cicd/README.md), enable notify on **at most one** terminal job (usually deploy), or use a caller-side `notify-failure` job instead—**not both**. See [Failure notifications in pipelines](../docs/notify-slack.md#failure-notifications-in-pipelines).
 
 ## Outputs
 

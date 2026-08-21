@@ -1,0 +1,91 @@
+name: Notify workflow failure on Slack
+description: Build failure child-blocks and send a fail alert via notify-slack
+inputs:
+  gh-checkout-path:
+    description: Directory where shared-workflows was checked out
+    required: false
+    default: shared-workflows
+  called-workflow:
+    description: Called reusable workflow file name
+    required: true
+  called-workflow-ref:
+    description: shared-workflows ref used by the caller (gh-workflows-ref)
+    required: true
+  title:
+    description: Slack container title
+    required: true
+  subtitle:
+    description: Slack container subtitle
+    required: true
+  detail-label:
+    description: Label for the called-workflow detail line
+    required: false
+    default: ""
+  detail-name:
+    description: Primary detail value for the called workflow context
+    required: false
+    default: ""
+  detail-version:
+    description: Secondary detail value for the called workflow context
+    required: false
+    default: ""
+  failed-step-checks-json:
+    description: |
+      JSON array of {"name":"Step name","outcome":"failure|success|skipped"} objects.
+      Failed step names are extracted when outcome is failure.
+    required: false
+    default: "[]"
+  failed-steps-json:
+    description: JSON array of failed step names
+    required: false
+    default: "[]"
+  slack-channel-id:
+    description: Slack channel ID (C…)
+    required: true
+  dry-run:
+    description: When true, print payload without HTTP POST
+    required: false
+    default: "false"
+runs:
+  using: composite
+  steps:
+    - name: Build Slack failure child blocks
+      id: build
+      shell: bash
+      env:
+        FAILED_STEP_CHECKS_JSON: ${{ inputs.failed-step-checks-json }}
+        FAILED_STEPS_JSON: ${{ inputs.failed-steps-json }}
+      run: |
+        set -euo pipefail
+        script="${{ inputs.gh-checkout-path }}/.github/workflows/lib/build_slack_failure_child_blocks.py"
+        args=(
+          --repository "${GITHUB_REPOSITORY}"
+          --run-id "${GITHUB_RUN_ID}"
+          --job-name "${GITHUB_JOB}"
+          --called-workflow "${{ inputs.called-workflow }}"
+          --called-workflow-ref "${{ inputs.called-workflow-ref }}"
+        )
+        if [[ -n "${{ inputs.detail-label }}" ]]; then
+          args+=(--detail-label "${{ inputs.detail-label }}")
+        fi
+        if [[ -n "${{ inputs.detail-name }}" ]]; then
+          args+=(--detail-name "${{ inputs.detail-name }}")
+        fi
+        if [[ -n "${{ inputs.detail-version }}" ]]; then
+          args+=(--detail-version "${{ inputs.detail-version }}")
+        fi
+        python3 "$script" "${args[@]}"
+
+    - name: Notify Slack on failure
+      if: steps.build.outcome == 'success'
+      continue-on-error: true
+      uses: ${{ github.action_path }}/../notify-slack
+      env:
+        SLACK_BOT_TOKEN: ${{ env.SLACK_BOT_TOKEN }}
+      with:
+        message-type: fail
+        title: ${{ inputs.title }}
+        subtitle: ${{ inputs.subtitle }}
+        slack-channel-id: ${{ inputs.slack-channel-id }}
+        child-blocks: ${{ steps.build.outputs.child_blocks_json }}
+        dry-run: ${{ inputs.dry-run }}

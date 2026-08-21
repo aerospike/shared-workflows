@@ -17,27 +17,35 @@ This is a reusable GitHub Actions workflow that signs binary artifacts using GPG
 
 ## Inputs
 
-| Name                    | Type     | Required | Description                                                                             |
-| ----------------------- | -------- | -------- | --------------------------------------------------------------------------------------- |
-| `gh-unsigned-artifacts` | `string` | No       | Previously uploaded artifacts to sign. Default: `build-artifacts`                       |
-| `gh-artifact-name`      | `string` | No       | Name for the uploaded signed artifacts. Default: `signed-artifacts`                     |
-| `gh-retention-days`     | `number` | No       | Number of days to retain the signed artifacts. Default: `1`                             |
-| `gh-checkout-path`      | `string` | No       | Directory to checkout the shared-workflows repository into. Default: `shared-workflows` |
-| `gh-workflows-ref`      | `string` | Yes      | Git ref for shared-workflows (**should match your `uses:` version**)                    |
-| `runs-on`               | `string` | No       | The runner to use. Default: `ubuntu-22.04`                                              |
-| `nuget-environment`     | `string` | No       | SSL.com environment name for NuGet signing. Default: `PROD`                             |
+| Name                      | Type      | Required | Description                                                                             |
+| ------------------------- | --------- | -------- | --------------------------------------------------------------------------------------- |
+| `gh-unsigned-artifacts`   | `string`  | No       | Previously uploaded artifacts to sign. Default: `build-artifacts`                       |
+| `gh-artifact-name`        | `string`  | No       | Name for the uploaded signed artifacts. Default: `signed-artifacts`                     |
+| `gh-retention-days`       | `number`  | No       | Number of days to retain the signed artifacts. Default: `1`                             |
+| `gh-checkout-path`        | `string`  | No       | Directory to checkout the shared-workflows repository into. Default: `shared-workflows` |
+| `gh-workflows-ref`        | `string`  | Yes      | Git ref for shared-workflows (**should match your `uses:` version**)                    |
+| `runs-on`                 | `string`  | No       | The runner to use. Default: `ubuntu-22.04`                                              |
+| `nuget-environment`       | `string`  | No       | SSL.com environment name for NuGet signing. Default: `PROD`                             |
+| `slack-notify-on-failure` | `boolean` | No       | When true, post a Slack alert if this job fails. Default: `false`                       |
+
+## Slack failure notifications
+
+Set `slack-notify-on-failure: true` to post a fail alert when this job fails. Requires `vars.SLACK_CHANNEL_ID` and `secrets.SLACK_BOT_TOKEN` on the caller (`secrets: inherit`).
+
+When used inside [`reusable_artifacts-cicd`](../artifacts-cicd/README.md), prefer enabling notify on deploy only, or use a caller `notify-failure` job—do not combine embedded notify here with a caller tail job. See [Failure notifications in pipelines](../docs/notify-slack.md#failure-notifications-in-pipelines).
 
 ## Secrets
 
-| Name              | Required | Description                              |
-| ----------------- | -------- | ---------------------------------------- |
-| `gpg-private-key` | Yes      | GPG private key for signing              |
-| `gpg-public-key`  | Yes      | GPG public key for verification          |
-| `gpg-key-pass`    | Yes      | Passphrase for the GPG key               |
-| `es-username`     | Cond.    | SSL.com account username (NuGet signing) |
-| `es-password`     | Cond.    | SSL.com account password (NuGet signing) |
-| `credential_id`   | Cond.    | SSL.com credential ID (NuGet signing)    |
-| `es-totp_secret`  | Cond.    | SSL.com TOTP secret (NuGet signing)      |
+| Name              | Required | Description                                            |
+| ----------------- | -------- | ------------------------------------------------------ |
+| `gpg-private-key` | Yes      | GPG private key for signing                            |
+| `gpg-public-key`  | Yes      | GPG public key for verification                        |
+| `gpg-key-pass`    | Yes      | Passphrase for the GPG key                             |
+| `es-username`     | Cond.    | SSL.com account username (NuGet signing)               |
+| `es-password`     | Cond.    | SSL.com account password (NuGet signing)               |
+| `credential_id`   | Cond.    | SSL.com credential ID (NuGet signing)                  |
+| `es-totp_secret`  | Cond.    | SSL.com TOTP secret (NuGet signing)                    |
+| `SLACK_BOT_TOKEN` | Cond.    | Slack bot token when `slack-notify-on-failure` is true |
 
 Notes:
 

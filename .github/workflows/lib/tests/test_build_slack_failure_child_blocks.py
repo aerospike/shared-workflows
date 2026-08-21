@@ -38,6 +38,33 @@ class BuildSlackFailureChildBlocksTests(unittest.TestCase):
         summary = mod.format_failed_summary("create-release-bundle", [], max_chars=1500)
         self.assertEqual(summary, "*create-release-bundle* failed")
 
+    def test_parse_failed_step_checks_json(self) -> None:
+        names = mod.parse_failed_step_checks_json(
+            json.dumps(
+                [
+                    {"name": "Deploy Artifacts", "outcome": "failure"},
+                    {"name": "Detect artifact types", "outcome": "success"},
+                ]
+            )
+        )
+        self.assertEqual(names, ["Deploy Artifacts"])
+
+    def test_resolve_failed_steps_deduplicates(self) -> None:
+        steps = mod.resolve_failed_steps(
+            failed_step_args=["Deploy Artifacts"],
+            failed_steps_json='["Deploy Artifacts","Check JFrog Configuration"]',
+            failed_step_checks_json=json.dumps(
+                [{"name": "Check JFrog Configuration", "outcome": "failure"}]
+            ),
+        )
+        self.assertEqual(steps, ["Deploy Artifacts", "Check JFrog Configuration"])
+
+    def test_bundle_name_alias(self) -> None:
+        parser = mod.build_parser()
+        args = parser.parse_args(["--bundle-name", "legacy", "--bundle-version", "1.0.0"])
+        self.assertEqual(args.detail_name, "legacy")
+        self.assertEqual(args.detail_version, "1.0.0")
+
     def test_build_child_blocks_structure(self) -> None:
         blocks = mod.build_child_blocks(
             run_url="https://github.com/my-org/my-app/actions/runs/123",
@@ -60,8 +87,9 @@ class BuildSlackFailureChildBlocksTests(unittest.TestCase):
         self.assertIn("*Artifact*\n`signed-artifacts`", called)
         self.assertNotIn("@", called)
 
-    def test_main_writes_json(self) -> None:
+    def test_main_writes_json_from_step_checks(self) -> None:
         buf = StringIO()
+        checks = json.dumps([{"name": "Create Release Bundle", "outcome": "failure"}])
         with mock.patch.dict(
             "os.environ",
             {
@@ -72,6 +100,7 @@ class BuildSlackFailureChildBlocksTests(unittest.TestCase):
                 "GITHUB_JOB": "create-release-bundle",
                 "GITHUB_REF_NAME": "main",
                 "GITHUB_SHA": "abc1234567890",
+                "FAILED_STEP_CHECKS_JSON": checks,
             },
             clear=False,
         ):
@@ -84,13 +113,11 @@ class BuildSlackFailureChildBlocksTests(unittest.TestCase):
                         "123",
                         "--job-name",
                         "create-release-bundle / create-release-bundle",
-                        "--failed-step",
-                        "Create Release Bundle",
                         "--called-workflow-ref",
                         "deadbeef",
-                        "--bundle-name",
+                        "--detail-name",
                         "database-release",
-                        "--bundle-version",
+                        "--detail-version",
                         "7.2.0.1",
                         "--print-json",
                     ]
