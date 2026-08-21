@@ -117,12 +117,3 @@ That produces three distinct lists.
 | `skipped_stages` | Stages below that point with no record. A gate was passed over         |
 
 For an unsealed artifact, the document will mostly show absences. Claims are only rendered when the record backing them exists, so an artifact with no supporting record will not imply one.
-
-## Reading The Output
-
-Two distinctions matter when interpreting a document:
-
-- JFrog build-info is not SLSA provenance. Build-info records what a build declared about itself; provenance is an attestation signed by the builder.
-- The bundle seal proves custody, not origin. It proves the bytes in the bundle are the bytes that were sealed, not where they came from.
-
-An absent record is not always a gap. A promoted container tag may lose its build properties, INTERNAL is a valid terminal stage, and a stage listed under `pending_stages` is simply not reached yet.
