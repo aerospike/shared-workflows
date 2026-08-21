@@ -7,6 +7,8 @@
     --about     one clause describing what the thing is, used in the opening sentence
     --format    markdown (default) | json
     --as-of     the date to report as, default today, since records accrue as a release moves
+    --verdict-path  also write the verdict object here, whatever --format is, so a caller
+                can gate on it without asking for the JSON document
 
 JFrog auth comes from JFROG_TOKEN. GitHub auth comes from the gh CLI, or GITHUB_TOKEN.
 
@@ -33,11 +35,15 @@ COMPANION = (".asc", ".prov", ".sig", ".sha256", ".md5")
 # The public virtual repository for each JFrog package type.
 VIRTUAL = {"docker": "docker", "maven": "maven", "helm": "helm", "debian": "deb", "yum": "rpm",
            "pypi": "pypi", "npm": "npm", "go": "go", "nuget": "nuget", "gems": "gems"}
+# Every package type JFrog can report, because an absent key falls through to the raw type and
+# renders as "shipped as a generic" or "2 nugets".
 NOUN = {"docker": "container", "oci": "container", "maven": "jar", "helm": "Helm chart",
         "debian": "deb package", "yum": "rpm package", "pypi": "Python package",
-        "npm": "npm package", "go": "Go module"}
+        "npm": "npm package", "go": "Go module", "generic": "file",
+        "nuget": "NuGet package", "gems": "Ruby gem", "cargo": "Rust crate"}
 # An immutable promoted tag carries a build timestamp; the clean tag is what a consumer pulls.
-TIMESTAMPED_TAG = re.compile(r"_\d{8}T\d{6}Z")
+# Both separators occur: `8.1.3.0_20260721T101500Z` and `8.1.3.0-20260721101500`.
+TIMESTAMPED_TAG = re.compile(r"_\d{8}T\d{6}Z|-\d{14}(?!\d)")
 # Promotion stages in maturity order. INTERNAL and PROD are alternative terminal stages, so
 # neither implies the other is missing.
 STAGE_ORDER = ["DEV", "TEST", "STAGE", "PREVIEW", "PROD"]
@@ -57,6 +63,9 @@ REPO_ENV_STAGE = {"dev": "DEV", "test": "TEST", "stage": "STAGE",
                   "prod-internal": "INTERNAL", "prod-public": "PROD"}
 # The type segment of a repository key, mapped to the package_type a bundle record would use.
 REPO_TYPE_PACKAGE = {"deb": "debian", "rpm": "yum", "container": "docker", "cargo": "cargo"}
+# How reachable a stage is, most public first. Deliberately not STAGE_ORDER, which is maturity:
+# INTERNAL is a terminal stage but is not somewhere a customer can pull from.
+PUBLICITY = ["PROD", "PREVIEW", "INTERNAL", "STAGE", "TEST", "DEV"]
 
 
 # ----------------------------------------------------------------- transport
@@ -137,39 +146,76 @@ query($org: String!, $after: String) {
   }
 }
 """
+# A person can hold more than one address on the company's verified domains, and a JFrog record
+# may carry any of them, so every address a person holds has to collapse to one identity.
+MEMBER_EMAILS_QUERY = """
+query($org: String!, $after: String) {
+  organization(login: $org) {
+    membersWithRole(first: 100, after: $after) {
+      pageInfo { hasNextPage endCursor }
+      nodes { login name organizationVerifiedDomainEmails(login: $org) }
+    }
+  }
+}
+"""
 _SAML = {}
 
 
 def saml_identities(org):
-    """A GitHub login to {email, name} map from the org's identity provider.
+    """A GitHub login to {email, emails, name} map from the org's directory.
 
-    An Aerospike account carries its work email as its SAML identity, not as a public profile
-    email, so `users/<login>` returns null for nearly everyone and no string rule links a login
-    to a person: `Klaven` is mcounts@aerospike.com. Reading this needs admin:org, which a CI
+    Two sources, because neither alone is enough. The SAML identity provider gives the address a
+    person signs in with, which is the one JFrog usually records. The verified-domain emails give
+    every company address that person holds, and a promotion record may carry any of them, so
+    without them jmartin@ and joem@ read as two people and a one-person chain hides.
+
+    An Aerospike account carries its work email here rather than as a public profile email, so
+    `users/<login>` returns null for nearly everyone and no string rule links a login to a person:
+    `Klaven` is mcounts@aerospike.com. Reading either query needs an org-scoped token, which a CI
     GITHUB_TOKEN does not have, so an empty map means unproven rather than unrelated.
-
-    The identity provider leaves givenName and familyName empty, so the readable name comes from
-    the GitHub profile, which most people fill in and bots do not.
     """
     if org in _SAML:
         return _SAML[org]
-    found, after = {}, None
+    found = {}
+
+    for node in paged(IDENTITIES_QUERY, org, "samlIdentityProvider", "externalIdentities"):
+        user, saml = node.get("user"), node.get("samlIdentity") or {}
+        if user and saml.get("nameId"):
+            login = user["login"].lower()
+            found[login] = {"email": saml["nameId"].lower(),
+                            "emails": {saml["nameId"].lower()},
+                            "name": (user.get("name") or "").strip() or None}
+
+    for node in paged(MEMBER_EMAILS_QUERY, org, None, "membersWithRole"):
+        addresses = {e.lower() for e in (node.get("organizationVerifiedDomainEmails") or [])}
+        if not addresses:
+            continue
+        login = node["login"].lower()
+        entry = found.setdefault(login, {"email": sorted(addresses)[0], "emails": set(),
+                                         "name": (node.get("name") or "").strip() or None})
+        entry["emails"] |= addresses
+        entry["name"] = entry.get("name") or (node.get("name") or "").strip() or None
+
+    _SAML[org] = found
+    return found
+
+
+def paged(query, org, container, connection):
+    """Every node of one paginated organization connection."""
+    nodes, after = [], None
     while True:
-        data = gh_graphql(IDENTITIES_QUERY, org=org, after=after)
-        provider = ((data or {}).get("organization") or {}).get("samlIdentityProvider")
-        if not provider:
+        data = gh_graphql(query, org=org, after=after)
+        scope = (data or {}).get("organization") or {}
+        if container:
+            scope = scope.get(container) or {}
+        page = scope.get(connection)
+        if not page:
             break
-        page = provider["externalIdentities"]
-        for node in page["nodes"]:
-            user, saml = node.get("user"), node.get("samlIdentity") or {}
-            if user and saml.get("nameId"):
-                found[user["login"].lower()] = {"email": saml["nameId"].lower(),
-                                                "name": (user.get("name") or "").strip() or None}
+        nodes += page["nodes"]
         if not page["pageInfo"]["hasNextPage"]:
             break
         after = page["pageInfo"]["endCursor"]
-    _SAML[org] = found
-    return found
+    return nodes
 
 
 def statement(envelope):
@@ -293,7 +339,40 @@ def unbundled_artifact(target):
     }, repo
 
 
-def where_published(sha, pkg_type):
+def version_hint(bundle, entry):
+    """The version the caller named, used to prefer their tag over a floating one.
+
+    A bundled target states it. An unbundled one carries it as the folder holding the file, which
+    is the tag for a container and the version directory for everything else. A hint that names
+    no version scores every candidate alike, so the ordering falls back to what it was.
+    """
+    if bundle and "/" in bundle:
+        return bundle.split("/", 1)[1]
+    parts = entry["path"].split("/")
+    return parts[-2] if len(parts) > 2 else None
+
+
+def project_of(repo, sha):
+    """The JFrog project holding these bytes, which a virtual repository key does not name.
+
+    A target given as a public top-level virtual (`docker/...`, `maven/...`) carries no project
+    in its path, so the first segment reports a project that does not exist and every build-info
+    lookup made with it comes back empty.
+    """
+    if repo.endswith("-local"):
+        return repo.split("-")[0]
+    holders = sorted({h["repo"] for h in aql(
+        f'items.find({{"sha256":"{sha}"}}).include("repo")')["results"]})
+    for holder in holders:
+        if holder.endswith("-release-bundles-v2"):
+            return holder[: -len("-release-bundles-v2")]
+    for holder in holders:
+        if holder.endswith("-local"):
+            return holder.split("-")[0]
+    return repo.split("-")[0]
+
+
+def where_published(sha, pkg_type, version=None):
     """The path a consumer pulls, every repository holding these bytes, and the build link.
 
     The link is looked up by digest rather than on one path. A container's identity is its
@@ -310,10 +389,47 @@ def where_published(sha, pkg_type):
     virtual = VIRTUAL.get(pkg_type)
     if not public or not virtual:
         return None, repos, linked
-    # Prefer a clean tag over an immutable timestamped one.
-    public.sort(key=lambda h: (bool(TIMESTAMPED_TAG.search(h["path"])), len(h["path"])))
+    # The version asked about first, then a clean tag over an immutable timestamped one. Without
+    # the version check a floating `8.1` wins on length over the `8.1.3.0` the reader named.
+    public.sort(key=lambda h: (bool(version) and version not in h["path"],
+                               bool(TIMESTAMPED_TAG.search(h["path"])),
+                               len(h["path"])))
     inner = f'{public[0]["path"]}/{public[0]["name"]}'.lstrip("/")
     return f"{virtual}/{inner}", repos, linked
+
+
+def most_public(repos):
+    """The furthest-promoted repository holding these bytes, which is the one to name to a reader.
+
+    A release-bundles repository holds the record rather than the artifact, so it is never the
+    answer. A repository whose key names no stage still holds the bytes, so it ranks last rather
+    than being discarded.
+    """
+    candidates = [r for r in repos if not r.endswith("-release-bundles-v2")]
+    if not candidates:
+        return None
+    def rank(repo):
+        stage = stage_of_repo(repo)
+        return (PUBLICITY.index(stage) if stage in PUBLICITY else len(PUBLICITY), repo)
+    return min(candidates, key=rank)
+
+
+def pasteable(art):
+    """A repository-qualified path for the verify command, for every artifact.
+
+    `public` names a top-level virtual and is the best answer when it exists, but it is only
+    built for a package type in VIRTUAL whose bytes reached a `prod-public` repository. Without
+    it a bundled artifact's path carries no repository, so the printed command names a path
+    nothing resolves and fails with `no sha256 for <path>`.
+    """
+    if art["public"]:
+        return art["public"]
+    # An unbundled entry is already repository-qualified by unbundled_artifact.
+    head = art["path"].split("/", 1)[0]
+    if head in art["repos"]:
+        return art["path"]
+    holding = most_public(art["repos"])
+    return f'{holding}/{art["path"]}' if holding else art["path"]
 
 
 def build_origin(name, number, project):
@@ -403,7 +519,7 @@ def collect(target, about, as_of=None):
         # records show up as absent.
         entry, origin_repo = unbundled_artifact(target)
         bundle_repo, bundle = None, None
-        project = origin_repo.split("-")[0]
+        project = project_of(origin_repo, entry["checksum"])
         record, seal, sealed_digests = {}, {}, set()
         entries = [entry]
         # The entry's path already carries its repository, unlike a bundled one.
@@ -440,7 +556,8 @@ def collect(target, about, as_of=None):
     for art in entries:
         props = {p["key"]: p["values"][0] for p in (art.get("properties") or [])}
         sha = art["checksum"]
-        public, repos, digest_linked = where_published(sha, art["package_type"])
+        public, repos, digest_linked = where_published(
+            sha, art["package_type"], version_hint(bundle, art))
 
         vcs, run, env = None, "", 0
         if props.get("build.name") and props.get("build.number"):
@@ -669,8 +786,8 @@ def acting_roles(evidence):
 def resolve_identities(evidence):
     """Each acting identity mapped to the person behind it, None where that cannot be shown.
 
-    Returns the person map plus a name for each person, so a report can say who someone is
-    rather than only which mailbox they own.
+    Every address a person holds folds onto one of them, so a promotion recorded against a second
+    company address still reads as the same person as the token that built the bytes.
     """
     orgs = {t.group("org") for t in
             (TOKEN_ACTOR.match(who) for _, who in acting_roles(evidence)) if t}
@@ -678,19 +795,33 @@ def resolve_identities(evidence):
         orgs.add(evidence["pr"]["repo"].split("/")[0])
     directory = {}
     for org in sorted(orgs):
-        directory.update(saml_identities(org))
-    # An email in a JFrog record has no login to look up, so index the directory both ways.
-    by_email = {entry["email"]: entry.get("name") for entry in directory.values()}
+        for login, entry in saml_identities(org).items():
+            known = directory.setdefault(login, {"email": entry["email"], "emails": set(),
+                                                 "name": entry.get("name")})
+            known["emails"] |= entry["emails"]
+            known["name"] = known.get("name") or entry.get("name")
+
+    # Alias to canonical, so a comparison stays a string equality rather than a set intersection.
+    canonical, named = {}, {}
+    for entry in directory.values():
+        for address in entry["emails"]:
+            canonical[address] = entry["email"]
+        named[entry["email"]] = entry.get("name")
 
     people, names = {}, {}
     for _, who in acting_roles(evidence):
         token = TOKEN_ACTOR.match(who)
         login = token.group("actor") if token else (None if "@" in who else who)
         entry = directory.get(login.lower()) if login else None
-        email = entry["email"] if entry else (who.lower() if not login else None)
+        if entry:
+            email = entry["email"]
+        elif login:
+            email = None
+        else:
+            email = canonical.get(who.lower(), who.lower())
         people[who] = email
         if email:
-            names[email] = (entry or {}).get("name") or by_email.get(email)
+            names[email] = (entry or {}).get("name") or named.get(email)
     return people, names
 
 
@@ -1153,7 +1284,7 @@ def document(evidence):
               f'the `{evidence["project"]}` project, and the review and provenance steps need the '
               "GitHub CLI."),
         ("code", 'export JFROG_TOKEN="<a JFrog access token>"\n\n'
-                 + "\n".join(f'./verify-artifact.sh {a["public"] or a["path"]}'
+                 + "\n".join(f'./verify-artifact.sh {pasteable(a)}'
                              for a in evidence["artifacts"]), "bash"),
     ]
     return blocks
@@ -1187,9 +1318,14 @@ def main():
     parser.add_argument("--about", default="")
     parser.add_argument("--format", choices=("markdown", "json"), default="markdown")
     parser.add_argument("--as-of", default=None)
+    parser.add_argument("--verdict-path", default=None)
     args = parser.parse_args()
 
     evidence = collect(args.target, args.about, args.as_of)
+    if args.verdict_path:
+        with open(args.verdict_path, "w", encoding="utf-8") as handle:
+            json.dump(evidence["verdict"], handle, indent=2)
+            handle.write("\n")
     if args.format == "json":
         print(json.dumps(evidence, indent=2))
     else:

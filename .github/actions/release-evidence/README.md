@@ -33,9 +33,19 @@ JFrog auth comes from `JFROG_TOKEN`. GitHub auth comes from the `gh` CLI or `GIT
 | `jf-url`      | No       | `https://aerospike.jfrog.io` | JFrog platform URL                                                 |
 | `jfrog-token` | No       | -                            | Overrides `JFROG_TOKEN` and the JFrog CLI config                   |
 
-| Output     | Description                                                |
-| ---------- | ---------------------------------------------------------- |
-| `document` | Path to the written document, empty when it went to stdout |
+| Output     | Description                                                                 |
+| ---------- | --------------------------------------------------------------------------- |
+| `document` | Path to the written document, empty when it went to stdout                  |
+| `verdict`  | `FAIL`, `PASS WITH WARNING`, `ON TRACK WITH WARNING`, `ON TRACK`, or `PASS` |
+| `finding`  | The one finding that decided it, empty on a clean `PASS` or `ON TRACK`      |
+| `reason`   | Why it came out that way, one clause                                        |
+| `problems` | Count of controls that did not happen                                       |
+| `gaps`     | Count of records due at this stage that do not exist                        |
+| `warnings` | Count of findings that thin the chain without failing it                    |
+| `complete` | `true` once the release has reached PROD or INTERNAL                        |
+
+The verdict is computed whatever `format` is asked for, so a caller can gate on it and still
+publish markdown.
 
 ## Prerequisites
 
@@ -63,6 +73,34 @@ SLSA provenance lookups use `gh`, so the job needs a token that can read attesta
   env:
     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
+
+## Gating On The Verdict
+
+`FAIL` is the only status that means a control did not happen or a record due at this stage does
+not exist. `ON TRACK` is a correct release with stages still ahead of it, so a gate that also
+blocks on `ON TRACK` will block every healthy pre-PROD promotion.
+
+```yaml
+- name: Record release evidence
+  id: evidence
+  uses: aerospike/shared-workflows/.github/actions/release-evidence@<sha> # version
+  with:
+    target: bundle:${{ inputs.bundle-name }}/${{ inputs.bundle-version }}@${{ inputs.jf-project }}
+    output-path: evidence.md
+  env:
+    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+- name: Block the promotion on a failing chain of custody
+  if: startsWith(steps.evidence.outputs.verdict, 'FAIL')
+  run: |
+    echo "::error::${{ steps.evidence.outputs.verdict }}: ${{ steps.evidence.outputs.finding }}"
+    exit 1
+```
+
+Separation of duties is judged against people, resolved through the org SAML identity map, which
+needs `admin:org`. A job running on `GITHUB_TOKEN` gets an empty map, so those findings read as
+unproven rather than as a violation and cannot fire. A gate on `GITHUB_TOKEN` alone therefore
+covers the record-shaped findings only.
 
 ## All artifacts and promotion stages
 

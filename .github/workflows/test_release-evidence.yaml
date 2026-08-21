@@ -59,6 +59,7 @@ jobs:
           oidc-audience: aerospike/testing
 
       - name: Record release evidence
+        id: evidence
         uses: ./.github/actions/release-evidence
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -79,3 +80,28 @@ jobs:
           done
           grep -qE 'sha256 [0-9a-f]{64}' release-evidence.md || { echo "no digest reported" >&2; missing=1; }
           exit "$missing"
+
+      # A caller gates on these, so an empty one is a silently open gate. Any of the five
+      # statuses is a pass here: this bundle sits in a test project and GITHUB_TOKEN cannot read
+      # the org identity map, so the verdict itself is not the thing under test.
+      - name: Fail if the verdict outputs came back empty
+        env:
+          VERDICT: ${{ steps.evidence.outputs.verdict }}
+          REASON: ${{ steps.evidence.outputs.reason }}
+          PROBLEMS: ${{ steps.evidence.outputs.problems }}
+          GAPS: ${{ steps.evidence.outputs.gaps }}
+          WARNINGS: ${{ steps.evidence.outputs.warnings }}
+          COMPLETE: ${{ steps.evidence.outputs.complete }}
+        run: |
+          set -euo pipefail
+          echo "verdict=${VERDICT} reason=${REASON}"
+          case "$VERDICT" in
+            FAIL | "PASS WITH WARNING" | "ON TRACK WITH WARNING" | "ON TRACK" | PASS) ;;
+            *) echo "unexpected verdict: '${VERDICT}'" >&2; exit 1 ;;
+          esac
+          [[ -n "$REASON" ]] || { echo "reason came back empty" >&2; exit 1; }
+          for pair in "problems:${PROBLEMS}" "gaps:${GAPS}" "warnings:${WARNINGS}"; do
+            [[ "${pair#*:}" =~ ^[0-9]+$ ]] || { echo "${pair%%:*} is not a count: '${pair#*:}'" >&2; exit 1; }
+          done
+          [[ "$COMPLETE" == "true" || "$COMPLETE" == "false" ]] \
+            || { echo "complete is not a boolean: '${COMPLETE}'" >&2; exit 1; }

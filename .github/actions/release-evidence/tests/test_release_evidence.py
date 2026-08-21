@@ -549,6 +549,181 @@ class Verdict(unittest.TestCase):
         self.assertTrue(line.startswith("**ON TRACK.** Correct so far."), line)
         self.assertIn("STAGE and PROD lie ahead", line)
 
+    def test_the_keys_the_action_publishes_as_outputs_all_exist(self):
+        # action.yaml reads these by name out of --verdict-path. A rename here has to break a
+        # test rather than silently empty a gate's `if:`.
+        call = rev.verdict(self.evidence(["DEV", "TEST"], ["STAGE", "PROD"]))
+        self.assertEqual(set(call), {"status", "reason", "finding", "problems", "gaps",
+                                     "warnings", "complete"})
+
+    def test_the_verdict_travels_in_the_evidence_so_markdown_callers_can_gate(self):
+        # --verdict-path serves it whatever --format is, which only works because collect()
+        # stores it rather than the renderer computing it.
+        ev = self.evidence(["DEV", "TEST", "STAGE", "PROD"], [])
+        ev["verdict"] = rev.verdict(ev)
+        self.assertEqual(rev.verdict_block(ev, [], [])[1], "info")
+        self.assertEqual(ev["verdict"]["status"], "PASS")
+
+
+class TheVerifyCommandRuns(unittest.TestCase):
+    """Every printed command has to resolve, or the section invites a reader to prove nothing."""
+
+    def art(self, **over):
+        art = {"type": "generic", "public": None, "repos": [], "path": "x/1.0/x-1.0.zip"}
+        art.update(over)
+        return art
+
+    def test_a_public_virtual_path_is_used_as_given(self):
+        art = self.art(type="maven", public="maven/com/aerospike/x/1.0/x-1.0.jar",
+                       repos=["database-maven-prod-public-local"],
+                       path="com/aerospike/x/1.0/x-1.0.jar")
+        self.assertEqual(rev.pasteable(art), "maven/com/aerospike/x/1.0/x-1.0.jar")
+
+    def test_a_type_with_no_virtual_falls_back_to_the_most_public_repository(self):
+        # generic is absent from VIRTUAL, so `public` is None and the bundle-relative path alone
+        # resolves to nothing.
+        art = self.art(repos=["connect-generic-dev-local", "connect-generic-prod-public-local",
+                              "connect-generic-stage-local", "connect-release-bundles-v2"],
+                       path="aerospike-trino/4.7.4-483/aerospike-trino-4.7.4-483.zip")
+        self.assertEqual(
+            rev.pasteable(art),
+            "connect-generic-prod-public-local/aerospike-trino/4.7.4-483/"
+            "aerospike-trino-4.7.4-483.zip")
+
+    def test_a_repository_naming_no_stage_is_still_named_rather_than_dropped(self):
+        # absctl really ships from ecosystem-container-prod-local, whose key names no stage this
+        # rule recognizes. JFrog labels that repository PROD in its `environments` field, which
+        # the key cannot be made to say: devops-containers-prod-local is labelled DEV. So the
+        # unranked repository sorts last and the command names a copy that resolves, rather than
+        # a bare path that resolves to nothing.
+        art = self.art(type="docker", repos=["ecosystem-container-dev-local",
+                                             "ecosystem-container-prod-local",
+                                             "ecosystem-release-bundles-v2"],
+                       path="absctl/v1.1.1/list.manifest.json")
+        chosen = rev.pasteable(art)
+        self.assertTrue(chosen.split("/", 1)[0] in art["repos"], chosen)
+        self.assertNotIn("release-bundles", chosen)
+        self.assertTrue(chosen.endswith("/absctl/v1.1.1/list.manifest.json"), chosen)
+
+    def test_an_unranked_key_sorts_behind_every_recognized_stage(self):
+        self.assertEqual(rev.most_public(["ecosystem-container-prod-local",
+                                          "ecosystem-container-dev-local"]),
+                         "ecosystem-container-dev-local")
+
+    def test_an_unbundled_path_already_carrying_its_repository_is_left_alone(self):
+        art = self.art(repos=["clients-pypi-dev-local"],
+                       path="clients-pypi-dev-local/aerospike/16.0.1/aerospike-16.0.1.whl")
+        self.assertEqual(rev.pasteable(art),
+                         "clients-pypi-dev-local/aerospike/16.0.1/aerospike-16.0.1.whl")
+
+    def test_the_release_bundle_repository_is_never_the_answer(self):
+        # It holds the record, not the artifact.
+        self.assertEqual(rev.most_public(["database-release-bundles-v2",
+                                          "database-deb-test-local"]),
+                         "database-deb-test-local")
+        self.assertIsNone(rev.most_public(["database-release-bundles-v2"]))
+
+    def test_prod_outranks_internal_which_outranks_stage(self):
+        self.assertEqual(rev.most_public(["x-deb-stage-local", "x-deb-prod-internal-local",
+                                          "x-deb-prod-public-local"]),
+                         "x-deb-prod-public-local")
+        self.assertEqual(rev.most_public(["x-deb-stage-local", "x-deb-prod-internal-local"]),
+                         "x-deb-prod-internal-local")
+
+
+class TheTagTheReaderNamedWins(unittest.TestCase):
+    """A floating tag is shorter than the release version, so length alone picks the wrong one."""
+
+    def published(self, paths, version):
+        # aerospike-server 7.1.0.25 really sits under 7.1, 7.1.0.25 and 7.1.0.25-20260603181409
+        # in database-docker-prod-public-local.
+        hits = {"results": [{"repo": "database-docker-prod-public-local", "path": path,
+                             "name": "list.manifest.json", "properties": []} for path in paths]}
+        saved = rev.aql
+        rev.aql = lambda query: hits
+        try:
+            return rev.where_published("deadbeef", "docker", version)[0]
+        finally:
+            rev.aql = saved
+
+    def test_the_release_version_beats_a_floating_tag(self):
+        self.assertEqual(
+            self.published(["aerospike-server/7.1", "aerospike-server/7.1.0.25",
+                            "aerospike-server/7.1.0.25-20260603181409"], "7.1.0.25"),
+            "docker/aerospike-server/7.1.0.25/list.manifest.json")
+
+    def test_the_clean_tag_beats_the_immutable_one_at_the_same_version(self):
+        self.assertEqual(
+            self.published(["aerospike-server/7.1.0.25-20260603181409",
+                            "aerospike-server/7.1.0.25"], "7.1.0.25"),
+            "docker/aerospike-server/7.1.0.25/list.manifest.json")
+
+    def test_no_version_falls_back_to_the_shortest_clean_tag(self):
+        self.assertEqual(
+            self.published(["aerospike-server/7.1", "aerospike-server/7.1.0.25"], None),
+            "docker/aerospike-server/7.1/list.manifest.json")
+
+    def test_the_hint_comes_from_the_bundle_when_there_is_one(self):
+        self.assertEqual(
+            rev.version_hint("aerospike-trino/4.7.4-483", {"path": "x/y/z.zip"}), "4.7.4-483")
+
+    def test_the_hint_comes_from_the_path_when_there_is_no_bundle(self):
+        self.assertEqual(
+            rev.version_hint(None, {"path": "docker/aerospike-server/7.1.0.25/"
+                                            "list.manifest.json"}), "7.1.0.25")
+
+    def test_a_path_too_short_to_carry_a_version_yields_no_hint(self):
+        self.assertIsNone(rev.version_hint(None, {"path": "repo/file.zip"}))
+
+
+class TheProjectComesFromARepositoryThatNamesOne(unittest.TestCase):
+    """A public virtual carries no project, so the first path segment invents one."""
+
+    def resolve(self, repo, holders):
+        saved = rev.aql
+        rev.aql = lambda query: {"results": [{"repo": h} for h in holders]}
+        try:
+            return rev.project_of(repo, "deadbeef")
+        finally:
+            rev.aql = saved
+
+    def test_a_local_repository_names_its_own_project(self):
+        self.assertEqual(self.resolve("database-deb-dev-local", []), "database")
+
+    def test_a_virtual_target_resolves_through_the_bundle_repository(self):
+        self.assertEqual(
+            self.resolve("docker", ["database-docker-prod-public-local",
+                                    "database-release-bundles-v2"]), "database")
+
+    def test_a_virtual_target_with_no_bundle_falls_back_to_a_local_repository(self):
+        self.assertEqual(self.resolve("docker", ["database-docker-prod-public-local"]), "database")
+
+
+class TheImmutableTagIsRecognizedInBothForms(unittest.TestCase):
+    """A promoted tag is timestamped two ways, and only one was matched."""
+
+    def test_both_separators_count_as_timestamped(self):
+        self.assertTrue(rev.TIMESTAMPED_TAG.search("aerospike-server/8.1.3.0_20260721T101500Z"))
+        self.assertTrue(rev.TIMESTAMPED_TAG.search("aerospike-server/8.1.3.0-20260721101500"))
+
+    def test_a_version_is_not_mistaken_for_a_timestamp(self):
+        for path in ("aerospike-server/8.1.3.0", "aerospike-server/8.1",
+                     "pool/x/aerospike-server-community_8.0.0.19-3debian12_amd64.deb",
+                     "com/aerospike/x/6.2.0/x-6.2.0-javadoc.jar"):
+            self.assertIsNone(rev.TIMESTAMPED_TAG.search(path), path)
+
+
+class EveryTypeHasAReadableNoun(unittest.TestCase):
+    """An absent key falls through to the raw type, which renders as "shipped as a generic"."""
+
+    def test_every_type_the_pipeline_publishes_reads_as_a_thing(self):
+        for pkg_type in list(rev.VIRTUAL) + ["generic", "oci", "cargo"]:
+            self.assertIn(pkg_type, rev.NOUN, pkg_type)
+
+    def test_a_generic_release_reads_as_files(self):
+        evidence = {"artifacts": [{"type": "generic"}, {"type": "generic"}]}
+        self.assertEqual(rev.nouns(evidence), "2 files")
+
 
 class TimesComeFromTheRecords(unittest.TestCase):
     """Every time shown is the timestamp of the record that names the actor, not a guess."""
@@ -604,9 +779,15 @@ class SeparationOfDuties(unittest.TestCase):
     """
 
     DIRECTORY = {
-        "pvinh-spike": {"email": "pvinh@aerospike.com", "name": "Phuc Vinh"},
-        "mphanias": {"email": "pmokrala@aerospike.com", "name": "Phani Mokrala"},
-        "abhilashmandaliya": {"email": "abhilash@aerospike.com", "name": "Abhilash Mandaliya"},
+        "pvinh-spike": {"email": "pvinh@aerospike.com", "name": "Phuc Vinh",
+                        "emails": {"pvinh@aerospike.com"}},
+        "mphanias": {"email": "pmokrala@aerospike.com", "name": "Phani Mokrala",
+                     "emails": {"pmokrala@aerospike.com"}},
+        "abhilashmandaliya": {"email": "abhilash@aerospike.com", "name": "Abhilash Mandaliya",
+                              "emails": {"abhilash@aerospike.com"}},
+        # Two verified company addresses, one person.
+        "arrowplum": {"email": "jmartin@aerospike.com", "name": "Joe M.",
+                      "emails": {"jmartin@aerospike.com", "joem@aerospike.com"}},
     }
 
     def setUp(self):
@@ -668,6 +849,17 @@ class SeparationOfDuties(unittest.TestCase):
         self.assertTrue(line.startswith("**PASS WITH WARNING."), line)
         self.assertIn("also authorized the publish", line)
 
+    def test_a_second_company_address_is_the_same_person(self):
+        # A promotion recorded against joem@ and a token resolving to jmartin@ are one human, so
+        # the publish gate added nobody. Without this the chain reads as separated.
+        ev = self.evidence(created_by="token:gh-citrusleaf/arrowplum",
+                           promotions=[self.promotion("STAGE", "jmartin@aerospike.com"),
+                                       self.promotion("PROD", "joem@aerospike.com")])
+        self.assertEqual(ev["duties"]["distinct"], 1)
+        self.assertFalse(ev["duties"]["separated"])
+        self.assertEqual([v[0] for v in ev["duties"]["violations"]],
+                         ["One person took this from commit to publish"])
+
     def test_a_finding_names_the_person_not_only_the_mailbox(self):
         ev = self.evidence(
             created_by="token:gh-citrusleaf/pvinh-spike",
@@ -709,8 +901,10 @@ class SeparationOfDuties(unittest.TestCase):
     def test_a_self_approval_survives_a_second_login(self):
         # One human with two logins is still one approval, so the login comparison cannot stand.
         rev.saml_identities = lambda _org: {
-            "writer": {"email": "one@aerospike.com", "name": "One Person"},
-            "writer-alt": {"email": "one@aerospike.com", "name": "One Person"}}
+            "writer": {"email": "one@aerospike.com", "name": "One Person",
+                       "emails": {"one@aerospike.com"}},
+            "writer-alt": {"email": "one@aerospike.com", "name": "One Person",
+                           "emails": {"one@aerospike.com"}}}
         ev = self.evidence(pr=self.pr("writer", ["writer-alt"]),
                            promotions=[self.promotion("PROD", "other@aerospike.com")])
         self.assertIn("The author approved their own change",

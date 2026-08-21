@@ -35,6 +35,29 @@ outputs:
   document:
     description: Path to the written document, empty when the document went to stdout
     value: ${{ steps.evidence.outputs.document }}
+  verdict:
+    description: >
+      The call on this release: FAIL, PASS WITH WARNING, ON TRACK WITH WARNING, ON TRACK, or
+      PASS. Gate with startsWith(..., 'FAIL').
+    value: ${{ steps.evidence.outputs.verdict }}
+  finding:
+    description: The one finding that decided the verdict, empty on a clean PASS or ON TRACK
+    value: ${{ steps.evidence.outputs.finding }}
+  reason:
+    description: Why the verdict came out that way, one clause
+    value: ${{ steps.evidence.outputs.reason }}
+  problems:
+    description: Count of controls that did not happen
+    value: ${{ steps.evidence.outputs.problems }}
+  gaps:
+    description: Count of records due at this stage that do not exist
+    value: ${{ steps.evidence.outputs.gaps }}
+  warnings:
+    description: Count of findings that thin the chain without failing it
+    value: ${{ steps.evidence.outputs.warnings }}
+  complete:
+    description: true once the release has reached PROD or INTERNAL
+    value: ${{ steps.evidence.outputs.complete }}
 runs:
   using: composite
   steps:
@@ -65,7 +88,8 @@ runs:
         echo "::add-mask::${token}"
         export JFROG_TOKEN="$token"
 
-        args=("$INPUT_TARGET" --format "$INPUT_FORMAT")
+        verdict="${RUNNER_TEMP:-/tmp}/release-evidence-verdict.json"
+        args=("$INPUT_TARGET" --format "$INPUT_FORMAT" --verdict-path "$verdict")
         if [[ -n "$INPUT_ABOUT" ]]; then
           args+=(--about "$INPUT_ABOUT")
         fi
@@ -80,3 +104,15 @@ runs:
           python3 "$script" "${args[@]}"
           echo "document=" >>"$GITHUB_OUTPUT"
         fi
+
+        # One line per output. gsub keeps a stray newline in a finding from writing a second
+        # key into GITHUB_OUTPUT.
+        jq -r 'def flat: (. // "") | tostring | gsub("[\r\n]+"; " ");
+               "verdict=\(.status | flat)",
+               "reason=\(.reason | flat)",
+               "finding=\(.finding | flat)",
+               "problems=\(.problems)",
+               "gaps=\(.gaps)",
+               "warnings=\(.warnings)",
+               "complete=\(.complete)"' "$verdict" >>"$GITHUB_OUTPUT"
+        echo "Verdict: $(jq -r '.status' "$verdict")"
