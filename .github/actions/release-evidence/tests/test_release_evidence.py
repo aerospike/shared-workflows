@@ -218,18 +218,36 @@ class ClaimsRequireRecords(unittest.TestCase):
         titles = [r[0] for r in rev.gap_rows(self.evidence(None, [], False))]
         self.assertEqual([t for t in titles if "transition" in t], [])
 
-    def test_a_required_gate_passed_over_is_reported_as_missing_evidence(self):
+    def test_a_gate_passed_over_below_a_customer_is_missing_evidence(self):
+        ev = self.evidence(None, [], False)
+        ev["derived"]["stages_reached"] = ["DEV", "STAGE"]
+        ev["derived"]["pending_stages"] = ["PROD"]
+        ev["derived"]["skipped_stages"] = ["TEST"]
+        row = next(r for r in rev.gap_rows(ev) if "transition" in r[0])
+        self.assertEqual(row[0], "A recorded TEST transition")
+        self.assertEqual(rev.shipped_untested(ev), [])
+
+    def test_a_gate_passed_over_on_the_way_to_customers_is_a_failure(self):
         ev = self.evidence(None, [], False)
         ev["derived"]["stages_reached"] = ["DEV", "PROD"]
         ev["derived"]["pending_stages"] = []
         ev["derived"]["skipped_stages"] = ["TEST", "STAGE"]
-        row = next(r for r in rev.gap_rows(ev) if "transition" in r[0])
-        self.assertEqual(row[0], "A recorded TEST and STAGE transition")
-        self.assertIn("passed over", row[1])
+        self.assertEqual([f[0] for f in rev.shipped_untested(ev)],
+                         ["Published to customers with no TEST and STAGE record"])
+        # Reported once, as the failure, not also as missing paperwork.
+        self.assertEqual([r for r in rev.gap_rows(ev) if "transition" in r[0]], [])
 
-    def test_a_missing_approval_is_named_as_a_gap_rather_than_left_silent(self):
+    def test_a_missing_approval_is_named_as_a_gap_once_it_has_been_vouched_for(self):
+        ev = self.pr_evidence([], None)
+        ev["derived"]["stages_reached"] = ["DEV", "TEST", "STAGE"]
+        self.assertIn("An approving review on the authorizing pull request",
+                      [r[0] for r in rev.gap_rows(ev)])
+
+    def test_a_missing_approval_on_a_dev_build_is_not_yet_a_gap(self):
+        # A candidate can be built from a branch before the merge, so nothing is late yet.
         rows = rev.gap_rows(self.pr_evidence([], None))
-        self.assertIn("An approving review on the authorizing pull request", [r[0] for r in rows])
+        self.assertNotIn("An approving review on the authorizing pull request",
+                         [r[0] for r in rows])
 
     def test_an_approved_pr_raises_no_approval_gap(self):
         rows = rev.gap_rows(self.pr_evidence(["reviewer"], "2026-01-01T00:00:00Z"))
@@ -253,9 +271,15 @@ class ClaimsRequireRecords(unittest.TestCase):
         self.assertIn("approved by `reviewer`", review)
         self.assertIn("merged 2026-01-01 00:00:00 UTC", review)
 
-    def test_an_unsealed_artifact_names_the_missing_bundle_as_the_root_gap(self):
+    def test_an_unsealed_artifact_past_dev_names_the_missing_bundle_as_the_root_gap(self):
+        ev = self.evidence(None, [], False)
+        ev["derived"]["stages_reached"] = ["DEV", "TEST"]
+        self.assertIn("A release bundle holding these bytes", [r[0] for r in rev.gap_rows(ev)])
+
+    def test_an_unsealed_artifact_still_in_dev_is_not_missing_a_bundle(self):
+        # The bundle is cut at the DEV to TEST gate, so nothing is late yet.
         rows = rev.gap_rows(self.evidence(None, [], False))
-        self.assertIn("A release bundle holding these bytes", [r[0] for r in rows])
+        self.assertNotIn("A release bundle holding these bytes", [r[0] for r in rows])
 
     def test_the_document_renders_without_a_release(self):
         ev = self.evidence(None, [], False)
@@ -360,7 +384,7 @@ class CollectUnbundled(unittest.TestCase):
         out = rev.render_markdown(ev, rev.document(ev))
         self.assertIn("has reached DEV", out)
         self.assertIn("not been promoted to TEST, STAGE and PROD", out)
-        self.assertIn("A release bundle holding these bytes", out)
+        self.assertIn("A recorded source commit", out)
         for lie in ("could not change after sealing", "promotion attestation names the seal"):
             self.assertNotIn(lie, out)
 
@@ -429,6 +453,46 @@ class CollectBundled(unittest.TestCase):
         rev.render_markdown(ev, rev.document(ev))  # must not raise
 
 
+class Verdict(unittest.TestCase):
+    """A release still climbing the pipeline is not failing for records it has not earned."""
+
+    def evidence(self, reached, pending, gaps_from=None):
+        pr = {"number": 1, "title": "t", "author": "writer", "approvers": ["reviewer"],
+              "merged_at": "2026-01-01T00:00:00Z", "repo": "citrusleaf/a-repo"}
+        ev = {"release": None, "pr": pr, "promotions": [], "artifacts": [],
+              "duties": {"warnings": [], "violations": [], "unproven": []},
+              "derived": {"stages_reached": reached, "pending_stages": pending,
+                          "skipped_stages": [], "sealed": True, "any_commit": True,
+                          "unlinked_published": [], "independently_approved": True}}
+        if gaps_from:
+            ev["derived"].update(gaps_from)
+        return ev
+
+    def test_a_clean_release_in_test_is_on_track_not_a_pass(self):
+        call = rev.verdict(self.evidence(["DEV", "TEST"], ["STAGE", "PROD"]))
+        self.assertEqual(call["status"], "ON TRACK")
+        self.assertFalse(call["complete"])
+        self.assertEqual(call["gaps"], 0)
+
+    def test_a_clean_release_in_prod_passes(self):
+        call = rev.verdict(self.evidence(["DEV", "TEST", "STAGE", "PROD"], []))
+        self.assertEqual(call["status"], "PASS")
+        self.assertTrue(call["complete"])
+
+    def test_a_release_in_test_with_no_commit_already_fails(self):
+        call = rev.verdict(self.evidence(["DEV", "TEST"], ["STAGE", "PROD"],
+                                         {"any_commit": False}))
+        self.assertEqual(call["status"], "FAIL")
+        self.assertEqual(call["reason"], "evidence incomplete")
+        self.assertEqual(call["finding"], "A recorded source commit")
+
+    def test_the_on_track_line_says_what_is_still_ahead(self):
+        ev = self.evidence(["DEV", "TEST"], ["STAGE", "PROD"])
+        line = rev.verdict_block(ev, [], [])[-1]
+        self.assertTrue(line.startswith("**ON TRACK.** Correct so far."), line)
+        self.assertIn("STAGE and PROD lie ahead", line)
+
+
 class SeparationOfDuties(unittest.TestCase):
     """A CI token and a user account can name one human, and only the identity map can tell.
 
@@ -436,9 +500,11 @@ class SeparationOfDuties(unittest.TestCase):
     directory, so every claim about who acted rests on the org SAML map.
     """
 
-    DIRECTORY = {"pvinh-spike": "pvinh@aerospike.com",
-                 "mphanias": "pmokrala@aerospike.com",
-                 "abhilashmandaliya": "abhilash@aerospike.com"}
+    DIRECTORY = {
+        "pvinh-spike": {"email": "pvinh@aerospike.com", "name": "Phuc Vinh"},
+        "mphanias": {"email": "pmokrala@aerospike.com", "name": "Phani Mokrala"},
+        "abhilashmandaliya": {"email": "abhilash@aerospike.com", "name": "Abhilash Mandaliya"},
+    }
 
     def setUp(self):
         self._real = rev.saml_identities
@@ -461,7 +527,8 @@ class SeparationOfDuties(unittest.TestCase):
             "pr": pr, "promotions": list(promotions), "artifacts": [],
             "derived": {"independently_approved": bool(pr and pr["approvers"]),
                         "sealed": bool(created_by), "any_commit": True,
-                        "unlinked_published": [], "skipped_stages": [], "stages_reached": []},
+                        "unlinked_published": [], "skipped_stages": [], "pending_stages": [],
+                        "stages_reached": [p["stage"] for p in promotions]},
         }
         ev["duties"] = rev.duties(ev)
         return ev
@@ -474,15 +541,35 @@ class SeparationOfDuties(unittest.TestCase):
         self.assertEqual(ev["duties"]["distinct"], 1)
         self.assertFalse(ev["duties"]["separated"])
         self.assertEqual([v[0] for v in ev["duties"]["violations"]],
-                         ["One person performed every recorded step"])
+                         ["One person took this from commit to publish"])
 
-    def test_the_approver_who_publishes_is_named(self):
+    def test_the_approver_who_publishes_is_a_note_not_a_failure(self):
+        # The author neither approved nor published, so the control held and only depth was lost.
         ev = self.evidence(pr=self.pr("abhilashmandaliya", ["mphanias"]),
                            created_by="token:gh-citrusleaf/abhilashmandaliya",
                            promotions=[self.promotion("PROD", "pmokrala@aerospike.com")])
+        self.assertEqual(ev["duties"]["violations"], [])
         self.assertIn("The person who approved the change also authorized the publish",
-                      [v[0] for v in ev["duties"]["violations"]])
+                      [w[0] for w in ev["duties"]["warnings"]])
         self.assertFalse(ev["duties"]["separated"])
+
+    def test_a_warning_reaches_the_verdict_line(self):
+        ev = self.evidence(pr=self.pr("abhilashmandaliya", ["mphanias"]),
+                           created_by="token:gh-citrusleaf/abhilashmandaliya",
+                           promotions=[self.promotion("PROD", "pmokrala@aerospike.com")])
+        ev["derived"].update(sealed=True, types=["generic"], attested_types=[],
+                             unattested_types=[], stages=["PROD"], terminal_stage="PROD",
+                             resident_stages=["PROD"], any_commit=True, self_approved=False,
+                             independently_approved=True)
+        line = rev.verdict_block(ev, [], [])[-1]
+        self.assertTrue(line.startswith("**PASS WITH WARNING."), line)
+        self.assertIn("also authorized the publish", line)
+
+    def test_a_finding_names_the_person_not_only_the_mailbox(self):
+        ev = self.evidence(
+            created_by="token:gh-citrusleaf/pvinh-spike",
+            promotions=[self.promotion("PROD", "pvinh@aerospike.com")])
+        self.assertIn("Phuc Vinh <pvinh@aerospike.com>", ev["duties"]["violations"][0][1])
 
     def test_distinct_people_at_every_step_read_as_separated(self):
         ev = self.evidence(pr=self.pr("abhilashmandaliya", ["mphanias"]),
@@ -514,12 +601,13 @@ class SeparationOfDuties(unittest.TestCase):
                            promotions=[self.promotion("TEST", "token:gh-citrusleaf/pvinh-spike"),
                                        self.promotion("STAGE", "pvinh@aerospike.com")])
         self.assertEqual([v[0] for v in ev["duties"]["violations"]],
-                         ["One person performed every recorded step"])
+                         ["One person took this from commit to publish"])
 
     def test_a_self_approval_survives_a_second_login(self):
         # One human with two logins is still one approval, so the login comparison cannot stand.
-        rev.saml_identities = lambda _org: {"writer": "one@aerospike.com",
-                                            "writer-alt": "one@aerospike.com"}
+        rev.saml_identities = lambda _org: {
+            "writer": {"email": "one@aerospike.com", "name": "One Person"},
+            "writer-alt": {"email": "one@aerospike.com", "name": "One Person"}}
         ev = self.evidence(pr=self.pr("writer", ["writer-alt"]),
                            promotions=[self.promotion("PROD", "other@aerospike.com")])
         self.assertIn("The author approved their own change",

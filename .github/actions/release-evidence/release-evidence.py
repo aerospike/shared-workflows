@@ -129,7 +129,7 @@ query($org: String!, $after: String) {
     samlIdentityProvider {
       externalIdentities(first: 100, after: $after) {
         pageInfo { hasNextPage endCursor }
-        nodes { samlIdentity { nameId } user { login } }
+        nodes { samlIdentity { nameId } user { login name } }
       }
     }
   }
@@ -139,12 +139,15 @@ _SAML = {}
 
 
 def saml_identities(org):
-    """A GitHub login to work-email map from the org's identity provider.
+    """A GitHub login to {email, name} map from the org's identity provider.
 
     An Aerospike account carries its work email as its SAML identity, not as a public profile
     email, so `users/<login>` returns null for nearly everyone and no string rule links a login
     to a person: `Klaven` is mcounts@aerospike.com. Reading this needs admin:org, which a CI
     GITHUB_TOKEN does not have, so an empty map means unproven rather than unrelated.
+
+    The identity provider leaves givenName and familyName empty, so the readable name comes from
+    the GitHub profile, which most people fill in and bots do not.
     """
     if org in _SAML:
         return _SAML[org]
@@ -156,8 +159,10 @@ def saml_identities(org):
             break
         page = provider["externalIdentities"]
         for node in page["nodes"]:
-            if node.get("user") and (node.get("samlIdentity") or {}).get("nameId"):
-                found[node["user"]["login"].lower()] = node["samlIdentity"]["nameId"].lower()
+            user, saml = node.get("user"), node.get("samlIdentity") or {}
+            if user and saml.get("nameId"):
+                found[user["login"].lower()] = {"email": saml["nameId"].lower(),
+                                                "name": (user.get("name") or "").strip() or None}
         if not page["pageInfo"]["hasNextPage"]:
             break
         after = page["pageInfo"]["endCursor"]
@@ -545,6 +550,7 @@ def collect(target, about):
         },
     }
     evidence["duties"] = duties(evidence)
+    evidence["verdict"] = verdict(evidence)
     return evidence
 
 
@@ -646,7 +652,11 @@ def acting_roles(evidence):
 
 
 def resolve_identities(evidence):
-    """Each acting identity mapped to the person behind it, None where that cannot be shown."""
+    """Each acting identity mapped to the person behind it, None where that cannot be shown.
+
+    Returns the person map plus a name for each person, so a report can say who someone is
+    rather than only which mailbox they own.
+    """
     orgs = {t.group("org") for t in
             (TOKEN_ACTOR.match(who) for _, who in acting_roles(evidence)) if t}
     if evidence["pr"]:
@@ -654,13 +664,26 @@ def resolve_identities(evidence):
     directory = {}
     for org in sorted(orgs):
         directory.update(saml_identities(org))
+    # An email in a JFrog record has no login to look up, so index the directory both ways.
+    by_email = {entry["email"]: entry.get("name") for entry in directory.values()}
 
-    people = {}
+    people, names = {}, {}
     for _, who in acting_roles(evidence):
         token = TOKEN_ACTOR.match(who)
         login = token.group("actor") if token else (None if "@" in who else who)
-        people[who] = directory.get(login.lower()) if login else who.lower()
-    return people
+        entry = directory.get(login.lower()) if login else None
+        email = entry["email"] if entry else (who.lower() if not login else None)
+        people[who] = email
+        if email:
+            names[email] = (entry or {}).get("name") or by_email.get(email)
+    return people, names
+
+
+def person_label(email, names):
+    """`Phuc Vinh <pvinh@aerospike.com>` where the directory knows a name, the address alone
+    where it does not, which is the usual case for bots and ops accounts."""
+    name = (names or {}).get(email)
+    return f"{name} <{email}>" if name else email
 
 
 def duties(evidence):
@@ -669,7 +692,8 @@ def duties(evidence):
     A token and a user account naming the same human read as two identities in the records, so
     every separation claim is made against resolved people, never against identity strings.
     """
-    roles, people = acting_roles(evidence), resolve_identities(evidence)
+    roles = acting_roles(evidence)
+    people, names = resolve_identities(evidence)
     last = terminal(evidence)
     unresolved = sorted({who for _, who in roles if not people.get(who)})
     resolved = {people[who] for _, who in roles if people.get(who)}
@@ -687,32 +711,38 @@ def duties(evidence):
         # A second login is not a second person, so the identity map overrides a login comparison.
         evidence["derived"]["independently_approved"] = False
 
-    violations = []
+    # A failure is a control that did not happen: nobody but the author looked at this before it
+    # shipped. A warning is a thinner chain that still had a second person in it, which costs
+    # depth rather than the control itself, so it must not read like the same thing.
+    failures, warnings = [], []
     if last and publisher and len(roles) > 1 and len(resolved) == 1 and not unproven:
-        names = phrase(f"`{w}`" for w in dict.fromkeys(w for _, w in roles))
-        violations.append([
-            "One person performed every recorded step",
-            f'`{publisher}` wrote or built this and authorized its {last["stage"]} publish. '
-            f'{len(roles)} records name {names}, all the same person. Nothing here was checked '
-            "by a second pair of eyes."])
+        idents = phrase(f"`{w}`" for w in dict.fromkeys(w for _, w in roles))
+        failures.append([
+            "One person took this from commit to publish",
+            f'{person_label(publisher, names)} wrote or built these bytes and authorized their '
+            f'{last["stage"]} publish. {len(roles)} records name {idents}, every one the same '
+            "person, so nothing here was seen by anybody else."])
     else:
         if selfies:
-            violations.append([
+            failures.append([
                 "The author approved their own change",
                 f'PR #{pr["number"]} was written by `{pr["author"]}` and approved by '
-                f'{phrase(f"`{a}`" for a in selfies)}, the same person '
-                f'(`{people[pr["author"]]}`).'])
+                f'{phrase(f"`{a}`" for a in selfies)}, who is the same person '
+                f'({person_label(people[pr["author"]], names)}).'])
         for role, who in earlier:
             if publisher and people.get(who) == publisher:
-                violations.append([
+                warnings.append([
                     f'The person who {role} also authorized the publish',
-                    f'`{who}` and `{last["by"]}` are both `{publisher}`, so the '
-                    f'{last["stage"]} gate added no independent judgement.'])
+                    f'`{who}` and `{last["by"]}` are both '
+                    f'{person_label(publisher, names)}. The author is somebody else, so no one '
+                    f'shipped their own change, but the {last["stage"]} gate rests on one person.'])
     return {
         "people": people,
+        "names": names,
         "distinct": len(resolved) + len(unresolved),
         "unproven": unproven,
-        "violations": violations,
+        "violations": failures,
+        "warnings": warnings,
         # Only true where every identity resolved and none of them is the publisher twice over.
         "separated": bool(last and publisher and not unproven
                           and all(people.get(w) != publisher for _, w in earlier)),
@@ -720,12 +750,18 @@ def duties(evidence):
 
 
 def duty_rows(evidence):
-    people = (evidence.get("duties") or {}).get("people", {})
+    duty = evidence.get("duties") or {}
+    people, names = duty.get("people", {}), duty.get("names", {})
 
     def named(identity):
-        """The identity as recorded, plus the person it resolves to when that differs."""
+        """The identity as recorded, plus who it turns out to be."""
         person = people.get(identity)
-        return f"`{identity}`" + (f" ({person})" if person and person != identity else "")
+        if not person:
+            return f"`{identity}`"
+        if identity == person:
+            name = names.get(person)
+            return f"`{identity}` ({name})" if name else f"`{identity}`"
+        return f"`{identity}` ({person_label(person, names)})"
 
     pr, rows = evidence["pr"], []
     if pr:
@@ -795,13 +831,17 @@ def claim_rows(evidence):
 
 
 def gap_rows(evidence):
-    """What an auditor would ask for that no record answers.
+    """What an auditor would ask for that no record answers, given where this has got to.
 
-    Every row here has to be false for a release that did everything right. Anything true of a
-    good release belongs in the claims table or nowhere.
+    Every row has to be false for a release doing everything right at its current position. A
+    record a later stage would produce is not missing, it is simply not due, and reporting it
+    would fire on every healthy release in the pipeline.
     """
     derived, rows = evidence["derived"], []
-    if not derived["sealed"]:
+    reached = set(derived["stages_reached"])
+    # A bundle is cut at the DEV to TEST gate, so an artifact still in DEV has nothing to seal it
+    # yet and that absence is the normal state rather than a defect.
+    if not derived["sealed"] and reached - {"DEV"}:
         rows.append(["A release bundle holding these bytes",
                      "That these bytes are fixed and travel as a unit. Nothing has been sealed, "
                      "so there is no seal to name them and no promotion record can refer to "
@@ -810,7 +850,9 @@ def gap_rows(evidence):
         rows.append(["A recorded source commit",
                      "That these bytes came from a known revision. No build-info VCS block, image "
                      "label or attestation records one, so nothing ties this release to source."])
-    elif not evidence["pr"]:
+    # A candidate can be built from a branch before its merge, so a pull request is only due once
+    # somebody has vouched for the bytes by moving them to STAGE or beyond.
+    elif not evidence["pr"] and reached & SEPARATION_STAGES:
         rows.append(["The pull request that authorized the change",
                      "That a review preceded the build. The commit is recorded, but no merged "
                      "pull request was found for it, so no approval can be shown."])
@@ -820,11 +862,12 @@ def gap_rows(evidence):
                      "customer pulls can be joined to its build. The promoted copy carries only "
                      "registry metadata, so the join works from the bundle record and fails from "
                      "the registry."])
-    if derived["skipped_stages"]:
+    # Once it has reached a customer the same absence is a failure, reported there instead.
+    if derived["skipped_stages"] and not shipped_untested(evidence):
         rows.append([f'A recorded {phrase(derived["skipped_stages"])} transition',
                      f'That this was tested at {phrase(derived["skipped_stages"])}. It reached '
                      f'{phrase(derived["stages_reached"])}, so those gates were passed over.'])
-    if evidence["pr"] and not derived["independently_approved"]:
+    if evidence["pr"] and not derived["independently_approved"] and reached & SEPARATION_STAGES:
         pr = evidence["pr"]
         rows.append(["An approving review on the authorizing pull request",
                      f'That someone other than `{pr["author"]}` examined this change. PR '
@@ -870,34 +913,108 @@ def position_blocks(evidence):
     return [("h2", "Where this is"), ("p", text)]
 
 
+def shipped_untested(evidence):
+    """A required gate with no record, on bytes a customer can already pull.
+
+    Below a customer-facing stage this is missing paperwork. At or past one it is the control
+    itself: nothing shows these bytes were tested before they were published.
+    """
+    derived = evidence["derived"]
+    if not derived["skipped_stages"] or not set(derived["stages_reached"]) & {"PROD", "INTERNAL"}:
+        return []
+    gates = phrase(derived["skipped_stages"])
+    return [[f'Published to customers with no {gates} record',
+             "These bytes sit in a customer-facing repository, and no promotion record exists "
+             f'for {gates}. Nothing shows they were tested before they shipped.']]
+
+
+def failures(evidence):
+    """Everything that makes this release a FAIL, worst first."""
+    return (evidence.get("duties") or {}).get("violations", []) + shipped_untested(evidence)
+
+
+def verdict(evidence):
+    """The call on this release, and the one finding that decided it.
+
+    Missing evidence fails: a claim nobody can check is worth no more than a claim that is false.
+    But a release that has not reached the stages which would produce more evidence has nothing
+    missing, so it is ON TRACK rather than passed. A server build sitting in TEST with no commit
+    recorded is already wrong; the same build with everything TEST requires is simply not finished.
+    """
+    problems, gaps = failures(evidence), gap_rows(evidence)
+    warnings = (evidence.get("duties") or {}).get("warnings", [])
+    done = bool(set(evidence["derived"]["stages_reached"]) & {"PROD", "INTERNAL"})
+    if problems:
+        status, reason, finding = "FAIL", "a control did not happen", problems[0][0]
+    elif gaps:
+        status, reason, finding = "FAIL", "evidence incomplete", gaps[0][0]
+    elif warnings:
+        status = "PASS WITH WARNING" if done else "ON TRACK WITH WARNING"
+        reason, finding = "the chain is thin", warnings[0][0]
+    else:
+        status = "PASS" if done else "ON TRACK"
+        reason = ("every step left a record" if done else
+                  "correct so far, with stages still ahead of it")
+        finding = None
+    return {"status": status, "reason": reason, "finding": finding,
+            "problems": len(problems), "gaps": len(gaps), "warnings": len(warnings),
+            "complete": done}
+
+
+def verdict_block(evidence, problems, gaps):
+    """The worst news first, before anything reassuring, and a word for how bad it is."""
+    call = evidence.get("verdict") or verdict(evidence)
+    warnings = (evidence.get("duties") or {}).get("warnings", [])
+    ahead = phrase(evidence["derived"]["pending_stages"])
+    if call["status"] == "PASS":
+        return ("panel", "info",
+                "**PASS.** Every step left a record, every claim below has one behind it, and "
+                "nothing an auditor would ask for is absent.")
+    if call["status"] == "ON TRACK":
+        return ("panel", "info",
+                "**ON TRACK.** Correct so far. Everything the pipeline should have recorded by "
+                f'{phrase(evidence["derived"]["stages_reached"]) or "this point"} exists'
+                + (f', and {ahead} lie ahead.' if ahead else "."))
+    if call["status"].startswith(("PASS", "ON TRACK")):
+        lead = ("Nothing here blocks the release." if call["complete"] else
+                f'Nothing here is wrong for something with {ahead} still ahead of it.')
+        return ("panel", "warning",
+                f'**{call["status"]}. {warnings[0][0]}.** {warnings[0][1]} {lead}')
+    rows = problems or gaps
+    extra = len(rows) - 1
+    more = "" if extra < 1 else (
+        f' {extra} further {"problem" if problems else "record"} below.' if extra == 1 else
+        f' {extra} further {"problems" if problems else "records"} below.')
+    trailer = ""
+    if problems and gaps:
+        trailer = (f' {len(gaps)} record an auditor would ask for also does not exist.'
+                   if len(gaps) == 1 else
+                   f' {len(gaps)} records an auditor would ask for also do not exist.')
+    lead = "FAIL" if problems else "FAIL, evidence incomplete"
+    return ("panel", "warning", f'**{lead}. {rows[0][0]}.** {rows[0][1]}{more}{trailer}')
+
+
 def document(evidence):
     """The document as blocks, so markdown and Confluence cannot drift apart."""
     release, last = evidence["release"], terminal(evidence)
-    wrong = (evidence.get("duties") or {}).get("violations", [])
-    gaps = gap_rows(evidence)
-    verdict = " ".join(filter(None, [
-        f'{len(wrong)} {"problem" if len(wrong) == 1 else "problems"} found.' if wrong else "",
-        f'{len(gaps)} record an auditor would ask for does not exist.' if len(gaps) == 1 else
-        f'{len(gaps)} records an auditor would ask for do not exist.' if gaps else "",
-    ])) or "Every claim below has a record behind it, and nothing an auditor would ask for is absent."
+    problems, gaps = failures(evidence), gap_rows(evidence)
     commit = next((a["commit"] for a in evidence["artifacts"] if a["commit"]), None)
     if release:
         ui = (f'{JF}/ui/artifactory/release-lifecycle/{release["name"]}/{release["version"]}'
               f'?repoKey={release["repo"]}')
         blocks = [
-            ("panel", "warning" if wrong else "info",
-             f'{release["name"]} {release["version"]} shipped as {nouns(evidence)}'
-             + (f' from commit `{commit[:8]}`. ' if commit else ", no commit recorded. ")
-             + verdict),
+            verdict_block(evidence, problems, gaps),
+            ("p", f'{release["name"]} {release["version"]} shipped as {nouns(evidence)}'
+                  + (f' from commit `{commit[:8]}`.' if commit else ", no commit recorded.")),
             ("h2", "The release"),
             ("p", f'[{release["name"]} {release["version"]}]({ui})'
                   + (f', {evidence["about"]}' if evidence["about"] else "") + "."),
         ]
     else:
         blocks = [
-            ("panel", "warning" if wrong else "info",
-             f"{subject(evidence)} has not been sealed into a release bundle. What follows is "
-             f"what the build recorded about it. {verdict}"),
+            verdict_block(evidence, problems, gaps),
+            ("p", f"{subject(evidence)} has not been sealed into a release bundle, so what "
+                  "follows is what the build recorded about it."),
             ("h2", "The artifact"),
             ("p", f"`{evidence['artifacts'][0]['path']}` in the "
                   f"`{evidence['project']}` project"
@@ -961,10 +1078,10 @@ def document(evidence):
             ("p", "Nothing. Every custody claim needs a seal or a promotion record, and neither "
                   "exists for this artifact."),
         ]
-    if duty.get("violations"):
+    if problems:
         blocks += [
             ("h2", "INCORRECT"),
-            ("table", ["Finding", "What the records show"], duty["violations"]),
+            ("table", ["Finding", "What the records show"], problems),
         ]
     if gaps:
         blocks += [
@@ -972,6 +1089,14 @@ def document(evidence):
             ("p", "Each row is something an auditor would ask for that no record answers. A "
                   "release that did everything right has none of these."),
             ("table", ["Missing", "What it would let us verify"], gaps),
+        ]
+    if duty.get("warnings"):
+        blocks += [
+            ("h2", "WARNING"),
+            ("p", "Nothing here blocks the release. The control held, a second person is in the "
+                  "chain, and nobody shipped their own change. These are the places it is thinner "
+                  "than it should be."),
+            ("table", ["Observation", "What the records show"], duty["warnings"]),
         ]
     blocks += [
         ("h2", "Verify it yourself"),
