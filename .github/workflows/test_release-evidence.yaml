@@ -102,8 +102,11 @@ jobs:
             *) echo "unexpected verdict: '${VERDICT}'" >&2; exit 1 ;;
           esac
           [[ -n "$REASON" ]] || { echo "reason came back empty" >&2; exit 1; }
-          for pair in "problems:${PROBLEMS}" "gaps:${GAPS}" "warnings:${WARNINGS}"; do
-            [[ "${pair#*:}" =~ ^[0-9]+$ ]] || { echo "${pair%%:*} is not a count: '${pair#*:}'" >&2; exit 1; }
+          for counter in "problems=${PROBLEMS}" "gaps=${GAPS}" "warnings=${WARNINGS}"; do
+            name="${counter%%=*}"
+            value="${counter#*=}"
+            [[ "$value" =~ ^[0-9]+$ ]] \
+              || { echo "${name} is not a count: '${value}'" >&2; exit 1; }
           done
           [[ "$COMPLETE" == "true" || "$COMPLETE" == "false" ]] \
             || { echo "complete is not a boolean: '${COMPLETE}'" >&2; exit 1; }

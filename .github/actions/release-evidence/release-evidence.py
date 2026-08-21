@@ -24,7 +24,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-JF = os.environ.get("JF_BASE", "https://aerospike.jfrog.io")
+JF_BASE = os.environ.get("JF_BASE", "https://aerospike.jfrog.io")
 
 COMPANION = (".asc", ".prov", ".sig", ".sha256", ".md5")
 VIRTUAL = {"docker": "docker", "maven": "maven", "helm": "helm", "debian": "deb", "yum": "rpm",
@@ -62,8 +62,8 @@ def jfrog_token():
     return tok
 
 
-def jf(path):
-    req = urllib.request.Request(f"{JF}/{path}",
+def jfrog(path):
+    req = urllib.request.Request(f"{JF_BASE}/{path}",
                                 headers={"Authorization": f"Bearer {jfrog_token()}"})
     try:
         with urllib.request.urlopen(req) as resp:
@@ -74,7 +74,7 @@ def jf(path):
 
 def aql(query):
     req = urllib.request.Request(
-        f"{JF}/artifactory/api/search/aql", data=query.encode(), method="POST",
+        f"{JF_BASE}/artifactory/api/search/aql", data=query.encode(), method="POST",
         headers={"Authorization": f"Bearer {jfrog_token()}", "Content-Type": "text/plain"})
     with urllib.request.urlopen(req) as resp:
         return json.load(resp)
@@ -248,7 +248,7 @@ def resolve_sha(path):
     """The digest for a target, whether it was given as a path or already as a digest."""
     if path.startswith("sha256:"):
         return path[len("sha256:"):]
-    info = jf(f"artifactory/api/storage/{path}")
+    info = jfrog(f"artifactory/api/storage/{path}")
     if not info or "checksums" not in info:
         sys.exit(f"no artifact at {path}")
     return info["checksums"]["sha256"]
@@ -268,8 +268,8 @@ def find_release(target):
         return f"{project}-release-bundles-v2", name_version, project
 
     sha = resolve_sha(path)
-    hits = aql(f'items.find({{"sha256":"{sha}"}}).include("repo","path")')
-    found = next((h for h in hits["results"]
+    digest_hits = aql(f'items.find({{"sha256":"{sha}"}}).include("repo","path")')
+    found = next((h for h in digest_hits["results"]
                   if h["repo"].endswith("-release-bundles-v2")), None)
     if not found:
         return None
@@ -298,8 +298,8 @@ def unbundled_artifact(target):
     sha = resolve_sha(path)
 
     if path.startswith("sha256:"):
-        hits = aql(f'items.find({{"sha256":"{sha}"}}).include("repo","path","name")')
-        found = next((h for h in (hits.get("results") or [])
+        digest_hits = aql(f'items.find({{"sha256":"{sha}"}}).include("repo","path","name")')
+        found = next((h for h in (digest_hits.get("results") or [])
                       if not h["repo"].endswith("-release-bundles-v2")), None)
         if not found:
             sys.exit(f"no artifact with digest {sha}")
@@ -308,7 +308,7 @@ def unbundled_artifact(target):
     else:
         repo, _, inner = path.partition("/")
 
-    props = (jf(f"artifactory/api/storage/{repo}/{inner}?properties") or {}).get("properties", {})
+    props = (jfrog(f"artifactory/api/storage/{repo}/{inner}?properties") or {}).get("properties", {})
     return {
         "package_type": package_type_of_repo(repo),
         # Repository-qualified here; a bundled artifact's path is bundle-relative instead.
@@ -355,12 +355,12 @@ def where_published(sha, pkg_type, version=None):
     from the clean tag while the timestamped tag beside it keeps them, so a per-path answer would
     report a break the consumer does not experience.
     """
-    hits = aql(f'items.find({{"sha256":"{sha}"}}).include('
+    digest_hits = aql(f'items.find({{"sha256":"{sha}"}}).include('
                f'"repo","path","name","property.key","property.value")')
-    repos = sorted({h["repo"] for h in hits["results"]})
+    repos = sorted({h["repo"] for h in digest_hits["results"]})
     linked = any(p.get("key") == "build.name"
-                 for h in hits["results"] for p in (h.get("properties") or []))
-    public = [h for h in hits["results"] if "prod-public" in h["repo"]]
+                 for h in digest_hits["results"] for p in (h.get("properties") or []))
+    public = [h for h in digest_hits["results"] if "prod-public" in h["repo"]]
     virtual = VIRTUAL.get(pkg_type)
     if not public or not virtual:
         return None, repos, linked
@@ -407,7 +407,7 @@ def pasteable(art):
 def build_origin(name, number, project):
     """Commit, CI run and captured environment size, following the build-info tree."""
     def fetch(num):
-        return jf(f"artifactory/api/build/{urllib.parse.quote(name)}/"
+        return jfrog(f"artifactory/api/build/{urllib.parse.quote(name)}/"
                   f"{urllib.parse.quote(num)}?project={project}") or {}
 
     info = fetch(number).get("buildInfo", {})
@@ -429,18 +429,18 @@ def build_origin(name, number, project):
 def image_labels(root, path):
     """OCI labels, which carry a container's origin when the manifest has no build.* properties."""
     image, directory = path.rsplit("/", 2)[0], path.rsplit("/", 1)[0]
-    manifest = jf(f"{root}/{path}")
+    manifest = jfrog(f"{root}/{path}")
     if manifest and "manifests" in manifest:
         child = next((m["digest"] for m in manifest["manifests"]
                       if m.get("platform", {}).get("os") != "unknown"), None)
         if not child:
             return {}
         directory = f"{image}/{child}"
-        manifest = jf(f"{root}/{directory}/manifest.json")
+        manifest = jfrog(f"{root}/{directory}/manifest.json")
     config = (manifest or {}).get("config", {}).get("digest")
     if not config:
         return {}
-    blob = jf(f"{root}/{directory}/{config.replace(':', '__')}")
+    blob = jfrog(f"{root}/{directory}/{config.replace(':', '__')}")
     return (blob or {}).get("config", {}).get("Labels") or {}
 
 
@@ -477,12 +477,12 @@ def collect(target, about, as_of=None):
 
     if release_ref:
         bundle_repo, bundle, project = release_ref
-        record = jf(f"lifecycle/api/v2/release_bundle/records/{bundle}?project={project}") or {}
+        record = jfrog(f"lifecycle/api/v2/release_bundle/records/{bundle}?project={project}") or {}
         # An empty record would render as a bundle of zero files signed by nobody, which reads
         # as evidence rather than its absence.
         if not record.get("artifacts"):
             sys.exit(f"no release bundle {bundle} in project {project}")
-        seal = statement(jf(f"artifactory/{bundle_repo}/{bundle}/release-bundle.json.evd")) or {}
+        seal = statement(jfrog(f"artifactory/{bundle_repo}/{bundle}/release-bundle.json.evd")) or {}
         sealed_digests = {s["digest"]["sha256"] for s in seal.get("subject", [])}
         entries = primary_artifacts(record)
     else:
@@ -503,11 +503,11 @@ def collect(target, about, as_of=None):
 
     promotions = []
     if release_ref:
-        listing = jf(f"artifactory/api/storage/{bundle_repo}/{bundle}") or {}
+        listing = jfrog(f"artifactory/api/storage/{bundle_repo}/{bundle}") or {}
         for child in listing.get("children", []):
             if not child["uri"].startswith("/promotion-"):
                 continue
-            pred = (statement(jf(f"artifactory/{bundle_repo}/{bundle}{child['uri']}"))
+            pred = (statement(jfrog(f"artifactory/{bundle_repo}/{bundle}{child['uri']}"))
                     or {}).get("predicate", {})
             promotions.append({
                 # UNKNOWN keeps an unreadable attestation visible without counting it as a
@@ -1157,7 +1157,7 @@ def document(evidence):
     problems, gaps = failures(evidence), gap_rows(evidence)
     commit = next((a["commit"] for a in evidence["artifacts"] if a["commit"]), None)
     if release:
-        ui = (f'{JF}/ui/artifactory/release-lifecycle/{release["name"]}/{release["version"]}'
+        ui = (f'{JF_BASE}/ui/artifactory/release-lifecycle/{release["name"]}/{release["version"]}'
               f'?repoKey={release["repo"]}')
         blocks = [
             verdict_block(evidence, problems, gaps),

@@ -388,9 +388,9 @@ class CollectUnbundled(unittest.TestCase):
 
     def setUp(self):
         self.calls = []
-        self._real = (rev.jf, rev.aql, rev.gh, rev.gh_graphql)
+        self._real = (rev.jfrog, rev.aql, rev.gh, rev.gh_graphql)
 
-        def fake_jf(path):
+        def fake_jfrog(path):
             self.calls.append(path)
             if "api/storage/" in path and path.endswith("?properties"):
                 return {"properties": {}}
@@ -404,11 +404,11 @@ class CollectUnbundled(unittest.TestCase):
                                  "path": "aerospike/16.0.1",
                                  "name": "aerospike-16.0.1.whl"}]}
 
-        rev.jf, rev.aql, rev.gh = fake_jf, fake_aql, lambda _p: None
+        rev.jfrog, rev.aql, rev.gh = fake_jfrog, fake_aql, lambda _p: None
         rev.gh_graphql = lambda _q, **_v: None
 
     def tearDown(self):
-        rev.jf, rev.aql, rev.gh, rev.gh_graphql = self._real
+        rev.jfrog, rev.aql, rev.gh, rev.gh_graphql = self._real
 
     def test_reports_on_an_artifact_that_is_in_no_release_bundle(self):
         ev = rev.collect(self.TARGET, "")
@@ -442,9 +442,9 @@ class CollectBundled(unittest.TestCase):
             "subject": [{"digest": {"sha256": "abc123"}}]}
 
     def setUp(self):
-        self._real = (rev.jf, rev.aql, rev.gh, rev.gh_graphql)
+        self._real = (rev.jfrog, rev.aql, rev.gh, rev.gh_graphql)
 
-        def fake_jf(path):
+        def fake_jfrog(path):
             if "lifecycle/api/v2/release_bundle/records" in path:
                 return {"created": "2026-08-01T10:00:00Z", "created_by": "ci",
                         "total_artifacts_count": 1,
@@ -463,13 +463,13 @@ class CollectBundled(unittest.TestCase):
                 return {}
             return {}
 
-        rev.jf = fake_jf
+        rev.jfrog = fake_jfrog
         rev.aql = lambda _q: {"results": [{"repo": "clients-pypi-prod-public-local",
                                            "path": "a", "name": "a.whl"}]}
         rev.gh = lambda _p: None
 
     def tearDown(self):
-        rev.jf, rev.aql, rev.gh, rev.gh_graphql = self._real
+        rev.jfrog, rev.aql, rev.gh, rev.gh_graphql = self._real
 
     def test_a_bundled_release_still_reports_its_release_block(self):
         ev = rev.collect("bundle:my-release/1.2.3@clients", "")
