@@ -19,6 +19,13 @@ inputs:
     description: Whether to run in dry-run mode
     required: false
     default: "false"
+  bundle-revision:
+    description: |
+      Appended to `version` to form the bundle version, so a rebuild of a release becomes a new
+      bundle revision rather than colliding with the bundle the first build created. The artifacts
+      keep the clean release version. Set to `auto` to use the run id and attempt.
+    required: false
+    default: ""
   entrypoint-path:
     description: Path to the create-release-bundle entrypoint script (relative to workspace)
     required: false
@@ -30,10 +37,15 @@ inputs:
       `jf release-bundle-annotate` after `jf release-bundle-create`. Relative paths are resolved from the job workspace.
     required: false
     default: ""
+outputs:
+  bundle-version:
+    description: Bundle version that was created, including the revision when one was requested
+    value: ${{ steps.create.outputs.bundle-version }}
 runs:
   using: composite
   steps:
     - name: Create Release Bundle
+      id: create
       shell: bash
       run: |
         entrypoint="${{ inputs.entrypoint-path }}"
@@ -51,10 +63,19 @@ runs:
         if [[ -n "${{ inputs.bundle-metadata-path }}" ]]; then
           meta_arg=(--bundle-metadata "${{ inputs.bundle-metadata-path }}")
         fi
+        revision_arg=()
+        revision="${{ inputs.bundle-revision }}"
+        if [[ "$revision" == "auto" ]]; then
+          revision="${{ github.run_id }}-${{ github.run_attempt }}"
+        fi
+        if [[ -n "$revision" ]]; then
+          revision_arg=(--revision "$revision")
+        fi
         "$entrypoint" \
           --project "${{ inputs.jf-project }}" \
           --build-names "${{ inputs.build-names }}" \
           --bundle-name "${{ inputs.bundle-name }}" \
           --version "${{ inputs.version }}" \
           "${meta_arg[@]}" \
+          "${revision_arg[@]}" \
           $dry_run_arg

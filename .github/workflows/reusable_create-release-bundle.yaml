@@ -44,6 +44,15 @@ on:
         required: false
         type: string
         default: ""
+      bundle-revision:
+        description: |
+          Appended to `version` to form the bundle version, so a rebuild of a release becomes a
+          new bundle revision rather than colliding with the bundle the first build created. The
+          artifacts keep the clean release version. Set to `auto` to use the run id and attempt.
+          Leave unset for a bundle version equal to the release version.
+        required: false
+        type: string
+        default: ""
       gh-bundle-metadata-artifact-name:
         description: |
           When set, downloads this GitHub Actions artifact (e.g. deploy job output `bundle-metadata-artifact-name`
@@ -79,6 +88,11 @@ on:
         type: string
         default: ubuntu-22.04
 
+    outputs:
+      bundle-version:
+        description: Bundle version that was created, including the revision when one was requested
+        value: ${{ jobs.create-release-bundle.outputs.bundle-version }}
+
 permissions:
   contents: read
   id-token: write
@@ -86,6 +100,8 @@ permissions:
 jobs:
   create-release-bundle:
     runs-on: ${{ inputs.runs-on }}
+    outputs:
+      bundle-version: ${{ steps.create.outputs.bundle-version }}
     permissions:
       contents: read
       id-token: write
@@ -168,6 +184,7 @@ jobs:
           fi
 
       - name: Create Release Bundle
+        id: create
         shell: bash
         run: |
           entrypoint="${{ inputs.gh-checkout-path }}/.github/workflows/create-release-bundle/entrypoint.sh"
@@ -185,10 +202,19 @@ jobs:
           if [[ -n "$bm" ]]; then
             meta_arg=(--bundle-metadata "$bm")
           fi
+          revision_arg=()
+          revision="${{ inputs.bundle-revision }}"
+          if [[ "$revision" == "auto" ]]; then
+            revision="${{ github.run_id }}-${{ github.run_attempt }}"
+          fi
+          if [[ -n "$revision" ]]; then
+            revision_arg=(--revision "$revision")
+          fi
           "$entrypoint" \
             --project "${{ inputs.jf-project }}" \
             --build-names "${{ inputs.jf-build-names }}" \
             --bundle-name "${{ inputs.jf-bundle-name }}" \
             --version "${{ inputs.version }}" \
             "${meta_arg[@]}" \
+            "${revision_arg[@]}" \
             $dry_run_arg
