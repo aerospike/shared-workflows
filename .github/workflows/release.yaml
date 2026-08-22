@@ -11,6 +11,9 @@ on:
 jobs:
   release:
     runs-on: ubuntu-latest
+    # A fork's head branch does not exist on this remote, and semantic-release
+    # rejects a --branches value it cannot find there.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     steps:
       - name: Harden the runner (Audit all outbound calls)
         uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
@@ -21,6 +24,9 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+          # The default merge ref leaves a detached HEAD, and semantic-release
+          # matches --branches against the checked-out branch name.
+          ref: ${{ github.head_ref || github.ref }}
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -29,11 +35,51 @@ jobs:
       - name: Semantic Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT_NAME: ${{ github.event_name }}
+          HEAD_REF: ${{ github.head_ref }}
         run: |
+          set -euo pipefail
+          args=()
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            # semantic-release reads the branch from GITHUB_REF, which the
+            # runner sets to refs/pull/N/merge. Exporting it here rather than in
+            # env: because the runner overrides GITHUB_-prefixed keys there.
+            export GITHUB_REF="refs/heads/$HEAD_REF"
+            # --no-ci because semantic-release otherwise declines to analyse a
+            # pull request at all, even for a dry run.
+            args=(--dry-run --no-ci --branches "$HEAD_REF")
+          fi
           npx -p semantic-release@24 \
               -p @semantic-release/commit-analyzer@13 \
               -p @semantic-release/release-notes-generator@14 \
               -p @semantic-release/github@11 \
               -p conventional-changelog@7 \
               -p conventional-changelog-conventionalcommits@8 \
-              semantic-release
+              semantic-release "${args[@]}" | tee "$RUNNER_TEMP/release.log"
+
+      - name: Show the projected release on the pull request
+        if: github.event_name == 'pull_request'
+        run: |
+          set -euo pipefail
+          log="$RUNNER_TEMP/release.log"
+          # A branch semantic-release declined to analyse otherwise reports the
+          # same way as one with nothing releasable in it.
+          if grep -q "configured to only publish from" "$log"; then
+            echo "::error::semantic-release did not analyse this branch, so there is no preview"
+            exit 1
+          fi
+          {
+            echo "## Projected release"
+            echo
+            if grep -q "Release note for version" "$log"; then
+              # These are the branch's own commits. A squash merge publishes the
+              # pull request title instead, so the landed entry may differ.
+              # Other log lines interleave with the notes, and the logger
+              # indents list items by four spaces, which markdown would
+              # otherwise render as a code block.
+              sed -n '/Release note for version/,$p' "$log" |
+                sed -e '/\[semantic-release\] ›/d' -e 's/^    //'
+            else
+              echo "No release would be published from these commits."
+            fi
+          } >>"$GITHUB_STEP_SUMMARY"
