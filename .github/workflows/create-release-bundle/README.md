@@ -8,21 +8,22 @@ This workflow creates JFrog release bundles by bundling one or more builds into 
 
 ## Inputs
 
-| Input                              | Description                                                                                                                                                                                                                  | Required | Default                         |
-| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------------------------------- |
-| `jf-project`                       | JFrog Artifactory project name                                                                                                                                                                                               | Yes      | -                               |
-| `jf-build-names`                   | Comma-separated list of `build-name:version` pairs to include (e.g. `"app-build:1.2.3,client-build:2.1.0"`)                                                                                                                  | Yes      | -                               |
-| `jf-bundle-name`                   | Name for the release bundle                                                                                                                                                                                                  | Yes      | -                               |
-| `version`                          | Version of the release bundle                                                                                                                                                                                                | Yes      | -                               |
-| `jf-url`                           | JFrog Artifactory URL                                                                                                                                                                                                        | No       | `https://artifact.aerospike.io` |
-| `oidc-provider-name`               | OIDC provider name for authentication                                                                                                                                                                                        | No       | `gh-aerospike`                  |
-| `oidc-audience`                    | OIDC audience for authentication                                                                                                                                                                                             | No       | `aerospike`                     |
-| `runs-on`                          | The runner to use for the build                                                                                                                                                                                              | No       | `ubuntu-22.04`                  |
-| `gh-checkout-path`                 | Directory to checkout the shared-workflows repository into                                                                                                                                                                   | No       | `shared-workflows`              |
-| `gh-workflows-ref`                 | Git ref for shared-workflows (**should match `uses:`**)                                                                                                                                                                      | Yes      | -                               |
-| `dry-run`                          | Whether to run in dry-run mode                                                                                                                                                                                               | No       | `false`                         |
-| `bundle-metadata-path`             | Optional path to `.maven-bundle-metadata.json` (e.g. detect-artifacts `bundle-metadata-path`). Applied as bundle properties after create.                                                                                    | No       | _(empty)_                       |
-| `gh-bundle-metadata-artifact-name` | When set, downloads this GitHub artifact and uses the contained `.maven-bundle-metadata.json` (e.g. `reusable_deploy-artifacts` output `bundle-metadata-artifact-name`). Overrides `bundle-metadata-path` when both are set. | No       | _(empty)_                       |
+| Input                              | Description                                                                                                                                                                                                                               | Required | Default                         |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------------------------------- |
+| `jf-project`                       | JFrog Artifactory project name                                                                                                                                                                                                            | Yes      | -                               |
+| `jf-build-names`                   | Comma-separated list of `build-name:version` pairs to include (e.g. `"app-build:1.2.3,client-build:2.1.0"`)                                                                                                                               | Yes      | -                               |
+| `jf-bundle-name`                   | Name for the release bundle                                                                                                                                                                                                               | Yes      | -                               |
+| `version`                          | Version of the release bundle                                                                                                                                                                                                             | Yes      | -                               |
+| `bundle-revision`                  | Appended to `version` to form the bundle version, so a rebuild of a release becomes a new bundle revision instead of colliding with the existing bundle. Artifacts keep the clean release version. Use `auto` for the run id and attempt. | No       | `""`                            |
+| `jf-url`                           | JFrog Artifactory URL                                                                                                                                                                                                                     | No       | `https://artifact.aerospike.io` |
+| `oidc-provider-name`               | OIDC provider name for authentication                                                                                                                                                                                                     | No       | `gh-aerospike`                  |
+| `oidc-audience`                    | OIDC audience for authentication                                                                                                                                                                                                          | No       | `aerospike`                     |
+| `runs-on`                          | The runner to use for the build                                                                                                                                                                                                           | No       | `ubuntu-22.04`                  |
+| `gh-checkout-path`                 | Directory to checkout the shared-workflows repository into                                                                                                                                                                                | No       | `shared-workflows`              |
+| `gh-workflows-ref`                 | Git ref for shared-workflows (**should match `uses:`**)                                                                                                                                                                                   | Yes      | -                               |
+| `dry-run`                          | Whether to run in dry-run mode                                                                                                                                                                                                            | No       | `false`                         |
+| `bundle-metadata-path`             | Optional path to `.maven-bundle-metadata.json` (e.g. detect-artifacts `bundle-metadata-path`). Applied as bundle properties after create.                                                                                                 | No       | _(empty)_                       |
+| `gh-bundle-metadata-artifact-name` | When set, downloads this GitHub artifact and uses the contained `.maven-bundle-metadata.json` (e.g. `reusable_deploy-artifacts` output `bundle-metadata-artifact-name`). Overrides `bundle-metadata-path` when both are set.              | No       | _(empty)_                       |
 
 ## Example Usage
 
@@ -76,3 +77,22 @@ Run the basic test suite:
 ```bash
 .github/workflows/create-release-bundle/test-entrypoint.sh
 ```
+
+## Bundle revisions
+
+A release version alone is not unique per build, so rebuilding a release collides with the
+bundle its first build created. Set `bundle-revision` to give each build its own bundle
+version:
+
+```yaml
+with:
+  version: 1.2.3
+  bundle-revision: auto # bundle becomes 1.2.3-<run_id>-<run_attempt>
+```
+
+The artifacts inside keep the clean release version. Only the bundle version carries the
+revision, which is what lets two builds of one release exist at once so a failed build can
+be superseded. See [Promote Release Bundle](../promote-release-bundle/README.md).
+
+The resolved bundle version is available as the `bundle-version` output, and is the value to
+pass to the promotion workflow.

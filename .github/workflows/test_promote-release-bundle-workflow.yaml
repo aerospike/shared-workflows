@@ -1,0 +1,53 @@
+name: Test Promote Release Bundle Workflow
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  # dry-run must stay true: this runs against real JFrog.
+  test-promote-release-bundle-workflow:
+    uses: ./.github/workflows/reusable_promote-release-bundle.yaml
+    with:
+      gh-workflows-ref: ${{ github.sha }}
+      jf-project: test
+      jf-bundle-name: test-promote-guard-probe
+      version: v1.0.0
+      target-stage: DEV
+      jf-url: https://artifact.aerospike.io
+      oidc-provider-name: gh-aerospike
+      oidc-audience: aerospike
+      dry-run: true
+
+  run-tests:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install jq -y
+
+      - name: Setup bats
+        uses: bats-core/bats-action@77d6fb60505b4d0d1d73e48bd035b55074bbfb43 # 4.0.0
+        with:
+          bats-version: 1.12.0
+          support-install: false
+          assert-install: false
+          detik-install: false
+          file-install: false
+
+      - name: Promotion guard tests
+        run: bats .github/workflows/promote-release-bundle/tests/bats/
+
+      - name: Delete guard tests
+        run: bats .github/actions/delete-release-bundle/tests/bats/
