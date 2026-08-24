@@ -59,6 +59,13 @@ setup() {
     [[ "${TYPE_COMPANIONS[generic]}" == ".asc" ]]
 }
 
+@test "TYPE_COMPANIONS[jar] does not suffix-append .module" {
+    # gather_companions appends suffixes to the JAR filename. Gradle .module
+    # shares the stem (foo-1.0.0.module), so process_jar copies it. Adding
+    # .module here would look for foo-1.0.0.jar.module and miss the real file.
+    [[ "${TYPE_COMPANIONS[jar]}" != *".module"* ]]
+}
+
 @test "CONTENT_DETECT_EXTENSIONS lists ambiguous extensions" {
     [[ "${CONTENT_DETECT_EXTENSIONS[*]}" == *"*.tgz"* ]]
     [[ "${CONTENT_DETECT_EXTENSIONS[*]}" == *"*.tar.gz"* ]]

@@ -179,9 +179,25 @@ echo "Manifest-Version: 1.0" >"$BUILD_ARTIFACTS_DIR/temp-jar/META-INF/MANIFEST.M
 cd "$BUILD_ARTIFACTS_DIR/temp-jar" && zip -q -r "../test.jar" . && cd - >/dev/null
 rm -rf "$BUILD_ARTIFACTS_DIR/temp-jar"
 
-# Create a Maven POM next to the JAR. Maven publishes artifacts as a
-# (jar, pom, .md5, .sha1, .asc) bundle that share the same stem; this fixture
-# exercises that grouping in the deploy-artifacts logic.
+# Gradle Module Metadata companion (stem-based, like .pom).
+# Args: <output.module> <group> <module-name> <version>
+write_gradle_module_metadata() {
+    local out="$1" group="$2" name="$3" version="$4"
+    cat >"$out" <<EOF
+{
+  "formatVersion": "1.1",
+  "component": {
+    "group": "${group}",
+    "module": "${name}",
+    "version": "${version}"
+  }
+}
+EOF
+}
+
+# Create a Maven POM next to the JAR. Maven/Gradle publish artifacts as a
+# (jar, pom, module, .md5, .sha1, .asc) bundle that share the same stem; this
+# fixture exercises that grouping in the deploy-artifacts logic.
 cat >"$BUILD_ARTIFACTS_DIR/test.pom" <<'POM'
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0">
@@ -193,16 +209,7 @@ cat >"$BUILD_ARTIFACTS_DIR/test.pom" <<'POM'
 POM
 echo "  Created test.pom (Maven POM companion)"
 
-cat >"$BUILD_ARTIFACTS_DIR/test.module" <<'MODULE'
-{
-  "formatVersion": "1.1",
-  "component": {
-    "group": "com.example.test",
-    "module": "test",
-    "version": "1.0.0"
-  }
-}
-MODULE
+write_gradle_module_metadata "$BUILD_ARTIFACTS_DIR/test.module" "com.example.test" "test" "1.0.0"
 echo "  Created test.module (Gradle module metadata companion)"
 
 # Maven sidecar checksums (.md5, .sha1) computed from the actual files —
@@ -233,7 +240,13 @@ POM
 md5sum "$BUILD_ARTIFACTS_DIR/standalone-bom.pom" >"$BUILD_ARTIFACTS_DIR/standalone-bom.pom.md5"
 sha1sum "$BUILD_ARTIFACTS_DIR/standalone-bom.pom" >"$BUILD_ARTIFACTS_DIR/standalone-bom.pom.sha1"
 echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/standalone-bom.pom.asc"
-echo "  Created standalone POM (standalone-bom.pom + .md5/.sha1/.asc)"
+# Gradle java-platform / BOM publications ship .module with the POM (no JAR).
+write_gradle_module_metadata "$BUILD_ARTIFACTS_DIR/standalone-bom.module" \
+    "com.example.bom" "standalone-bom" "1.0.0"
+md5sum "$BUILD_ARTIFACTS_DIR/standalone-bom.module" >"$BUILD_ARTIFACTS_DIR/standalone-bom.module.md5"
+sha1sum "$BUILD_ARTIFACTS_DIR/standalone-bom.module" >"$BUILD_ARTIFACTS_DIR/standalone-bom.module.sha1"
+echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/standalone-bom.module.asc"
+echo "  Created standalone POM (standalone-bom.pom/.module + .md5/.sha1/.asc)"
 
 # JFrog Maven repo layout (nested download paths). Exercises recursive find in
 # detect_types / deploy when artifacts are not flat in build-artifacts/.
@@ -275,7 +288,9 @@ cat >"$dir/my-app-1.0.0.pom" <<'POM'
 POM
 echo "FAKE-GPG-SIGNATURE" >"$dir/my-app-1.0.0.jar.asc"
 echo "FAKE-GPG-SIGNATURE" >"$dir/my-app-1.0.0.pom.asc"
-echo "  Created maven-repo my-app (jar+pom+asc)"
+write_gradle_module_metadata "$dir/my-app-1.0.0.module" "com.example.app" "my-app" "1.0.0"
+echo "FAKE-GPG-SIGNATURE" >"$dir/my-app-1.0.0.module.asc"
+echo "  Created maven-repo my-app (jar+pom+module+asc)"
 
 # 2. Parent aggregator + two children
 dir="$MAVEN_REPO/com/example/parent/parent-proj/1.0.0"
@@ -332,7 +347,10 @@ cat >"$dir/standalone-bom-2.1.0.pom" <<'POM'
 </project>
 POM
 echo "FAKE-GPG-SIGNATURE" >"$dir/standalone-bom-2.1.0.pom.asc"
-echo "  Created maven-repo standalone-bom-2.1.0 (pom+asc only)"
+write_gradle_module_metadata "$dir/standalone-bom-2.1.0.module" \
+    "com.example.bom" "standalone-bom" "2.1.0"
+echo "FAKE-GPG-SIGNATURE" >"$dir/standalone-bom-2.1.0.module.asc"
+echo "  Created maven-repo standalone-bom-2.1.0 (pom+module+asc)"
 
 # Create a valid ZIP file
 echo "test zip content" >"$BUILD_ARTIFACTS_DIR/temp-zip-content.txt"

@@ -81,6 +81,10 @@ register_type() {
 
 register_type deb --extension "*.deb" --repo "deb-dev-local"
 register_type rpm --extension "*.rpm" --repo "rpm-dev-local"
+# Maven stem-based companions (.pom, .module, checksums, and their .asc) are
+# copied by process_jar / _detect_structure_maven_poms. gather_companions
+# suffix-appends to the JAR filename, so listing .module here would look for
+# foo.jar.module and miss foo.module. Keep .asc so foo.jar.asc is still gathered.
 register_type jar --extension "*.jar" --repo "maven-dev-local" --companions ".pom .asc .pom.asc"
 # Extension-based layout; detect_types.sh validates with is_nuget_package before structuring.
 register_type nupkg --extension "*.nupkg" --repo "nuget-dev-local"

@@ -30,6 +30,8 @@ teardown() {
     [[ -f "$target/my-app-1.0.0.pom" ]]
     [[ -f "$target/my-app-1.0.0.pom.asc" ]]
     [[ ! -f "$target/my-app-1.0.0.jar" ]]
+    # Full companion set (including .module) is copied by process_jar at deploy.
+    [[ ! -f "$target/my-app-1.0.0.module" ]]
 }
 
 @test "detect_types: parent aggregator (no jar) structures as standalone POM" {
@@ -74,6 +76,19 @@ teardown() {
     [[ "$(wc -l <"$manifest" | tr -d ' ')" == "5" ]]
 }
 
+@test "detect_types: pom-only BOM structures .module companions" {
+    require_bash4_for_detect_types
+    local wd="$MAVEN_STRUCT_TEST_DIR/wd"
+    create_jfrog_maven_fixture_tree "$wd"
+    run_detect_types_in "$wd"
+
+    local target="$wd/structured_build_artifacts/jar/com/example/bom/standalone-bom/2.1.0"
+    [[ -f "$target/standalone-bom-2.1.0.pom" ]]
+    [[ -f "$target/standalone-bom-2.1.0.pom.asc" ]]
+    [[ -f "$target/standalone-bom-2.1.0.module" ]]
+    [[ -f "$target/standalone-bom-2.1.0.module.asc" ]]
+}
+
 @test "detect_types: JAR files are not copied during detection" {
     require_bash4_for_detect_types
     local wd="$MAVEN_STRUCT_TEST_DIR/wd" jar_count
@@ -91,8 +106,8 @@ teardown() {
     run_entrypoint_dry_run >/dev/null 2>&1 || true
 
     local target="structured_build_artifacts/jar/com/example/app/my-app/1.0.0"
-    for f in my-app-1.0.0.jar my-app-1.0.0.pom \
-             my-app-1.0.0.jar.asc my-app-1.0.0.pom.asc; do
+    for f in my-app-1.0.0.jar my-app-1.0.0.pom my-app-1.0.0.module \
+             my-app-1.0.0.jar.asc my-app-1.0.0.pom.asc my-app-1.0.0.module.asc; do
         [[ -f "$target/$f" ]] || (echo "Missing $target/$f" >&2 && return 1)
     done
 }

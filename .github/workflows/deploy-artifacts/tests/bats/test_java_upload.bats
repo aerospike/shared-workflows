@@ -131,7 +131,8 @@ teardown_file() {
   for f in test.jar test.pom test.module \
            test.jar.asc test.pom.asc test.module.asc \
            test.jar.md5 test.jar.sha1 test.pom.md5 test.pom.sha1 \
-           test.module.md5 test.module.sha1; do
+           test.module.md5 test.module.sha1 \
+           my-app-1.0.0.module my-app-1.0.0.module.asc; do
     local cmd
     # Match the file as the source argument to jf rt upload (whitespace-bounded)
     # so e.g. "test.jar" doesn't match "test.jar.asc".
@@ -181,7 +182,8 @@ teardown_file() {
 
   local f
   for f in test.jar.md5 test.jar.sha1 test.pom.md5 test.pom.sha1 \
-           test.module.md5 test.module.sha1; do
+           test.module.md5 test.module.sha1 \
+           standalone-bom.module.md5 standalone-bom.module.sha1; do
     local cmd
     cmd=$(echo "$upload_commands" | grep -E "[/[:space:]]${f}[[:space:]]" || true)
     [[ -n $cmd ]] || (echo "Missing upload for $f" >&2 && return 1)
@@ -204,7 +206,8 @@ teardown_file() {
 
   local f
   for f in test.jar test.pom test.module \
-           test.jar.asc test.pom.asc test.module.asc; do
+           test.jar.asc test.pom.asc test.module.asc \
+           standalone-bom.module standalone-bom.module.asc; do
     local cmd
     cmd=$(echo "$upload_commands" | grep -E "[/[:space:]]${f}[[:space:]]" || true)
     [[ -n $cmd ]] || (echo "Missing upload for $f" >&2 && return 1)
@@ -231,7 +234,8 @@ teardown_file() {
   local generic_repo="test-project-generic-dev-local"
   local f
   for f in test.jar.md5 test.jar.sha1 test.pom.md5 test.pom.sha1 \
-           test.module.md5 test.module.sha1; do
+           test.module.md5 test.module.sha1 \
+           standalone-bom.module.md5 standalone-bom.module.sha1; do
     local generic_cmd
     generic_cmd=$(echo "$upload_commands" | grep -E "[/[:space:]]${f}[[:space:]]" | grep -F "$generic_repo" || true)
     [[ -z $generic_cmd ]] || \
@@ -296,10 +300,11 @@ teardown_file() {
 }
 
 @test "Standalone POM (no JAR) and its sidecars upload to maven repo" {
-  # BOM/parent POMs ship without a JAR. structure_standalone_poms must copy the
-  # .pom.md5/.pom.sha1/.pom.asc siblings into the structured tree so they reach
-  # the maven repo; otherwise they fall through to structure_generic_files which
-  # excludes *.md5/*.sha1 (reserved for JAR processing).
+  # BOM/parent POMs and Gradle java-platform publications ship without a JAR.
+  # structure_standalone_poms must copy the .pom/.module checksum and signature
+  # siblings into the structured tree so they reach the maven repo; otherwise
+  # they fall through to structure_generic_files which excludes *.md5/*.sha1
+  # and *.module (reserved for JAR/POM processing).
   local output
   output=$(run_entrypoint_dry_run "test-project" "test-build" "v1.0.0" "12345" "12345-metadata")
 
@@ -311,7 +316,11 @@ teardown_file() {
   for f in standalone-bom.pom \
            standalone-bom.pom.asc \
            standalone-bom.pom.md5 \
-           standalone-bom.pom.sha1; do
+           standalone-bom.pom.sha1 \
+           standalone-bom.module \
+           standalone-bom.module.asc \
+           standalone-bom.module.md5 \
+           standalone-bom.module.sha1; do
     local cmd
     cmd=$(echo "$upload_commands" | grep -E "[/[:space:]]${f}[[:space:]]" || true)
     if [[ -z $cmd ]]; then

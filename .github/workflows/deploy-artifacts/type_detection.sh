@@ -399,8 +399,9 @@ _write_maven_bundle_metadata_json() {
 }
 
 # Structure Maven POMs into jar/{groupId}/{artifactId}/{version}/.
-# JAR-less BOM/parent POMs copy signature + checksum sidecars; POMs with a sibling
-# .jar copy .pom.asc only (full companion set for the pair is handled by process_jar).
+# JAR-less BOM/parent POMs copy .module metadata plus signature and checksum
+# sidecars; POMs with a sibling .jar copy .pom.asc only (full companion set
+# for the pair, including .module, is handled by process_jar).
 _detect_structure_maven_poms() {
     local artifacts_root="$1"
     while IFS= read -r -d '' pom; do
