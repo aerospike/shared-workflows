@@ -444,7 +444,8 @@ _detect_structure_maven_poms() {
             fi
         else
             local ext sibling
-            for ext in pom.asc pom.md5 pom.sha1; do
+            for ext in pom.asc pom.md5 pom.sha1 \
+                module module.asc module.md5 module.sha1; do
                 sibling="$pom_dir/$base_name.$ext"
                 if [[ -f $sibling ]]; then
                     cp -a "$sibling" "$target/"

@@ -151,6 +151,7 @@ setup() {
     [[ "$exts" == *"*.asc"* ]]
     [[ "$exts" == *"*.prov"* ]]
     [[ "$exts" == *"*.pom"* ]]
+    [[ "$exts" == *"*.module"* ]]
     [[ "$exts" == *"*.csproj"* ]]
     # Maven sidecar checksums must be excluded from generic structuring,
     # otherwise structure_generic_files double-structures them and JFrog's

@@ -82,6 +82,7 @@ declare -a TEST_FILES=(
     "$UNSIGNED_ARTIFACTS_DIR/test.deb"
     "$UNSIGNED_ARTIFACTS_DIR/test-1.0-2.noarch.rpm"
     "$UNSIGNED_ARTIFACTS_DIR/test.jar"
+    "$UNSIGNED_ARTIFACTS_DIR/test.module"
     "$UNSIGNED_ARTIFACTS_DIR/test.zip"
     "$UNSIGNED_ARTIFACTS_DIR/aerospike-hello-0.4.2.tgz"
     "$UNSIGNED_ARTIFACTS_DIR/nested/dir/nested.deb"
@@ -154,6 +155,11 @@ echo ""
 echo " Test 3: Signing all files"
 # shellcheck disable=SC1091
 . "$SCRIPT_DIR/entrypoint.sh" "$UNSIGNED_ARTIFACTS_DIR/**/*" "$SIGNED_ARTIFACTS_DIR"
+
+if [[ ! -f "$SIGNED_ARTIFACTS_DIR/test.module.asc" ]]; then
+    echo "❌ Gradle module metadata signature was not created"
+    exit 1
+fi
 
 echo ""
 echo "📋 Results for Test 3:"
