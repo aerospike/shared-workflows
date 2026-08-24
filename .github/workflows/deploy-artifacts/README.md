@@ -10,7 +10,7 @@ A reusable GitHub Actions workflow for uploading build artifacts to JFrog Artifa
 | ------------------------- | ----------------------------- | -------------------------- | ---------------------------------------------------------------------------------- |
 | DEB                       | `{project}-deb-dev-local`     | `.asc`                     | `version`, `package_name`, `deb.distribution`, `deb.component`, `deb.architecture` |
 | RPM                       | `{project}-rpm-dev-local`     | `.asc`                     | `version`, `package_name`, `rpm.distribution`, `rpm.component`, `rpm.architecture` |
-| JAR                       | `{project}-maven-dev-local`   | `.pom`, `.asc`, `.pom.asc` | `version`, `group_id`, `package_name`                                              |
+| JAR                       | `{project}-maven-dev-local`   | `.pom`, `.module`, signatures, checksums | `version`, `group_id`, `package_name`                                  |
 | NuGet (.nupkg/.snupkg)    | `{project}-nuget-dev-local`   | `.asc`                     | `version`, `package_name`                                                          |
 | npm (.tgz)                | `{project}-npm-dev-local`     | `.asc`                     | `version`, `package_name`                                                          |
 | PyPI (.whl/.tar.gz sdist) | `{project}-pypi-dev-local`    | `.asc`                     | `version`, `package_name`, `pypi.name`, `pypi.version`                             |
@@ -125,7 +125,11 @@ rpm/
 jar/
   com/example/project/{artifact}/{version}/{artifact}.jar
   com/example/project/{artifact}/{version}/{artifact}.pom
+  com/example/project/{artifact}/{version}/{artifact}.module
   com/example/project/{artifact}/{version}/{artifact}.jar.asc
+  com/example/project/{artifact}/{version}/{artifact}.pom.asc
+  com/example/project/{artifact}/{version}/{artifact}.module.asc
+  com/example/project/{artifact}/{version}/{artifact}.{jar,pom,module}.{md5,sha1}
 ```
 
 ### NuGet

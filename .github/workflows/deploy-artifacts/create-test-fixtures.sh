@@ -193,6 +193,18 @@ cat >"$BUILD_ARTIFACTS_DIR/test.pom" <<'POM'
 POM
 echo "  Created test.pom (Maven POM companion)"
 
+cat >"$BUILD_ARTIFACTS_DIR/test.module" <<'MODULE'
+{
+  "formatVersion": "1.1",
+  "component": {
+    "group": "com.example.test",
+    "module": "test",
+    "version": "1.0.0"
+  }
+}
+MODULE
+echo "  Created test.module (Gradle module metadata companion)"
+
 # Maven sidecar checksums (.md5, .sha1) computed from the actual files —
 # JFrog Artifactory rejects checksum sidecars whose content isn't a valid
 # hash format, so empty placeholders won't survive an end-to-end upload.
@@ -200,7 +212,9 @@ md5sum "$BUILD_ARTIFACTS_DIR/test.jar" >"$BUILD_ARTIFACTS_DIR/test.jar.md5"
 sha1sum "$BUILD_ARTIFACTS_DIR/test.jar" >"$BUILD_ARTIFACTS_DIR/test.jar.sha1"
 md5sum "$BUILD_ARTIFACTS_DIR/test.pom" >"$BUILD_ARTIFACTS_DIR/test.pom.md5"
 sha1sum "$BUILD_ARTIFACTS_DIR/test.pom" >"$BUILD_ARTIFACTS_DIR/test.pom.sha1"
-echo "  Created Maven sidecar checksums (test.{jar,pom}.{md5,sha1})"
+md5sum "$BUILD_ARTIFACTS_DIR/test.module" >"$BUILD_ARTIFACTS_DIR/test.module.md5"
+sha1sum "$BUILD_ARTIFACTS_DIR/test.module" >"$BUILD_ARTIFACTS_DIR/test.module.sha1"
+echo "  Created Maven sidecar checksums (test.{jar,pom,module}.{md5,sha1})"
 
 # Standalone POM (BOM/parent-only) — has no companion JAR. structure_standalone_poms
 # must still publish its sidecars; without that, the .md5/.sha1 fall through to
@@ -355,12 +369,15 @@ fi
 echo "Creating .asc companion files..."
 echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/test.jar.asc"
 echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/test.pom.asc"
+echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/test.module.asc"
 # Signed Maven sidecar checksums: the sign stage GPG-signs every non-.asc file,
 # which includes .md5/.sha1, producing .md5.asc/.sha1.asc companions.
 echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/test.jar.md5.asc"
 echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/test.jar.sha1.asc"
 echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/test.pom.md5.asc"
 echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/test.pom.sha1.asc"
+echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/test.module.md5.asc"
+echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/test.module.sha1.asc"
 echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/test-ubuntu22.04.deb.asc"
 echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/test-1.0-2.el9.noarch.rpm.asc"
 echo "FAKE-GPG-SIGNATURE" >"$BUILD_ARTIFACTS_DIR/test-all-arch_1.0.0-1ubuntu22.04_all.deb.asc"
