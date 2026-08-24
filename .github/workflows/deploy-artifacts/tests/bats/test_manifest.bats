@@ -87,11 +87,13 @@ get_manifest() {
 @test "manifest does not contain companion files" {
     local manifest
     manifest=$(get_manifest)
-    # Companion suffixes are .asc / .md5 / .sha1. Bare .pom is a primary for
-    # standalone POMs (BOM/parent releases) so it is intentionally not
-    # excluded — process_jar handles JAR-companion POMs without manifesting
-    # them, and structure_standalone_poms manifests JAR-less POMs as primaries.
-    ! echo "$manifest" | grep -qE '\.(asc|md5|sha1)([[:space:]]|$)'
+    # Companion suffixes are .asc / .md5 / .sha1 / .module. Bare .pom is a
+    # primary for standalone POMs (BOM/parent releases) so it is intentionally
+    # not excluded — process_jar handles JAR-companion POMs without
+    # manifesting them, and structure_standalone_poms manifests JAR-less POMs
+    # as primaries. Gradle .module is always a stem-based companion of jar/pom
+    # and is never a manifest primary.
+    ! echo "$manifest" | grep -qE '\.(asc|md5|sha1|module)([[:space:]]|$)'
 }
 
 # --- Content detection tests ---
@@ -143,13 +145,15 @@ get_manifest() {
 
     # Find all primary files (exclude companions).
     # .md5/.sha1 are Maven sidecar checksums copied alongside the JAR by
-    # process_jar; they're companions, not primaries, and the upload step
-    # routes them off the manifest path.
+    # process_jar; .module is Gradle Module Metadata (same stem as jar/pom).
+    # They're companions, not primaries, and the upload step routes them off
+    # the manifest path.
     local structured_files
     structured_files=$(find structured_build_artifacts -type f \
         -not -name "*.asc" \
         -not -name "*.pom" \
         -not -name "*.pom.asc" \
+        -not -name "*.module" \
         -not -name "*.prov" \
         -not -name "*.md5" \
         -not -name "*.sha1" \

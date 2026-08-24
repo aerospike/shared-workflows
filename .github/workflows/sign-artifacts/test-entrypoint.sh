@@ -156,10 +156,14 @@ echo " Test 3: Signing all files"
 # shellcheck disable=SC1091
 . "$SCRIPT_DIR/entrypoint.sh" "$UNSIGNED_ARTIFACTS_DIR/**/*" "$SIGNED_ARTIFACTS_DIR"
 
-if [[ ! -f "$SIGNED_ARTIFACTS_DIR/test.module.asc" ]]; then
+# cp --parents preserves the unsigned-artifacts prefix (e.g. test-fixtures/),
+# so search by basename rather than assuming a flat signed-artifacts/ layout.
+module_asc=$(find "$SIGNED_ARTIFACTS_DIR" -name "test.module.asc" -type f | head -n1)
+if [[ -z $module_asc ]]; then
     echo "❌ Gradle module metadata signature was not created"
     exit 1
 fi
+echo "✅ Gradle module metadata signature: $module_asc"
 
 echo ""
 echo "📋 Results for Test 3:"
