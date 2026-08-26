@@ -8,6 +8,7 @@ DEPLOY_DIR="$GIT_ROOT/.github/workflows/deploy-artifacts"
 setup() {
     # Need package_utils.sh for metadata extraction used by props functions
     source "$DEPLOY_DIR/../lib/helm-helpers.sh"
+    source "$DEPLOY_DIR/../lib/maven-helpers.sh"
     source "$DEPLOY_DIR/package_utils.sh"
     source "$DEPLOY_DIR/type_registry.sh"
     # package_utils.sh sets strict mode and an ERR trap that interferes with bats assertions
@@ -56,6 +57,13 @@ setup() {
     [[ "${TYPE_COMPANIONS[crate]}" == ".asc" ]]
     [[ "${TYPE_COMPANIONS[win]}" == ".asc" ]]
     [[ "${TYPE_COMPANIONS[generic]}" == ".asc" ]]
+}
+
+@test "TYPE_COMPANIONS[jar] does not suffix-append .module" {
+    # gather_companions appends suffixes to the JAR filename. Gradle .module
+    # shares the stem (foo-1.0.0.module), so process_jar copies it. Adding
+    # .module here would look for foo-1.0.0.jar.module and miss the real file.
+    [[ "${TYPE_COMPANIONS[jar]}" != *".module"* ]]
 }
 
 @test "CONTENT_DETECT_EXTENSIONS lists ambiguous extensions" {
@@ -150,6 +158,7 @@ setup() {
     [[ "$exts" == *"*.asc"* ]]
     [[ "$exts" == *"*.prov"* ]]
     [[ "$exts" == *"*.pom"* ]]
+    [[ "$exts" == *"*.module"* ]]
     [[ "$exts" == *"*.csproj"* ]]
     # Maven sidecar checksums must be excluded from generic structuring,
     # otherwise structure_generic_files double-structures them and JFrog's

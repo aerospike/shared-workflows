@@ -86,6 +86,8 @@ fi
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/../lib/helm-helpers.sh"
 # shellcheck disable=SC1091
+source "$SCRIPT_DIR/../lib/maven-helpers.sh"
+# shellcheck disable=SC1091
 source "$SCRIPT_DIR/package_utils.sh"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/type_registry.sh"

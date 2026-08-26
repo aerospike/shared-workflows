@@ -5,8 +5,11 @@
 GIT_ROOT="$(git rev-parse --show-toplevel)"
 DEPLOY_DIR="$GIT_ROOT/.github/workflows/deploy-artifacts"
 
+load '../helpers/maven_fixtures'
+
 setup() {
     source "$DEPLOY_DIR/../lib/helm-helpers.sh"
+    source "$DEPLOY_DIR/../lib/maven-helpers.sh"
     source "$DEPLOY_DIR/package_utils.sh"
     source "$DEPLOY_DIR/type_detection.sh"
     # package_utils.sh sets strict mode and an ERR trap that interferes with bats assertions
@@ -491,4 +494,51 @@ YAML
 
 @test "_validate_helm_name accepts name with dots" {
     _validate_helm_name "my.chart"
+}
+
+# --- get_jar_metadata (flat jar + sibling POM) ---
+
+@test "get_jar_metadata reads name, version and group from a sibling POM" {
+    command -v xmllint >/dev/null 2>&1 || skip "xmllint required"
+
+    local dir="$BATS_TEST_TMPDIR/direct"
+    mkdir -p "$dir"
+    make_flat_jar_with_pom "$dir" "  <artifactId>my-app</artifactId>
+  <version>2.1.0</version>
+  <groupId>com.example.direct</groupId>"
+
+    result=$(get_jar_metadata "$dir/test.jar")
+    [[ $result == "my-app 2.1.0 com.example.direct" ]]
+}
+
+@test "get_jar_metadata keeps filename pkgname when sibling POM inherits all GAV from parent" {
+    command -v xmllint >/dev/null 2>&1 || skip "xmllint required"
+
+    local dir="$BATS_TEST_TMPDIR/inherited-parent-only"
+    mkdir -p "$dir"
+    make_flat_jar_with_pom "$dir" "  <parent>
+    <groupId>com.example.parent</groupId>
+    <artifactId>parent-pom</artifactId>
+    <version>1.0.0</version>
+  </parent>"
+
+    result=$(get_jar_metadata "$dir/test.jar")
+    [[ $result == "test 1.0.0 com.example.parent" ]]
+}
+
+@test "get_jar_metadata resolves child module GAV when sibling POM inherits groupId and version from parent" {
+    command -v xmllint >/dev/null 2>&1 || skip "xmllint required"
+
+    local dir="$BATS_TEST_TMPDIR/inherited-child"
+    mkdir -p "$dir"
+    make_flat_jar_with_pom "$dir" "  <parent>
+    <groupId>com.example.parent</groupId>
+    <artifactId>parent-proj</artifactId>
+    <version>1.0.0</version>
+  </parent>
+  <artifactId>child-one</artifactId>
+  <packaging>jar</packaging>" "child-one-1.0.0"
+
+    result=$(get_jar_metadata "$dir/child-one-1.0.0.jar")
+    [[ $result == "child-one 1.0.0 com.example.parent" ]]
 }

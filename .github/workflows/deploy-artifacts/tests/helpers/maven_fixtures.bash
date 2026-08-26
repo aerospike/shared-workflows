@@ -28,10 +28,39 @@ EOF
         rm -rf "$tmp"
 }
 
+# Gradle Module Metadata companion (stem-based, like .pom).
+# Args: <output.module> <group> <module-name> <version>
+write_gradle_module_metadata() {
+        local out="$1" group="$2" name="$3" version="$4"
+        cat >"$out" <<EOF
+{
+  "formatVersion": "1.1",
+  "component": {
+    "group": "${group}",
+    "module": "${name}",
+    "version": "${version}"
+  }
+}
+EOF
+}
+
+# Flat JAR without pom.properties plus a sibling POM (exercises get_jar_metadata sibling path).
+# Args: <dir> <pom_body> [stem without extension, default: test]
+make_flat_jar_with_pom() {
+        local dir="$1" pom_body="$2" stem="${3:-test}"
+        printf 'placeholder' >"$dir/payload.txt"
+        (cd "$dir" && zip -q "${stem}.jar" payload.txt)
+        cat >"$dir/${stem}.pom" <<POM
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+$pom_body
+</project>
+POM
+}
+
 # Populate <base>/build-artifacts with three Maven shapes in JFrog download layout:
-#   1. jar+pom+asc (my-app)
+#   1. jar+pom+module+asc (my-app)
 #   2. parent aggregator + two children (jar+pom+asc each)
-#   3. standalone BOM (pom+asc only)
+#   3. standalone BOM (pom+module+asc; Gradle java-platform / no JAR)
 # Args: <workspace_dir>  (creates build-artifacts/ underneath)
 create_jfrog_maven_fixture_tree() {
         local root="$1"
@@ -56,6 +85,8 @@ create_jfrog_maven_fixture_tree() {
 POM
         echo "FAKE-GPG-SIGNATURE my-app-jar" >"$dir/my-app-1.0.0.jar.asc"
         echo "FAKE-GPG-SIGNATURE my-app-pom" >"$dir/my-app-1.0.0.pom.asc"
+        write_gradle_module_metadata "$dir/my-app-1.0.0.module" "com.example.app" "my-app" "1.0.0"
+        echo "FAKE-GPG-SIGNATURE my-app-module" >"$dir/my-app-1.0.0.module.asc"
 
         # --- 2. Parent + two children ---
         dir="$base/maven-repo/com/example/parent/parent-proj/1.0.0"
@@ -111,6 +142,9 @@ POM
 </project>
 POM
         echo "FAKE-GPG-SIGNATURE standalone-bom" >"$dir/standalone-bom-2.1.0.pom.asc"
+        write_gradle_module_metadata "$dir/standalone-bom-2.1.0.module" \
+                "com.example.bom" "standalone-bom" "2.1.0"
+        echo "FAKE-GPG-SIGNATURE standalone-bom-module" >"$dir/standalone-bom-2.1.0.module.asc"
 }
 
 # Run detect_types.sh only. Args: <workspace_dir>

@@ -115,7 +115,7 @@ teardown_file() {
   [[ $upload_commands == *".jar"* ]] || (echo "JAR file upload command not found" >&2 && return 1)
 }
 
-@test "Maven companions (pom, .md5, .sha1, .asc) upload to maven repo" {
+@test "Maven companions (pom, module, .md5, .sha1, .asc) upload to maven repo" {
   # Regression for INFRA-405's companion-model refactor: .pom and checksum
   # sidecars share the JAR's stem, so the generic suffix-append companion
   # logic can't find them and they fall through to the generic repo. They
@@ -128,9 +128,11 @@ teardown_file() {
 
   local expected_repo="test-project-maven-dev-local"
   local f
-  for f in test.jar test.pom \
-           test.jar.asc test.pom.asc \
-           test.jar.md5 test.jar.sha1 test.pom.md5 test.pom.sha1; do
+  for f in test.jar test.pom test.module \
+           test.jar.asc test.pom.asc test.module.asc \
+           test.jar.md5 test.jar.sha1 test.pom.md5 test.pom.sha1 \
+           test.module.md5 test.module.sha1 \
+           my-app-1.0.0.module my-app-1.0.0.module.asc; do
     local cmd
     # Match the file as the source argument to jf rt upload (whitespace-bounded)
     # so e.g. "test.jar" doesn't match "test.jar.asc".
@@ -155,7 +157,9 @@ teardown_file() {
   upload_commands=$(extract_upload_commands "$output")
 
   local f
-  for f in test.jar.md5.asc test.jar.sha1.asc test.pom.md5.asc test.pom.sha1.asc; do
+  for f in test.jar.md5.asc test.jar.sha1.asc \
+           test.pom.md5.asc test.pom.sha1.asc \
+           test.module.md5.asc test.module.sha1.asc; do
     local cmd
     cmd=$(echo "$upload_commands" | grep -E "[/[:space:]]${f}[[:space:]]" || true)
     [[ -z $cmd ]] || \
@@ -177,7 +181,9 @@ teardown_file() {
   upload_commands=$(extract_upload_commands "$output")
 
   local f
-  for f in test.jar.md5 test.jar.sha1 test.pom.md5 test.pom.sha1; do
+  for f in test.jar.md5 test.jar.sha1 test.pom.md5 test.pom.sha1 \
+           test.module.md5 test.module.sha1 \
+           standalone-bom.module.md5 standalone-bom.module.sha1; do
     local cmd
     cmd=$(echo "$upload_commands" | grep -E "[/[:space:]]${f}[[:space:]]" || true)
     [[ -n $cmd ]] || (echo "Missing upload for $f" >&2 && return 1)
@@ -188,10 +194,10 @@ teardown_file() {
   done
 }
 
-@test "JAR and POM uploads include build-info" {
-  # The base artifacts (.jar, .pom) and their .asc signatures must remain in
-  # the build-info so they are included in release bundles. This pairs with
-  # the previous test: only the .md5/.sha1 sidecars opt out.
+@test "JAR, POM, and module uploads include build-info" {
+  # The base artifacts (.jar, .pom, .module) and their .asc signatures must
+  # remain in the build-info so they are included in release bundles. This
+  # pairs with the previous test: only the .md5/.sha1 sidecars opt out.
   local output
   output=$(run_entrypoint_dry_run "test-project" "test-build" "v1.0.0" "12345" "12345-metadata")
 
@@ -199,7 +205,9 @@ teardown_file() {
   upload_commands=$(extract_upload_commands "$output")
 
   local f
-  for f in test.jar test.pom test.jar.asc test.pom.asc; do
+  for f in test.jar test.pom test.module \
+           test.jar.asc test.pom.asc test.module.asc \
+           standalone-bom.module standalone-bom.module.asc; do
     local cmd
     cmd=$(echo "$upload_commands" | grep -E "[/[:space:]]${f}[[:space:]]" || true)
     [[ -n $cmd ]] || (echo "Missing upload for $f" >&2 && return 1)
@@ -225,7 +233,9 @@ teardown_file() {
 
   local generic_repo="test-project-generic-dev-local"
   local f
-  for f in test.jar.md5 test.jar.sha1 test.pom.md5 test.pom.sha1; do
+  for f in test.jar.md5 test.jar.sha1 test.pom.md5 test.pom.sha1 \
+           test.module.md5 test.module.sha1 \
+           standalone-bom.module.md5 standalone-bom.module.sha1; do
     local generic_cmd
     generic_cmd=$(echo "$upload_commands" | grep -E "[/[:space:]]${f}[[:space:]]" | grep -F "$generic_repo" || true)
     [[ -z $generic_cmd ]] || \
@@ -245,14 +255,17 @@ teardown_file() {
   upload_commands=$(extract_upload_commands "$output")
 
   # Position of each filename's first occurrence in the upload sequence.
-  local jar_pos pom_pos
-  local jar_md5_pos jar_sha1_pos pom_md5_pos pom_sha1_pos
+  local jar_pos pom_pos module_pos
+  local jar_md5_pos jar_sha1_pos pom_md5_pos pom_sha1_pos module_md5_pos module_sha1_pos
   jar_pos=$(echo "$upload_commands"      | grep -nE "[/[:space:]]test\.jar[[:space:]]"      | head -1 | cut -d: -f1)
   pom_pos=$(echo "$upload_commands"      | grep -nE "[/[:space:]]test\.pom[[:space:]]"      | head -1 | cut -d: -f1)
+  module_pos=$(echo "$upload_commands"   | grep -nE "[/[:space:]]test\.module[[:space:]]"   | head -1 | cut -d: -f1)
   jar_md5_pos=$(echo "$upload_commands"  | grep -nE "[/[:space:]]test\.jar\.md5[[:space:]]"  | head -1 | cut -d: -f1)
   jar_sha1_pos=$(echo "$upload_commands" | grep -nE "[/[:space:]]test\.jar\.sha1[[:space:]]" | head -1 | cut -d: -f1)
   pom_md5_pos=$(echo "$upload_commands"  | grep -nE "[/[:space:]]test\.pom\.md5[[:space:]]"  | head -1 | cut -d: -f1)
   pom_sha1_pos=$(echo "$upload_commands" | grep -nE "[/[:space:]]test\.pom\.sha1[[:space:]]" | head -1 | cut -d: -f1)
+  module_md5_pos=$(echo "$upload_commands"  | grep -nE "[/[:space:]]test\.module\.md5[[:space:]]"  | head -1 | cut -d: -f1)
+  module_sha1_pos=$(echo "$upload_commands" | grep -nE "[/[:space:]]test\.module\.sha1[[:space:]]" | head -1 | cut -d: -f1)
 
   [[ -n $jar_pos && -n $jar_md5_pos  && $jar_pos -lt $jar_md5_pos  ]] || \
     (echo "test.jar must upload before test.jar.md5  (jar=$jar_pos, jar.md5=$jar_md5_pos)" >&2 && return 1)
@@ -262,6 +275,10 @@ teardown_file() {
     (echo "test.pom must upload before test.pom.md5  (pom=$pom_pos, pom.md5=$pom_md5_pos)" >&2 && return 1)
   [[ -n $pom_pos && -n $pom_sha1_pos && $pom_pos -lt $pom_sha1_pos ]] || \
     (echo "test.pom must upload before test.pom.sha1 (pom=$pom_pos, pom.sha1=$pom_sha1_pos)" >&2 && return 1)
+  [[ -n $module_pos && -n $module_md5_pos && $module_pos -lt $module_md5_pos ]] || \
+    (echo "test.module must upload before test.module.md5 (module=$module_pos, module.md5=$module_md5_pos)" >&2 && return 1)
+  [[ -n $module_pos && -n $module_sha1_pos && $module_pos -lt $module_sha1_pos ]] || \
+    (echo "test.module must upload before test.module.sha1 (module=$module_pos, module.sha1=$module_sha1_pos)" >&2 && return 1)
 }
 
 @test "Standalone POM is structured and added to the manifest" {
@@ -283,10 +300,11 @@ teardown_file() {
 }
 
 @test "Standalone POM (no JAR) and its sidecars upload to maven repo" {
-  # BOM/parent POMs ship without a JAR. structure_standalone_poms must copy the
-  # .pom.md5/.pom.sha1/.pom.asc siblings into the structured tree so they reach
-  # the maven repo; otherwise they fall through to structure_generic_files which
-  # excludes *.md5/*.sha1 (reserved for JAR processing).
+  # BOM/parent POMs and Gradle java-platform publications ship without a JAR.
+  # structure_standalone_poms must copy the .pom/.module checksum and signature
+  # siblings into the structured tree so they reach the maven repo; otherwise
+  # they fall through to structure_generic_files which excludes *.md5/*.sha1
+  # and *.module (reserved for JAR/POM processing).
   local output
   output=$(run_entrypoint_dry_run "test-project" "test-build" "v1.0.0" "12345" "12345-metadata")
 
@@ -298,7 +316,11 @@ teardown_file() {
   for f in standalone-bom.pom \
            standalone-bom.pom.asc \
            standalone-bom.pom.md5 \
-           standalone-bom.pom.sha1; do
+           standalone-bom.pom.sha1 \
+           standalone-bom.module \
+           standalone-bom.module.asc \
+           standalone-bom.module.md5 \
+           standalone-bom.module.sha1; do
     local cmd
     cmd=$(echo "$upload_commands" | grep -E "[/[:space:]]${f}[[:space:]]" || true)
     if [[ -z $cmd ]]; then

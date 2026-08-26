@@ -49,6 +49,10 @@ is_go_module() {
 # are sourced by entrypoint.sh + detect_types.sh. Same file is sourced by
 # sign-artifacts/entrypoint.sh so detection stays consistent across stages.
 
+# --- Maven ------------------------------------------------------------------------------------
+# _maven_read_pom_coordinates lives in ../lib/maven-helpers.sh and is sourced by
+# entrypoint.sh + detect_types.sh before package_utils.sh (JAR metadata uses it too).
+
 # --- PyPI (artifact-publisher / artifact-identification.sh style) -----------------------------
 
 _require_nonempty_name_version() {
@@ -140,15 +144,7 @@ is_maven_package() {
     esac
 
     local artifact_id group_id version
-    artifact_id=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='artifactId'])" "$file" 2>/dev/null || true)
-    group_id=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='groupId'])" "$file" 2>/dev/null || true)
-    if [[ -z $group_id ]]; then
-        group_id=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='parent']/*[local-name()='groupId'])" "$file" 2>/dev/null || true)
-    fi
-    version=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='version'])" "$file" 2>/dev/null || true)
-    if [[ -z $version ]]; then
-        version=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='parent']/*[local-name()='version'])" "$file" 2>/dev/null || true)
-    fi
+    IFS='|' read -r artifact_id group_id version < <(_maven_read_pom_gav "$file")
 
     if [[ -n $artifact_id && -n $group_id && -n $version ]]; then
         return 0
@@ -307,27 +303,6 @@ _detect_structure_crate_packages() {
 # Writes structured_build_artifacts/.maven-bundle-metadata.json after scanning all *.pom under
 # the artifacts root. See detect-artifacts action output bundle-metadata-path.
 
-# _maven_read_pom_coordinates <pom>
-# Sets: _mv_group_id _mv_artifact_id _mv_version _mv_packaging _mv_module_count (int)
-_maven_read_pom_coordinates() {
-    local pom="$1"
-    _mv_artifact_id=$(xmllint --xpath "string(/*[local-name()='project']/*[local-name()='artifactId'])" "$pom" 2>/dev/null || true)
-    _mv_group_id=$(xmllint --xpath "string(/*[local-name()='project']/*[local-name()='groupId'])" "$pom" 2>/dev/null || true)
-    if [[ -z ${_mv_group_id} ]]; then
-        _mv_group_id=$(xmllint --xpath "string(/*[local-name()='project']/*[local-name()='parent']/*[local-name()='groupId'])" "$pom" 2>/dev/null || true)
-    fi
-    _mv_version=$(xmllint --xpath "string(/*[local-name()='project']/*[local-name()='version'])" "$pom" 2>/dev/null || true)
-    if [[ -z ${_mv_version} ]]; then
-        _mv_version=$(xmllint --xpath "string(/*[local-name()='project']/*[local-name()='parent']/*[local-name()='version'])" "$pom" 2>/dev/null || true)
-    fi
-    _mv_packaging=$(xmllint --xpath "string(/*[local-name()='project']/*[local-name()='packaging'])" "$pom" 2>/dev/null || true)
-    [[ -z ${_mv_packaging} ]] && _mv_packaging="jar"
-    _mv_module_count=$(xmllint --xpath "count(/*[local-name()='project']/*[local-name()='modules']/*[local-name()='module'])" "$pom" 2>/dev/null || echo 0)
-    if [[ -z ${_mv_module_count} ]] || [[ ! (${_mv_module_count} =~ ^[0-9]+$) ]]; then
-        _mv_module_count=0
-    fi
-}
-
 # _pom_has_flatten_maven_plugin_marker <pom>
 # True when the preamble mentions the plugin (typical when keepCommentsInPom or header comment preserved).
 _pom_has_flatten_maven_plugin_marker() {
@@ -343,9 +318,11 @@ _pom_has_flatten_maven_plugin_marker() {
 # strongest signal for flattened BOMs.
 _pom_matches_flatten_resolved_heuristic() {
     local pom="$1"
-    is_maven_package "$pom" || return 1
-    _maven_read_pom_coordinates "$pom"
-    if [[ ${_mv_packaging,,} == pom ]]; then
+    local artifact_id group_id version packaging module_count
+    IFS='|' read -r artifact_id group_id version packaging module_count \
+        < <(_maven_read_pom_coordinates "$pom")
+    [[ -n $artifact_id && -n $group_id && -n $version ]] || return 1
+    if [[ ${packaging,,} == pom ]]; then
         return 1
     fi
     local dep_count
@@ -385,15 +362,17 @@ _write_maven_bundle_metadata_json() {
     while IFS= read -r -d '' pom; do
         [[ -f $pom ]] || continue
         is_maven_package "$pom" || continue
-        _maven_read_pom_coordinates "$pom"
-        if [[ -z ${_mv_group_id-} || -z ${_mv_artifact_id-} || -z ${_mv_version-} ]]; then
-            echo "Notice: excluding POM from Maven bundle metadata (incomplete GAV after coordinate read): $pom (group_id='${_mv_group_id-}' artifact_id='${_mv_artifact_id-}' version='${_mv_version-}')" >&2
+        local group_id artifact_id version packaging module_count
+        IFS='|' read -r artifact_id group_id version packaging module_count \
+            < <(_maven_read_pom_coordinates "$pom")
+        if [[ -z ${group_id-} || -z ${artifact_id-} || -z ${version-} ]]; then
+            echo "Notice: excluding POM from Maven bundle metadata (incomplete GAV after coordinate read): $pom (group_id='${group_id-}' artifact_id='${artifact_id-}' version='${version-}')" >&2
             continue
         fi
-        local gav_key="${_mv_group_id}|${_mv_artifact_id}|${_mv_version}"
+        local gav_key="${group_id}|${artifact_id}|${version}"
         gav_seen["$gav_key"]=1
 
-        if [[ ${_mv_packaging,,} == pom && $_mv_module_count -gt 0 ]]; then
+        if [[ ${packaging,,} == pom && $module_count -gt 0 ]]; then
             maven_aggregator_present=true
         fi
         if _pom_is_flattened_maven_style "$pom"; then
@@ -420,8 +399,9 @@ _write_maven_bundle_metadata_json() {
 }
 
 # Structure Maven POMs into jar/{groupId}/{artifactId}/{version}/.
-# JAR-less BOM/parent POMs copy signature + checksum sidecars; POMs with a sibling
-# .jar copy .pom.asc only (full companion set for the pair is handled by process_jar).
+# JAR-less BOM/parent POMs copy .module metadata plus signature and checksum
+# sidecars; POMs with a sibling .jar copy .pom.asc only (full companion set
+# for the pair, including .module, is handled by process_jar).
 _detect_structure_maven_poms() {
     local artifacts_root="$1"
     while IFS= read -r -d '' pom; do
@@ -440,9 +420,11 @@ _detect_structure_maven_poms() {
             continue
         fi
 
-        _maven_read_pom_coordinates "$pom"
-        group_path="${_mv_group_id//./\/}"
-        target="./structured_build_artifacts/jar/${group_path}/${_mv_artifact_id}/${_mv_version}"
+        local group_id artifact_id version _packaging _module_count
+        IFS='|' read -r artifact_id group_id version _packaging _module_count \
+            < <(_maven_read_pom_coordinates "$pom")
+        group_path="${group_id//./\/}"
+        target="./structured_build_artifacts/jar/${group_path}/${artifact_id}/${version}"
         mkdir -p "$target"
 
         if [[ $has_jar == true ]]; then
@@ -463,7 +445,8 @@ _detect_structure_maven_poms() {
             fi
         else
             local ext sibling
-            for ext in pom.asc pom.md5 pom.sha1; do
+            for ext in pom.asc pom.md5 pom.sha1 \
+                module module.asc module.md5 module.sha1; do
                 sibling="$pom_dir/$base_name.$ext"
                 if [[ -f $sibling ]]; then
                     cp -a "$sibling" "$target/"

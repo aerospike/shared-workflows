@@ -4,7 +4,7 @@
 
 This is a reusable GitHub Actions workflow that signs binary artifacts using GPG. It supports `.deb`, `.rpm`, `.nupkg` (NuGet via SSL.com), Helm charts, and other file types passed via a glob pattern. It produces:
 
-- GPG detached signature (`.asc`) for generic files that pass through the GPG stage (e.g. `.jar`, `.zip`, plain tarballs)
+- GPG detached signature (`.asc`) for generic files that pass through the GPG stage (e.g. `.jar`, Gradle `.module` metadata, `.zip`, plain tarballs)
 - Native signing for `.deb` and `.rpm` using `dpkg-sig` and `rpm --addsign`
 - Helm chart provenance (`.prov`) for packaged charts (`.tgz`/`.tar.gz` containing a `Chart.yaml`): a GPG-clearsigned message containing the chart's `Chart.yaml` plus a sha256 of the tarball, the same native format `helm package --sign` produces. The chart receives a `.prov` rather than a detached `.asc`, and consumers verify with `helm verify` or `helm install --verify`.
 

@@ -234,27 +234,33 @@ teardown() {
 
 # --- Maven / JAR structuring ---
 
-@test "flat JAR routes to jar/GAV/ with pom and .asc companions co-located" {
+@test "flat JAR routes to jar/GAV/ with pom, module, and sidecars co-located" {
     run_entrypoint_dry_run >/dev/null 2>&1 || true
     local jar_dir
     jar_dir="structured_build_artifacts/jar/com/example/test/test/1.0.0"
     [[ -f "$jar_dir/test.jar" ]]
     [[ -f "$jar_dir/test.pom" ]]
+    [[ -f "$jar_dir/test.module" ]]
     [[ -f "$jar_dir/test.jar.asc" ]]
     [[ -f "$jar_dir/test.pom.asc" ]]
+    [[ -f "$jar_dir/test.module.asc" ]]
+    [[ -f "$jar_dir/test.module.md5" ]]
+    [[ -f "$jar_dir/test.module.sha1" ]]
 }
 
-@test "nested JFrog-layout JAR routes to jar/GAV/ with pom and .asc co-located" {
+@test "nested JFrog-layout JAR routes to jar/GAV/ with pom, module, and .asc co-located" {
     run_entrypoint_dry_run >/dev/null 2>&1 || true
     local jar_dir
     jar_dir="structured_build_artifacts/jar/com/example/app/my-app/1.0.0"
     [[ -f "$jar_dir/my-app-1.0.0.jar" ]]
     [[ -f "$jar_dir/my-app-1.0.0.pom" ]]
+    [[ -f "$jar_dir/my-app-1.0.0.module" ]]
     [[ -f "$jar_dir/my-app-1.0.0.jar.asc" ]]
     [[ -f "$jar_dir/my-app-1.0.0.pom.asc" ]]
+    [[ -f "$jar_dir/my-app-1.0.0.module.asc" ]]
 }
 
-@test "flat standalone BOM routes to jar/GAV/ with pom.asc co-located" {
+@test "flat standalone BOM routes to jar/GAV/ with pom, module, and sidecars co-located" {
     run_entrypoint_dry_run >/dev/null 2>&1 || true
     local bom_dir
     bom_dir="structured_build_artifacts/jar/com/example/bom/standalone-bom/1.0.0"
@@ -262,21 +268,29 @@ teardown() {
     [[ -f "$bom_dir/standalone-bom.pom.asc" ]]
     [[ -f "$bom_dir/standalone-bom.pom.md5" ]]
     [[ -f "$bom_dir/standalone-bom.pom.sha1" ]]
+    [[ -f "$bom_dir/standalone-bom.module" ]]
+    [[ -f "$bom_dir/standalone-bom.module.asc" ]]
+    [[ -f "$bom_dir/standalone-bom.module.md5" ]]
+    [[ -f "$bom_dir/standalone-bom.module.sha1" ]]
 }
 
-@test "nested standalone BOM routes to jar/GAV/ with pom.asc co-located" {
+@test "nested standalone BOM routes to jar/GAV/ with pom, module, and .asc co-located" {
     run_entrypoint_dry_run >/dev/null 2>&1 || true
     local bom_dir
     bom_dir="structured_build_artifacts/jar/com/example/bom/standalone-bom/2.1.0"
     [[ -f "$bom_dir/standalone-bom-2.1.0.pom" ]]
     [[ -f "$bom_dir/standalone-bom-2.1.0.pom.asc" ]]
+    [[ -f "$bom_dir/standalone-bom-2.1.0.module" ]]
+    [[ -f "$bom_dir/standalone-bom-2.1.0.module.asc" ]]
 }
 
-@test "No .jar or .pom files leak into generic structured dir" {
+@test "No .jar, .pom, or .module files leak into generic structured dir" {
     run_entrypoint_dry_run >/dev/null 2>&1 || true
-    local jar_in_generic pom_in_generic
+    local jar_in_generic pom_in_generic module_in_generic
     jar_in_generic=$(find structured_build_artifacts/generic -name '*.jar' 2>/dev/null | wc -l | tr -d ' ')
     pom_in_generic=$(find structured_build_artifacts/generic -name '*.pom' 2>/dev/null | wc -l | tr -d ' ')
+    module_in_generic=$(find structured_build_artifacts/generic -name '*.module' 2>/dev/null | wc -l | tr -d ' ')
     [[ "$jar_in_generic" -eq 0 ]]
     [[ "$pom_in_generic" -eq 0 ]]
+    [[ "$module_in_generic" -eq 0 ]]
 }

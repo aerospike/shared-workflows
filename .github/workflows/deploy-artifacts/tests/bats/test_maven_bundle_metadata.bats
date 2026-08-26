@@ -123,17 +123,24 @@ POM
     echo "FAKE-GPG-SIGNATURE" >"$pom_dir/standalone-bom.pom.asc"
     md5sum "$pom_dir/standalone-bom.pom" >"$pom_dir/standalone-bom.pom.md5"
     sha1sum "$pom_dir/standalone-bom.pom" >"$pom_dir/standalone-bom.pom.sha1"
+    write_gradle_module_metadata "$pom_dir/standalone-bom.module" \
+        "com.example.bom" "standalone-bom" "1.0.0"
+    echo "FAKE-GPG-SIGNATURE" >"$pom_dir/standalone-bom.module.asc"
+    md5sum "$pom_dir/standalone-bom.module" >"$pom_dir/standalone-bom.module.md5"
+    sha1sum "$pom_dir/standalone-bom.module" >"$pom_dir/standalone-bom.module.sha1"
 
     (cd "$wd" && "$DEPLOY_ARTIFACTS_DIR/detect_types.sh" --artifacts-dir build-artifacts >/dev/null)
 
     pom_dir="$wd/structured_build_artifacts/jar/com/example/bom/standalone-bom/1.0.0"
-    for f in standalone-bom.pom standalone-bom.pom.asc standalone-bom.pom.md5 standalone-bom.pom.sha1; do
+    for f in standalone-bom.pom standalone-bom.pom.asc standalone-bom.pom.md5 standalone-bom.pom.sha1 \
+             standalone-bom.module standalone-bom.module.asc standalone-bom.module.md5 standalone-bom.module.sha1; do
         [[ -f "$pom_dir/$f" ]] || (echo "Missing structured file: $pom_dir/$f" >&2 && return 1)
     done
 
     grep -qE 'standalone-bom\.pom[[:space:]]+jar$' "$wd/structured_build_artifacts/.manifest" || \
         (echo "standalone-bom.pom missing from manifest:" >&2 && cat "$wd/structured_build_artifacts/.manifest" >&2 && return 1)
-    ! grep -qE 'standalone-bom\.pom\.(asc|md5|sha1)[[:space:]]' "$wd/structured_build_artifacts/.manifest"
+    ! grep -qE 'standalone-bom\.(pom|module)\.(asc|md5|sha1)[[:space:]]' "$wd/structured_build_artifacts/.manifest"
+    ! grep -qE 'standalone-bom\.module[[:space:]]' "$wd/structured_build_artifacts/.manifest"
 }
 
 @test "maven bundle metadata: no POMs yields zeros" {

@@ -31,6 +31,7 @@ fi
 
 # Create some additional test files
 echo "test jar content" >"$UNSIGNED_ARTIFACTS_DIR/test.jar"
+echo '{"formatVersion":"1.1"}' >"$UNSIGNED_ARTIFACTS_DIR/test.module"
 echo "test zip content" >"$UNSIGNED_ARTIFACTS_DIR/test.zip"
 
 # Create a packaged helm chart .tgz (single top-level dir with Chart.yaml at root).

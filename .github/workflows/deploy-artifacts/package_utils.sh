@@ -34,12 +34,17 @@ get_jar_metadata() {
     fi
 
     # Flat JAR + sibling POM (e.g. test.jar + test.pom): filename may not encode version.
+    # _maven_read_pom_gav (../lib/maven-helpers.sh) resolves parent inheritance;
+    # only overwrite filename-derived fields when the POM supplies non-empty values.
     local sibling_pom="$jar_dir/${base_no_ext}.pom"
     if [[ -z $group_id && -f $sibling_pom ]]; then
         if command -v xmllint >/dev/null 2>&1; then
-            pkgname=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='artifactId'])" "$sibling_pom" 2>/dev/null)
-            version=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='version'])" "$sibling_pom" 2>/dev/null)
-            group_id=$(xmllint --xpath "string(//*[local-name()='project']/*[local-name()='groupId'])" "$sibling_pom" 2>/dev/null)
+            local pom_artifact_id pom_group_id pom_version
+            IFS='|' read -r pom_artifact_id pom_group_id pom_version \
+                < <(_maven_read_pom_gav "$sibling_pom")
+            [[ -n $pom_artifact_id ]] && pkgname="$pom_artifact_id"
+            [[ -n $pom_version ]] && version="$pom_version"
+            [[ -n $pom_group_id ]] && group_id="$pom_group_id"
         fi
     fi
 
@@ -143,16 +148,17 @@ process_jar() {
     echo "Copying JAR to: $target" >&2
     cp -v "$jar" "$target/" >&2
 
-    # Maven companions: pom and checksum sidecars share the JAR's stem (not its
-    # full filename), so the generic gather_companions cannot find them. Copy
-    # them here so they land in the same structured target as the JAR.
+    # Maven companions: pom, Gradle module metadata, and checksum sidecars share
+    # the JAR's stem (not its full filename), so the generic gather_companions
+    # cannot find them. Copy them here so they land in the same structured
+    # target as the JAR.
     # .md5/.sha1 are deliberately NOT signed per Maven Central convention;
     # any .md5.asc/.sha1.asc produced by an indiscriminate sign step is
     # intentionally left behind here so it doesn't reach JFrog.
     # Order isn't important during structuring; the upload step controls upload
     # order so JFrog's checksum-deploy interception finds the base file first.
-    for ext in pom pom.asc \
-        jar.md5 jar.sha1 pom.md5 pom.sha1; do
+    for ext in pom module pom.asc module.asc \
+        jar.md5 jar.sha1 pom.md5 pom.sha1 module.md5 module.sha1; do
         local sibling="$jar_dir/${base_name}.${ext}"
         if [[ -f $sibling ]]; then
             cp -v "$sibling" "$target/" >&2
@@ -485,6 +491,9 @@ process_go() { copy_to_structured "$1" "$2"; }
 # is_helm_chart and _extract_helm_chart_yaml are defined in ../lib/helm-helpers.sh,
 # sourced by entrypoint.sh (and by sign-artifacts/entrypoint.sh) so the two stages
 # stay in sync.
+#
+# get_jar_metadata sibling-POM path uses _maven_read_pom_gav from
+# ../lib/maven-helpers.sh (sourced before this file in entrypoint.sh / detect_types.sh).
 
 # Validate a Helm chart name.
 # Helm chart names use DNS-1123-style identifiers (lowercase, alphanumeric, hyphens,
