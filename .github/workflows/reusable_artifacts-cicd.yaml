@@ -90,6 +90,21 @@ on:
         required: false
         type: string
         default: ${{ github.repository }}
+      gh-source-app-client-id:
+        description: |
+          Client ID of a GitHub App used to mint the source checkout token. Pair with the
+          gh-source-app-private-key secret. Mutually exclusive with the gh-source-token secret.
+        required: false
+        type: string
+        default: ""
+      gh-source-app-repositories:
+        description: |
+          Newline- or comma-separated repositories the minted token may reach, unqualified names in
+          the calling repo's owner. Leave empty only if the App installation is already scoped: an
+          empty value gives the token every repository in the installation.
+        required: false
+        type: string
+        default: ""
       build-type:
         description: Freeform build type label applied as a target-prop on all artifacts (e.g., release, nightly, snapshot)
         required: false
@@ -253,6 +268,14 @@ on:
         default: ""
 
     secrets:
+      gh-source-token:
+        description: |
+          Token for the source-repository checkout and its submodules, also exported to the build
+          script as GH_SOURCE_TOKEN. Mutually exclusive with gh-source-app-client-id.
+        required: false
+      gh-source-app-private-key:
+        description: Private key of the App named by gh-source-app-client-id.
+        required: false
       gpg-private-key:
         required: true
       gpg-public-key:
@@ -373,6 +396,8 @@ jobs:
       gh-source-path: ${{ inputs.gh-source-path }}
       gh-source-ref: ${{ inputs.gh-source-ref }}
       gh-source-repository: ${{ inputs.gh-source-repository }}
+      gh-source-app-client-id: ${{ inputs.gh-source-app-client-id }}
+      gh-source-app-repositories: ${{ inputs.gh-source-app-repositories }}
       gh-workflows-ref: ${{ inputs.gh-workflows-ref }}
       jf-build-id: ${{ needs.resolve.outputs.jf-metadata-build-id }}-${{ matrix.distro }}-${{ matrix.arch }}
       jf-build-name: ${{ inputs.jf-build-name }}
@@ -393,7 +418,9 @@ jobs:
       setup-helm: ${{ matrix['setup-helm'] != null && matrix['setup-helm'] || matrix['setup-helm'] == null && inputs.setup-helm }}
       helm-version: ${{ matrix['helm-version'] || inputs.helm-version }}
       working-directory: ${{ matrix['working-directory'] || needs.resolve.outputs.resolved-working-directory }}
-    secrets: inherit
+    secrets:
+      gh-source-token: ${{ secrets.gh-source-token }}
+      gh-source-app-private-key: ${{ secrets.gh-source-app-private-key }}
 
   collect-matrix-artifacts:
     needs: [resolve, build]
