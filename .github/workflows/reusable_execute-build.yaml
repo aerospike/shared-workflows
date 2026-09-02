@@ -172,6 +172,14 @@ on:
         type: string
         default: latest
 
+    secrets:
+      gh-source-token:
+        description: |
+          Token for the source-repository checkout and its submodules, also exported to the build
+          script as GH_SOURCE_TOKEN. Supply this when the source repo's submodules or sibling repos
+          live in repositories the calling repo's GITHUB_TOKEN cannot read.
+        required: false
+
     outputs:
       gh-artifact-name:
         description: The name of the uploaded artifacts on github
@@ -217,6 +225,10 @@ jobs:
           fetch-tags: true
           submodules: recursive
           fetch-depth: 0
+          token: ${{ secrets.gh-source-token || github.token }}
+          # Do not persist a supplied token: it reaches past the calling repo, and .git/config
+          # rides along in any artifact built from a copy of the tree.
+          persist-credentials: ${{ secrets.gh-source-token == '' }}
 
       - name: Set up Java
         if: inputs.setup-java
@@ -265,6 +277,7 @@ jobs:
           # INPUT_ prefix avoids clobbering entrypoint.sh's internal BUILD_SCRIPT vars.
           INPUT_BUILD_SCRIPT: ${{ inputs.build-script }}
           INPUT_BUILD_SCRIPT_PATH: ${{ inputs.build-script-path }}
+          GH_SOURCE_TOKEN: ${{ secrets.gh-source-token }}
         run: |
           parser="${{ inputs.gh-checkout-path }}/.github/workflows/execute-build/parse-build-env.sh"
           chmod +x "$parser"
