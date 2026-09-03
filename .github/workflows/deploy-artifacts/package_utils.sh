@@ -170,19 +170,15 @@ process_jar() {
 }
 
 # Known Debian/Ubuntu suite names for DEB_DISTRIBUTIONS / --deb-distributions.
+# Validation conducted against currently active distributions
 # Ubuntu: jammy, noble, resolute (standard); focal, bionic (ESM); xenial, questing (gathered).
 # Debian: bookworm, trixie (supported); bullseye (filename map); forky, sid (testing/unstable).
 _KNOWN_DEB_CODENAMES_CSV="bionic,bookworm,bullseye,focal,forky,jammy,noble,questing,resolute,sid,trixie,xenial"
 
 _is_known_deb_codename() {
-    case "$1" in
-    bionic | bookworm | bullseye | focal | forky | jammy | noble | questing | resolute | sid | trixie | xenial)
-        return 0
-        ;;
-    *)
-        return 1
-        ;;
-    esac
+    local name="${1-}"
+    [[ -n $name && $name != *,* ]] || return 1
+    [[ ,${_KNOWN_DEB_CODENAMES_CSV}, == *,"$name",* ]]
 }
 
 # Strip whitespace, lowercase, and reject unknown or empty tokens.
