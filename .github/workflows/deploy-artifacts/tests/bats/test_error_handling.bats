@@ -58,3 +58,9 @@ teardown_file() {
   [[ $output == *"--deb-distributions"* ]]
 }
 
+@test "Invalid --deb-distributions produces error" {
+  run "$DEPLOY_ARTIFACTS_DIR/entrypoint.sh" test-project test-build v1.0.0 12345 12345-metadata --deb-distributions jammy,not-a-distro --dry-run
+  [[ $status -ne 0 ]]
+  [[ $output == *"Unknown Debian/Ubuntu codename 'not-a-distro'"* ]]
+}
+

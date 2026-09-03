@@ -66,7 +66,7 @@ while [[ $# -gt 0 ]]; do
         echo "  --jar-group-id <group-id>        Maven group ID for JAR artifacts" >&2
         echo "  --build-type <label>             Freeform build type label (e.g., release, nightly)" >&2
         echo "  --internal                       Mark artifacts as internal-only (not for public promotion)" >&2
-        echo "  --deb-distributions <list>        Comma-separated Debian/Ubuntu codenames for packages whose filename has no distro token (e.g. jammy,noble,bookworm,trixie). Also accepted as DEB_DISTRIBUTIONS." >&2
+        echo "  --deb-distributions <list>        Comma-separated Debian/Ubuntu codenames for packages whose filename has no distro token (e.g. jammy,noble,resolute,bookworm,trixie). Also accepted as DEB_DISTRIBUTIONS." >&2
         echo "  --dry-run        Show what would be uploaded without actually uploading" >&2
         echo "  --help, -h       Show this help message" >&2
         echo "" >&2
@@ -74,7 +74,7 @@ while [[ $# -gt 0 ]]; do
         echo "  $0  database my-app v1.0.0 1754566442238 1754566442238-metadata" >&2
         echo "  $0  database my-app v1.0.0 1754566442238 1754566442238-metadata --dry-run" >&2
         echo "  $0  database my-app v1.0.0 1754566442238 1754566442238-metadata --jar-group-id com.aerospike.test" >&2
-        echo "  $0  connect aerospike-xdr-proxy 4.0.7 1754566442238 --deb-distributions jammy,noble,bookworm,trixie" >&2
+        echo "  $0  connect aerospike-xdr-proxy 4.0.7 1754566442238 --deb-distributions jammy,noble,resolute,bookworm,trixie" >&2
         exit 0
         ;;
     -*)
@@ -155,6 +155,10 @@ source "$SCRIPT_DIR/../lib/helm-helpers.sh"
 source "$SCRIPT_DIR/../lib/maven-helpers.sh"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/package_utils.sh"
+if [[ -n ${DEB_DISTRIBUTIONS-} ]]; then
+    DEB_DISTRIBUTIONS=$(_normalize_deb_distributions "$DEB_DISTRIBUTIONS") || exit 1
+    export DEB_DISTRIBUTIONS
+fi
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/type_registry.sh"
 # shellcheck disable=SC1091

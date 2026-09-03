@@ -72,6 +72,32 @@ setup() {
     [[ "$result" == "jammy,noble,bookworm" ]]
 }
 
+@test "get_codename_for_deb lowercases DEB_DISTRIBUTIONS" {
+    DEB_DISTRIBUTIONS="Jammy,Noble"
+    result=$(get_codename_for_deb "pkg.all.deb")
+    [[ "$result" == "jammy,noble" ]]
+}
+
+@test "get_codename_for_deb accepts gathered Ubuntu and Debian codenames" {
+    DEB_DISTRIBUTIONS="resolute,focal,bionic,xenial,questing,forky,sid"
+    result=$(get_codename_for_deb "pkg.all.deb")
+    [[ "$result" == "resolute,focal,bionic,xenial,questing,forky,sid" ]]
+}
+
+@test "get_codename_for_deb rejects unknown DEB_DISTRIBUTIONS codename" {
+    DEB_DISTRIBUTIONS="jammy,not-a-distro"
+    run get_codename_for_deb "pkg.all.deb"
+    [[ $status -ne 0 ]]
+    [[ "$output" == *"Unknown Debian/Ubuntu codename 'not-a-distro'"* ]]
+}
+
+@test "get_codename_for_deb rejects empty DEB_DISTRIBUTIONS token" {
+    DEB_DISTRIBUTIONS="jammy,,noble"
+    run get_codename_for_deb "pkg.all.deb"
+    [[ $status -ne 0 ]]
+    [[ "$output" == *"empty codename"* ]]
+}
+
 @test "get_codename_for_deb filename token wins over DEB_DISTRIBUTIONS" {
     DEB_DISTRIBUTIONS="bookworm,trixie"
     result=$(get_codename_for_deb "test-ubuntu22.04.deb")

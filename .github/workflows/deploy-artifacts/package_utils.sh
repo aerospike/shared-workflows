@@ -169,10 +169,56 @@ process_jar() {
     echo "$target/$jar_name"
 }
 
+# Known Debian/Ubuntu suite names for DEB_DISTRIBUTIONS / --deb-distributions.
+# Ubuntu: jammy, noble, resolute (standard); focal, bionic (ESM); xenial, questing (gathered).
+# Debian: bookworm, trixie (supported); bullseye (filename map); forky, sid (testing/unstable).
+_KNOWN_DEB_CODENAMES_CSV="bionic,bookworm,bullseye,focal,forky,jammy,noble,questing,resolute,sid,trixie,xenial"
+
+_is_known_deb_codename() {
+    case "$1" in
+    bionic | bookworm | bullseye | focal | forky | jammy | noble | questing | resolute | sid | trixie | xenial)
+        return 0
+        ;;
+    *)
+        return 1
+        ;;
+    esac
+}
+
+# Strip whitespace, lowercase, and reject unknown or empty tokens.
+# Args: <comma-separated list>
+# Returns: normalized list on stdout, or return 1.
+_normalize_deb_distributions() {
+    local raw="${1-}"
+    raw="${raw//[[:space:]]/}"
+    raw="${raw,,}"
+    [[ -n $raw ]] || return 1
+
+    local IFS=,
+    local -a parts=()
+    read -ra parts <<<"$raw" || true
+
+    local p
+    local -a out=()
+    for p in "${parts[@]}"; do
+        if [[ -z $p ]]; then
+            echo "Invalid DEB_DISTRIBUTIONS: empty codename" >&2
+            return 1
+        fi
+        if ! _is_known_deb_codename "$p"; then
+            echo "Unknown Debian/Ubuntu codename '$p'. Allowed: ${_KNOWN_DEB_CODENAMES_CSV}" >&2
+            return 1
+        fi
+        out+=("$p")
+    done
+    local IFS=,
+    echo "${out[*]}"
+}
+
 # Debian/Ubuntu codename for a .deb, used as JFrog deb.distribution.
 # Filename tokens take precedence. Distro-agnostic packages (e.g. *.all.deb)
 # have no token; set DEB_DISTRIBUTIONS (or --deb-distributions) to a
-# comma-separated list of codenames (e.g. jammy,noble,bookworm,trixie).
+# comma-separated list of known codenames (e.g. jammy,noble,resolute,bookworm,trixie).
 get_codename_for_deb() {
     case "$1" in
     *ubuntu20.04*) echo "focal" ;;
@@ -183,14 +229,13 @@ get_codename_for_deb() {
     *debian12*) echo "bookworm" ;;
     *debian13*) echo "trixie" ;;
     *)
-        local dists="${DEB_DISTRIBUTIONS-}"
-        dists="${dists// /}"
-        if [[ -n $dists ]]; then
-            echo "$dists"
-            return 0
+        local raw="${DEB_DISTRIBUTIONS-}"
+        raw="${raw//[[:space:]]/}"
+        if [[ -z $raw ]]; then
+            echo "distro $1 not supported" >&2
+            return 1
         fi
-        echo "distro $1 not supported" >&2
-        return 1
+        _normalize_deb_distributions "$raw"
         ;;
     esac
 }
