@@ -169,6 +169,10 @@ process_jar() {
     echo "$target/$jar_name"
 }
 
+# Debian/Ubuntu codename for a .deb, used as JFrog deb.distribution.
+# Filename tokens take precedence. Distro-agnostic packages (e.g. *.all.deb)
+# have no token; set DEB_DISTRIBUTIONS (or --deb-distributions) to a
+# comma-separated list of codenames (e.g. jammy,noble,bookworm,trixie).
 get_codename_for_deb() {
     case "$1" in
     *ubuntu20.04*) echo "focal" ;;
@@ -179,6 +183,12 @@ get_codename_for_deb() {
     *debian12*) echo "bookworm" ;;
     *debian13*) echo "trixie" ;;
     *)
+        local dists="${DEB_DISTRIBUTIONS-}"
+        dists="${dists// /}"
+        if [[ -n $dists ]]; then
+            echo "$dists"
+            return 0
+        fi
         echo "distro $1 not supported" >&2
         return 1
         ;;
@@ -188,12 +198,14 @@ get_codename_for_deb() {
 process_deb() {
     local file="$1"
     local dest_dir="$2"
-    local codename pkgname
+    local codename pkgname pool_codename
 
     codename=$(get_codename_for_deb "$file")
     pkgname=$(dpkg-deb -f "$file" Package)
 
-    local target="$dest_dir/pool/$codename/$pkgname"
+    # Staging path uses the first distro when indexing for several distributions.
+    pool_codename="${codename%%,*}"
+    local target="$dest_dir/pool/$pool_codename/$pkgname"
     mkdir -p "$target"
     echo "Copying DEB to: $target" >&2
     local deb_name

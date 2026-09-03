@@ -52,3 +52,9 @@ teardown_file() {
   [[ $output == *"Unknown option"* ]]
 }
 
+@test "Help mentions --deb-distributions" {
+  run "$DEPLOY_ARTIFACTS_DIR/entrypoint.sh" --help
+  [[ $status -eq 0 ]]
+  [[ $output == *"--deb-distributions"* ]]
+}
+

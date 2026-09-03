@@ -110,6 +110,8 @@ deb/pool/
   bookworm/{package-name}/{file}.deb.asc
 ```
 
+Codename is inferred from the filename (`ubuntu22.04` → `jammy`, `debian12` → `bookworm`, and so on). Distro-agnostic packages such as `aerospike-xdr-proxy-4.0.7.all.deb` have no token; set `DEB_DISTRIBUTIONS` or pass `--deb-distributions` with a comma-separated list of Debian/Ubuntu codenames (for example `jammy,noble,bookworm,trixie`). JFrog indexes the package for every listed distribution via `deb.distribution` and `--deb`. Filename tokens still win when present. The local pool path uses the first listed codename.
+
 ### RPM
 
 ```text
