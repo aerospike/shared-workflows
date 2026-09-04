@@ -180,6 +180,34 @@ on:
         type: string
         default: latest
 
+      # Source checkout credential, GitHub App form
+      gh-source-app-client-id:
+        description: |
+          Client ID of a GitHub App used to mint the source checkout token. Pair with the
+          gh-source-app-private-key secret. Mutually exclusive with the gh-source-token secret.
+        required: false
+        type: string
+        default: ""
+      gh-source-app-repositories:
+        description: |
+          Newline- or comma-separated repositories the minted token may reach, unqualified names in
+          the calling repo's owner. Leave empty only if the App installation is already scoped: an
+          empty value gives the token every repository in the installation.
+        required: false
+        type: string
+        default: ""
+
+    secrets:
+      gh-source-token:
+        description: |
+          Token for the source-repository checkout and its submodules, also exported to the build
+          script as GH_SOURCE_TOKEN. Supply this when the source repo's submodules or sibling repos
+          live in repositories the calling repo's GITHUB_TOKEN cannot read.
+        required: false
+      gh-source-app-private-key:
+        description: Private key of the App named by gh-source-app-client-id.
+        required: false
+
     outputs:
       gh-artifact-name:
         description: The name of the uploaded artifacts on github
@@ -218,6 +246,24 @@ jobs:
           path: ${{ inputs.gh-checkout-path }}
           fetch-depth: 1
 
+      - name: Reject conflicting source checkout credentials
+        shell: bash
+        run: |
+          if [[ -n "${{ inputs.gh-source-app-client-id }}" && -n "${{ secrets.gh-source-token }}" ]]; then
+            echo "::error::Set gh-source-app-client-id or the gh-source-token secret, not both."
+            exit 1
+          fi
+
+      - name: Mint source checkout token
+        id: gh-source-app-token
+        if: inputs.gh-source-app-client-id != ''
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ inputs.gh-source-app-client-id }}
+          private-key: ${{ secrets.gh-source-app-private-key }}
+          repositories: ${{ inputs.gh-source-app-repositories }}
+          permission-contents: read
+
       - name: Checkout source repository
         if: inputs.gh-source-path != ''
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -228,6 +274,10 @@ jobs:
           fetch-tags: true
           submodules: recursive
           fetch-depth: 0
+          token: ${{ steps.gh-source-app-token.outputs.token || secrets.gh-source-token || github.token }}
+          # Do not persist a supplied token: it reaches past the calling repo, and .git/config
+          # rides along in any artifact built from a copy of the tree.
+          persist-credentials: ${{ inputs.gh-source-app-client-id == '' && secrets.gh-source-token == '' }}
 
       - name: Set up Java
         if: inputs.setup-java
@@ -276,6 +326,7 @@ jobs:
           # INPUT_ prefix avoids clobbering entrypoint.sh's internal BUILD_SCRIPT vars.
           INPUT_BUILD_SCRIPT: ${{ inputs.build-script }}
           INPUT_BUILD_SCRIPT_PATH: ${{ inputs.build-script-path }}
+          GH_SOURCE_TOKEN: ${{ steps.gh-source-app-token.outputs.token || secrets.gh-source-token }}
         run: |
           parser="${{ inputs.gh-checkout-path }}/.github/workflows/execute-build/parse-build-env.sh"
           chmod +x "$parser"
