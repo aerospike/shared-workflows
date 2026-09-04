@@ -937,3 +937,118 @@ class SeparationOfDuties(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+
+class VerifyCommands(unittest.TestCase):
+    def evidence(self, artifacts, **over):
+        ev = {
+            "project": "database", "promotions": [], "pr": None, "source": None,
+            "release": {"repo": "database-release-bundles-v2", "bundle": "thing/1.0"},
+            "artifacts": artifacts,
+        }
+        ev.update(over)
+        return ev
+
+    def art(self, path, **over):
+        entry = {"type": "maven", "path": path, "public": path, "repos": [],
+                 "number": None, "attestation": None}
+        entry.update(over)
+        return entry
+
+    def test_a_signature_is_never_the_worked_example(self):
+        ev = self.evidence([self.art("g/a/1.0/a-1.0.jar.asc"), self.art("g/a/1.0/a-1.0.jar")])
+        self.assertEqual(rev.verify_subject(ev)["path"], "g/a/1.0/a-1.0.jar")
+
+    def test_the_jar_wins_over_its_sources_and_pom(self):
+        ev = self.evidence([self.art("g/a/1.0/a-1.0-javadoc.jar"),
+                            self.art("g/a/1.0/a-1.0-sources.jar"),
+                            self.art("g/a/1.0/a-1.0.pom"),
+                            self.art("g/a/1.0/a-1.0.jar")])
+        self.assertEqual(rev.verify_subject(ev)["path"], "g/a/1.0/a-1.0.jar")
+
+    def test_a_container_walks_the_tag_index_not_a_blob(self):
+        ev = self.evidence([
+            self.art("img/sha256:abc/manifest.json", type="docker"),
+            self.art("img/1.0/list.manifest.json", type="docker"),
+        ])
+        self.assertEqual(rev.verify_subject(ev)["path"], "img/1.0/list.manifest.json")
+
+    def test_a_release_with_no_artifacts_still_renders(self):
+        self.assertIn("JFROG_TOKEN", rev.verify_commands(self.evidence([])))
+
+    def test_the_seal_step_is_absent_without_a_bundle(self):
+        ev = self.evidence([self.art("g/a/1.0/a-1.0.jar")], release=None)
+        self.assertNotIn("release-bundle.json.evd", rev.verify_commands(ev))
+
+    def test_the_terminal_promotion_is_the_one_quoted(self):
+        ev = self.evidence([self.art("g/a/1.0/a-1.0.jar")], promotions=[
+            {"stage": "TEST", "file": "promotion-1.json.evd"},
+            {"stage": "PROD", "file": "promotion-2.json.evd"},
+        ])
+        block = rev.verify_commands(ev)
+        self.assertIn("promotion-2.json.evd", block)
+        self.assertNotIn("promotion-1.json.evd", block)
+
+    def test_a_promotion_with_no_attestation_file_is_skipped(self):
+        ev = self.evidence([self.art("g/a/1.0/a-1.0.jar")],
+                           promotions=[{"stage": "PROD", "file": None}])
+        self.assertNotIn("jq -r .payload | base64 -d |\n  jq '{by:", rev.verify_commands(ev))
+
+    def test_the_commit_lookup_names_the_build_that_holds_it(self):
+        ev = self.evidence([self.art("g/a/1.0/a-1.0.jar", number="9-artifacts")],
+                           source={"repo": "aerospike/a", "commit": "deadbeef",
+                                   "build": "a", "vcs_build": "9-buildinfo-el9",
+                                   "artifact": "g/a/1.0/a-1.0.jar",
+                                   "artifact_build": "9-artifacts"})
+        block = rev.verify_commands(ev)
+        self.assertIn("api/build/a/9-buildinfo-el9?project=database", block)
+        self.assertIn("metadata child", block)
+
+    def test_no_metadata_note_when_the_artifact_build_carried_the_commit(self):
+        ev = self.evidence([self.art("g/a/1.0/a-1.0.jar", number="9")],
+                           source={"repo": "aerospike/a", "commit": "deadbeef",
+                                   "build": "a", "vcs_build": "9",
+                                   "artifact": "g/a/1.0/a-1.0.jar", "artifact_build": "9"})
+        self.assertNotIn("metadata child", rev.verify_commands(ev))
+
+    def test_repeated_basenames_do_not_become_the_substitution_hint(self):
+        # Every multi-image container release repeats list.manifest.json.
+        ev = self.evidence([
+            self.art("db-docker-prod-public-local/one/1.0/list.manifest.json", type="docker"),
+            self.art("db-docker-prod-public-local/two/1.0/list.manifest.json", type="docker"),
+        ])
+        hint = rev.substitution_hint(ev)
+        self.assertNotIn("`list.manifest.json`", hint)
+        self.assertIn("two/1.0/list.manifest.json", hint)
+
+    def test_a_single_artifact_release_gets_no_substitution_hint(self):
+        self.assertIsNone(rev.substitution_hint(self.evidence([self.art("g/a/1.0/a-1.0.jar")])))
+
+    def test_the_property_lookup_uses_a_real_repository_not_a_virtual(self):
+        entry = self.art("img/1.0_20260101T000000Z/list.manifest.json", type="docker",
+                         public="docker/img/1.0/list.manifest.json",
+                         repos=["c-docker-prod-public-local"])
+        self.assertEqual(rev.qualified(entry),
+                         "c-docker-prod-public-local/img/1.0_20260101T000000Z/list.manifest.json")
+        self.assertEqual(rev.pasteable(entry), "docker/img/1.0/list.manifest.json")
+
+    def test_an_already_qualified_path_is_left_alone(self):
+        entry = self.art("c-pypi-dev-local/a/1.0/a.whl", type="pypi", public=None,
+                         repos=["c-pypi-dev-local"])
+        self.assertEqual(rev.qualified(entry), "c-pypi-dev-local/a/1.0/a.whl")
+
+    def test_a_promotion_target_outranks_a_dev_copy(self):
+        # A repository key outside the -prod-public convention names no stage, so ranking
+        # alone would send a reader to DEV for a release that reached PROD.
+        entry = self.art("absctl/v1.1.1/absctl.rpm", type="yum", public=None,
+                         repos=["e-rpm-dev-local", "e-rpm-prod-local"])
+        ev = self.evidence([entry], promotions=[
+            {"stage": "PROD", "file": "p.evd", "repos": ["e-rpm-prod-local"]}])
+        self.assertEqual(rev.verify_path(ev, entry), "e-rpm-prod-local/absctl/v1.1.1/absctl.rpm")
+
+    def test_a_public_path_still_wins(self):
+        entry = self.art("a/1.0/a.jar", public="maven/a/1.0/a.jar", repos=["c-maven-dev-local"])
+        ev = self.evidence([entry], promotions=[
+            {"stage": "PROD", "file": "p.evd", "repos": ["c-maven-dev-local"]}])
+        self.assertEqual(rev.verify_path(ev, entry), "maven/a/1.0/a.jar")
