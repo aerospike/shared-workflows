@@ -190,9 +190,9 @@ on:
         default: ""
       gh-source-app-repositories:
         description: |
-          Newline- or comma-separated repositories the minted token may reach, unqualified names in
-          the calling repo's owner. Leave empty only if the App installation is already scoped: an
-          empty value gives the token every repository in the installation.
+          Newline- or comma-separated private repositories the build needs beyond the source repo,
+          which is added automatically. Names are unqualified within the calling repo's owner. The
+          App must be installed on every repo listed here and on the source repo itself.
         required: false
         type: string
         default: ""
@@ -261,7 +261,11 @@ jobs:
         with:
           client-id: ${{ inputs.gh-source-app-client-id }}
           private-key: ${{ secrets.gh-source-app-private-key }}
-          repositories: ${{ inputs.gh-source-app-repositories }}
+          # The source repo goes in unconditionally. The minted token replaces GITHUB_TOKEN for its
+          # checkout, so omitting it fails with "Repository not found" on the caller's own repo.
+          repositories: |
+            ${{ inputs.gh-source-repository }}
+            ${{ inputs.gh-source-app-repositories }}
           permission-contents: read
 
       - name: Checkout source repository

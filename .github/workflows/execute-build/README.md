@@ -117,8 +117,14 @@ secrets:
   gh-source-app-private-key: ${{ secrets.APP_PRIVATE_KEY }}
 ```
 
-Name the repositories. Leaving `gh-source-app-repositories` empty gives the token every repository
-in the App installation. The mint requests `contents: read` only.
+List only the extra repositories. The source repo is added to the mint automatically, because the
+minted token replaces `GITHUB_TOKEN` for its checkout too. Leaving `gh-source-app-repositories`
+empty still gives the token every repository in the App installation. The mint requests
+`contents: read` only.
+
+Install the App on the source repo as well as every repo listed here. The `repositories` input can
+only narrow within an installation, so a repo the App is not installed on fails the checkout with
+`Repository not found`.
 
 **Pre-minted token**, for callers without a GitHub App:
 
