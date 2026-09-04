@@ -269,6 +269,45 @@ setup() {
     rm -rf "$test_dir"
 }
 
+@test "get_deb_props uses DEB_DISTRIBUTIONS for distro-agnostic .all.deb" {
+    local src="$GIT_ROOT/tests/test-all-arch_1.0.0-1ubuntu22.04_all.deb"
+    if [[ ! -f "$src" ]]; then
+        skip "Test fixture not available"
+    fi
+    local test_dir
+    test_dir=$(mktemp -d)
+    cp "$src" "$test_dir/aerospike-xdr-proxy-4.0.7.all.deb"
+    VERSION="4.0.7"
+    BUILD_TYPE=""
+    INTERNAL="false"
+    DEB_DISTRIBUTIONS="jammy,noble,bookworm,trixie"
+    error() { echo "Error: $*" >&2; return 1; }
+    local props
+    props=$(get_deb_props "$test_dir/aerospike-xdr-proxy-4.0.7.all.deb" 2>/dev/null)
+    [[ "$props" == *"deb.distribution=jammy,noble,bookworm,trixie"* ]]
+    if command -v dpkg-deb >/dev/null 2>&1; then
+        [[ "$props" == *"deb.architecture=all"* ]]
+    fi
+    rm -rf "$test_dir"
+}
+
+@test "get_deb_extra_flags uses DEB_DISTRIBUTIONS for distro-agnostic .all.deb" {
+    local src="$GIT_ROOT/tests/test-all-arch_1.0.0-1ubuntu22.04_all.deb"
+    if [[ ! -f "$src" ]]; then
+        skip "Test fixture not available"
+    fi
+    command -v dpkg-deb >/dev/null 2>&1 || skip "dpkg-deb not available"
+    local test_dir
+    test_dir=$(mktemp -d)
+    cp "$src" "$test_dir/aerospike-xdr-proxy-4.0.7.all.deb"
+    DEB_DISTRIBUTIONS="jammy,noble,bookworm,trixie"
+    error() { echo "Error: $*" >&2; return 1; }
+    local flags
+    flags=$(get_deb_extra_flags "$test_dir/aerospike-xdr-proxy-4.0.7.all.deb" 2>/dev/null)
+    [[ "$flags" == "--deb jammy,noble,bookworm,trixie/main/all" ]]
+    rm -rf "$test_dir"
+}
+
 # --- get_npm_props ---
 
 @test "get_go_props returns correct props for Go module zip" {

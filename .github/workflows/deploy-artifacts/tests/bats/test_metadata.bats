@@ -55,8 +55,53 @@ setup() {
 }
 
 @test "get_codename_for_deb fails for unknown distro" {
+    unset DEB_DISTRIBUTIONS
     run get_codename_for_deb "test-unknown.deb"
     [[ $status -ne 0 ]]
+}
+
+@test "get_codename_for_deb uses DEB_DISTRIBUTIONS when filename has no distro token" {
+    DEB_DISTRIBUTIONS="jammy,noble,bookworm,trixie"
+    result=$(get_codename_for_deb "aerospike-xdr-proxy-4.0.7.all.deb")
+    [[ "$result" == "jammy,noble,bookworm,trixie" ]]
+}
+
+@test "get_codename_for_deb strips spaces in DEB_DISTRIBUTIONS" {
+    DEB_DISTRIBUTIONS="jammy, noble, bookworm"
+    result=$(get_codename_for_deb "pkg.all.deb")
+    [[ "$result" == "jammy,noble,bookworm" ]]
+}
+
+@test "get_codename_for_deb lowercases DEB_DISTRIBUTIONS" {
+    DEB_DISTRIBUTIONS="Jammy,Noble"
+    result=$(get_codename_for_deb "pkg.all.deb")
+    [[ "$result" == "jammy,noble" ]]
+}
+
+@test "get_codename_for_deb accepts gathered Ubuntu and Debian codenames" {
+    DEB_DISTRIBUTIONS="resolute,focal,bionic,xenial,questing,forky,sid"
+    result=$(get_codename_for_deb "pkg.all.deb")
+    [[ "$result" == "resolute,focal,bionic,xenial,questing,forky,sid" ]]
+}
+
+@test "get_codename_for_deb rejects unknown DEB_DISTRIBUTIONS codename" {
+    DEB_DISTRIBUTIONS="jammy,not-a-distro"
+    run get_codename_for_deb "pkg.all.deb"
+    [[ $status -ne 0 ]]
+    [[ "$output" == *"Unknown Debian/Ubuntu codename 'not-a-distro'"* ]]
+}
+
+@test "get_codename_for_deb rejects empty DEB_DISTRIBUTIONS token" {
+    DEB_DISTRIBUTIONS="jammy,,noble"
+    run get_codename_for_deb "pkg.all.deb"
+    [[ $status -ne 0 ]]
+    [[ "$output" == *"empty codename"* ]]
+}
+
+@test "get_codename_for_deb filename token wins over DEB_DISTRIBUTIONS" {
+    DEB_DISTRIBUTIONS="bookworm,trixie"
+    result=$(get_codename_for_deb "test-ubuntu22.04.deb")
+    [[ "$result" == "jammy" ]]
 }
 
 # --- DEB Architecture: all ---
@@ -84,6 +129,24 @@ setup() {
 @test "get_codename_for_deb works with Architecture: all deb filename" {
     result=$(get_codename_for_deb "test-all-arch_1.0.0-1ubuntu22.04_all.deb")
     [[ "$result" == "jammy" ]]
+}
+
+@test "process_deb stages distro-agnostic package under first DEB_DISTRIBUTIONS codename" {
+    local src="$GIT_ROOT/tests/test-all-arch_1.0.0-1ubuntu22.04_all.deb"
+    if [[ ! -f "$src" ]]; then
+        skip "Test fixture not available"
+    fi
+    local test_dir dest
+    test_dir=$(mktemp -d)
+    dest=$(mktemp -d)
+    cp "$src" "$test_dir/aerospike-xdr-proxy-4.0.7.all.deb"
+    DEB_DISTRIBUTIONS="jammy,noble,bookworm,trixie"
+    local target
+    target=$(process_deb "$test_dir/aerospike-xdr-proxy-4.0.7.all.deb" "$dest" 2>/dev/null)
+    [[ "$target" == *"/pool/jammy/"* ]]
+    [[ -f "$dest/pool/jammy/aerospike-xdr-proxy-4.0.7.all.deb" ]] || \
+        [[ -f "$dest/pool/jammy/test-all-arch/aerospike-xdr-proxy-4.0.7.all.deb" ]]
+    rm -rf "$test_dir" "$dest"
 }
 
 # --- get_nupkg_metadata ---
