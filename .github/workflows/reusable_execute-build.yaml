@@ -84,6 +84,14 @@ on:
         description: JFrog Artifactory URL
         type: string
         default: https://artifact.aerospike.io
+      job-name:
+        description: |
+          Display name for the build job in the Actions UI. Matrix callers pass a
+          per-cell value (e.g. the matrix name) so a run doesn't show every build
+          as "execute-build". Defaults to the job id when omitted.
+        required: false
+        type: string
+        default: ""
       matrix-json-data:
         description: JSON for the current matrix entry. Exported as MATRIX_JSON to the build subprocess.
         required: false
@@ -189,6 +197,9 @@ permissions:
 
 jobs:
   execute-build:
+    # Falls back to the job id when the caller passes nothing, so existing
+    # callers see an unchanged display name.
+    name: ${{ inputs.job-name || 'execute-build' }}
     runs-on: ${{ inputs.runs-on }}
     outputs:
       gh-artifact-name: ${{ steps.build-info.outputs.gh-artifact-name }}
