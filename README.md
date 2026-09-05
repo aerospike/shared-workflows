@@ -95,6 +95,7 @@ For CI/CD pipelines, see the [CI/CD standard](.github/workflows/docs/CICD-standa
 | ------------------------------------- | --------------------------------------------------------------------- | ----------------------------------------------------------- |
 | `reusable_artifacts-cicd.yaml`        | Artifacts pipeline — build → sign → deploy (DEB, RPM, NuGet, generic) | [README](.github/workflows/artifacts-cicd/README.md)        |
 | `reusable_docker-build-deploy.yaml`   | Docker pipeline — multi-arch OCI images with SLSA attestations        | [README](.github/workflows/docker-build-deploy/README.md)   |
+| `reusable_docker-copy-hub.yaml`       | Copy existing OCI tags from JFrog to Docker Hub (no rebuild)          | [README](.github/workflows/docker-copy-hub/README.md)       |
 | `reusable_create-release-bundle.yaml` | Release bundles — combine artifact + docker outputs                   | [README](.github/workflows/create-release-bundle/README.md) |
 | `reusable_execute-build.yaml`         | Run arbitrary build script, upload artifacts                          | [README](.github/workflows/execute-build/README.md)         |
 | `reusable_sign-artifacts.yaml`        | GPG sign deb/rpm/generic, SSL.com sign nupkg                          | [README](.github/workflows/sign-artifacts/README.md)        |

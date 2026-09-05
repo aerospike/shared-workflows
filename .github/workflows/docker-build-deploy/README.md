@@ -1,6 +1,8 @@
 # Reusable Docker Build, Publish & Attest
 
-This workflow builds, optionally attests, and publishes an OCI image to JFrog Artifactory
+This workflow builds, optionally attests, and publishes an OCI image to JFrog Artifactory.
+
+To copy **already published** tags from JFrog to Docker Hub without rebuilding, use [docker-copy-hub](../docker-copy-hub/README.md) instead.
 
 ## Usage
 

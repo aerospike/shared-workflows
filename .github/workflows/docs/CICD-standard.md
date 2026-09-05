@@ -30,6 +30,7 @@ The architecture follows an ecosystem-specific build & sign pattern, where artif
 ### Docker Pipeline (Container images)
 
 1. **Docker Build & Deploy** → build, attest (SLSA provenance), and publish OCI images
+2. **Docker Copy to Hub** → copy already-published tags from JFrog to Docker Hub (no rebuild, no Artifactory write). [README](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/docker-copy-hub/README.md)
 
 ### Unified Release
 
@@ -51,6 +52,7 @@ Deploy can upload optional Maven bundle metadata (`.maven-bundle-metadata.json`)
 
 - `reusable_artifacts-cicd.yaml`: **Artifacts pipeline** (build → sign → deploy). [README](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/artifacts-cicd/README.md)
 - `reusable_docker-build-deploy.yaml`: **Docker pipeline** (container images with SLSA attestations). [README](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/docker-build-deploy/README.md)
+- `reusable_docker-copy-hub.yaml`: **Copy existing images to Docker Hub** (no rebuild, no Artifactory write). [README](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/docker-copy-hub/README.md)
 - `reusable_create-release-bundle.yaml`: **Release bundles** (combines artifact + docker outputs). [README](https://github.com/aerospike/shared-workflows/blob/main/.github/workflows/create-release-bundle/README.md)
 
 The lower-level workflows (`reusable_execute-build.yaml`, `reusable_sign-artifacts.yaml`, `reusable_deploy-artifacts.yaml`) are the building blocks used internally by the orchestrators. They're also available directly if you're following the composable approach.
