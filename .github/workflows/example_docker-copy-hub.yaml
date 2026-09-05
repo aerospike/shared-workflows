@@ -1,0 +1,48 @@
+name: Example Docker Copy to Docker Hub
+
+# Copies already-published aerospike-tools tags from JFrog to Docker Hub.
+# Does not build images and does not write anything back to Artifactory.
+
+on:
+  workflow_dispatch:
+    inputs:
+      source-image:
+        description: Source image without tag
+        required: true
+        default: artifact.aerospike.io/docker/aerospike-tools
+      dest-image:
+        description: Destination Docker Hub image without tag
+        required: true
+        default: aerospike/aerospike-tools
+      tags:
+        description: Comma-separated tags to copy unchanged
+        required: true
+        default: 13.0.3-5,13.0.3-5-amd64,13.0.3-5-arm64
+      dry-run:
+        description: Inspect JFrog tags only; do not push to Docker Hub
+        type: boolean
+        required: false
+        default: true
+      jf-project:
+        description: JFrog project key used only to mint a read OIDC token
+        required: false
+        default: database
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  copy-to-dockerhub:
+    uses: ./.github/workflows/reusable_docker-copy-hub.yaml
+    with:
+      source-image: ${{ inputs.source-image }}
+      dest-image: ${{ inputs.dest-image }}
+      tags: ${{ inputs.tags }}
+      dry-run: ${{ inputs.dry-run }}
+      jf-project: ${{ inputs.jf-project }}
+      oidc-provider-name: gh-aerospike
+      oidc-audience: aerospike
+    secrets:
+      dockerhub-username: ${{ secrets.DOCKERHUB_USERNAME }}
+      dockerhub-token: ${{ secrets.DOCKERHUB_TOKEN }}
