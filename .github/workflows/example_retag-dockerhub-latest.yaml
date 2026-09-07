@@ -1,0 +1,48 @@
+name: Example Retag Docker Hub Latest
+
+# Pull pinned Docker Hub tags and push the same content as :latest.
+# Uses aerospike org secrets DOCKERHUB_USERNAME / DOCKERHUB_TOKEN.
+# Must run on aerospike/shared-workflows (org secrets are not available on a fork).
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: Print docker commands only; do not login or push
+        type: boolean
+        required: false
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  retag-latest:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Docker login to Docker Hub
+        if: ${{ !inputs.dry-run }}
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - uses: step-security/setup-buildx-action@a4709e2865773e1792246433e8eb922f9743a875 # v4.2.0
+
+      - name: Pull versioned tags and push :latest
+        env:
+          DRY_RUN: ${{ inputs.dry-run }}
+        run: |
+          set -euo pipefail
+          args=(--skip-login)
+          if [ "$DRY_RUN" = true ]; then
+            args+=(--dry-run)
+          fi
+          ./retag-dockerhub-latest.sh "${args[@]}"
