@@ -81,10 +81,6 @@ register_type() {
 
 register_type deb --extension "*.deb" --repo "deb-dev-local"
 register_type rpm --extension "*.rpm" --repo "rpm-dev-local"
-# Maven stem-based companions (.pom, .module, checksums, and their .asc) are
-# copied by process_jar / _detect_structure_maven_poms. gather_companions
-# suffix-appends to the JAR filename, so listing .module here would look for
-# foo.jar.module and miss foo.module. Keep .asc so foo.jar.asc is still gathered.
 register_type jar --extension "*.jar" --repo "maven-dev-local" --companions ".pom .asc .pom.asc"
 # Extension-based layout; detect_types.sh validates with is_nuget_package before structuring.
 register_type nupkg --extension "*.nupkg" --repo "nuget-dev-local"
@@ -145,7 +141,7 @@ get_known_extensions() {
     # Companion and build file extensions
     # Maven metadata and sidecar checksums belong to JAR/POM processing: exclude
     # them from the generic find pass so they aren't double-structured into the
-    # generic repo.
+    # generic repo. process_jar copies them into the structured jar tree.
     exts+=("*.asc" "*.prov" "*.pom" "*.module" "*.csproj" "docker-images.json" "*.md5" "*.sha1")
     printf '%s\n' "${exts[@]}"
 }
@@ -189,12 +185,17 @@ get_deb_extra_flags() {
 
 get_rpm_props() {
     local file="$1"
+    local dist
+    if ! dist=$(get_dist_for_rpm "$file"); then
+        error "Failed to get dist for $file"
+    fi
     local -a metadata
-    read -r -a metadata < <(get_rpm_metadata "$file")
+    local metadata_str
+    metadata_str=$(get_rpm_metadata "$file")
+    read -r -a metadata <<<"$metadata_str"
     local pkgname="${metadata[0]}"
     local version="${metadata[1]}"
     local arch="${metadata[2]}"
-    local dist="${metadata[3]}"
     echo "  Package: $pkgname, Version: $version, Arch: $arch, Dist: $dist" >&2
     echo "$(get_base_props);package_name=$pkgname;rpm.distribution=$dist;rpm.component=main;rpm.architecture=$arch"
 }

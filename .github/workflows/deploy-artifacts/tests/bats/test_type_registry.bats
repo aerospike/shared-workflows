@@ -308,6 +308,26 @@ setup() {
     rm -rf "$test_dir"
 }
 
+@test "get_rpm_props uses RPM_DISTRIBUTIONS for distro-agnostic .noarch.rpm" {
+    local src="$GIT_ROOT/tests/test-1.0-2.noarch.rpm"
+    if [[ ! -f "$src" ]]; then
+        skip "Test fixture not available"
+    fi
+    local test_dir
+    test_dir=$(mktemp -d)
+    cp "$src" "$test_dir/aerospike-xdr-proxy-4.0.8-1.noarch.rpm"
+    VERSION="4.0.8"
+    BUILD_TYPE=""
+    INTERNAL="false"
+    RPM_DISTRIBUTIONS="el8,el9,amzn2023"
+    error() { echo "Error: $*" >&2; return 1; }
+    local props
+    props=$(get_rpm_props "$test_dir/aerospike-xdr-proxy-4.0.8-1.noarch.rpm" 2>/dev/null)
+    [[ "$props" == *"rpm.distribution=el8,el9,amzn2023"* ]]
+    [[ "$props" == *"rpm.architecture=noarch"* ]]
+    rm -rf "$test_dir"
+}
+
 # --- get_npm_props ---
 
 @test "get_go_props returns correct props for Go module zip" {

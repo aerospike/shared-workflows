@@ -121,6 +121,8 @@ rpm/
   amzn2023/aarch64/{file}.rpm
 ```
 
+Dist tag is inferred from a dotted filename token (`el9`, `amzn2023`, and so on). Distro-agnostic packages such as `aerospike-xdr-proxy-4.0.8-1.noarch.rpm` have no token; set `RPM_DISTRIBUTIONS` or pass `--rpm-distributions` with a comma-separated list of known tags. Unknown names are rejected. Allowed: `amzn2`, `amzn2023`, `el7`, `el8`, `el9`, `el10`. Example: `el8,el9,amzn2023`. JFrog indexes the package for every listed distribution via `rpm.distribution`. Filename tokens still win when present. The local path uses the first listed tag (`el8/noarch/...`).
+
 ### JAR/Maven
 
 ```text

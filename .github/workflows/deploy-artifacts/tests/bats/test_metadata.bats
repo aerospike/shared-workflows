@@ -161,6 +161,67 @@ setup() {
     [[ "${meta[1]}" == "8.0.2" ]]
 }
 
+# --- get_dist_for_rpm ---
+
+@test "get_dist_for_rpm extracts el9 from filename" {
+    result=$(get_dist_for_rpm "aerospike-server-community-7.2.0.10-1.el9.x86_64.rpm")
+    [[ "$result" == "el9" ]]
+}
+
+@test "get_dist_for_rpm extracts amzn2023 from filename" {
+    result=$(get_dist_for_rpm "pkg-1.0-1.amzn2023.aarch64.rpm")
+    [[ "$result" == "amzn2023" ]]
+}
+
+@test "get_dist_for_rpm does not treat amzn2 as a prefix of amzn2023" {
+    result=$(get_dist_for_rpm "pkg-1.0-1.amzn2023.x86_64.rpm")
+    [[ "$result" == "amzn2023" ]]
+}
+
+@test "get_dist_for_rpm fails for unknown distro" {
+    unset RPM_DISTRIBUTIONS
+    run get_dist_for_rpm "aerospike-xdr-proxy-4.0.8-1.noarch.rpm"
+    [[ $status -ne 0 ]]
+}
+
+@test "get_dist_for_rpm uses RPM_DISTRIBUTIONS when filename has no distro token" {
+    RPM_DISTRIBUTIONS="el8,el9,amzn2023"
+    result=$(get_dist_for_rpm "aerospike-xdr-proxy-4.0.8-1.noarch.rpm")
+    [[ "$result" == "el8,el9,amzn2023" ]]
+}
+
+@test "get_dist_for_rpm strips spaces in RPM_DISTRIBUTIONS" {
+    RPM_DISTRIBUTIONS="el8, el9, amzn2023"
+    result=$(get_dist_for_rpm "pkg-1.0-1.noarch.rpm")
+    [[ "$result" == "el8,el9,amzn2023" ]]
+}
+
+@test "get_dist_for_rpm lowercases RPM_DISTRIBUTIONS" {
+    RPM_DISTRIBUTIONS="EL8,EL9"
+    result=$(get_dist_for_rpm "pkg-1.0-1.noarch.rpm")
+    [[ "$result" == "el8,el9" ]]
+}
+
+@test "get_dist_for_rpm rejects unknown RPM_DISTRIBUTIONS tag" {
+    RPM_DISTRIBUTIONS="el9,not-a-distro"
+    run get_dist_for_rpm "pkg-1.0-1.noarch.rpm"
+    [[ $status -ne 0 ]]
+    [[ "$output" == *"Unknown RPM dist tag 'not-a-distro'"* ]]
+}
+
+@test "get_dist_for_rpm rejects empty RPM_DISTRIBUTIONS token" {
+    RPM_DISTRIBUTIONS="el9,,el8"
+    run get_dist_for_rpm "pkg-1.0-1.noarch.rpm"
+    [[ $status -ne 0 ]]
+    [[ "$output" == *"empty dist tag"* ]]
+}
+
+@test "get_dist_for_rpm filename token wins over RPM_DISTRIBUTIONS" {
+    RPM_DISTRIBUTIONS="el8,amzn2023"
+    result=$(get_dist_for_rpm "test-1.0-2.el9.noarch.rpm")
+    [[ "$result" == "el9" ]]
+}
+
 # --- get_rpm_metadata ---
 
 @test "get_rpm_metadata extracts metadata from real rpm" {
@@ -168,11 +229,30 @@ setup() {
     if [[ ! -f "$rpm_file" ]]; then
         skip "Test fixture not available"
     fi
+    RPM_DISTRIBUTIONS="el8,el9,amzn2023"
     read -r -a meta < <(get_rpm_metadata "$rpm_file")
     # pkgname
     [[ -n "${meta[0]}" ]]
     # arch
     [[ "${meta[2]}" == "noarch" ]]
+    [[ "${meta[3]}" == "el8,el9,amzn2023" ]]
+}
+
+@test "process_rpm stages distro-agnostic package under first RPM_DISTRIBUTIONS tag" {
+    local src="$GIT_ROOT/tests/test-1.0-2.noarch.rpm"
+    if [[ ! -f "$src" ]]; then
+        skip "Test fixture not available"
+    fi
+    local test_dir dest
+    test_dir=$(mktemp -d)
+    dest=$(mktemp -d)
+    cp "$src" "$test_dir/aerospike-xdr-proxy-4.0.8-1.noarch.rpm"
+    RPM_DISTRIBUTIONS="el8,el9,amzn2023"
+    local target
+    target=$(process_rpm "$test_dir/aerospike-xdr-proxy-4.0.8-1.noarch.rpm" "$dest" 2>/dev/null)
+    [[ "$target" == *"/el8/noarch/"* ]]
+    [[ -f "$dest/el8/noarch/aerospike-xdr-proxy-4.0.8-1.noarch.rpm" ]]
+    rm -rf "$test_dir" "$dest"
 }
 
 # --- is_npm_package ---
