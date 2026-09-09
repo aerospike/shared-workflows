@@ -29,7 +29,7 @@ on:
       build-args-json:
         type: string
         default: "{}"
-        description: JSON object of build-args passed to docker build # {"KEY":"VALUE",...}
+        description: JSON object of build-args passed to docker build, {"KEY":"VALUE",...}
       context:
         type: string
         default: .
@@ -54,7 +54,7 @@ on:
       jf-registry:
         type: string
         required: false
-        description: Full Docker registry URL including repository path (e.g., artifact.aerospike.io/test-docker-dev-local) # should be full uri for Artifactory registry eg artifact.aerospike.io/test-docker-dev-local
+        description: Full Docker registry URL including repository path (e.g., artifact.aerospike.io/test-docker-dev-local)
       jf-registry-base:
         type: string
         default: artifact.aerospike.io
@@ -66,7 +66,7 @@ on:
       labels-json:
         type: string
         default: "{}"
-        description: JSON object of image labels # {"key":"value",...}
+        description: JSON object of image labels, {"key":"value",...}
       oidc-audience:
         type: string
         default: aerospike
@@ -78,11 +78,11 @@ on:
       platforms:
         type: string
         default: linux/amd64,linux/arm64
-        description: Comma-separated target platforms for buildx # pass-through
+        description: Comma-separated target platforms for buildx
       provenance:
         type: string
         default: mode=max
-        description: BuildKit provenance setting ('', 'false', or 'mode=max') # "", "false", or "mode=max"
+        description: BuildKit provenance setting ('', 'false', or 'mode=max')
       push:
         type: boolean
         default: true
@@ -90,7 +90,7 @@ on:
       repo-scope:
         type: string
         default: -docker-dev-local
-        description: Repository suffix appended to jf-project (e.g., -docker-preview-public-local) # e.g. "-docker-preview-public-local"
+        description: Repository suffix appended to jf-project (e.g., -docker-preview-public-local)
       sbom:
         type: boolean
         default: true
@@ -131,16 +131,11 @@ on:
         description: Immutable tag (registry/image:version_timestamp)
         value: ${{ jobs.merge.outputs.immutable-tag }}
 
-# INFRA-560: the single build job is split into per-platform native legs plus a
-# merge job. Each platform is built on its own native runner (QEMU only for
-# platforms without one), each job mints its own short-lived OIDC token, legs
-# push by digest, and the merge job assembles one multi-platform manifest,
-# publishes one build-info record, and attests. Internal job names/topology are
-# NOT part of the workflow_call contract; the inputs/outputs surface above is.
+# Job names and topology below are not part of the workflow_call contract; the
+# inputs/outputs surface above is.
 jobs:
-  # Parse the arbitrary `platforms` input into a build matrix, mapping each
-  # platform to a native runner (QEMU fallback for any without one). A static
-  # strategy.matrix cannot read an input at parse time, so we emit it here.
+  # A static strategy.matrix cannot read an input at parse time, so the matrix
+  # is emitted here instead.
   parse-platforms:
     runs-on: ubuntu-24.04
     outputs:
@@ -158,16 +153,8 @@ jobs:
           PLATFORMS: ${{ inputs.platforms }}
         run: |
           set -euo pipefail
-          # Dedupe by platform. A repeated platform would otherwise produce
-          # two legs with the same sanitized name and colliding digest/legmeta
-          # artifact uploads (a hard 409: same artifact name twice in one run).
-          #
-          # Native runner mapping. arm64 and amd64 have GitHub-hosted native
-          # runners; anything else falls back to QEMU emulation on amd64. The
-          # mapping is internal (consumers only pass `platforms`); the QEMU
-          # fallback is intentional. Do NOT add a hard-fail guard for
-          # unrecognized platforms: consumers may pass exotic platforms
-          # expecting emulation.
+          # `unique` is required: a repeated platform yields two legs with the
+          # same sanitized name, whose digest uploads collide on one artifact name.
           matrix="$(jq -nc --arg p "$PLATFORMS" '
             [ $p | split(",")[] | gsub("^\\s+|\\s+$"; "") | select(. != "") ]
             | unique
@@ -183,10 +170,6 @@ jobs:
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
           echo "Parsed platform matrix: $matrix"
 
-  # Per-platform build leg. Builds one platform on its mapped runner, mints its
-  # own OIDC token, pushes the image BY DIGEST (no tags), and uploads the digest
-  # plus per-leg metadata as artifacts for the merge job. No build-info, no
-  # attestation here.
   build:
     needs: parse-platforms
     strategy:
@@ -236,8 +219,7 @@ jobs:
             fail "input must be a JSON array, got $(printf '%s' "$json" | jq -r 'type')"
           fi
 
-          # Rules are ordered per entry, so the reported failure is the first one a
-          # reader would hit. An empty result means the input is good.
+          # Rules are ordered per entry; an empty result means the input is good.
           problem="$(printf '%s' "$json" | jq -r '
             def prior($arr; $i; f): $arr[0:$i] | map(select(type == "object") | f);
             . as $arr
@@ -314,9 +296,9 @@ jobs:
           # step resolves each entry against.
           merge-multiple: false
 
-      # A pattern matching nothing is silent in actions/download-artifact, so
-      # the assertions here are the only thing standing between an artifact the
-      # caller named and a green build with an empty COPY.
+      # A pattern matching nothing is silent in actions/download-artifact. The
+      # assertions below are what turn a missing artifact into a failure rather
+      # than a green build with an empty COPY.
       - name: Place build-context artifacts
         if: ${{ steps.ctx_artifacts.outputs.place == 'true' }}
         shell: bash
@@ -442,12 +424,11 @@ jobs:
           set -euo pipefail
           to_kv() { jq -r 'to_entries|map("\(.key)=\(.value)")|.[]'; }
 
-          # NOTE: the JFrog/OIDC token is intentionally NOT passed as a build-arg.
-          # Build-args persist in image history and provenance. The token reaches
-          # the build only via the jfrog_token secret-file mount (see below).
+          # Build-args persist in image history and in provenance. The JFrog
+          # token reaches the build through the jfrog_token secret-file mount.
           build_args="$(to_kv <<<"$BUILD_ARGS_JSON")"
 
-          # Merge user labels with OCI labels (user labels override)
+          # User labels override the generated OCI set.
           labels="$(jq -n \
             --arg title "$TITLE" \
             --arg version "$APP_VERSION" \
@@ -472,9 +453,8 @@ jobs:
       - name: Prepare build secrets
         shell: bash
         env:
-          # Pass OIDC credentials via env (not command-line args) so the token
-          # is never exposed in the process list, and so values are available
-          # to jq for safe URL-encoding below. Built from THIS leg's own token.
+          # Via env, not command-line args: an arg would put the token in the
+          # process list.
           OIDC_USER: ${{ steps.jf.outputs.oidc-user }}
           OIDC_TOKEN: ${{ steps.jf.outputs.oidc-token }}
           BUILD_SECRETS_JSON: ${{ secrets.build-secrets-json }}
@@ -484,23 +464,18 @@ jobs:
           set -euo pipefail
           mkdir -p /tmp/docker-secrets
 
-          # Delta 1: Always inject OIDC token as a build secret
           printf '%s' "$OIDC_TOKEN" > /tmp/docker-secrets/jfrog_token
 
-          # Delta 2: Construct authenticated GOPROXY URL when jf-go-repo is set
           jf_go_repo="${JF_GO_REPO:-}"
           if [ -n "$jf_go_repo" ]; then
-            # Percent-encode the user and token before embedding them in the URL
-            # userinfo component. OIDC users/tokens can contain reserved chars
-            # (e.g. '@', ':', '/', '+') that would otherwise corrupt the URL and
-            # break the HTTP request to Artifactory.
+            # OIDC users and tokens contain characters reserved in a URL
+            # userinfo component ('@', ':', '/', '+'), so they must be encoded.
             oidc_user_enc=$(jq -rn 'env.OIDC_USER | @uri')
             oidc_token_enc=$(jq -rn 'env.OIDC_TOKEN | @uri')
             printf '%s' "https://${oidc_user_enc}:${oidc_token_enc}@${JF_REGISTRY_BASE}/artifactory/api/go/${jf_go_repo}" \
               > /tmp/docker-secrets/goproxy
           fi
 
-          # Delta 3: Write consumer-provided secrets from JSON
           secrets_json="${BUILD_SECRETS_JSON:-}"
           if [ -n "$secrets_json" ] && [ "$secrets_json" != "{}" ]; then
             # Validate key names before using them as filenames. Keys become
@@ -517,7 +492,6 @@ jobs:
 
           chmod 600 /tmp/docker-secrets/*
 
-          # Generate secret-files lines (only file paths, not values)
           secret_files=""
           for f in /tmp/docker-secrets/*; do
             [ -f "$f" ] || continue
@@ -542,12 +516,10 @@ jobs:
           build-args: ${{ env.BUILD_ARGS }}
           labels: ${{ env.LABELS }}
           secret-files: ${{ env.BUILD_SECRET_FILES }}
-          # GHA build-step cache (mode=max). Caches expensive builder stages;
-          # scoped per platform so legs do not collide. Nothing is written to
-          # JFrog (no dev-local cache-exposure surface).
+          # Scoped per platform; a shared scope would have legs overwrite each
+          # other's cache.
           cache-from: type=gha,scope=${{ matrix.sanitized }}
           cache-to: type=gha,mode=max,scope=${{ matrix.sanitized }}
-          # Push by digest, no tags. The merge job assembles the tagged manifest.
           outputs: type=image,name=${{ env.REGISTRY }}/${{ inputs.image-name }},push-by-digest=true,name-canonical=true,push=${{ inputs.push }}
 
       - name: Record push time
@@ -572,9 +544,9 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "${RUNNER_TEMP}/digests" "${RUNNER_TEMP}/legmeta"
-          # buildx-by-digest convention: an empty file named after the digest.
+          # The filename is the payload; the merge job reads basenames.
           touch "${RUNNER_TEMP}/digests/${DIGEST#sha256:}"
-          # Per-leg metadata for test assertions (runner arch, token timing).
+          # Consumed only by test_docker-build-deploy-workflow.yaml.
           jq -nc \
             --arg platform "$PLATFORM" \
             --arg digest "$DIGEST" \
@@ -584,12 +556,9 @@ jobs:
             '{platform:$platform, digest:$digest, runner_arch:$runner_arch, token_fetched_at:($fetched_at|tonumber), push_completed_at:($pushed_at|tonumber)}' \
             > "${RUNNER_TEMP}/legmeta/${SANITIZED}.json"
 
-      # Artifact names are namespaced by image-name so the workflow can be
-      # invoked more than once in a single run (e.g. several images, or a
-      # multi-platform plus a single-platform build) without colliding. The
-      # `--` delimiter avoids glob prefix-collision between names where one is a
-      # prefix of another (e.g. "test-image" vs "test-image-single"). image-name
-      # must not contain `--` or characters illegal in artifact names.
+      # image-name namespaces the artifact so two invocations in one run do not
+      # collide, and `--` keeps the merge job's glob from matching an image-name
+      # that another one is a prefix of. image-name must not itself contain `--`.
       - name: Upload digest
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -606,9 +575,6 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-  # Merge job: assemble one multi-platform manifest from the per-leg digests,
-  # compute tags, publish one build-info record (under the unchanged build
-  # number), and attest the manifest-list digest. Output-producing job.
   merge:
     needs: [parse-platforms, build]
     runs-on: ubuntu-24.04
@@ -692,7 +658,6 @@ jobs:
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           path: ${{ runner.temp }}/digests
-          # Scoped to this invocation's image-name (see upload namespacing note).
           pattern: digests-${{ inputs.image-name }}--*
           merge-multiple: true
 
@@ -713,14 +678,12 @@ jobs:
             exit 0
           fi
 
-          # -t for every requested tag
           tag_args=()
           IFS=',' read -ra TAGS_ARR <<< "$TAGS"
           for t in "${TAGS_ARR[@]}"; do
             tag_args+=("-t" "$t")
           done
 
-          # source refs: registry/image@sha256:<digest> for each leg digest file
           src_args=()
           shopt -s nullglob
           for f in "${RUNNER_TEMP}/digests"/*; do
@@ -733,8 +696,8 @@ jobs:
 
           docker buildx imagetools create "${tag_args[@]}" "${src_args[@]}"
 
-          # The manifest-list (index) digest is what consumers pull and what we
-          # attest. Read it back from the immutable tag.
+          # The index digest, not any per-leg digest, is what consumers pull and
+          # what the attestation subject must be.
           digest="$(docker buildx imagetools inspect "$IMMUTABLE_TAG" --format '{{json .Manifest}}' | jq -r '.digest')"
           echo "digest=${digest}" >> "$GITHUB_OUTPUT"
           echo "image-ref=${IMMUTABLE_TAG}@${digest}" >> "$GITHUB_OUTPUT"
