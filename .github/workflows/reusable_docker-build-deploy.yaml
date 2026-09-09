@@ -131,11 +131,10 @@ on:
         description: Immutable tag (registry/image:version_timestamp)
         value: ${{ jobs.merge.outputs.immutable-tag }}
 
-# Job names and topology below are not part of the workflow_call contract; the
-# inputs/outputs surface above is.
 jobs:
-  # A static strategy.matrix cannot read an input at parse time, so the matrix
-  # is emitted here instead.
+  # `platforms` is a comma-separated string and GHA expressions cannot split
+  # one, so the matrix has to be built into JSON by a job before `build` can
+  # fromJSON it.
   parse-platforms:
     runs-on: ubuntu-24.04
     outputs:
