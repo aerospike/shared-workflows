@@ -158,45 +158,28 @@ jobs:
           PLATFORMS: ${{ inputs.platforms }}
         run: |
           set -euo pipefail
-          entries=()
-          declare -A seen
-          IFS=',' read -ra arr <<< "$PLATFORMS"
-          for p in "${arr[@]}"; do
-            # trim surrounding whitespace
-            p="$(echo "$p" | xargs)"
-            [ -z "$p" ] && continue
-            # Dedupe by platform. A repeated platform would otherwise produce
-            # two legs with the same sanitized name and colliding digest/legmeta
-            # artifact uploads (a hard 409: same artifact name twice in one run).
-            if [ -n "${seen[$p]:-}" ]; then
-              echo "::warning::duplicate platform '$p' ignored"
-              continue
-            fi
-            seen[$p]=1
-            sanitized="${p//\//-}"
-            # Native runner mapping. arm64 and amd64 have GitHub-hosted native
-            # runners; anything else falls back to QEMU emulation on amd64. The
-            # mapping is internal (consumers only pass `platforms`); the QEMU
-            # fallback is intentional. Do NOT add a hard-fail guard for
-            # unrecognized platforms: consumers may pass exotic platforms
-            # expecting emulation.
-            case "$p" in
-              linux/amd64) runner="ubuntu-24.04";     qemu=false ;;
-              linux/arm64) runner="ubuntu-24.04-arm"; qemu=false ;;
-              *)           runner="ubuntu-24.04";     qemu=true  ;;
-            esac
-            entries+=("$(jq -nc \
-              --arg platform "$p" \
-              --arg runner "$runner" \
-              --arg sanitized "$sanitized" \
-              --argjson qemu "$qemu" \
-              '{platform: $platform, runner: $runner, sanitized: $sanitized, qemu: $qemu}')")
-          done
-          if [ "${#entries[@]}" -eq 0 ]; then
+          # Dedupe by platform. A repeated platform would otherwise produce
+          # two legs with the same sanitized name and colliding digest/legmeta
+          # artifact uploads (a hard 409: same artifact name twice in one run).
+          #
+          # Native runner mapping. arm64 and amd64 have GitHub-hosted native
+          # runners; anything else falls back to QEMU emulation on amd64. The
+          # mapping is internal (consumers only pass `platforms`); the QEMU
+          # fallback is intentional. Do NOT add a hard-fail guard for
+          # unrecognized platforms: consumers may pass exotic platforms
+          # expecting emulation.
+          matrix="$(jq -nc --arg p "$PLATFORMS" '
+            [ $p | split(",")[] | gsub("^\\s+|\\s+$"; "") | select(. != "") ]
+            | unique
+            | map({platform: ., sanitized: gsub("/"; "-")}
+                  + (if   . == "linux/amd64" then {runner: "ubuntu-24.04",     qemu: false}
+                     elif . == "linux/arm64" then {runner: "ubuntu-24.04-arm", qemu: false}
+                     else                         {runner: "ubuntu-24.04",     qemu: true}
+                     end))')"
+          if [ "$(jq 'length' <<<"$matrix")" -eq 0 ]; then
             echo "::error::no platforms parsed from input '$PLATFORMS'"
             exit 1
           fi
-          matrix="$(printf '%s\n' "${entries[@]}" | jq -sc '.')"
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
           echo "Parsed platform matrix: $matrix"
 
@@ -214,6 +197,7 @@ jobs:
     env:
       JFROG_CLI_BUILD_NAME: ${{ inputs.jf-build-name || github.workflow }}
       JFROG_CLI_LOG_LEVEL: INFO
+      REGISTRY: ${{ inputs.jf-registry || format('{0}/{1}{2}', inputs.jf-registry-base, inputs.jf-project, inputs.repo-scope) }}
     permissions:
       contents: read
       packages: write
@@ -315,13 +299,13 @@ jobs:
             echo "count=$count"
             echo "pattern=$pattern"
             echo "entries=$(printf '%s' "$json" | jq -c '.')"
+            echo "place=$([ "$count" -gt 0 ] && echo true || echo false)"
           } >> "$GITHUB_OUTPUT"
 
           echo "Validated $count build-context artifact(s); download pattern: $pattern"
-      # An empty `count` means the validate step was skipped, so the caller
-      # asked for nothing. A zero `count` means an explicit empty array.
+
       - name: Download build-context artifacts
-        if: ${{ steps.ctx_artifacts.outputs.count != '' && steps.ctx_artifacts.outputs.count != '0' }}
+        if: ${{ steps.ctx_artifacts.outputs.place == 'true' }}
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           path: ${{ runner.temp }}/context-artifacts
@@ -334,7 +318,7 @@ jobs:
       # the assertions here are the only thing standing between an artifact the
       # caller named and a green build with an empty COPY.
       - name: Place build-context artifacts
-        if: ${{ steps.ctx_artifacts.outputs.count != '' && steps.ctx_artifacts.outputs.count != '0' }}
+        if: ${{ steps.ctx_artifacts.outputs.place == 'true' }}
         shell: bash
         env:
           CONTEXT_ARTIFACTS_ENTRIES: ${{ steps.ctx_artifacts.outputs.entries }}
@@ -423,7 +407,6 @@ jobs:
         env:
           JF_URL: ${{ inputs.jf-url }}
           JF_PROJECT: ${{ inputs.jf-project }}
-          JFROG_CLI_BUILD_NAME: ${{ inputs.jf-build-name || github.workflow }}
         with:
           version: 2.78.8
           oidc-provider-name: ${{ inputs.oidc-provider-name }}
@@ -434,21 +417,10 @@ jobs:
         shell: bash
         run: echo "fetched_at=$(date -u +%s)" >> "$GITHUB_OUTPUT"
 
-      - name: Compute registry
-        id: registry
-        shell: bash
-        run: |
-          set -euo pipefail
-          reg='${{ inputs.jf-registry }}'
-          if [ -z "$reg" ]; then
-            reg='${{ inputs.jf-registry-base }}/${{ inputs.jf-project }}${{ inputs.repo-scope }}'
-          fi
-          echo "registry=$reg" >> "$GITHUB_OUTPUT"
-
       - name: Docker login to Artifactory
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
-          registry: ${{ steps.registry.outputs.registry }}
+          registry: ${{ env.REGISTRY }}
           username: ${{ steps.jf.outputs.oidc-user }}
           password: ${{ steps.jf.outputs.oidc-token }}
 
@@ -459,47 +431,42 @@ jobs:
 
       - name: Prepare build args/labels
         shell: bash
+        env:
+          TITLE: ${{ inputs.app-name || inputs.image-name }}
+          APP_VERSION: ${{ inputs.app-version }}
+          REVISION: ${{ github.sha }}
+          SOURCE_URL: ${{ github.server_url }}/${{ github.repository }}
+          LABELS_JSON: ${{ inputs.labels-json }}
+          BUILD_ARGS_JSON: ${{ inputs.build-args-json }}
         run: |
           set -euo pipefail
           to_kv() { jq -r 'to_entries|map("\(.key)=\(.value)")|.[]'; }
 
-          # Generate OCI labels
-          oci_labels=$(jq -n \
-            --arg title "${{ inputs.app-name || inputs.image-name }}" \
-            --arg version "${{ inputs.app-version }}" \
+          # NOTE: the JFrog/OIDC token is intentionally NOT passed as a build-arg.
+          # Build-args persist in image history and provenance. The token reaches
+          # the build only via the jfrog_token secret-file mount (see below).
+          build_args="$(to_kv <<<"$BUILD_ARGS_JSON")"
+
+          # Merge user labels with OCI labels (user labels override)
+          labels="$(jq -n \
+            --arg title "$TITLE" \
+            --arg version "$APP_VERSION" \
             --arg created "$(date --utc -Iseconds)" \
-            --arg revision "${{ github.sha }}" \
-            --arg source "${{ github.server_url }}/${{ github.repository }}" \
-            --arg url "${{ github.server_url }}/${{ github.repository }}" \
+            --arg revision "$REVISION" \
+            --arg url "$SOURCE_URL" \
+            --argjson user "$LABELS_JSON" \
             '{
               "org.opencontainers.image.title": $title,
               "org.opencontainers.image.version": $version,
               "org.opencontainers.image.created": $created,
               "org.opencontainers.image.revision": $revision,
-              "org.opencontainers.image.source": $source,
+              "org.opencontainers.image.source": $url,
               "org.opencontainers.image.url": $url
-            }')
+            } * $user' | to_kv)"
 
-          # Merge user labels with OCI labels (user labels override)
-          user_labels='${{ inputs.labels-json }}'
-          merged_labels=$(jq -n --argjson oci "$oci_labels" --argjson user "$user_labels" '$oci * $user')
-
-          # Convert JSON to KEY=VALUE lines
-          echo '${{ inputs.build-args-json }}' | to_kv > /tmp/build_args
-          echo "$merged_labels" | to_kv > /tmp/labels
-
-          # NOTE: the JFrog/OIDC token is intentionally NOT passed as a build-arg.
-          # Build-args persist in image history and provenance. The token reaches
-          # the build only via the jfrog_token secret-file mount (see below).
-
-          # Use heredoc syntax so multi-line values are preserved in GITHUB_ENV
           {
-            echo "BUILD_ARGS<<EOF"
-            cat /tmp/build_args
-            echo "EOF"
-            echo "LABELS<<EOF"
-            cat /tmp/labels
-            echo "EOF"
+            printf 'BUILD_ARGS<<EOF\n%s\nEOF\n' "$build_args"
+            printf 'LABELS<<EOF\n%s\nEOF\n' "$labels"
           } >> "$GITHUB_ENV"
 
       - name: Prepare build secrets
@@ -548,8 +515,7 @@ jobs:
             done
           fi
 
-          # Lock down secret files: readable only by the runner process user.
-          chmod 600 /tmp/docker-secrets/* 2>/dev/null || true
+          chmod 600 /tmp/docker-secrets/*
 
           # Generate secret-files lines (only file paths, not values)
           secret_files=""
@@ -582,7 +548,7 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.sanitized }}
           cache-to: type=gha,mode=max,scope=${{ matrix.sanitized }}
           # Push by digest, no tags. The merge job assembles the tagged manifest.
-          outputs: type=image,name=${{ steps.registry.outputs.registry }}/${{ inputs.image-name }},push-by-digest=true,name-canonical=true,push=${{ inputs.push }}
+          outputs: type=image,name=${{ env.REGISTRY }}/${{ inputs.image-name }},push-by-digest=true,name-canonical=true,push=${{ inputs.push }}
 
       - name: Record push time
         id: push_time
@@ -649,6 +615,7 @@ jobs:
     env:
       JFROG_CLI_BUILD_NAME: ${{ inputs.jf-build-name || github.workflow }}
       JFROG_CLI_LOG_LEVEL: INFO
+      REGISTRY: ${{ inputs.jf-registry || format('{0}/{1}{2}', inputs.jf-registry-base, inputs.jf-project, inputs.repo-scope) }}
     permissions:
       contents: read
       packages: write
@@ -673,27 +640,15 @@ jobs:
         env:
           JF_URL: ${{ inputs.jf-url }}
           JF_PROJECT: ${{ inputs.jf-project }}
-          JFROG_CLI_BUILD_NAME: ${{ inputs.jf-build-name || github.workflow }}
         with:
           version: 2.78.8
           oidc-provider-name: ${{ inputs.oidc-provider-name }}
           oidc-audience: ${{ inputs.oidc-audience }}
 
-      - name: Compute registry
-        id: registry
-        shell: bash
-        run: |
-          set -euo pipefail
-          reg='${{ inputs.jf-registry }}'
-          if [ -z "$reg" ]; then
-            reg='${{ inputs.jf-registry-base }}/${{ inputs.jf-project }}${{ inputs.repo-scope }}'
-          fi
-          echo "registry=$reg" >> "$GITHUB_OUTPUT"
-
       - name: Docker login to Artifactory
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
-          registry: ${{ steps.registry.outputs.registry }}
+          registry: ${{ env.REGISTRY }}
           username: ${{ steps.jf.outputs.oidc-user }}
           password: ${{ steps.jf.outputs.oidc-token }}
 
@@ -702,28 +657,25 @@ jobs:
       - name: Compute tags
         id: tags
         shell: bash
+        env:
+          IMAGE: ${{ inputs.image-name }}
+          APP_VERSION: ${{ inputs.app-version }}
+          VERSIONS_OVERRIDE: ${{ inputs.versions-override }}
         run: |
-          base="${{ steps.registry.outputs.registry }}/${{ inputs.image-name }}"
-          timestamp=$(date --utc +%Y%m%dT%H%M%SZ)
+          set -euo pipefail
+          base="${REGISTRY}/${IMAGE}"
 
-          app_version="${{ inputs.app-version }}"
-          app_version="${app_version#v}"  # Strip 'v' prefix if present
+          app_version="${APP_VERSION#v}"
           # OCI tags forbid '+' but SemVer build metadata uses it (e.g. 1.2.3+abc).
-          # Replace with '-' so SemVer inputs still produce valid image tags.
           app_version="${app_version//+/-}"
 
-          # Build immutable tag (always included)
-          immutable="${base}:${app_version}_${timestamp}"
+          immutable="${base}:${app_version}_$(date --utc +%Y%m%dT%H%M%SZ)"
+          tags_array=("$immutable")
 
-          # Build tags array: always start with immutable tag
-          tags_array=("${immutable}")
-
-          if [ -n "${{ inputs.versions-override }}" ]; then
-            # Parse comma-separated override tags and prepend base
-            IFS=',' read -ra override_tags <<< "${{ inputs.versions-override }}"
+          if [ -n "${VERSIONS_OVERRIDE:-}" ]; then
+            IFS=',' read -ra override_tags <<< "$VERSIONS_OVERRIDE"
             for tag in "${override_tags[@]}"; do
-              # Trim whitespace and prepend base
-              tag=$(echo "$tag" | xargs)
+              tag="$(echo "$tag" | xargs)"
               if [ -n "$tag" ]; then
                 tags_array+=("${base}:${tag}")
               fi
@@ -732,11 +684,8 @@ jobs:
             tags_array+=("${base}:${app_version}")
           fi
 
-          # Join tags with comma for output
           IFS=','
-          tags="${tags_array[*]}"
-
-          echo "tags=${tags}" >> "$GITHUB_OUTPUT"
+          echo "tags=${tags_array[*]}" >> "$GITHUB_OUTPUT"
           echo "immutable-tag=${immutable}" >> "$GITHUB_OUTPUT"
 
       - name: Download per-leg digests
@@ -751,7 +700,6 @@ jobs:
         id: manifest
         shell: bash
         env:
-          REGISTRY: ${{ steps.registry.outputs.registry }}
           IMAGE: ${{ inputs.image-name }}
           TAGS: ${{ steps.tags.outputs.tags }}
           IMMUTABLE_TAG: ${{ steps.tags.outputs.immutable-tag }}
@@ -791,23 +739,18 @@ jobs:
           echo "digest=${digest}" >> "$GITHUB_OUTPUT"
           echo "image-ref=${IMMUTABLE_TAG}@${digest}" >> "$GITHUB_OUTPUT"
 
-      # TODO: Uncomment this when xray scan is ready
-      #   - name: xray scan
-      #     shell: bash
-      #     run: |
-      #       jf docker pull ${{ steps.tags.outputs.immutable-tag }} --build-name="${{ env.JFROG_CLI_BUILD_NAME }}" --build-number="$JFROG_CLI_BUILD_NUMBER"
-      #       jf docker scan ${{ steps.tags.outputs.immutable-tag }} --build-name="${{ env.JFROG_CLI_BUILD_NAME }}" --build-number="$JFROG_CLI_BUILD_NUMBER"
-
       - name: Create build info for docker image
         if: ${{ inputs.push }}
         shell: bash
+        env:
+          IMAGE_REF: ${{ steps.manifest.outputs.image-ref }}
+          JF_REPO: ${{ inputs.jf-project }}${{ inputs.repo-scope }}
         run: |
-          # Build-info is created against the multi-platform manifest-list digest,
-          # under the unchanged build number (the setup-jfrog-cli default,
-          # github.run_number) so existing consumer release-bundle references of
-          # the form <name>:${{ github.run_number }} still resolve.
-          image_ref="${{ steps.manifest.outputs.image-ref }}"
-          jf rt build-docker-create --image-file <(echo "$image_ref") "${{ inputs.jf-project }}${{ inputs.repo-scope }}"
+          set -euo pipefail
+          # The build number stays at the setup-jfrog-cli default (github.run_number):
+          # consumer release-bundle references of the form <name>:<run_number> resolve
+          # against it.
+          jf rt build-docker-create --image-file <(echo "$IMAGE_REF") "$JF_REPO"
 
       - name: Publish Build Info
         if: ${{ inputs.push }}
