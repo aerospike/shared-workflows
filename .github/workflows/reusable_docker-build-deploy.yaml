@@ -152,8 +152,7 @@ jobs:
           PLATFORMS: ${{ inputs.platforms }}
         run: |
           set -euo pipefail
-          # `unique` is required: a repeated platform yields two legs with the
-          # same sanitized name, whose digest uploads collide on one artifact name.
+          # `unique` guards against repeated platform inputs.
           matrix="$(jq -nc --arg p "$PLATFORMS" '
             [ $p | split(",")[] | gsub("^\\s+|\\s+$"; "") | select(. != "") ]
             | unique
