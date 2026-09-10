@@ -63,8 +63,8 @@ jobs:
           JF_URL: https://artifact.aerospike.io
           JF_PROJECT: test
         with:
-          oidc-provider-name: gh-dev-test
-          oidc-audience: aerospike/testing
+          oidc-provider-name: gh-aerospike
+          oidc-audience: aerospike
       - name: Delete existing bundle (if any)
         uses: ./.github/actions/delete-release-bundle
         with:
@@ -82,8 +82,8 @@ jobs:
       context: ./.github/workflows/execute-build/test_apps/hi
       file: ./.github/workflows/execute-build/test_apps/hi/Dockerfile
       jf-build-name: test-container
-      oidc-provider-name: gh-dev-test
-      oidc-audience: aerospike/testing
+      oidc-provider-name: gh-aerospike
+      oidc-audience: aerospike
   create-release-bundle:
     needs: [build-test-deploy, extract-version]
     uses: ./.github/workflows/reusable_create-release-bundle.yaml
@@ -94,8 +94,8 @@ jobs:
       jf-build-names: test-container:${{ github.run_number }}
       jf-bundle-name: test-docker-release
       version: ${{ needs.extract-version.outputs.version }}
-      oidc-provider-name: gh-dev-test
-      oidc-audience: aerospike/testing
+      oidc-provider-name: gh-aerospike
+      oidc-audience: aerospike
 
   # Report what the bundle can prove: digests, the bundle seal, promotion history,
   # SLSA provenance, and the authorizing pull request. Reads signed records only.
@@ -123,8 +123,8 @@ jobs:
           JF_URL: https://artifact.aerospike.io
           JF_PROJECT: test
         with:
-          oidc-provider-name: gh-dev-test
-          oidc-audience: aerospike/testing
+          oidc-provider-name: gh-aerospike
+          oidc-audience: aerospike
       - name: Record release evidence
         uses: ./.github/actions/release-evidence
         env:
