@@ -407,8 +407,9 @@ def pasteable(art):
 def qualified(art):
     """The artifact in a real repository, which is where its `build.*` properties live.
 
-    A virtual repository does not answer property requests, and for a container neither does
-    the floating tag folder: the properties sit on the timestamped path the build pushed.
+    The maven, pypi and deb virtuals answer a property request with nothing, and for a
+    container neither does the floating tag folder: the properties sit on the timestamped
+    path the build pushed.
     """
     head = art["path"].split("/", 1)[0]
     if head in art["repos"]:
