@@ -1,0 +1,178 @@
+name: Promote Release Bundle
+
+on:
+  workflow_call:
+    inputs:
+      # Required inputs
+      jf-bundle-name:
+        description: Name of the release bundle to promote
+        required: true
+        type: string
+      jf-project:
+        description: JFrog Artifactory project name
+        required: true
+        type: string
+      target-stage:
+        description: |
+          Promotion stage to advance to: DEV, TEST, STAGE, PREVIEW, INTERNAL or PROD.
+          Promotion may only advance from the stage directly before the target.
+        required: true
+        type: string
+      version:
+        description: Version of the release bundle to promote
+        required: true
+        type: string
+      gh-workflows-ref:
+        description: |
+          Git reference for shared-workflows checkout. Should match the version in your 'uses:' line.
+          GitHub Actions doesn't expose the called workflow's ref, so this is required.
+          See: .github/workflows/docs/why-gh-workflows-ref.md
+        required: true
+        type: string
+
+      # Optional inputs
+      dry-run:
+        description: Whether to run in dry-run mode
+        required: false
+        type: boolean
+        default: false
+      exclude-repos:
+        description: Semicolon-separated list of target repos to exclude from promotion
+        required: false
+        type: string
+        default: ""
+      gh-checkout-path:
+        description: Directory to checkout the shared-workflows repository into
+        required: false
+        type: string
+        default: shared-workflows
+      gh-environment:
+        description: |
+          GitHub environment to attach to the promotion job. Its reviewers are the gate
+          owner for this promotion, which is the one protection a callable workflow can
+          apply that a composite action cannot. Required when supersede is true.
+        required: false
+        type: string
+        default: ""
+      include-repos:
+        description: Semicolon-separated list of target repos to include in promotion (limits scope)
+        required: false
+        type: string
+        default: ""
+      jf-url:
+        description: JFrog Artifactory URL
+        required: false
+        type: string
+        default: https://artifact.aerospike.io
+      oidc-audience:
+        description: OIDC audience
+        required: false
+        type: string
+        default: aerospike
+      oidc-provider-name:
+        description: OIDC provider name
+        required: false
+        type: string
+        default: gh-aerospike
+      runs-on:
+        description: The runner to use
+        required: false
+        type: string
+        default: ubuntu-22.04
+      supersede:
+        description: |
+          Replace the version currently promoted to the target stage. Promotion into an
+          occupied stage fails unless this is set. Refused for PREVIEW, INTERNAL and PROD,
+          where a fix ships as a new version.
+        required: false
+        type: boolean
+        default: false
+      supersede-reason:
+        description: Why the incumbent is being replaced. Required when supersede is true.
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  promote-release-bundle:
+    runs-on: ${{ inputs.runs-on }}
+    environment: ${{ inputs.gh-environment }}
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
+        with:
+          egress-policy: audit
+
+      - name: Require a gate owner for supersede
+        if: inputs.supersede
+        shell: bash
+        run: |
+          if [[ -z "${{ inputs.gh-environment }}" ]]; then
+            echo "Error: supersede requires gh-environment so the gate owner approves replacing the incumbent." >&2
+            exit 1
+          fi
+
+      - name: Checkout shared-workflows repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: aerospike/shared-workflows
+          ref: ${{ inputs.gh-workflows-ref }}
+          path: ${{ inputs.gh-checkout-path }}
+          fetch-depth: 1
+
+      - name: Setup JFrog CLI
+        uses: step-security/setup-jfrog-cli@53aeacb709fce45d0baf69a13ec3342f7e2d71a9 # v5.1.0
+        env:
+          JF_URL: ${{ inputs.jf-url }}
+          JF_PROJECT: ${{ inputs.jf-project }}
+        with:
+          oidc-provider-name: ${{ inputs.oidc-provider-name }}
+          oidc-audience: ${{ inputs.oidc-audience }}
+
+      - name: Check JFrog Configuration
+        run: |
+          jf c show
+          jf rt ping
+
+      - name: Promote Release Bundle
+        shell: bash
+        env:
+          GH_ACTOR: ${{ github.actor }}
+          SUPERSEDE_REASON: ${{ inputs.supersede-reason }}
+        run: |
+          set -euo pipefail
+          entrypoint="${{ inputs.gh-checkout-path }}/.github/workflows/promote-release-bundle/entrypoint.sh"
+          if [[ ! -f "$entrypoint" ]]; then
+            echo "Error: entrypoint not found at $entrypoint" >&2
+            exit 1
+          fi
+          chmod +x "$entrypoint"
+
+          args=(
+            --bundle-name "${{ inputs.jf-bundle-name }}"
+            --version "${{ inputs.version }}"
+            --target-stage "${{ inputs.target-stage }}"
+            --project "${{ inputs.jf-project }}"
+            --actor "$GH_ACTOR"
+          )
+          if [[ -n "${{ inputs.include-repos }}" ]]; then
+            args+=(--include-repos "${{ inputs.include-repos }}")
+          fi
+          if [[ -n "${{ inputs.exclude-repos }}" ]]; then
+            args+=(--exclude-repos "${{ inputs.exclude-repos }}")
+          fi
+          if [[ "${{ inputs.supersede }}" == "true" ]]; then
+            args+=(--supersede --supersede-reason "$SUPERSEDE_REASON")
+          fi
+          if [[ "${{ inputs.dry-run }}" == "true" ]]; then
+            args+=(--dry-run)
+          fi
+
+          "$entrypoint" "${args[@]}"
