@@ -214,10 +214,12 @@ runs:
         TLS_VOLUME_DEST_DIR=/etc/aerospike/tls
         echo "tls_volume_dest_dir=$TLS_VOLUME_DEST_DIR" >> "$GITHUB_OUTPUT"
 
+        # Pull the volume-loader via JFrog's database-docker-virtual, not docker.io (bare "alpine" times out on Docker Hub).
+        LOADER_IMAGE="${{ inputs.container-repo-url }}/database-docker-virtual/alpine:3.20"
         docker run --name "$CONTAINER_NAME_TO_LOAD_VOLUME" -d \
           -v "$CONFIG_FILES_VOLUME_NAME:$VOLUME_DEST_DIR" \
           -v "$TLS_VOLUME_NAME:$TLS_VOLUME_DEST_DIR" \
-          alpine tail -f /dev/null
+          "$LOADER_IMAGE" tail -f /dev/null
       shell: bash
       env:
         # Prevents volume directories from being expanded since they start with /
