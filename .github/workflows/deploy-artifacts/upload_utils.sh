@@ -134,17 +134,30 @@ discover_and_process() {
         [[ -f $file ]] || continue
         echo "Processing $label: $file" >&2
 
-        # Processor returns the target path on stdout (all logging goes to stderr)
-        local target_path
-        target_path=$("$processor" "$file" "$dest")
+        # Processors print one target path per line on stdout (all logging goes to
+        # stderr). A processor may place several copies of one artifact, e.g.
+        # process_rpm fans a noarch package out across <dist>/<arch> folders.
+        local processor_out
+        processor_out=$("$processor" "$file" "$dest")
 
-        # Copy companion files to the same directory as the primary
-        if [[ -n $type && -n $target_path ]]; then
+        if [[ -z $type ]]; then
+            continue
+        fi
+        if [[ -z $processor_out ]]; then
+            echo "Warning: $label processor returned no target path; artifact not copied to structured tree: $file" >&2
+            continue
+        fi
+
+        local -a target_paths=()
+        mapfile -t target_paths <<<"$processor_out"
+
+        # Copy companion files to the same directory as each primary copy
+        local target_path
+        for target_path in "${target_paths[@]}"; do
+            [[ -n $target_path ]] || continue
             gather_companions "$file" "$(dirname "$target_path")" "$type"
             manifest_add "$target_path" "$type"
-        elif [[ -n $type && -z $target_path ]]; then
-            echo "Warning: $label processor returned no target path; artifact not copied to structured tree: $file" >&2
-        fi
+        done
     done < <(find build-artifacts -name "$pattern" -print0)
 }
 

@@ -59,6 +59,11 @@ while [[ $# -gt 0 ]]; do
         export RPM_DISTRIBUTIONS
         shift 2
         ;;
+    --rpm-architectures)
+        RPM_ARCHITECTURES="$2"
+        export RPM_ARCHITECTURES
+        shift 2
+        ;;
     --help | -h)
         echo "Usage: $0 <project> <build-name> <version> <build-number> [metadata-build-number] [OPTIONS]" >&2
         echo "" >&2
@@ -73,6 +78,7 @@ while [[ $# -gt 0 ]]; do
         echo "  --internal                       Mark artifacts as internal-only (not for public promotion)" >&2
         echo "  --deb-distributions <list>        Comma-separated Debian/Ubuntu codenames for packages whose filename has no distro token (e.g. jammy,noble,resolute,bookworm,trixie). Also accepted as DEB_DISTRIBUTIONS." >&2
         echo "  --rpm-distributions <list>        Comma-separated RPM dist tags for packages whose filename has no distro token (e.g. el8,el9,amzn2023). Also accepted as RPM_DISTRIBUTIONS." >&2
+        echo "  --rpm-architectures <list>        Comma-separated arch folders a noarch RPM is published under (default x86_64,aarch64). Also accepted as RPM_ARCHITECTURES." >&2
         echo "  --dry-run        Show what would be uploaded without actually uploading" >&2
         echo "  --help, -h       Show this help message" >&2
         echo "" >&2
@@ -168,6 +174,10 @@ fi
 if [[ -n ${RPM_DISTRIBUTIONS-} ]]; then
     RPM_DISTRIBUTIONS=$(_normalize_rpm_distributions "$RPM_DISTRIBUTIONS") || exit 1
     export RPM_DISTRIBUTIONS
+fi
+if [[ -n ${RPM_ARCHITECTURES-} ]]; then
+    RPM_ARCHITECTURES=$(_normalize_rpm_architectures "$RPM_ARCHITECTURES") || exit 1
+    export RPM_ARCHITECTURES
 fi
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/type_registry.sh"

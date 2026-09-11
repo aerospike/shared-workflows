@@ -222,6 +222,37 @@ setup() {
     [[ "$result" == "el9" ]]
 }
 
+# --- get_arch_folders_for_rpm ---
+
+@test "get_arch_folders_for_rpm keeps an arch-specific package in its own arch" {
+    result=$(get_arch_folders_for_rpm "x86_64")
+    [[ "$result" == "x86_64" ]]
+}
+
+@test "get_arch_folders_for_rpm fans noarch out to the default arches" {
+    unset RPM_ARCHITECTURES
+    result=$(get_arch_folders_for_rpm "noarch")
+    [[ "$result" == "x86_64,aarch64" ]]
+}
+
+@test "get_arch_folders_for_rpm honours RPM_ARCHITECTURES for noarch" {
+    RPM_ARCHITECTURES="x86_64, AARCH64 ,ppc64le"
+    result=$(get_arch_folders_for_rpm "noarch")
+    [[ "$result" == "x86_64,aarch64,ppc64le" ]]
+}
+
+@test "get_arch_folders_for_rpm rejects an unknown architecture" {
+    RPM_ARCHITECTURES="x86_64,sparc64"
+    run get_arch_folders_for_rpm "noarch"
+    [[ $status -ne 0 && "$output" == *"Unknown RPM architecture 'sparc64'"* ]]
+}
+
+@test "get_arch_folders_for_rpm rejects an empty RPM_ARCHITECTURES token" {
+    RPM_ARCHITECTURES="x86_64,,aarch64"
+    run get_arch_folders_for_rpm "noarch"
+    [[ $status -ne 0 && "$output" == *"empty architecture"* ]]
+}
+
 # --- get_rpm_metadata ---
 
 @test "get_rpm_metadata extracts metadata from real rpm" {
@@ -238,7 +269,7 @@ setup() {
     [[ "${meta[3]}" == "el8,el9,amzn2023" ]]
 }
 
-@test "process_rpm stages distro-agnostic package under first RPM_DISTRIBUTIONS tag" {
+@test "process_rpm stages a distro-agnostic package in every dist and arch folder" {
     local src="$GIT_ROOT/tests/test-1.0-2.noarch.rpm"
     if [[ ! -f "$src" ]]; then
         skip "Test fixture not available"
@@ -248,11 +279,22 @@ setup() {
     dest=$(mktemp -d)
     cp "$src" "$test_dir/aerospike-xdr-proxy-4.0.8-1.noarch.rpm"
     RPM_DISTRIBUTIONS="el8,el9,amzn2023"
-    local target
-    target=$(process_rpm "$test_dir/aerospike-xdr-proxy-4.0.8-1.noarch.rpm" "$dest" 2>/dev/null)
-    [[ "$target" == *"/el8/noarch/"* ]]
-    [[ -f "$dest/el8/noarch/aerospike-xdr-proxy-4.0.8-1.noarch.rpm" ]]
+    unset RPM_ARCHITECTURES
+    local staged
+    staged=$(process_rpm "$test_dir/aerospike-xdr-proxy-4.0.8-1.noarch.rpm" "$dest" 2>/dev/null)
+
+    local ok=1 d a
+    for d in el8 el9 amzn2023; do
+        for a in x86_64 aarch64; do
+            [[ "$staged" == *"/$d/$a/aerospike-xdr-proxy-4.0.8-1.noarch.rpm"* ]] || ok=0
+            [[ -f "$dest/$d/$a/aerospike-xdr-proxy-4.0.8-1.noarch.rpm" ]] || ok=0
+        done
+    done
+    # $basearch never expands to noarch, so a <dist>/noarch copy is unreachable.
+    [[ -z "$(find "$dest" -type d -name noarch)" ]] || ok=0
+
     rm -rf "$test_dir" "$dest"
+    [[ $ok -eq 1 ]]
 }
 
 # --- is_npm_package ---

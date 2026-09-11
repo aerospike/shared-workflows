@@ -147,6 +147,62 @@ get_dist_for_rpm() {
     _normalize_rpm_distributions "$raw"
 }
 
+# Concrete YUM architectures a noarch RPM is published under.
+# Artifactory derives YUM metadata from the folder tree at yumRootDepth=2, so only
+# <dist>/<arch>/repodata indexes a file, and client configs use
+# baseurl=.../<dist>/$basearch/ where $basearch is never "noarch". A distro-agnostic
+# package therefore needs a physical copy in each concrete arch folder.
+_DEFAULT_RPM_ARCHITECTURES_CSV="x86_64,aarch64"
+_KNOWN_RPM_ARCHES_CSV="aarch64,armv7hl,i686,ppc64le,s390x,x86_64"
+
+_is_known_rpm_arch() {
+    local name="${1-}"
+    [[ -n $name && $name != *,* ]] || return 1
+    [[ ,${_KNOWN_RPM_ARCHES_CSV}, == *,"$name",* ]]
+}
+
+# Strip whitespace, lowercase, and reject unknown or empty tokens.
+# Args: <comma-separated list>
+# Returns: normalized list on stdout, or return 1.
+_normalize_rpm_architectures() {
+    local raw="${1-}"
+    raw="${raw//[[:space:]]/}"
+    raw="${raw,,}"
+    [[ -n $raw ]] || return 1
+
+    local IFS=,
+    local -a parts=()
+    read -ra parts <<<"$raw" || true
+
+    local p
+    local -a out=()
+    for p in "${parts[@]}"; do
+        if [[ -z $p ]]; then
+            echo "Invalid RPM_ARCHITECTURES: empty architecture" >&2
+            return 1
+        fi
+        if ! _is_known_rpm_arch "$p"; then
+            echo "Unknown RPM architecture '$p'. Allowed: ${_KNOWN_RPM_ARCHES_CSV}" >&2
+            return 1
+        fi
+        out+=("$p")
+    done
+    local IFS=,
+    echo "${out[*]}"
+}
+
+# Architecture folder(s) a .rpm must be published under.
+# Arch-specific packages stay in their own arch folder. noarch packages fan out to
+# RPM_ARCHITECTURES (or --rpm-architectures), defaulting to x86_64,aarch64.
+get_arch_folders_for_rpm() {
+    local arch="${1-}"
+    if [[ $arch != "noarch" ]]; then
+        echo "$arch"
+        return 0
+    fi
+    _normalize_rpm_architectures "${RPM_ARCHITECTURES:-$_DEFAULT_RPM_ARCHITECTURES_CSV}"
+}
+
 # Function to extract RPM metadata and distribution
 get_rpm_metadata() {
     local rpm="$1"
@@ -161,11 +217,14 @@ get_rpm_metadata() {
     echo "$pkgname $version $arch $dist"
 }
 
+# Places one copy per <dist>/<arch> folder and prints every target path, one per
+# line. YUM metadata is folder-derived, so a package is only installable from the
+# folders it physically occupies.
 process_rpm() {
     local file="$1"
     local dest_dir="$2"
     local -a metadata
-    local pkgname version arch dist staging_dist
+    local pkgname version arch dist
 
     local metadata_str
     metadata_str=$(get_rpm_metadata "$file")
@@ -175,17 +234,29 @@ process_rpm() {
     arch="${metadata[2]}"
     dist="${metadata[3]}"
 
-    # Staging path uses the first distro when indexing for several distributions.
-    staging_dist="${dist%%,*}"
-    local target="$dest_dir/$staging_dist/$arch"
-    echo "  Distribution: $dist, Architecture: $arch" >&2
-    mkdir -p "$target"
-    echo "Copying RPM to: $target" >&2
+    local arch_csv
+    arch_csv=$(get_arch_folders_for_rpm "$arch") || return 1
+
+    local -a dists=() arches=()
+    IFS=, read -ra dists <<<"$dist" || true
+    IFS=, read -ra arches <<<"$arch_csv" || true
+
+    echo "  Distribution: $dist, Architecture: $arch, Arch folders: $arch_csv" >&2
+
     local rpm_name
     rpm_name=$(basename "$file")
-    cp -v "$file" "$target/$rpm_name" >&2
-    # Return target path for companion placement
-    echo "$target/$rpm_name"
+
+    local d a target
+    for d in "${dists[@]}"; do
+        for a in "${arches[@]}"; do
+            target="$dest_dir/$d/$a"
+            mkdir -p "$target"
+            echo "Copying RPM to: $target" >&2
+            cp -v "$file" "$target/$rpm_name" >&2
+            # Return target paths for companion placement
+            echo "$target/$rpm_name"
+        done
+    done
 }
 
 process_jar() {

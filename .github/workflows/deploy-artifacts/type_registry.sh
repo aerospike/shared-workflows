@@ -199,6 +199,15 @@ get_rpm_props() {
     local version="${metadata[1]}"
     local arch="${metadata[2]}"
     local dist="${metadata[3]}"
+
+    # process_rpm lays copies out as <dist>/<arch>/<file>, one per dist. Tag each
+    # copy with the dist folder it occupies rather than the whole requested list.
+    local folder_dist
+    folder_dist=$(basename "$(dirname "$(dirname "$file")")")
+    if _is_known_rpm_dist "$folder_dist"; then
+        dist="$folder_dist"
+    fi
+
     echo "  Package: $pkgname, Version: $version, Arch: $arch, Dist: $dist" >&2
     echo "$(get_base_props);package_name=$pkgname;rpm.distribution=$dist;rpm.component=main;rpm.architecture=$arch"
 }
