@@ -1003,14 +1003,14 @@ class VerifyCommands(unittest.TestCase):
                                    "artifact_build": "9-artifacts"})
         block = rev.verify_commands(ev)
         self.assertIn("api/build/a/9-buildinfo-el9?project=database", block)
-        self.assertIn("metadata child", block)
+        self.assertIn("another build in the tree", block)
 
-    def test_no_metadata_note_when_the_artifact_build_carried_the_commit(self):
+    def test_no_other_build_note_when_the_artifact_build_carried_the_commit(self):
         ev = self.evidence([self.art("g/a/1.0/a-1.0.jar", number="9")],
                            source={"repo": "aerospike/a", "commit": "deadbeef",
                                    "build": "a", "vcs_build": "9",
                                    "artifact": "g/a/1.0/a-1.0.jar", "artifact_build": "9"})
-        self.assertNotIn("metadata child", rev.verify_commands(ev))
+        self.assertNotIn("another build in the tree", rev.verify_commands(ev))
 
     def test_repeated_basenames_do_not_become_the_substitution_hint(self):
         # Every multi-image container release repeats list.manifest.json.
@@ -1047,8 +1047,186 @@ class VerifyCommands(unittest.TestCase):
             {"stage": "PROD", "file": "p.evd", "repos": ["e-rpm-prod-local"]}])
         self.assertEqual(rev.verify_path(ev, entry), "e-rpm-prod-local/absctl/v1.1.1/absctl.rpm")
 
+    def test_the_pull_request_step_filters_on_the_merge_commit(self):
+        ev = self.evidence([self.art("g/a/1.0/a-1.0.jar")],
+                           source={"repo": "aerospike/a", "commit": "deadbeef", "build": "a",
+                                   "artifact": "g/a/1.0/a-1.0.jar", "artifact_build": "9"})
+        self.assertIn('select(.merge_commit_sha == "deadbeef")', rev.verify_commands(ev))
+
     def test_a_public_path_still_wins(self):
         entry = self.art("a/1.0/a.jar", public="maven/a/1.0/a.jar", repos=["c-maven-dev-local"])
         ev = self.evidence([entry], promotions=[
             {"stage": "PROD", "file": "p.evd", "repos": ["c-maven-dev-local"]}])
         self.assertEqual(rev.verify_path(ev, entry), "maven/a/1.0/a.jar")
+
+
+class BundleRoots(unittest.TestCase):
+    @staticmethod
+    def seal(sources):
+        return {"predicate": {"sources": sources}}
+
+    def test_the_root_is_the_source_nothing_feeds(self):
+        seal = self.seal([
+            {"sourceType": "BUILDS", "upstreamSourceIds": [1],
+             "builds": [{"buildName": "srv", "buildNumber": "8.1-artifacts"}]},
+            {"sourceType": "BUILDS", "upstreamSourceIds": [],
+             "builds": [{"buildName": "srv", "buildNumber": "8.1"}]}])
+        self.assertEqual(rev.bundle_roots(seal), [("srv", "8.1")])
+
+    def test_every_root_is_returned(self):
+        seal = self.seal([
+            {"sourceType": "BUILDS", "upstreamSourceIds": [],
+             "builds": [{"buildName": "srv-slim", "buildNumber": "1"},
+                        {"buildName": "srv-full", "buildNumber": "2"}]}])
+        self.assertEqual(rev.bundle_roots(seal), [("srv-slim", "1"), ("srv-full", "2")])
+
+    def test_sources_that_are_not_builds_are_ignored(self):
+        seal = self.seal([
+            {"sourceType": "ARTIFACTS", "upstreamSourceIds": []},
+            {"sourceType": "BUILDS", "upstreamSourceIds": [],
+             "builds": [{"buildName": "srv", "buildNumber": "8.1"}]}])
+        self.assertEqual(rev.bundle_roots(seal), [("srv", "8.1")])
+
+    def test_a_seal_naming_no_builds_yields_nothing(self):
+        self.assertEqual(rev.bundle_roots({}), [])
+        self.assertEqual(rev.bundle_roots(self.seal([])), [])
+
+    def test_all_sources_feed_each_other_so_none_is_discarded(self):
+        seal = self.seal([
+            {"sourceType": "BUILDS", "upstreamSourceIds": [2],
+             "builds": [{"buildName": "a", "buildNumber": "1"}]},
+            {"sourceType": "BUILDS", "upstreamSourceIds": [1],
+             "builds": [{"buildName": "b", "buildNumber": "2"}]}])
+        self.assertEqual(rev.bundle_roots(seal), [("a", "1"), ("b", "2")])
+
+
+class BuildOriginWalksTheTree(unittest.TestCase):
+    """The child holding the commit is found by structure, never by its name."""
+
+    def setUp(self):
+        self._real = rev.jfrog
+        self.tree, self.calls = {}, []
+
+        def fake_jfrog(path):
+            self.calls.append(path)
+            name, _, rest = path[len("artifactory/api/build/"):].partition("/")
+            number = rest.split("?")[0]
+            info = self.tree.get((name, number))
+            return {"buildInfo": info} if info else {}
+
+        rev.jfrog = fake_jfrog
+
+    def tearDown(self):
+        rev.jfrog = self._real
+
+    def build(self, name, number, children=(), commit=None, url="", props=0):
+        info = {"url": url, "properties": {str(i): i for i in range(props)},
+                "modules": [{"id": f"{c[0]}/{c[1]}", "type": "build"} for c in children]}
+        if commit:
+            info["vcs"] = [{"revision": commit}]
+        self.tree[(name, number)] = info
+
+    def test_a_child_named_without_buildinfo_is_still_found(self):
+        self.build("srv", "8.1", children=[("srv", "8.1-metadata-el8-x86_64")])
+        self.build("srv", "8.1-metadata-el8-x86_64", commit="deadbeef")
+        vcs, _, _, holder = rev.build_origin("srv", "8.1", "database")
+        self.assertEqual(vcs["revision"], "deadbeef")
+        self.assertEqual(holder, ("srv", "8.1-metadata-el8-x86_64"))
+
+    def test_a_child_carrying_another_build_name_is_reached(self):
+        self.build("bundle-root", "1", children=[("other-build", "77")])
+        self.build("other-build", "77", commit="cafe")
+        _, _, _, holder = rev.build_origin("bundle-root", "1", "database")
+        self.assertEqual(holder, ("other-build", "77"))
+
+    def test_the_walk_descends_past_the_first_level(self):
+        self.build("a", "1", children=[("a", "2")])
+        self.build("a", "2", children=[("a", "3")])
+        self.build("a", "3", commit="beef")
+        _, _, _, holder = rev.build_origin("a", "1", "database")
+        self.assertEqual(holder, ("a", "3"))
+
+    def test_a_sibling_without_a_commit_does_not_end_the_search(self):
+        self.build("a", "1", children=[("a", "artifacts"), ("a", "meta")])
+        self.build("a", "artifacts")
+        self.build("a", "meta", commit="beef")
+        _, _, _, holder = rev.build_origin("a", "1", "database")
+        self.assertEqual(holder, ("a", "meta"))
+
+    def test_a_build_carrying_its_own_commit_costs_one_request(self):
+        self.build("a", "1", commit="beef")
+        _, _, _, holder = rev.build_origin("a", "1", "database")
+        self.assertEqual(holder, ("a", "1"))
+        self.assertEqual(len(self.calls), 1)
+
+    def test_a_cycle_terminates(self):
+        self.build("a", "1", children=[("a", "2")])
+        self.build("a", "2", children=[("a", "1")])
+        vcs, _, _, holder = rev.build_origin("a", "1", "database")
+        self.assertIsNone(vcs)
+        self.assertIsNone(holder)
+
+    def test_the_run_url_stays_with_the_build_the_caller_named(self):
+        self.build("a", "1", children=[("a", "2")], url="https://runs/1")
+        self.build("a", "2", commit="beef", url="https://runs/2")
+        _, run, _, _ = rev.build_origin("a", "1", "database")
+        self.assertEqual(run, "https://runs/1")
+
+    def test_the_run_url_falls_back_to_the_holder(self):
+        self.build("a", "1", children=[("a", "2")])
+        self.build("a", "2", commit="beef", url="https://runs/2")
+        _, run, _, _ = rev.build_origin("a", "1", "database")
+        self.assertEqual(run, "https://runs/2")
+
+    def test_the_environment_count_is_the_larger_of_the_two(self):
+        self.build("a", "1", children=[("a", "2")], props=3)
+        self.build("a", "2", commit="beef", props=81)
+        _, _, env, _ = rev.build_origin("a", "1", "database")
+        self.assertEqual(env, 81)
+
+    def test_a_shared_cache_spares_the_second_artifact_every_request(self):
+        self.build("a", "1", children=[("a", "2")])
+        self.build("a", "2", commit="beef")
+        cache = {}
+        rev.build_origin("a", "1", "database", cache)
+        first = len(self.calls)
+        rev.build_origin("a", "1", "database", cache)
+        self.assertEqual(len(self.calls), first)
+
+    def test_a_tree_with_no_commit_anywhere_reports_none(self):
+        self.build("a", "1", children=[("a", "2")])
+        self.build("a", "2")
+        vcs, _, _, holder = rev.build_origin("a", "1", "database")
+        self.assertIsNone(vcs)
+        self.assertIsNone(holder)
+
+
+class TheAuthorizingPull(unittest.TestCase):
+    """Several pull requests can list one commit; only one produced it."""
+
+    SHA = "053ef20f"
+
+    @staticmethod
+    def pull(number, merge_sha=None, head_sha="other", merged=None):
+        return {"number": number, "merge_commit_sha": merge_sha,
+                "head": {"sha": head_sha}, "merged_at": merged}
+
+    def test_the_merge_commit_wins_over_an_earlier_listed_open_one(self):
+        found = [self.pull(1147), self.pull(1208),
+                 self.pull(1225, merge_sha=self.SHA, merged="2026-09-09T18:28:15Z"),
+                 self.pull(1236)]
+        self.assertEqual(rev.authorizing_pull(found, self.SHA)["number"], 1225)
+
+    def test_a_merged_pull_whose_head_is_the_commit_is_next_best(self):
+        found = [self.pull(1), self.pull(2, head_sha=self.SHA, merged="2026-09-09T18:28:15Z")]
+        self.assertEqual(rev.authorizing_pull(found, self.SHA)["number"], 2)
+
+    def test_any_merged_pull_beats_an_open_one(self):
+        found = [self.pull(1), self.pull(2, merged="2026-09-09T18:28:15Z")]
+        self.assertEqual(rev.authorizing_pull(found, self.SHA)["number"], 2)
+
+    def test_only_open_pulls_name_no_authorizing_one(self):
+        self.assertIsNone(rev.authorizing_pull([self.pull(1), self.pull(2)], self.SHA))
+
+    def test_nothing_listed_names_nothing(self):
+        self.assertIsNone(rev.authorizing_pull([], self.SHA))
