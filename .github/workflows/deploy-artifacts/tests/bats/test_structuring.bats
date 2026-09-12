@@ -30,6 +30,31 @@ teardown() {
     [[ -f "$rpm_dir/test-1.0-2.el9.noarch.rpm.asc" ]]
 }
 
+# Artifactory derives YUM metadata from the folder tree, and client configs resolve
+# baseurl=.../<dist>/$basearch/, which never expands to "noarch". A noarch package is
+# only installable if a physical copy sits in each concrete arch folder.
+@test "noarch RPM is copied into every concrete arch folder, never <dist>/noarch" {
+    run_entrypoint_dry_run >/dev/null 2>&1 || true
+    [[ -f "structured_build_artifacts/rpm/el9/x86_64/test-1.0-2.el9.noarch.rpm" ]] &&
+        [[ -f "structured_build_artifacts/rpm/el9/aarch64/test-1.0-2.el9.noarch.rpm" ]] &&
+        [[ ! -d "structured_build_artifacts/rpm/el9/noarch" ]]
+}
+
+@test "each noarch RPM copy carries its own .asc companion" {
+    run_entrypoint_dry_run >/dev/null 2>&1 || true
+    [[ -f "structured_build_artifacts/rpm/el9/x86_64/test-1.0-2.el9.noarch.rpm.asc" ]] &&
+        [[ -f "structured_build_artifacts/rpm/el9/aarch64/test-1.0-2.el9.noarch.rpm.asc" ]]
+}
+
+@test "every structured noarch RPM copy gets its own upload command" {
+    local output cmds
+    output=$(run_entrypoint_dry_run 2>&1)
+    cmds=$(extract_upload_commands "$output")
+    # Uploads run from inside the rpm struct dir, so paths are relative to it.
+    [[ "$cmds" == *"el9/x86_64/test-1.0-2.el9.noarch.rpm"* ]] &&
+        [[ "$cmds" == *"el9/aarch64/test-1.0-2.el9.noarch.rpm"* ]]
+}
+
 @test "NuGet .asc companion is co-located with primary after structuring" {
     run_entrypoint_dry_run >/dev/null 2>&1 || true
     local nupkg_dir

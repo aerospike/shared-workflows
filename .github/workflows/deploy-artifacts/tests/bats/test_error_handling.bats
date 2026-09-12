@@ -64,3 +64,15 @@ teardown_file() {
   [[ $output == *"Unknown Debian/Ubuntu codename 'not-a-distro'"* ]]
 }
 
+@test "Help mentions --rpm-distributions" {
+  run "$DEPLOY_ARTIFACTS_DIR/entrypoint.sh" --help
+  [[ $status -eq 0 ]]
+  [[ $output == *"--rpm-distributions"* ]]
+}
+
+@test "Invalid --rpm-distributions produces error" {
+  run "$DEPLOY_ARTIFACTS_DIR/entrypoint.sh" test-project test-build v1.0.0 12345 12345-metadata --rpm-distributions el9,not-a-distro --dry-run
+  [[ $status -ne 0 ]]
+  [[ $output == *"Unknown RPM dist tag 'not-a-distro'"* ]]
+}
+
