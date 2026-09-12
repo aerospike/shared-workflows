@@ -404,8 +404,22 @@ def pasteable(art):
     return f'{holding}/{art["path"]}' if holding else art["path"]
 
 
+def qualified(art):
+    """The artifact in a real repository, which is where its `build.*` properties live.
+
+    The maven, pypi and deb virtuals answer a property request with nothing, and for a
+    container neither does the floating tag folder: the properties sit on the timestamped
+    path the build pushed.
+    """
+    head = art["path"].split("/", 1)[0]
+    if head in art["repos"]:
+        return art["path"]
+    holding = most_public(art["repos"])
+    return f'{holding}/{art["path"]}' if holding else art["path"]
+
+
 def build_origin(name, number, project):
-    """Commit, CI run and captured environment size, following the build-info tree."""
+    """Commit, CI run, captured environment size, and the build number the commit came from."""
     def fetch(num):
         return jfrog(f"artifactory/api/build/{urllib.parse.quote(name)}/"
                   f"{urllib.parse.quote(num)}?project={project}") or {}
@@ -414,6 +428,7 @@ def build_origin(name, number, project):
     vcs = (info.get("vcs") or [None])[0]
     run = info.get("url", "")
     env = len(info.get("properties") or {})
+    holder = number if vcs else None
     if not vcs:
         parent = fetch(re.sub(r"-artifacts$", "", number)).get("buildInfo", {})
         run = run or parent.get("url", "")
@@ -423,7 +438,8 @@ def build_origin(name, number, project):
             meta = fetch(child).get("buildInfo", {})
             vcs = (meta.get("vcs") or [None])[0]
             env = max(env, len(meta.get("properties") or {}))
-    return vcs, run, env
+            holder = child if vcs else None
+    return vcs, run, env, holder
 
 
 def image_labels(root, path):
@@ -518,6 +534,7 @@ def collect(target, about, as_of=None):
                 "repos": pred.get("target", {}).get("includedRepositoryKeys", []),
                 "mutable": pred.get("mutable"),
                 "seals": (pred.get("provenance") or [{}])[0].get("digest", {}).get("sha256"),
+                "file": child["uri"].lstrip("/"),
             })
         promotions.sort(key=lambda p: p["when"] or "")
 
@@ -528,9 +545,10 @@ def collect(target, about, as_of=None):
         public, repos, digest_linked = where_published(
             sha, art["package_type"], version_hint(bundle, art))
 
-        vcs, run, env = None, "", 0
+        vcs, run, env, vcs_build = None, "", 0, None
         if props.get("build.name") and props.get("build.number"):
-            vcs, run, env = build_origin(props["build.name"], props["build.number"], project)
+            vcs, run, env, vcs_build = build_origin(
+                props["build.name"], props["build.number"], project)
 
         repo = None
         if vcs:
@@ -577,17 +595,20 @@ def collect(target, about, as_of=None):
 
         published_linked = digest_linked if public else None
 
-        if commit and not source:
-            source = {"repo": repo, "commit": commit, "run": run, "env": env,
-                      "subject": (vcs or {}).get("message", "").split("\n")[0]}
-
-        artifacts.append({
+        entry = {
             "type": art["package_type"], "path": art["path"], "sha256": sha,
             "public": public, "published_build_linked": published_linked, "repos": repos,
             "build": props.get("build.name"), "number": props.get("build.number"),
             "commit": commit, "commit_from": commit_from,
             "sealed": sha in sealed_digests, "source_repo": repo, "attestation": attestation,
-        })
+        }
+        artifacts.append(entry)
+
+        if commit and not source:
+            source = {"repo": repo, "commit": commit, "run": run, "env": env,
+                      "build": props.get("build.name"), "vcs_build": vcs_build,
+                      "artifact": qualified(entry), "artifact_build": entry["number"],
+                      "subject": (vcs or {}).get("message", "").split("\n")[0]}
 
     pull_request = None
     if source and source["repo"] and source["commit"]:
@@ -654,6 +675,147 @@ def collect(target, about, as_of=None):
 
 
 # -------------------------------------------------------------------- phrasing
+AQL_BY_DIGEST = (
+    'curl -sf -H "Authorization: Bearer $JFROG_TOKEN" '
+    "-H 'Content-Type: text/plain' \\\n"
+    '  -d "items.find({\\"sha256\\":\\"$SHA\\"}).include(\\"repo\\")" \\\n'
+    """  "$JF/artifactory/api/search/aql" | jq -r '[.results[].repo] | unique | .[]'""")
+
+
+def shipped(evidence):
+    """The report's artifacts, minus signatures and the container blobs behind a manifest."""
+    out = [a for a in evidence["artifacts"]
+           if not a["path"].endswith(COMPANION)
+           and (a["type"] not in ("docker", "oci") or container_tag_manifest(a["path"]))]
+    return out or evidence["artifacts"]
+
+
+# Companions of the artifact people actually depend on. Walking one as the worked example
+# names the wrong subject.
+SECONDARY = ("-sources.jar", "-javadoc.jar", "-tests.jar", ".pom", ".module", ".json")
+
+
+def verify_subject(evidence):
+    """The artifact the verify block walks. One shipped thing, never a signature."""
+    entries = shipped(evidence)
+    if not entries:
+        return None
+    return min(entries, key=lambda a: (a["path"].endswith(SECONDARY), a["path"]))
+
+
+def substitution_hint(evidence):
+    """How to point the verify block at the release's other artifacts, if it has any.
+
+    A basename is not a usable substitution when several artifacts share one, which every
+    multi-image container release does with `list.manifest.json`.
+    """
+    subject = verify_subject(evidence)
+    others = [a for a in shipped(evidence) if a is not subject]
+    if not others:
+        return None
+    paths = list(dict.fromkeys(verify_path(evidence, a) for a in others))
+    differ = "artifact differs" if len(others) == 1 else "artifacts differ"
+    return (f"The other {len(others)} {differ} only in the path. Substitute "
+            + phrase(f"`{path}`" for path in paths[:3])
+            + (", and so on" if len(paths) > 3 else "")
+            + " in the first command and the rest of the block follows.")
+
+
+def verify_path(evidence, art):
+    """Where to point a reader at these bytes: the furthest they were actually promoted to.
+
+    A repository key outside the `-prod-public` convention, such as `<project>-rpm-prod-local`,
+    names no stage, and `most_public` ranks those last. Ranking alone therefore sends a reader
+    to the DEV copy of a release that reached PROD. The promotion record names the repository.
+    """
+    if art["public"]:
+        return art["public"]
+    targeted = [r for p in reversed(evidence["promotions"]) for r in p.get("repos", [])
+                if r in art["repos"]]
+    if targeted:
+        return f'{targeted[0]}/{art["path"]}'
+    return pasteable(art)
+
+
+def verify_commands(evidence):
+    """A pasteable shell session that reaches every record this report cites."""
+    art = verify_subject(evidence)
+    if not art:
+        return 'export JFROG_TOKEN="<a JFrog access token>"'
+
+    release, source = evidence["release"], evidence["source"]
+    out = ['export JFROG_TOKEN="<a JFrog access token>"', f"JF={JF_BASE}"]
+    if release:
+        out.append(f'BUNDLE=artifactory/{release["repo"]}/{release["bundle"]}')
+    out += ['get() { curl -sf -H "Authorization: Bearer $JFROG_TOKEN" "$JF/$1"; }', ""]
+
+    out += [f'# The SHA-256 of the {noun(art["type"])} a customer resolves.',
+            f'SHA=$(get artifactory/api/storage/{verify_path(evidence, art)} |',
+            "      jq -r .checksums.sha256)", 'echo "$SHA"', ""]
+    out += ["# Every repository holding those exact bytes.", AQL_BY_DIGEST, ""]
+
+    if release:
+        seal = (f'artifactory/api/storage/{release["repo"]}/{release["bundle"]}'
+                "/release-bundle.json.evd")
+        out += ["# The seal: how many files it names, and whether this one is among them.",
+                'get "$BUNDLE/release-bundle.json.evd" | jq -r .payload | base64 -d |',
+                "  jq --arg s \"$SHA\" '{files: (.subject | length),",
+                "                      names_this_file: ([.subject[].digest.sha256] "
+                "| index($s) != null)}'", "",
+                "# The digest of the seal itself.",
+                f'get "{seal}" | jq -r .checksums.sha256', ""]
+
+    if evidence["promotions"]:
+        out += ["# Every promotion: the stage, when, and who authorized it.",
+                f'get "lifecycle/api/v2/promotion/records/{release["bundle"]}'
+                f'?project={evidence["project"]}" |',
+                "  jq '[.promotions[] | {stage: .environment, when: .created, "
+                "by: .created_by}]'", ""]
+        last = evidence["promotions"][-1]
+        if last.get("file"):
+            out += [f'# The {last["stage"]} attestation names the seal by that digest, and '
+                    "records the move.",
+                    f'get "$BUNDLE/{last["file"]}" | jq -r .payload | base64 -d |',
+                    "  jq '{by: .predicate.createdBy, target: .predicate.target.environment,",
+                    "       repos: .predicate.target.includedRepositoryKeys, "
+                    "mutable: .predicate.mutable,",
+                    "       seal: .predicate.provenance[0].digest.sha256}'", ""]
+
+    if source and source.get("vcs_build"):
+        note = ""
+        if source["vcs_build"] != source.get("artifact_build"):
+            note = ("\n# The commit sits on the metadata child, not the artifact child the "
+                    "property names.")
+        out += [f"# The build behind it, and the commit it was built from.{note}",
+                f'get "artifactory/api/storage/{source["artifact"]}?properties" |',
+                "  jq -c '.properties | {build: .\"build.name\"[0], "
+                "number: .\"build.number\"[0]}'",
+                f'get "artifactory/api/build/{urllib.parse.quote(source["build"] or "")}/'
+                f'{urllib.parse.quote(source["vcs_build"])}?project={evidence["project"]}" |',
+                "  jq '{run: .buildInfo.url, revision: .buildInfo.vcs[0].revision}'", ""]
+
+    pr = evidence["pr"]
+    if source and source.get("repo") and source.get("commit"):
+        out += ["# The pull request that authorized the change, and its reviews.",
+                f'gh api repos/{source["repo"]}/commits/{source["commit"]}/pulls \\',
+                "  --jq '.[] | \"PR #\\(.number) \\(.title) by \\(.user.login), "
+                "merged \\(.merged_at)\"'"]
+        if pr:
+            out += [f'gh api repos/{pr["repo"]}/pulls/{pr["number"]}/reviews \\',
+                    "  --jq 'if length == 0 then \"no reviews\" else "
+                    "(.[] | \"\\(.state) by \\(.user.login)\") end'"]
+        out.append("")
+
+    if art.get("attestation"):
+        out += ["# The GitHub build provenance for these bytes.",
+                f'gh api repos/{source["repo"]}/attestations/sha256:$SHA \\',
+                "  --jq '.attestations[0].bundle.dsseEnvelope.payload' | base64 -d |",
+                "  jq '{predicateType, builder: .predicate.runDetails.builder.id,",
+                "       buildType: .predicate.buildDefinition.buildType}'", ""]
+
+    return "\n".join(out).rstrip()
+
+
 def cap(text):
     return text[:1].upper() + text[1:] if text else text
 
@@ -1256,14 +1418,15 @@ def document(evidence):
         ]
     blocks += [
         ("h2", "Verify it yourself"),
-        ("p", "One command per artifact, against the most public location each one has reached. "
-              "Reading the build, seal and promotion records needs an account with read access to "
-              f'the `{evidence["project"]}` project, and the review and provenance steps need the '
-              "GitHub CLI."),
-        ("code", 'export JFROG_TOKEN="<a JFrog access token>"\n\n'
-                 + "\n".join(f'./verify-artifact.sh {pasteable(a)}'
-                             for a in evidence["artifacts"]), "bash"),
+        ("p", "Every claim above resolves to a request you can make yourself. Reading the build, "
+              "seal and promotion records needs an account with read access to the "
+              f'`{evidence["project"]}` project. Any step using `gh` needs the GitHub CLI. '
+              "Run the block top to bottom, or take any command on its own."),
+        ("code", verify_commands(evidence), "bash"),
     ]
+    hint = substitution_hint(evidence)
+    if hint:
+        blocks.append(("p", hint))
     return blocks
 
 
