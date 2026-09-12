@@ -47,20 +47,42 @@ project="${bundle_repo%-release-bundles-v2}"
 build_name=$(jq -r '(.["build.name"]   // [])[0] // empty' <<<"$props")
 build_number=$(jq -r '(.["build.number"] // [])[0] // empty' <<<"$props")
 
+build_of() { jfrog "artifactory/api/build/$(urlencode "$1")/$(urlencode "$2")?project=$project"; }
+# Children are the modules of type "build", each id a fully qualified <name>/<number>. Selecting
+# them by name resolves nothing for a pipeline that names them differently.
+children_of() { jq -r '.buildInfo.modules[]? | select(.type == "build") | .id' <<<"$1"; }
+
 vcs=''
 run=''
 if [[ -n $build_name && -n $build_number ]]; then
-    build_info=$(jfrog "artifactory/api/build/$(urlencode "$build_name")/$(urlencode "$build_number")?project=$project")
+    build_info=$(build_of "$build_name" "$build_number")
     vcs=$(jq -c '.buildInfo.vcs[0] // empty' <<<"$build_info")
     run=$(jq -r '.buildInfo.url // empty' <<<"$build_info")
-    # A matrix pipeline keeps vcs on a metadata child, reachable through the parent.
-    if [[ -z $vcs ]]; then
-        parent_build_info=$(jfrog "artifactory/api/build/$(urlencode "$build_name")/$(urlencode "${build_number%-artifacts}")?project=$project")
-        [[ -z $run ]] && run=$(jq -r '.buildInfo.url // empty' <<<"$parent_build_info")
-        child_build_id=$(jq -r '[.buildInfo.modules[]?.id | select(contains("-buildinfo-"))][0] // empty' <<<"$parent_build_info")
-        [[ -n $child_build_id ]] && vcs=$(jfrog "artifactory/api/build/$(urlencode "$build_name")/$(urlencode "${child_build_id##*/}")?project=$project" |
-            jq -c '.buildInfo.vcs[0] // empty')
-    fi
+fi
+
+# The artifact's build property names the leaf its files were attached to, which is not always at
+# or above the node holding the commit. The bundle's seal names the builds it was made from, and a
+# root is the source nothing else feeds.
+if [[ -z $vcs && -n $bundle_repo ]]; then
+    seal_bundle=$(jq -rn --arg path "$bundle_path" '$path | split("/") | .[0:2] | join("/")')
+    roots=$(jfrog "artifactory/$bundle_repo/$seal_bundle/release-bundle.json.evd" |
+        jq -r '[.payload | @base64d | fromjson | .predicate.sources[]? |
+                select(.sourceType == "BUILDS")] as $all |
+               ([$all[] | select((.upstreamSourceIds // []) | length == 0)] | if length > 0
+                 then . else $all end)[].builds[]? | "\(.buildName)/\(.buildNumber)"')
+    while read -r root_id; do
+        [[ -n $root_id ]] || continue
+        root_info=$(build_of "${root_id%/*}" "${root_id##*/}")
+        vcs=$(jq -c '.buildInfo.vcs[0] // empty' <<<"$root_info")
+        [[ -z $run ]] && run=$(jq -r '.buildInfo.url // empty' <<<"$root_info")
+        [[ -n $vcs ]] && break
+        while read -r child_id; do
+            [[ -n $child_id ]] || continue
+            vcs=$(build_of "${child_id%/*}" "${child_id##*/}" | jq -c '.buildInfo.vcs[0] // empty')
+            [[ -n $vcs ]] && break
+        done < <(children_of "$root_info")
+        [[ -n $vcs ]] && break
+    done <<<"$roots"
 fi
 
 source_repo="${REPO-}"
