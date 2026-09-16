@@ -121,6 +121,10 @@ rpm/
   amzn2023/aarch64/{file}.rpm
 ```
 
+Dist tag is inferred from a dotted filename token (`el9`, `amzn2023`, and so on). Distro-agnostic packages such as `aerospike-xdr-proxy-4.0.8-1.noarch.rpm` have no token; set `RPM_DISTRIBUTIONS` or pass `--rpm-distributions` with a comma-separated list of known tags. Unknown names are rejected. Allowed: `amzn2`, `amzn2023`, `el7`, `el8`, `el9`, `el10`. Example: `el8,el9,amzn2023`. Filename tokens still win when present.
+
+Unlike Debian, Artifactory does not index RPMs from a property. It builds YUM metadata from the folder tree at `yumRootDepth`, so a package is only installable from the `<dist>/<arch>/` folders it physically occupies; `rpm.distribution` is stored for search but drives nothing. A copy is therefore uploaded to every requested dist. `noarch` is not a folder a client can reach either, because repo configs resolve `baseurl=.../<dist>/$basearch/` and `$basearch` is always a concrete arch, so noarch packages fan out across `RPM_ARCHITECTURES` (`--rpm-architectures`, default `x86_64,aarch64`; allowed: `aarch64`, `armv7hl`, `i686`, `ppc64le`, `s390x`, `x86_64`). With `--rpm-distributions el8,el9,amzn2023`, a single `*-1.noarch.rpm` lands in six folders (`el8/x86_64`, `el8/aarch64`, `el9/x86_64`, …), each with its own `.asc` and each tagged `rpm.distribution=<its own dist>`. Artifactory deduplicates by checksum, so the copies cost one blob.
+
 ### JAR/Maven
 
 ```text
