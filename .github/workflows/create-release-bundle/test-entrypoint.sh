@@ -169,6 +169,61 @@ fi
 
 record_test_result "Test 5: Bundle metadata dotfile path triggers annotate (dry-run)" "$test5_success"
 
+# Test 6: Revision forms the bundle version without changing the release version
+echo ""
+echo "Test 6: Revision appends to the bundle version (dry-run)"
+test6_success=true
+
+cd "$TEST_DIR"
+output=$("$SCRIPT_DIR/entrypoint.sh" --project test-project --build-names "test-build:1728052628123" --bundle-name rev-bundle --version v1.2.3 --revision 4711-2 --dry-run 2>&1)
+
+if ! echo "$output" | grep -q "jf release-bundle-create rev-bundle v1.2.3-4711-2"; then
+    test6_success=false
+fi
+if ! echo "$output" | grep -q "Bundle version: v1.2.3-4711-2 (revision 4711-2)"; then
+    test6_success=false
+fi
+if ! echo "$output" | grep -q '"description": "Release for build version v1.2.3"'; then
+    test6_success=false
+fi
+if ! echo "$output" | grep -q '"version": "v1.2.3-4711-2"'; then
+    test6_success=false
+fi
+
+record_test_result "Test 6: Revision appends to the bundle version (dry-run)" "$test6_success"
+
+# Test 7: Without a revision the bundle version is the release version
+echo ""
+echo "Test 7: No revision leaves the bundle version unchanged (dry-run)"
+test7_success=true
+
+cd "$TEST_DIR"
+output=$("$SCRIPT_DIR/entrypoint.sh" --project test-project --build-names "test-build:1728052628123" --bundle-name norev-bundle --version v1.2.3 --dry-run 2>&1)
+
+if ! echo "$output" | grep -q "jf release-bundle-create norev-bundle v1.2.3"; then
+    test7_success=false
+fi
+if echo "$output" | grep -q "Bundle version:"; then
+    test7_success=false
+fi
+
+record_test_result "Test 7: No revision leaves the bundle version unchanged (dry-run)" "$test7_success"
+
+# Test 8: The resolved bundle version is exposed as a step output
+echo ""
+echo "Test 8: Bundle version is written to GITHUB_OUTPUT"
+test8_success=true
+
+cd "$TEST_DIR"
+: >"$TEST_DIR/gh-output"
+GITHUB_OUTPUT="$TEST_DIR/gh-output" "$SCRIPT_DIR/entrypoint.sh" --project test-project --build-names "test-build:1728052628123" --bundle-name out-bundle --version v9.9.9 --revision 1-1 --dry-run >/dev/null 2>&1
+
+if ! grep -q "^bundle-version=v9.9.9-1-1$" "$TEST_DIR/gh-output"; then
+    test8_success=false
+fi
+
+record_test_result "Test 8: Bundle version is written to GITHUB_OUTPUT" "$test8_success"
+
 # Summary
 echo ""
 echo "Test report: $TEST_REPORT_FILE"
