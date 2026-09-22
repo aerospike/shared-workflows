@@ -33,15 +33,16 @@ Two approaches are supported as first-class consumer paths:
 
 Pick whichever fits the use case. The orchestrated path is generally lower-maintenance for new consumers; the composable path is the right answer when the orchestrator's opinions don't match. Both are supported, neither is a fallback.
 
-| Workflow                              | Purpose                                                         |
-| ------------------------------------- | --------------------------------------------------------------- |
-| `reusable_artifacts-cicd.yaml`        | Orchestrated build, sign, deploy                                |
-| `reusable_docker-build-deploy.yaml`   | Multi-arch OCI images with attestations                         |
-| `reusable_create-release-bundle.yaml` | JFrog release bundles (combines artifact + docker outputs)      |
-| `reusable_execute-build.yaml`         | Composable. Run arbitrary build script, upload artifacts        |
-| `reusable_sign-artifacts.yaml`        | Composable. GPG sign deb/rpm/generic/.tgz, SSL.com sign nupkg   |
-| `reusable_deploy-artifacts.yaml`      | Composable. Upload to JFrog Artifactory (auto-routes by type)   |
-| `reusable_notify-slack.yaml`          | Post Block Kit Slack alerts (info/fail/success/blocked/warning) |
+| Workflow                               | Purpose                                                         |
+| -------------------------------------- | --------------------------------------------------------------- |
+| `reusable_artifacts-cicd.yaml`         | Orchestrated build, sign, deploy                                |
+| `reusable_docker-build-deploy.yaml`    | Multi-arch OCI images with attestations                         |
+| `reusable_create-release-bundle.yaml`  | JFrog release bundles (combines artifact + docker outputs)      |
+| `reusable_promote-release-bundle.yaml` | Promote a bundle one stage; refuses overwrite, gates supersede  |
+| `reusable_execute-build.yaml`          | Composable. Run arbitrary build script, upload artifacts        |
+| `reusable_sign-artifacts.yaml`         | Composable. GPG sign deb/rpm/generic/.tgz, SSL.com sign nupkg   |
+| `reusable_deploy-artifacts.yaml`       | Composable. Upload to JFrog Artifactory (auto-routes by type)   |
+| `reusable_notify-slack.yaml`           | Post Block Kit Slack alerts (info/fail/success/blocked/warning) |
 
 ### Slack notification actions
 
