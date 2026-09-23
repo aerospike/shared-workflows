@@ -27,18 +27,44 @@ if [[ $path == sha256:* ]]; then
     sha="${path#sha256:}"
     props='{}'
 else
-    sha=$(jfrog "artifactory/api/storage/$path" | jq -r '.checksums.sha256 // empty')
+    storage=$(jfrog "artifactory/api/storage/$path")
+    sha=$(jq -r '.checksums.sha256 // empty' <<<"$storage")
     [[ -n $sha ]] || {
-        echo "no sha256 for $path" >&2
+        # An absent artifact and one carrying no checksum are different conditions; curl is not
+        # run with -f, so both arrive here as a body without .checksums. Do not merge the two.
+        if jq -e 'any(.errors[]?; .status == 404)' >/dev/null 2>&1 <<<"$storage"; then
+            echo "no artifact at $path" >&2
+        else
+            echo "no sha256 for $path" >&2
+        fi
         exit 1
     }
     props=$(jfrog "artifactory/api/storage/$path?properties" | jq '.properties // {}')
 fi
 
 # Resolves a public virtual to the locals behind it. The release bundle repo names the project.
-digest_hits=$(aql "items.find({\"sha256\":\"$sha\"}).include(\"repo\",\"path\",\"name\")")
-bundle_repo=$(jq -r '[.results[] | select(.repo|endswith("-release-bundles-v2"))][0].repo // empty' <<<"$digest_hits")
-bundle_path=$(jq -r '[.results[] | select(.repo|endswith("-release-bundles-v2"))][0].path // empty' <<<"$digest_hits")
+digest_hits=$(aql "items.find({\"sha256\":\"$sha\"}).include(\"repo\",\"path\",\"name\",\"created\")")
+
+# The same bytes sit in every bundle that ever shipped them, so taking the first names a
+# superseded bundle as readily as the live one and then reports its empty promotion history.
+bundle_repo=''
+bundle_path=''
+while IFS=$'\t' read -r cand_repo cand_path; do
+    [[ -n $cand_repo ]] || continue
+    [[ -z $bundle_repo ]] && {
+        bundle_repo=$cand_repo
+        bundle_path=$cand_path
+    }
+    cand_bundle=$(jq -rn --arg p "$cand_path" '$p | split("/") | .[0:2] | join("/")')
+    promoted=$(jfrog "lifecycle/api/v2/promotion/records/${cand_bundle%/*}/${cand_bundle#*/}?project=${cand_repo%-release-bundles-v2}" |
+        jq -r '[.promotions[]?] | length')
+    if [[ ${promoted:-0} -gt 0 ]]; then
+        bundle_repo=$cand_repo
+        bundle_path=$cand_path
+        break
+    fi
+done < <(jq -r '[.results[] | select(.repo | endswith("-release-bundles-v2"))]
+    | sort_by(.created) | reverse | .[] | "\(.repo)\t\(.path)"' <<<"$digest_hits")
 
 project="${bundle_repo%-release-bundles-v2}"
 [[ -z $project ]] && project=$(jq -r '[.results[].repo | select(contains("-"))][0] // ""' <<<"$digest_hits" |
@@ -125,6 +151,9 @@ commit_from='nowhere: no VCS block, no image label, no attestation'
 [[ -z $commit && -n $attestation ]] && commit=$(jq -r \
     '.predicate.buildDefinition.resolvedDependencies[0].digest.gitCommit // ""' <<<"$attestation") &&
     [[ -n $commit ]] && commit_from='GitHub attestation, not in build-info'
+# Properties are mutable, so this only stands in where no signed record carries the commit.
+[[ -z $commit ]] && commit=$(jq -r '(.["jf.revision"] // [""])[0]' <<<"$props") &&
+    [[ -n $commit ]] && commit_from='JFrog artifact properties, not signed'
 
 step "The artifact"
 jq -n --arg path "$path" --arg sha "$sha" --arg build "${build_name-}" \
@@ -138,7 +167,7 @@ step "The commit it was built from"
 jq -n --arg commit "${commit-}" --arg run "$run" --argjson vcs "${vcs:-null}" \
     --arg commit_from "$commit_from" '{
   revision: (if $commit == "" then null else $commit end),
-  message:  (($vcs.message // "") | split("\n")[0]),
+  message:  ((($vcs.message // "") | split("\n") | .[0]) // ""),
   branch:   ($vcs.branch // ""),
   run:      $run,
   commit_from: $commit_from }'
