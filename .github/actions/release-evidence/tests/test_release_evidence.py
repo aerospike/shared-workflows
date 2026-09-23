@@ -1335,3 +1335,44 @@ class ASignedCommitOutranksTheProperty(unittest.TestCase):
         ev = rev.collect(self.TARGET, "")
         self.assertNotIn("The source commit rests on a mutable property",
                          [row[0] for row in rev.warning_rows(ev)])
+
+
+class ThePropertySourcedCommitIsNotAttributedToBuildInfo(unittest.TestCase):
+    """The document must name where the commit came from, not where it usually comes from."""
+
+    TARGET = TheCommitFallsBackToArtifactProperties.TARGET
+
+    def setUp(self):
+        self._real = (rev.jfrog, rev.aql, rev.gh, rev.gh_graphql)
+        outer = TheCommitFallsBackToArtifactProperties
+
+        def fake_jfrog(path):
+            if "api/storage/" in path and path.endswith("?properties"):
+                return {"properties": outer.PROPS}
+            if "api/build/" in path:
+                return outer.BUILD_INFO
+            if "api/storage/" in path:
+                return {"checksums": {"sha256": "abc123"}}
+            return {}
+
+        rev.jfrog = fake_jfrog
+        rev.aql = lambda _q: {"results": [{
+            "repo": "database-rpm-dev-local", "path": "el9/x86_64",
+            "name": "aerospike-server-community-8.2.0.0-12.el9.x86_64.rpm"}]}
+        rev.gh = lambda _p: None
+        rev.gh_graphql = lambda _q, **_v: None
+
+    def tearDown(self):
+        rev.jfrog, rev.aql, rev.gh, rev.gh_graphql = self._real
+
+    def test_the_document_never_claims_build_info_records_the_revision(self):
+        ev = rev.collect(self.TARGET, "")
+        out = rev.render_markdown(ev, rev.document(ev))
+        self.assertNotIn("Build-info records `vcs.revision", out)
+        self.assertIn("jf.revision", out)
+
+    def test_the_custody_row_is_sourced_to_the_property(self):
+        ev = rev.collect(self.TARGET, "")
+        row = next(r for r in rev.custody_rows(ev) if r[0] == "Build from that commit")
+        self.assertEqual(row[2], "JFrog artifact properties")
+        self.assertIn("build-info holds no VCS block", row[1])

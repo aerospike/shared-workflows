@@ -938,10 +938,19 @@ def custody_rows(evidence):
                      f'written by `{pr["author"]}`, {approval}, {state}', "GitHub"])
     if evidence["source"]:
         src = evidence["source"]
-        rows.append(["Build from that commit",
-                     f'Build-info records `vcs.revision {src["commit"]}` and '
-                     f'[the CI run]({src["run"]}), alongside {src["env"]} captured environment '
-                     f"values", "JFrog build-info"])
+        run = f'[the CI run]({src["run"]})' if src.get("run") else "no recorded CI run"
+        # The row names where the commit actually came from. Attributing a property-sourced
+        # commit to the build-info claims a VCS block that is not there.
+        if src.get("commit_from") == "JFrog artifact properties":
+            rows.append(["Build from that commit",
+                         f'The published files carry `jf.revision {src["commit"]}` and {run}. '
+                         "The build-info holds no VCS block, so this is the only record tying "
+                         "them to a revision", "JFrog artifact properties"])
+        else:
+            rows.append(["Build from that commit",
+                         f'Build-info records `vcs.revision {src["commit"]}` and '
+                         f'{run}, alongside {src["env"]} captured environment '
+                         f"values", "JFrog build-info"])
     if release:
         detail = (f'including {phrase(f"{n} `{ext}` file" + ("s" if n > 1 else "") for ext, n in sorted(evidence["signatures"].items()))}'
                   if evidence["signatures"] else "each addressed by digest")
@@ -1172,10 +1181,13 @@ def claim_rows(evidence):
                      f'`{att["runner"]}`', cap(noun(pkg_type))])
     if derived["unattested_types"] and derived["any_commit"]:
         art = next(a for a in evidence["artifacts"] if a["commit"])
+        backing = ("A `jf.revision` property on each published file, which carries no signature "
+                   "and can be changed by anyone holding annotate permission"
+                   if art["commit_from"] == "JFrog artifact properties" else
+                   "A JFrog build-info record published by the build job about itself, with no "
+                   "signature over it")
         rows.append([f'The {phrase(noun(t) for t in derived["unattested_types"])} carry commit '
-                     f'`{art["commit"][:8]}`',
-                     "A JFrog build-info record published by the build job about itself, with no "
-                     "signature over it",
+                     f'`{art["commit"][:8]}`', backing,
                      cap(phrase(noun(t) for t in derived["unattested_types"]))])
     return rows
 
