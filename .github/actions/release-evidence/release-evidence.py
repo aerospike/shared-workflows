@@ -614,6 +614,9 @@ def collect(target, about, as_of=None):
         elif run:
             match = re.match(r"https://github\.com/([^/]+/[^/]+)/", run)
             repo = match.group(1) if match else None
+        elif props.get("jf.vcsUrl"):
+            repo = re.sub(r"\.git$", "",
+                          re.sub(r"^https://github\.com/", "", props["jf.vcsUrl"])) or None
 
         labels = {}
         if not repo and art["package_type"] == "docker":
@@ -650,6 +653,9 @@ def collect(target, about, as_of=None):
             deps = stmt["predicate"]["buildDefinition"].get("resolvedDependencies") or [{}]
             commit = deps[0].get("digest", {}).get("gitCommit")
             commit_from = "GitHub attestation" if commit else None
+        # Properties are mutable, so this only stands in where no signed record carries the commit.
+        if not commit and props.get("jf.revision"):
+            commit, commit_from = props["jf.revision"], "JFrog artifact properties"
 
         published_linked = digest_linked if public else None
 
@@ -664,6 +670,7 @@ def collect(target, about, as_of=None):
 
         if commit and not source:
             source = {"repo": repo, "commit": commit, "run": run, "env": env,
+                      "commit_from": commit_from,
                       "build": vcs_build[0] if vcs_build else props.get("build.name"),
                       "vcs_build": vcs_build[1] if vcs_build else None,
                       "artifact": qualified(entry), "artifact_build": entry["number"],
@@ -1295,6 +1302,15 @@ def warning_rows(evidence):
             "metadata, because promotion retags the manifest. The join to the build still works "
             "from the bundle record and from the immutable timestamped tag, so this costs a step "
             "rather than the evidence."])
+    source = evidence.get("source") or {}
+    if source.get("commit_from") == "JFrog artifact properties":
+        rows.append([
+            "The source commit rests on a mutable property",
+            f'`{source["commit"][:12]}` comes from the `jf.revision` property the JFrog CLI wrote '
+            "at upload. No build-info VCS block, image label or attestation carries it, which is "
+            "what a build performed outside the publishing pipeline looks like. Anyone holding "
+            "annotate permission on the repository can change a property, so the commit is "
+            "recorded and resolvable but not signed."])
     return rows
 
 

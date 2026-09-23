@@ -1230,3 +1230,108 @@ class TheAuthorizingPull(unittest.TestCase):
 
     def test_nothing_listed_names_nothing(self):
         self.assertIsNone(rev.authorizing_pull([], self.SHA))
+
+
+class TheCommitFallsBackToArtifactProperties(unittest.TestCase):
+    """A build run outside the publishing pipeline leaves no build-info VCS block.
+
+    The JFrog CLI still writes jf.revision and jf.vcsUrl at upload, so the commit and the
+    repository are recorded even where the structured build record carries neither.
+    """
+
+    TARGET = ("database-rpm-dev-local/el9/x86_64/"
+              "aerospike-server-community-8.2.0.0-12.el9.x86_64.rpm")
+    PROPS = {
+        "build.name": ["aerospike-server"],
+        "build.number": ["8.2.0.0-12-artifacts"],
+        "jf.revision": ["b4d13ef5f524e55960a3ab13ade560c2f918298b"],
+        "jf.vcsUrl": ["https://github.com/citrusleaf/aerospike-server"],
+    }
+    BUILD_INFO = {"buildInfo": {"name": "aerospike-server", "number": "8.2.0.0-12-artifacts"}}
+
+    def setUp(self):
+        self._real = (rev.jfrog, rev.aql, rev.gh, rev.gh_graphql)
+
+        def fake_jfrog(path):
+            if "api/storage/" in path and path.endswith("?properties"):
+                return {"properties": self.PROPS}
+            if "api/build/" in path:
+                return self.BUILD_INFO
+            if "api/storage/" in path:
+                return {"checksums": {"sha256": "abc123"}}
+            return {}
+
+        rev.jfrog = fake_jfrog
+        rev.aql = lambda _q: {"results": [{
+            "repo": "database-rpm-dev-local", "path": "el9/x86_64",
+            "name": "aerospike-server-community-8.2.0.0-12.el9.x86_64.rpm"}]}
+        rev.gh = lambda _p: None
+        rev.gh_graphql = lambda _q, **_v: None
+
+    def tearDown(self):
+        rev.jfrog, rev.aql, rev.gh, rev.gh_graphql = self._real
+
+    def test_the_commit_comes_from_the_property(self):
+        source = rev.collect(self.TARGET, "")["source"]
+        self.assertEqual(source["commit"], "b4d13ef5f524e55960a3ab13ade560c2f918298b")
+        self.assertEqual(source["commit_from"], "JFrog artifact properties")
+
+    def test_the_repository_comes_from_the_property(self):
+        self.assertEqual(rev.collect(self.TARGET, "")["source"]["repo"],
+                         "citrusleaf/aerospike-server")
+
+    def test_a_recorded_commit_is_no_longer_a_gap(self):
+        ev = rev.collect(self.TARGET, "")
+        self.assertTrue(ev["derived"]["any_commit"])
+        self.assertNotIn("A recorded source commit", [row[0] for row in rev.gap_rows(ev)])
+
+    def test_a_mutable_source_warns_rather_than_fails(self):
+        ev = rev.collect(self.TARGET, "")
+        self.assertIn("The source commit rests on a mutable property",
+                      [row[0] for row in rev.warning_rows(ev)])
+        call = rev.verdict(ev)
+        self.assertEqual(call["gaps"], 0)
+        self.assertTrue(call["status"].endswith("WITH WARNING"))
+
+
+class ASignedCommitOutranksTheProperty(unittest.TestCase):
+    """A build-info VCS block is the stronger record, so the property never displaces it."""
+
+    TARGET = TheCommitFallsBackToArtifactProperties.TARGET
+
+    def setUp(self):
+        self._real = (rev.jfrog, rev.aql, rev.gh, rev.gh_graphql)
+
+        def fake_jfrog(path):
+            if "api/storage/" in path and path.endswith("?properties"):
+                return {"properties": dict(
+                    TheCommitFallsBackToArtifactProperties.PROPS,
+                    **{"jf.revision": ["0000000000000000000000000000000000000000"]})}
+            if "api/build/" in path:
+                return {"buildInfo": {
+                    "name": "aerospike-server", "number": "8.2.0.0-12-artifacts",
+                    "vcs": [{"revision": "b4d13ef5f524e55960a3ab13ade560c2f918298b",
+                             "url": "https://github.com/citrusleaf/aerospike-server.git"}]}}
+            if "api/storage/" in path:
+                return {"checksums": {"sha256": "abc123"}}
+            return {}
+
+        rev.jfrog = fake_jfrog
+        rev.aql = lambda _q: {"results": [{
+            "repo": "database-rpm-dev-local", "path": "el9/x86_64",
+            "name": "aerospike-server-community-8.2.0.0-12.el9.x86_64.rpm"}]}
+        rev.gh = lambda _p: None
+        rev.gh_graphql = lambda _q, **_v: None
+
+    def tearDown(self):
+        rev.jfrog, rev.aql, rev.gh, rev.gh_graphql = self._real
+
+    def test_the_build_info_revision_wins(self):
+        source = rev.collect(self.TARGET, "")["source"]
+        self.assertEqual(source["commit"], "b4d13ef5f524e55960a3ab13ade560c2f918298b")
+        self.assertEqual(source["commit_from"], "JFrog build-info")
+
+    def test_no_mutable_property_warning_is_raised(self):
+        ev = rev.collect(self.TARGET, "")
+        self.assertNotIn("The source commit rests on a mutable property",
+                         [row[0] for row in rev.warning_rows(ev)])
