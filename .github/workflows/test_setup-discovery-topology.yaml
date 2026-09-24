@@ -1,0 +1,158 @@
+name: Test Setup Discovery Topology Action
+on:
+  workflow_dispatch:
+    inputs:
+      # checkov:skip=CKV_GHA_7:workflow_dispatch input used for debugging failing test cases in this repo
+      enable-bash-trace-mode:
+        type: boolean
+        required: false
+        default: false
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/actions/setup-discovery-topology/**
+      - .github/actions/setup-aerospike-server/**
+      - .github/workflows/test_setup-discovery-topology.yaml
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  ENABLE_BASH_TRACE_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.enable-bash-trace-mode || 'false' }}
+
+jobs:
+  test-unit:
+    name: Proxy map unit tests
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # The helper libraries are off because no bats suite in this repo uses
+      # them; every existing `load` is a local helper file.
+      - name: Install bats
+        uses: bats-core/bats-action@77d6fb60505b4d0d1d73e48bd035b55074bbfb43 # 4.0.0
+        with:
+          bats-version: 1.12.0
+          support-install: false
+          assert-install: false
+          detik-install: false
+          file-install: false
+
+      - name: Run bats tests
+        run: bats .github/actions/setup-discovery-topology/tests/
+
+  test-l2-topology:
+    name: L2 topology isolation (2 nodes)
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Aerospike Server (community, unpublished ports)
+        id: aerospike
+        uses: ./.github/actions/setup-aerospike-server
+        with:
+          server-container-repo: database-docker-virtual/aerospike-server
+          num-nodes: "2"
+          container-name-prefix: discovery-as
+          network-name: discovery-aerospike-net
+          publish-ports: "false"
+          startup-timeout: "60"
+          oidc-provider: ${{ vars.JFROG_OIDC_PROVIDER }}
+          oidc-audience: ${{ vars.JFROG_OIDC_AUDIENCE }}
+          enable-bash-trace-mode: ${{ env.ENABLE_BASH_TRACE_MODE }}
+
+      - name: Verify Aerospike host ports were not published
+        run: |
+          bindings=$(docker inspect discovery-as-1 --format '{{json .HostConfig.PortBindings}}')
+          echo "PortBindings: $bindings"
+          [[ "$bindings" == "{}" || "$bindings" == "null" ]] \
+            || { echo "Expected no host port bindings"; exit 1; }
+
+      - name: Setup discovery topology
+        id: topology
+        uses: ./.github/actions/setup-discovery-topology
+        with:
+          container-names: ${{ steps.aerospike.outputs.container-names }}
+          aerospike-network-name: ${{ steps.aerospike.outputs.network-name }}
+          client-image: alpine:3.20
+          client-network-name: discovery-client-net
+          enable-bash-trace-mode: ${{ env.ENABLE_BASH_TRACE_MODE }}
+          client-command: |
+            set -eu
+            getent hosts as-endpoint.test >/dev/null
+            if getent hosts discovery-as-1 >/dev/null 2>&1; then
+              echo "discovery-as-1 should not resolve from the client network" >&2
+              exit 1
+            fi
+            wget -q -O- http://toxiproxy:8474/version
+
+      - name: Verify topology outputs
+        run: |
+          echo "endpoint-hostname: ${{ steps.topology.outputs.endpoint-hostname }}"
+          echo "endpoint-ports: ${{ steps.topology.outputs.endpoint-ports }}"
+          echo "toxiproxy-url: ${{ steps.topology.outputs.toxiproxy-url }}"
+          echo "proxy-name-port-map: ${{ steps.topology.outputs.proxy-name-port-map }}"
+
+          [[ "${{ steps.topology.outputs.endpoint-hostname }}" == "as-endpoint.test" ]] \
+            || { echo "Unexpected endpoint-hostname"; exit 1; }
+          [[ "${{ steps.topology.outputs.endpoint-ports }}" == "30001,30002" ]] \
+            || { echo "Unexpected endpoint-ports"; exit 1; }
+          [[ "${{ steps.topology.outputs.toxiproxy-url }}" == "http://toxiproxy:8474" ]] \
+            || { echo "Unexpected toxiproxy-url"; exit 1; }
+          [[ "${{ steps.topology.outputs.proxy-name-port-map }}" == "discovery-as-1:30001,discovery-as-2:30002" ]] \
+            || { echo "Unexpected proxy-name-port-map"; exit 1; }
+
+      - name: Verify Toxiproxy is attached to both networks
+        run: |
+          networks=$(docker inspect toxiproxy --format '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}')
+          echo "Toxiproxy networks: $networks"
+          [[ "$networks" == *"discovery-aerospike-net"* ]] \
+            || { echo "Toxiproxy missing aerospike network"; exit 1; }
+          [[ "$networks" == *"discovery-client-net"* ]] \
+            || { echo "Toxiproxy missing client network"; exit 1; }
+
+      - name: Verify Aerospike protocol through the proxy
+        run: |
+          tools_image="aerospike.jfrog.io/database-docker-virtual/aerospike-tools:12.1.1_2"
+          client_net="${{ steps.topology.outputs.client-network-name }}"
+          for port in 30001 30002; do
+            rc=0
+            result=$(docker run --rm --network "$client_net" "$tools_image" \
+              asinfo -h as-endpoint.test -p "$port" -v status 2>&1) || rc=$?
+            echo "asinfo as-endpoint.test:$port -> $result (exit $rc)"
+            [[ $rc -eq 0 && "$result" == *"ok"* ]] \
+              || { echo "Expected status=ok through proxy port $port"; exit 1; }
+          done
+
+      - name: Verify node addresses are unreachable from the client network
+        run: |
+          tools_image="aerospike.jfrog.io/database-docker-virtual/aerospike-tools:12.1.1_2"
+          client_net="${{ steps.topology.outputs.client-network-name }}"
+          rc=0
+          result=$(docker run --rm --network "$client_net" "$tools_image" \
+            asinfo -h discovery-as-1 -p 3000 -v status 2>&1) || rc=$?
+          echo "direct asinfo exit=$rc result=$result"
+          [[ $rc -ne 0 ]] \
+            || { echo "Client network should not reach discovery-as-1:3000"; exit 1; }
+
+      - name: Verify reset_peer toxic can be created from the client network
+        run: |
+          client_net="${{ steps.topology.outputs.client-network-name }}"
+          docker run --rm --network "$client_net" \
+            --entrypoint /toxiproxy-cli \
+            ghcr.io/shopify/toxiproxy:2.12.0 \
+            --host toxiproxy:8474 \
+            toxic add -t reset_peer -a timeout=0 discovery-as-1

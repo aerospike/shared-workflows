@@ -71,6 +71,12 @@ inputs:
     description: Aerospike service port inside the container (must match aerospike.conf)
     required: false
     default: "3000"
+  publish-ports:
+    description: >
+      Publish container ports to the runner host. Set false for L2 discovery
+      topologies so tests cannot accidentally connect via localhost mappings.
+    required: false
+    default: "true"
   startup-timeout:
     description: Seconds to wait for each node and cluster formation
     required: false
@@ -148,6 +154,8 @@ runs:
           || error "startup-timeout must be a positive integer (got: '${{ inputs.startup-timeout }}')"
         [[ "${{ inputs.service-port }}" =~ ^[1-9][0-9]*$ ]] \
           || error "service-port must be a positive integer (got: '${{ inputs.service-port }}')"
+        [[ "${{ inputs.publish-ports }}" == "true" || "${{ inputs.publish-ports }}" == "false" ]] \
+          || error "publish-ports must be 'true' or 'false' (got: '${{ inputs.publish-ports }}')"
 
         if [[ "${{ inputs.enable-tls }}" == "true" ]]; then
           [[ "${{ inputs.tls-base-port }}" =~ ^[1-9][0-9]*$ ]] \
@@ -448,6 +456,7 @@ runs:
         network="${{ inputs.network-name }}"
         features_path="${{ steps.prepare-config.outputs.features-path }}"
         config_path="${{ steps.prepare-config.outputs.config-path }}"
+        publish_ports="${{ inputs.publish-ports }}"
         enable_tls="${{ inputs.enable-tls }}"
         tls_base_port=${{ inputs.tls-base-port }}
         effective_security="${{ steps.validate.outputs.effective-security }}"
@@ -557,12 +566,17 @@ runs:
             "--name" "$name"
             "--detach"
             "--network" "$network"
-            "-p" "${host_port}:${service_port}"
           )
+
+          if [[ "$publish_ports" == "true" ]]; then
+            run_args+=("-p" "${host_port}:${service_port}")
+          fi
 
           # TLS port mapping and cert mounting
           if [[ "$enable_tls" == "true" ]]; then
-            run_args+=("-p" "${tls_host_port}:4333")
+            if [[ "$publish_ports" == "true" ]]; then
+              run_args+=("-p" "${tls_host_port}:4333")
+            fi
             run_args+=("-v" "${{ steps.server-volume.outputs.tls_volume_name }}:${{ steps.server-volume.outputs.tls_volume_dest_dir }}")
           fi
 
@@ -608,7 +622,11 @@ runs:
             run_args+=("--config-file" "${{ steps.server-volume.outputs.conf_volume_dest_dir }}/$aerospike_conf_filename")
           fi
 
-          echo "Starting container: $name (host port: $host_port)"
+          if [[ "$publish_ports" == "true" ]]; then
+            echo "Starting container: $name (host port: $host_port)"
+          else
+            echo "Starting container: $name (host ports unpublished)"
+          fi
 
           # Prevent UNIX to windows path conversions here to prevent the aerospike.conf path from being wrongly converted
           MSYS_NO_PATHCONV=1 docker run "${run_args[@]}"

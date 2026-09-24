@@ -108,6 +108,7 @@ With `server-edition: auto`, the action infers `enterprise` from repositories na
 | `network-name`                 | No       | `aerospike-net`                                       | Docker network name                                                                         |
 | `base-port`                    | No       | `3000`                                                | Base host port (node N maps to `base-port + N - 1`)                                         |
 | `service-port`                 | No       | `3000`                                                | Aerospike service port inside the container (must match `aerospike.conf`)                   |
+| `publish-ports`                | No       | `true`                                                | Publish container ports to the runner host. Set `false` for L2 discovery topologies         |
 | `startup-timeout`              | No       | `30`                                                  | Seconds to wait for node readiness and cluster formation                                    |
 | `enable-tls`                   | No       | `false`                                               | Enable TLS on Aerospike Server containers                                                   |
 | `tls-base-port`                | No       | `4333`                                                | Base host TLS port (node N maps to `tls-base-port + N - 1`)                                 |
@@ -129,6 +130,8 @@ With `server-edition: auto`, the action infers `enterprise` from repositories na
 | `service-ports`     | Comma-separated host ports (e.g., `3000,3001,3002`)                           |
 | `tls-service-ports` | Comma-separated TLS host ports (empty if TLS disabled)                        |
 | `tls-cert-dir`      | Directory containing generated TLS certs (empty if TLS disabled)              |
+
+When `publish-ports` is `false`, the action still reports `service-ports` / `tls-service-ports` as the calculated host-port numbers, but it does not bind them. Use this for L2 discovery tests so a client running on the runner cannot connect through localhost mappings. Isolation from node IPs still requires running the client in a container that is not on the Aerospike network.
 
 ## Multi-Node Clustering
 
