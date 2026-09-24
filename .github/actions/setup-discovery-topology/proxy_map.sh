@@ -34,8 +34,6 @@ parse_container_names() {
         seen[$trimmed]=1
         CONTAINER_NAME_LIST+=("$trimmed")
     done
-
-    ((${#CONTAINER_NAME_LIST[@]} > 0)) || error "container-names is required"
 }
 
 validate_port() {
@@ -62,10 +60,6 @@ build_proxy_json() {
     local json="["
     local name listen_port proxy_name
 
-    validate_port "$listen_base" "listen-port-base"
-    validate_port "$upstream_port" "upstream-port"
-    validate_listen_range "$listen_base"
-
     for name in "${CONTAINER_NAME_LIST[@]}"; do
         listen_port=$((listen_base + i))
         proxy_name="${name}${name_suffix}"
@@ -86,9 +80,6 @@ build_listen_ports_csv() {
     local csv=""
     local listen_port
 
-    validate_port "$listen_base" "listen-port-base"
-    validate_listen_range "$listen_base"
-
     for _name in "${CONTAINER_NAME_LIST[@]}"; do
         listen_port=$((listen_base + i))
         if ((i > 0)); then
@@ -106,9 +97,6 @@ build_name_port_csv() {
     local i=0
     local csv=""
     local name listen_port
-
-    validate_port "$listen_base" "listen-port-base"
-    validate_listen_range "$listen_base"
 
     for name in "${CONTAINER_NAME_LIST[@]}"; do
         listen_port=$((listen_base + i))
