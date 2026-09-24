@@ -17,7 +17,8 @@ CONTAINER_NAME_LIST=()
 parse_container_names() {
     local csv=${1-}
     local name trimmed
-    local -a names seen
+    local -a names
+    local -A seen
     CONTAINER_NAME_LIST=()
 
     [[ -n $csv ]] || error "container-names is required"
@@ -29,20 +30,12 @@ parse_container_names() {
         [[ -n $trimmed ]] || error "container-names contains an empty name"
         [[ $trimmed =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]] ||
             error "invalid container name '$trimmed' (must match Docker name rules)"
+        [[ -v seen[$trimmed] ]] && error "duplicate container name '$trimmed'"
+        seen[$trimmed]=1
         CONTAINER_NAME_LIST+=("$trimmed")
     done
 
     ((${#CONTAINER_NAME_LIST[@]} > 0)) || error "container-names is required"
-
-    seen=()
-    for name in "${CONTAINER_NAME_LIST[@]}"; do
-        for existing in "${seen[@]+"${seen[@]}"}"; do
-            if [[ $existing == "$name" ]]; then
-                error "duplicate container name '$name'"
-            fi
-        done
-        seen+=("$name")
-    done
 }
 
 validate_port() {
