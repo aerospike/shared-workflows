@@ -159,6 +159,10 @@ main() {
         error "Aerospike Docker network '$aerospike_network' does not exist"
 
     parse_container_names "$container_names"
+    validate_listen_range "$listen_port_base"
+    if [[ -n $tls_listen_port_base ]]; then
+        validate_listen_range "$tls_listen_port_base"
+    fi
 
     local missing=()
     local name

@@ -96,7 +96,7 @@ setup() {
 @test "rejects listen ports that overflow 65535" {
     parse_container_names "aerospike-1,aerospike-2"
 
-    run build_proxy_json 65535 3000
+    run validate_listen_range 65535
 
     [ "$status" -ne 0 ]
     [[ "$output" == *"exceed 65535"* ]]
