@@ -69,8 +69,6 @@ jobs:
           container-name-prefix: discovery-as
           network-name: discovery-aerospike-net
           publish-ports: "false"
-          features-content: |
-            feature-key-version 2
           startup-timeout: "60"
           oidc-provider: ${{ vars.JFROG_OIDC_PROVIDER }}
           oidc-audience: ${{ vars.JFROG_OIDC_AUDIENCE }}
