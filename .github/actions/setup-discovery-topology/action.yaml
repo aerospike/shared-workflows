@@ -1,0 +1,139 @@
+name: Setup Discovery Topology
+description: >
+  Creates the L2 discovery topology: a client-only Docker network, a Toxiproxy
+  L4 proxy attached to both that network and the Aerospike network, and a
+  client container with no route to node IPs.
+
+inputs:
+  aerospike-network-name:
+    description: Docker network created by setup-aerospike-server
+    required: true
+  client-command:
+    description: Shell command to run inside the client container (image must provide /bin/sh)
+    required: true
+  client-image:
+    description: Client container image
+    required: true
+  container-names:
+    description: Comma-separated Aerospike container names from setup-aerospike-server
+    required: true
+  client-container-name:
+    description: Name for the client container
+    required: false
+    default: discovery-client
+  client-env-vars:
+    description: Semicolon-delimited KEY=VALUE pairs passed as -e flags. Use \; for literal semicolons, \\ for literal backslashes.
+    required: false
+    default: ""
+  client-network-name:
+    description: Client-side Docker network name
+    required: false
+    default: discovery-client-net
+  client-volumes:
+    description: Semicolon-delimited docker volume mounts (host:container[:mode]). Empty mounts GITHUB_WORKSPACE onto itself when set.
+    required: false
+    default: ""
+  client-workdir:
+    description: Working directory inside the client container. Empty uses GITHUB_WORKSPACE when set.
+    required: false
+    default: ""
+  enable-bash-trace-mode:
+    description: Show commands being executed in shell scripts for debugging
+    required: false
+    default: "false"
+  endpoint-hostname:
+    description: Single endpoint hostname advertised to the client (DNS alias on the client network)
+    required: false
+    default: as-endpoint.test
+  listen-port-base:
+    description: First Toxiproxy listen port (node N maps to listen-port-base + N - 1)
+    required: false
+    default: "30001"
+  proxy-container-name:
+    description: Toxiproxy container name (also the control-API hostname on the client network)
+    required: false
+    default: toxiproxy
+  startup-timeout:
+    description: Seconds to wait for the Toxiproxy control API
+    required: false
+    default: "30"
+  tls-listen-port-base:
+    description: First TLS Toxiproxy listen port. Empty skips TLS proxies.
+    required: false
+    default: ""
+  tls-upstream-port:
+    description: Aerospike TLS port inside each server container
+    required: false
+    default: "4333"
+  toxiproxy-control-port:
+    description: Toxiproxy HTTP control API port
+    required: false
+    default: "8474"
+  toxiproxy-image:
+    description: Toxiproxy container image
+    required: false
+    default: ghcr.io/shopify/toxiproxy:2.12.0
+  upstream-port:
+    description: Aerospike service port inside each server container
+    required: false
+    default: "3000"
+
+outputs:
+  client-container-name:
+    description: Client container name
+    value: ${{ steps.setup.outputs.client-container-name }}
+  client-network-name:
+    description: Client-side Docker network name
+    value: ${{ steps.setup.outputs.client-network-name }}
+  endpoint-hostname:
+    description: Endpoint hostname the client should connect to
+    value: ${{ steps.setup.outputs.endpoint-hostname }}
+  endpoint-port-base:
+    description: First proxy listen port
+    value: ${{ steps.setup.outputs.endpoint-port-base }}
+  endpoint-ports:
+    description: Comma-separated proxy listen ports
+    value: ${{ steps.setup.outputs.endpoint-ports }}
+  proxy-map-json:
+    description: Toxiproxy populate payload (JSON array)
+    value: ${{ steps.setup.outputs.proxy-map-json }}
+  proxy-name-port-map:
+    description: Comma-separated node:listen-port map
+    value: ${{ steps.setup.outputs.proxy-name-port-map }}
+  tls-endpoint-ports:
+    description: Comma-separated TLS proxy listen ports (empty if TLS proxies were not created)
+    value: ${{ steps.setup.outputs.tls-endpoint-ports }}
+  toxiproxy-container-name:
+    description: Toxiproxy container name
+    value: ${{ steps.setup.outputs.toxiproxy-container-name }}
+  toxiproxy-url:
+    description: Toxiproxy control API URL as reachable from the client container
+    value: ${{ steps.setup.outputs.toxiproxy-url }}
+
+runs:
+  using: composite
+  steps:
+    - name: Setup discovery topology
+      id: setup
+      shell: bash
+      env:
+        AEROSPIKE_NETWORK_NAME: ${{ inputs.aerospike-network-name }}
+        CLIENT_COMMAND: ${{ inputs.client-command }}
+        CLIENT_CONTAINER_NAME: ${{ inputs.client-container-name }}
+        CLIENT_ENV_VARS: ${{ inputs.client-env-vars }}
+        CLIENT_IMAGE: ${{ inputs.client-image }}
+        CLIENT_NETWORK_NAME: ${{ inputs.client-network-name }}
+        CLIENT_VOLUMES: ${{ inputs.client-volumes }}
+        CLIENT_WORKDIR: ${{ inputs.client-workdir }}
+        CONTAINER_NAMES: ${{ inputs.container-names }}
+        ENABLE_BASH_TRACE_MODE: ${{ inputs.enable-bash-trace-mode }}
+        ENDPOINT_HOSTNAME: ${{ inputs.endpoint-hostname }}
+        LISTEN_PORT_BASE: ${{ inputs.listen-port-base }}
+        PROXY_CONTAINER_NAME: ${{ inputs.proxy-container-name }}
+        STARTUP_TIMEOUT: ${{ inputs.startup-timeout }}
+        TLS_LISTEN_PORT_BASE: ${{ inputs.tls-listen-port-base }}
+        TLS_UPSTREAM_PORT: ${{ inputs.tls-upstream-port }}
+        TOXIPROXY_CONTROL_PORT: ${{ inputs.toxiproxy-control-port }}
+        TOXIPROXY_IMAGE: ${{ inputs.toxiproxy-image }}
+        UPSTREAM_PORT: ${{ inputs.upstream-port }}
+      run: bash "${{ github.action_path }}/entrypoint.sh"
