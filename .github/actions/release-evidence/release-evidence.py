@@ -50,6 +50,7 @@ REPO_ENV_STAGE = {"dev": "DEV", "test": "TEST", "stage": "STAGE",
                   "preview-public": "PREVIEW", "preview-restricted": "PREVIEW",
                   "prod-internal": "INTERNAL", "prod-public": "PROD"}
 REPO_TYPE_PACKAGE = {"deb": "debian", "rpm": "yum", "container": "docker", "cargo": "cargo"}
+MAX_BUILD_DEPTH = 8
 # Reachability, not maturity: STAGE_ORDER would rank INTERNAL above STAGE.
 PUBLICITY = ["PROD", "PREVIEW", "INTERNAL", "STAGE", "TEST", "DEV"]
 
@@ -254,6 +255,17 @@ def resolve_sha(path):
     return info["checksums"]["sha256"]
 
 
+def bundle_of(path):
+    """The `name/version` a bundle repository path starts with."""
+    return "/".join(path.split("/")[:2])
+
+
+def has_promotion(bundle_repo, bundle):
+    """Whether a bundle carries a promotion record, which is what makes it the live one."""
+    listing = jfrog(f"artifactory/api/storage/{bundle_repo}/{bundle}") or {}
+    return any(child["uri"].startswith("/promotion-") for child in listing.get("children", []))
+
+
 def find_release(target):
     """The release bundle holding a target, or None when it has not been sealed into one.
 
@@ -268,13 +280,18 @@ def find_release(target):
         return f"{project}-release-bundles-v2", name_version, project
 
     sha = resolve_sha(path)
-    digest_hits = aql(f'items.find({{"sha256":"{sha}"}}).include("repo","path")')
-    found = next((h for h in digest_hits["results"]
-                  if h["repo"].endswith("-release-bundles-v2")), None)
-    if not found:
+    digest_hits = aql(f'items.find({{"sha256":"{sha}"}}).include("repo","path","created")')
+    # The same bytes sit in every bundle that ever shipped them, so taking the first names a
+    # superseded bundle as readily as the live one and then reports its empty promotion history.
+    candidates = sorted((h for h in digest_hits["results"]
+                         if h["repo"].endswith("-release-bundles-v2")),
+                        key=lambda h: h.get("created") or "", reverse=True)
+    if not candidates:
         return None
+    found = next((c for c in candidates if has_promotion(c["repo"], bundle_of(c["path"]))),
+                 candidates[0])
     project = found["repo"][: -len("-release-bundles-v2")]
-    return found["repo"], "/".join(found["path"].split("/")[:2]), project
+    return found["repo"], bundle_of(found["path"]), project
 
 
 def package_type_of_repo(repo):
@@ -418,28 +435,74 @@ def qualified(art):
     return f'{holding}/{art["path"]}' if holding else art["path"]
 
 
-def build_origin(name, number, project):
-    """Commit, CI run, captured environment size, and the build number the commit came from."""
-    def fetch(num):
-        return jfrog(f"artifactory/api/build/{urllib.parse.quote(name)}/"
-                  f"{urllib.parse.quote(num)}?project={project}") or {}
+def authorizing_pull(found, commit):
+    """The pull request that produced a commit, out of every one listing it.
 
-    info = fetch(number).get("buildInfo", {})
-    vcs = (info.get("vcs") or [None])[0]
-    run = info.get("url", "")
-    env = len(info.get("properties") or {})
-    holder = number if vcs else None
-    if not vcs:
-        parent = fetch(re.sub(r"-artifacts$", "", number)).get("buildInfo", {})
-        run = run or parent.get("url", "")
-        child = next((m["id"].split("/")[-1] for m in parent.get("modules", [])
-                      if "-buildinfo-" in m.get("id", "")), None)
-        if child:
-            meta = fetch(child).get("buildInfo", {})
-            vcs = (meta.get("vcs") or [None])[0]
-            env = max(env, len(meta.get("properties") or {}))
-            holder = child if vcs else None
-    return vcs, run, env, holder
+    `commits/{sha}/pulls` returns every pull request the commit appears in, so a long-lived
+    branch that merged the release branch in lists it too. Taking the first names an unrelated
+    open pull request often enough to report an approved change as unreviewed.
+    """
+    return (next((p for p in found if p.get("merge_commit_sha") == commit), None)
+            or next((p for p in found
+                     if p.get("merged_at") and p.get("head", {}).get("sha") == commit), None)
+            or next((p for p in found if p.get("merged_at")), None))
+
+
+def bundle_roots(seal):
+    """The builds a bundle was sealed from, per its own signed seal.
+
+    A root is a source nothing else feeds. Reading it here rather than from an artifact property
+    enters the build tree at the top, so resolving a commit only ever descends.
+    """
+    sources = [s for s in (seal.get("predicate", {}).get("sources") or [])
+               if s.get("sourceType") == "BUILDS"]
+    roots = [s for s in sources if not s.get("upstreamSourceIds")] or sources
+    return [(b["buildName"], b["buildNumber"])
+            for s in roots for b in (s.get("builds") or []) if b.get("buildName")]
+
+
+def build_origin(name, number, project, cache=None):
+    """Commit, CI run, captured environment size, and the build the commit came from.
+
+    A build carries its VCS block on itself or on a descendant. Children are the `modules`
+    entries of type `build`, each id a fully qualified `<name>/<number>`, so the relationship is
+    structural. Matching child names instead resolves nothing for a pipeline that names them
+    differently, and the build number alone is ambiguous across build names.
+    """
+    cache = {} if cache is None else cache
+
+    def fetch(bname, bnum):
+        key = (bname, bnum)
+        if key not in cache:
+            cache[key] = (jfrog(f"artifactory/api/build/{urllib.parse.quote(bname)}/"
+                                f"{urllib.parse.quote(bnum)}?project={project}")
+                          or {}).get("buildInfo", {})
+        return cache[key]
+
+    def descend(bname, bnum, seen, depth=0):
+        if (bname, bnum) in seen or depth > MAX_BUILD_DEPTH:
+            return None
+        seen.add((bname, bnum))
+        info = fetch(bname, bnum)
+        if (info.get("vcs") or [None])[0]:
+            return bname, bnum, info
+        for module in info.get("modules") or []:
+            if module.get("type") == "build" and "/" in (module.get("id") or ""):
+                cname, _, cnum = module["id"].rpartition("/")
+                hit = descend(cname, cnum, seen, depth + 1)
+                if hit:
+                    return hit
+        return None
+
+    info = fetch(name, number)
+    hit = descend(name, number, set())
+    if not hit:
+        return None, info.get("url", ""), len(info.get("properties") or {}), None
+    hname, hnum, hinfo = hit
+    return ((hinfo.get("vcs") or [None])[0],
+            info.get("url", "") or hinfo.get("url", ""),
+            max(len(info.get("properties") or {}), len(hinfo.get("properties") or {})),
+            (hname, hnum))
 
 
 def image_labels(root, path):
@@ -538,6 +601,7 @@ def collect(target, about, as_of=None):
             })
         promotions.sort(key=lambda p: p["when"] or "")
 
+    roots, build_cache = bundle_roots(seal), {}
     artifacts, source = [], None
     for art in entries:
         props = {p["key"]: p["values"][0] for p in (art.get("properties") or [])}
@@ -548,7 +612,17 @@ def collect(target, about, as_of=None):
         vcs, run, env, vcs_build = None, "", 0, None
         if props.get("build.name") and props.get("build.number"):
             vcs, run, env, vcs_build = build_origin(
-                props["build.name"], props["build.number"], project)
+                props["build.name"], props["build.number"], project, build_cache)
+        # An artifact's build property names the leaf its files were attached to, which is not
+        # always at or above the node holding the commit. The bundle's roots always are.
+        if not vcs:
+            for root in roots:
+                root_vcs, root_run, root_env, root_build = build_origin(
+                    *root, project, build_cache)
+                if root_vcs:
+                    vcs, run = root_vcs, run or root_run
+                    env, vcs_build = max(env, root_env), root_build
+                    break
 
         repo = None
         if vcs:
@@ -556,6 +630,9 @@ def collect(target, about, as_of=None):
         elif run:
             match = re.match(r"https://github\.com/([^/]+/[^/]+)/", run)
             repo = match.group(1) if match else None
+        elif props.get("jf.vcsUrl"):
+            repo = re.sub(r"\.git$", "",
+                          re.sub(r"^https://github\.com/", "", props["jf.vcsUrl"])) or None
 
         labels = {}
         if not repo and art["package_type"] == "docker":
@@ -592,6 +669,9 @@ def collect(target, about, as_of=None):
             deps = stmt["predicate"]["buildDefinition"].get("resolvedDependencies") or [{}]
             commit = deps[0].get("digest", {}).get("gitCommit")
             commit_from = "GitHub attestation" if commit else None
+        # Properties are mutable, so this only stands in where no signed record carries the commit.
+        if not commit and props.get("jf.revision"):
+            commit, commit_from = props["jf.revision"], "JFrog artifact properties"
 
         published_linked = digest_linked if public else None
 
@@ -606,15 +686,17 @@ def collect(target, about, as_of=None):
 
         if commit and not source:
             source = {"repo": repo, "commit": commit, "run": run, "env": env,
-                      "build": props.get("build.name"), "vcs_build": vcs_build,
+                      "commit_from": commit_from,
+                      "build": vcs_build[0] if vcs_build else props.get("build.name"),
+                      "vcs_build": vcs_build[1] if vcs_build else None,
                       "artifact": qualified(entry), "artifact_build": entry["number"],
                       "subject": (vcs or {}).get("message", "").split("\n")[0]}
 
     pull_request = None
     if source and source["repo"] and source["commit"]:
         found = gh(f'repos/{source["repo"]}/commits/{source["commit"]}/pulls') or []
-        if found:
-            head = found[0]
+        head = authorizing_pull(found, source["commit"])
+        if head:
             reviews = gh(f'repos/{source["repo"]}/pulls/{head["number"]}/reviews') or []
             approved = [r for r in reviews if r.get("state") == "APPROVED"]
             pull_request = {
@@ -784,7 +866,7 @@ def verify_commands(evidence):
     if source and source.get("vcs_build"):
         note = ""
         if source["vcs_build"] != source.get("artifact_build"):
-            note = ("\n# The commit sits on the metadata child, not the artifact child the "
+            note = ("\n# The commit sits on another build in the tree, not the one the artifact "
                     "property names.")
         out += [f"# The build behind it, and the commit it was built from.{note}",
                 f'get "artifactory/api/storage/{source["artifact"]}?properties" |',
@@ -797,9 +879,11 @@ def verify_commands(evidence):
     pr = evidence["pr"]
     if source and source.get("repo") and source.get("commit"):
         out += ["# The pull request that authorized the change, and its reviews.",
+                "# Several can list one commit; the one that produced it is the one whose",
+                "# merge_commit_sha is the commit.",
                 f'gh api repos/{source["repo"]}/commits/{source["commit"]}/pulls \\',
-                "  --jq '.[] | \"PR #\\(.number) \\(.title) by \\(.user.login), "
-                "merged \\(.merged_at)\"'"]
+                f'  --jq \'.[] | select(.merge_commit_sha == "{source["commit"]}") | '
+                "\"PR #\\(.number) \\(.title) by \\(.user.login), merged \\(.merged_at)\"'"]
         if pr:
             out += [f'gh api repos/{pr["repo"]}/pulls/{pr["number"]}/reviews \\',
                     "  --jq 'if length == 0 then \"no reviews\" else "
@@ -870,10 +954,19 @@ def custody_rows(evidence):
                      f'written by `{pr["author"]}`, {approval}, {state}', "GitHub"])
     if evidence["source"]:
         src = evidence["source"]
-        rows.append(["Build from that commit",
-                     f'Build-info records `vcs.revision {src["commit"]}` and '
-                     f'[the CI run]({src["run"]}), alongside {src["env"]} captured environment '
-                     f"values", "JFrog build-info"])
+        run = f'[the CI run]({src["run"]})' if src.get("run") else "no recorded CI run"
+        # The row names where the commit actually came from. Attributing a property-sourced
+        # commit to the build-info claims a VCS block that is not there.
+        if src.get("commit_from") == "JFrog artifact properties":
+            rows.append(["Build from that commit",
+                         f'The published files carry `jf.revision {src["commit"]}` and {run}. '
+                         "The build-info holds no VCS block, so this is the only record tying "
+                         "them to a revision", "JFrog artifact properties"])
+        else:
+            rows.append(["Build from that commit",
+                         f'Build-info records `vcs.revision {src["commit"]}` and '
+                         f'{run}, alongside {src["env"]} captured environment '
+                         f"values", "JFrog build-info"])
     if release:
         detail = (f'including {phrase(f"{n} `{ext}` file" + ("s" if n > 1 else "") for ext, n in sorted(evidence["signatures"].items()))}'
                   if evidence["signatures"] else "each addressed by digest")
@@ -1102,13 +1195,21 @@ def claim_rows(evidence):
                      "Sigstore-signed SLSA provenance held by GitHub, keyed to the artifact "
                      f'digest, with `builder.id` of `{att["builder"]}` and runner '
                      f'`{att["runner"]}`', cap(noun(pkg_type))])
-    if derived["unattested_types"] and derived["any_commit"]:
-        art = next(a for a in evidence["artifacts"] if a["commit"])
-        rows.append([f'The {phrase(noun(t) for t in derived["unattested_types"])} carry commit '
-                     f'`{art["commit"][:8]}`',
-                     "A JFrog build-info record published by the build job about itself, with no "
-                     "signature over it",
-                     cap(phrase(noun(t) for t in derived["unattested_types"]))])
+    # Only the files this claim is about. A commit on some other type is not evidence for these.
+    carrying = [a for a in evidence["artifacts"]
+                if a["commit"] and a["type"] in derived["unattested_types"]]
+    # A bundle sealed from more than one root can hold more than one commit, and a row naming
+    # only the first would put the others' files behind a commit they were not built from.
+    for commit in sorted({a["commit"] for a in carrying}):
+        share = [a for a in carrying if a["commit"] == commit]
+        # The row covers all of them, so it rests on the weakest record behind any one.
+        backing = ("A `jf.revision` property on each published file, which carries no signature "
+                   "and can be changed by anyone holding annotate permission"
+                   if any(a["commit_from"] == "JFrog artifact properties" for a in share) else
+                   "A JFrog build-info record published by the build job about itself, with no "
+                   "signature over it")
+        named = phrase(noun(t) for t in sorted({a["type"] for a in share}))
+        rows.append([f'The {named} carry commit `{commit[:8]}`', backing, cap(named)])
     return rows
 
 
@@ -1234,6 +1335,21 @@ def warning_rows(evidence):
             "metadata, because promotion retags the manifest. The join to the build still works "
             "from the bundle record and from the immutable timestamped tag, so this costs a step "
             "rather than the evidence."])
+    # Any file resting on the property earns this, not just whichever one set the source. A
+    # bundle mixing the two records would otherwise report only the stronger.
+    on_property = [a for a in evidence["artifacts"]
+                   if a.get("commit_from") == "JFrog artifact properties"]
+    if on_property:
+        carrying = [a for a in evidence["artifacts"] if a["commit"]]
+        scope = ("" if len(on_property) == len(carrying)
+                 else f", on {len(on_property)} of the {len(carrying)} files carrying a commit")
+        rows.append([
+            "The source commit rests on a mutable property",
+            f'`{on_property[0]["commit"][:12]}` comes from the `jf.revision` property the JFrog '
+            f"CLI wrote at upload{scope}. No build-info VCS block, image label or attestation "
+            "carries it, which is what a build performed outside the publishing pipeline looks "
+            "like. Anyone holding annotate permission on the repository can change a property, "
+            "so the commit is recorded and resolvable but not signed."])
     return rows
 
 

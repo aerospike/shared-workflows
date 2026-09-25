@@ -1003,14 +1003,14 @@ class VerifyCommands(unittest.TestCase):
                                    "artifact_build": "9-artifacts"})
         block = rev.verify_commands(ev)
         self.assertIn("api/build/a/9-buildinfo-el9?project=database", block)
-        self.assertIn("metadata child", block)
+        self.assertIn("another build in the tree", block)
 
-    def test_no_metadata_note_when_the_artifact_build_carried_the_commit(self):
+    def test_no_other_build_note_when_the_artifact_build_carried_the_commit(self):
         ev = self.evidence([self.art("g/a/1.0/a-1.0.jar", number="9")],
                            source={"repo": "aerospike/a", "commit": "deadbeef",
                                    "build": "a", "vcs_build": "9",
                                    "artifact": "g/a/1.0/a-1.0.jar", "artifact_build": "9"})
-        self.assertNotIn("metadata child", rev.verify_commands(ev))
+        self.assertNotIn("another build in the tree", rev.verify_commands(ev))
 
     def test_repeated_basenames_do_not_become_the_substitution_hint(self):
         # Every multi-image container release repeats list.manifest.json.
@@ -1047,8 +1047,494 @@ class VerifyCommands(unittest.TestCase):
             {"stage": "PROD", "file": "p.evd", "repos": ["e-rpm-prod-local"]}])
         self.assertEqual(rev.verify_path(ev, entry), "e-rpm-prod-local/absctl/v1.1.1/absctl.rpm")
 
+    def test_the_pull_request_step_filters_on_the_merge_commit(self):
+        ev = self.evidence([self.art("g/a/1.0/a-1.0.jar")],
+                           source={"repo": "aerospike/a", "commit": "deadbeef", "build": "a",
+                                   "artifact": "g/a/1.0/a-1.0.jar", "artifact_build": "9"})
+        self.assertIn('select(.merge_commit_sha == "deadbeef")', rev.verify_commands(ev))
+
     def test_a_public_path_still_wins(self):
         entry = self.art("a/1.0/a.jar", public="maven/a/1.0/a.jar", repos=["c-maven-dev-local"])
         ev = self.evidence([entry], promotions=[
             {"stage": "PROD", "file": "p.evd", "repos": ["c-maven-dev-local"]}])
         self.assertEqual(rev.verify_path(ev, entry), "maven/a/1.0/a.jar")
+
+
+class BundleRoots(unittest.TestCase):
+    @staticmethod
+    def seal(sources):
+        return {"predicate": {"sources": sources}}
+
+    def test_the_root_is_the_source_nothing_feeds(self):
+        seal = self.seal([
+            {"sourceType": "BUILDS", "upstreamSourceIds": [1],
+             "builds": [{"buildName": "srv", "buildNumber": "8.1-artifacts"}]},
+            {"sourceType": "BUILDS", "upstreamSourceIds": [],
+             "builds": [{"buildName": "srv", "buildNumber": "8.1"}]}])
+        self.assertEqual(rev.bundle_roots(seal), [("srv", "8.1")])
+
+    def test_every_root_is_returned(self):
+        seal = self.seal([
+            {"sourceType": "BUILDS", "upstreamSourceIds": [],
+             "builds": [{"buildName": "srv-slim", "buildNumber": "1"},
+                        {"buildName": "srv-full", "buildNumber": "2"}]}])
+        self.assertEqual(rev.bundle_roots(seal), [("srv-slim", "1"), ("srv-full", "2")])
+
+    def test_sources_that_are_not_builds_are_ignored(self):
+        seal = self.seal([
+            {"sourceType": "ARTIFACTS", "upstreamSourceIds": []},
+            {"sourceType": "BUILDS", "upstreamSourceIds": [],
+             "builds": [{"buildName": "srv", "buildNumber": "8.1"}]}])
+        self.assertEqual(rev.bundle_roots(seal), [("srv", "8.1")])
+
+    def test_a_seal_naming_no_builds_yields_nothing(self):
+        self.assertEqual(rev.bundle_roots({}), [])
+        self.assertEqual(rev.bundle_roots(self.seal([])), [])
+
+    def test_all_sources_feed_each_other_so_none_is_discarded(self):
+        seal = self.seal([
+            {"sourceType": "BUILDS", "upstreamSourceIds": [2],
+             "builds": [{"buildName": "a", "buildNumber": "1"}]},
+            {"sourceType": "BUILDS", "upstreamSourceIds": [1],
+             "builds": [{"buildName": "b", "buildNumber": "2"}]}])
+        self.assertEqual(rev.bundle_roots(seal), [("a", "1"), ("b", "2")])
+
+
+class BuildOriginWalksTheTree(unittest.TestCase):
+    """The child holding the commit is found by structure, never by its name."""
+
+    def setUp(self):
+        self._real = rev.jfrog
+        self.tree, self.calls = {}, []
+
+        def fake_jfrog(path):
+            self.calls.append(path)
+            name, _, rest = path[len("artifactory/api/build/"):].partition("/")
+            number = rest.split("?")[0]
+            info = self.tree.get((name, number))
+            return {"buildInfo": info} if info else {}
+
+        rev.jfrog = fake_jfrog
+
+    def tearDown(self):
+        rev.jfrog = self._real
+
+    def build(self, name, number, children=(), commit=None, url="", props=0):
+        info = {"url": url, "properties": {str(i): i for i in range(props)},
+                "modules": [{"id": f"{c[0]}/{c[1]}", "type": "build"} for c in children]}
+        if commit:
+            info["vcs"] = [{"revision": commit}]
+        self.tree[(name, number)] = info
+
+    def test_a_child_named_without_buildinfo_is_still_found(self):
+        self.build("srv", "8.1", children=[("srv", "8.1-metadata-el8-x86_64")])
+        self.build("srv", "8.1-metadata-el8-x86_64", commit="deadbeef")
+        vcs, _, _, holder = rev.build_origin("srv", "8.1", "database")
+        self.assertEqual(vcs["revision"], "deadbeef")
+        self.assertEqual(holder, ("srv", "8.1-metadata-el8-x86_64"))
+
+    def test_a_child_carrying_another_build_name_is_reached(self):
+        self.build("bundle-root", "1", children=[("other-build", "77")])
+        self.build("other-build", "77", commit="cafe")
+        _, _, _, holder = rev.build_origin("bundle-root", "1", "database")
+        self.assertEqual(holder, ("other-build", "77"))
+
+    def test_the_walk_descends_past_the_first_level(self):
+        self.build("a", "1", children=[("a", "2")])
+        self.build("a", "2", children=[("a", "3")])
+        self.build("a", "3", commit="beef")
+        _, _, _, holder = rev.build_origin("a", "1", "database")
+        self.assertEqual(holder, ("a", "3"))
+
+    def test_a_sibling_without_a_commit_does_not_end_the_search(self):
+        self.build("a", "1", children=[("a", "artifacts"), ("a", "meta")])
+        self.build("a", "artifacts")
+        self.build("a", "meta", commit="beef")
+        _, _, _, holder = rev.build_origin("a", "1", "database")
+        self.assertEqual(holder, ("a", "meta"))
+
+    def test_a_build_carrying_its_own_commit_costs_one_request(self):
+        self.build("a", "1", commit="beef")
+        _, _, _, holder = rev.build_origin("a", "1", "database")
+        self.assertEqual(holder, ("a", "1"))
+        self.assertEqual(len(self.calls), 1)
+
+    def test_a_cycle_terminates(self):
+        self.build("a", "1", children=[("a", "2")])
+        self.build("a", "2", children=[("a", "1")])
+        vcs, _, _, holder = rev.build_origin("a", "1", "database")
+        self.assertIsNone(vcs)
+        self.assertIsNone(holder)
+
+    def test_the_run_url_stays_with_the_build_the_caller_named(self):
+        self.build("a", "1", children=[("a", "2")], url="https://runs/1")
+        self.build("a", "2", commit="beef", url="https://runs/2")
+        _, run, _, _ = rev.build_origin("a", "1", "database")
+        self.assertEqual(run, "https://runs/1")
+
+    def test_the_run_url_falls_back_to_the_holder(self):
+        self.build("a", "1", children=[("a", "2")])
+        self.build("a", "2", commit="beef", url="https://runs/2")
+        _, run, _, _ = rev.build_origin("a", "1", "database")
+        self.assertEqual(run, "https://runs/2")
+
+    def test_the_environment_count_is_the_larger_of_the_two(self):
+        self.build("a", "1", children=[("a", "2")], props=3)
+        self.build("a", "2", commit="beef", props=81)
+        _, _, env, _ = rev.build_origin("a", "1", "database")
+        self.assertEqual(env, 81)
+
+    def test_a_shared_cache_spares_the_second_artifact_every_request(self):
+        self.build("a", "1", children=[("a", "2")])
+        self.build("a", "2", commit="beef")
+        cache = {}
+        rev.build_origin("a", "1", "database", cache)
+        first = len(self.calls)
+        rev.build_origin("a", "1", "database", cache)
+        self.assertEqual(len(self.calls), first)
+
+    def test_a_tree_with_no_commit_anywhere_reports_none(self):
+        self.build("a", "1", children=[("a", "2")])
+        self.build("a", "2")
+        vcs, _, _, holder = rev.build_origin("a", "1", "database")
+        self.assertIsNone(vcs)
+        self.assertIsNone(holder)
+
+
+class TheAuthorizingPull(unittest.TestCase):
+    """Several pull requests can list one commit; only one produced it."""
+
+    SHA = "053ef20f"
+
+    @staticmethod
+    def pull(number, merge_sha=None, head_sha="other", merged=None):
+        return {"number": number, "merge_commit_sha": merge_sha,
+                "head": {"sha": head_sha}, "merged_at": merged}
+
+    def test_the_merge_commit_wins_over_an_earlier_listed_open_one(self):
+        found = [self.pull(1147), self.pull(1208),
+                 self.pull(1225, merge_sha=self.SHA, merged="2026-09-09T18:28:15Z"),
+                 self.pull(1236)]
+        self.assertEqual(rev.authorizing_pull(found, self.SHA)["number"], 1225)
+
+    def test_a_merged_pull_whose_head_is_the_commit_is_next_best(self):
+        found = [self.pull(1), self.pull(2, head_sha=self.SHA, merged="2026-09-09T18:28:15Z")]
+        self.assertEqual(rev.authorizing_pull(found, self.SHA)["number"], 2)
+
+    def test_any_merged_pull_beats_an_open_one(self):
+        found = [self.pull(1), self.pull(2, merged="2026-09-09T18:28:15Z")]
+        self.assertEqual(rev.authorizing_pull(found, self.SHA)["number"], 2)
+
+    def test_only_open_pulls_name_no_authorizing_one(self):
+        self.assertIsNone(rev.authorizing_pull([self.pull(1), self.pull(2)], self.SHA))
+
+    def test_nothing_listed_names_nothing(self):
+        self.assertIsNone(rev.authorizing_pull([], self.SHA))
+
+
+class TheCommitFallsBackToArtifactProperties(unittest.TestCase):
+    """A build run outside the publishing pipeline leaves no build-info VCS block.
+
+    The JFrog CLI still writes jf.revision and jf.vcsUrl at upload, so the commit and the
+    repository are recorded even where the structured build record carries neither.
+    """
+
+    TARGET = ("database-rpm-dev-local/el9/x86_64/"
+              "aerospike-server-community-8.2.0.0-12.el9.x86_64.rpm")
+    PROPS = {
+        "build.name": ["aerospike-server"],
+        "build.number": ["8.2.0.0-12-artifacts"],
+        "jf.revision": ["b4d13ef5f524e55960a3ab13ade560c2f918298b"],
+        "jf.vcsUrl": ["https://github.com/citrusleaf/aerospike-server"],
+    }
+    BUILD_INFO = {"buildInfo": {"name": "aerospike-server", "number": "8.2.0.0-12-artifacts"}}
+
+    def setUp(self):
+        self._real = (rev.jfrog, rev.aql, rev.gh, rev.gh_graphql)
+
+        def fake_jfrog(path):
+            if "api/storage/" in path and path.endswith("?properties"):
+                return {"properties": self.PROPS}
+            if "api/build/" in path:
+                return self.BUILD_INFO
+            if "api/storage/" in path:
+                return {"checksums": {"sha256": "abc123"}}
+            return {}
+
+        rev.jfrog = fake_jfrog
+        rev.aql = lambda _q: {"results": [{
+            "repo": "database-rpm-dev-local", "path": "el9/x86_64",
+            "name": "aerospike-server-community-8.2.0.0-12.el9.x86_64.rpm"}]}
+        rev.gh = lambda _p: None
+        rev.gh_graphql = lambda _q, **_v: None
+
+    def tearDown(self):
+        rev.jfrog, rev.aql, rev.gh, rev.gh_graphql = self._real
+
+    def test_the_commit_comes_from_the_property(self):
+        source = rev.collect(self.TARGET, "")["source"]
+        self.assertEqual(source["commit"], "b4d13ef5f524e55960a3ab13ade560c2f918298b")
+        self.assertEqual(source["commit_from"], "JFrog artifact properties")
+
+    def test_the_repository_comes_from_the_property(self):
+        self.assertEqual(rev.collect(self.TARGET, "")["source"]["repo"],
+                         "citrusleaf/aerospike-server")
+
+    def test_a_recorded_commit_is_no_longer_a_gap(self):
+        ev = rev.collect(self.TARGET, "")
+        self.assertTrue(ev["derived"]["any_commit"])
+        self.assertNotIn("A recorded source commit", [row[0] for row in rev.gap_rows(ev)])
+
+    def test_a_mutable_source_warns_rather_than_fails(self):
+        ev = rev.collect(self.TARGET, "")
+        self.assertIn("The source commit rests on a mutable property",
+                      [row[0] for row in rev.warning_rows(ev)])
+        call = rev.verdict(ev)
+        self.assertEqual(call["gaps"], 0)
+        self.assertTrue(call["status"].endswith("WITH WARNING"))
+
+
+class ASignedCommitOutranksTheProperty(unittest.TestCase):
+    """A build-info VCS block is the stronger record, so the property never displaces it."""
+
+    TARGET = TheCommitFallsBackToArtifactProperties.TARGET
+
+    def setUp(self):
+        self._real = (rev.jfrog, rev.aql, rev.gh, rev.gh_graphql)
+
+        def fake_jfrog(path):
+            if "api/storage/" in path and path.endswith("?properties"):
+                return {"properties": dict(
+                    TheCommitFallsBackToArtifactProperties.PROPS,
+                    **{"jf.revision": ["0000000000000000000000000000000000000000"]})}
+            if "api/build/" in path:
+                return {"buildInfo": {
+                    "name": "aerospike-server", "number": "8.2.0.0-12-artifacts",
+                    "vcs": [{"revision": "b4d13ef5f524e55960a3ab13ade560c2f918298b",
+                             "url": "https://github.com/citrusleaf/aerospike-server.git"}]}}
+            if "api/storage/" in path:
+                return {"checksums": {"sha256": "abc123"}}
+            return {}
+
+        rev.jfrog = fake_jfrog
+        rev.aql = lambda _q: {"results": [{
+            "repo": "database-rpm-dev-local", "path": "el9/x86_64",
+            "name": "aerospike-server-community-8.2.0.0-12.el9.x86_64.rpm"}]}
+        rev.gh = lambda _p: None
+        rev.gh_graphql = lambda _q, **_v: None
+
+    def tearDown(self):
+        rev.jfrog, rev.aql, rev.gh, rev.gh_graphql = self._real
+
+    def test_the_build_info_revision_wins(self):
+        source = rev.collect(self.TARGET, "")["source"]
+        self.assertEqual(source["commit"], "b4d13ef5f524e55960a3ab13ade560c2f918298b")
+        self.assertEqual(source["commit_from"], "JFrog build-info")
+
+    def test_no_mutable_property_warning_is_raised(self):
+        ev = rev.collect(self.TARGET, "")
+        self.assertNotIn("The source commit rests on a mutable property",
+                         [row[0] for row in rev.warning_rows(ev)])
+
+
+class ThePropertySourcedCommitIsNotAttributedToBuildInfo(unittest.TestCase):
+    """The document must name where the commit came from, not where it usually comes from."""
+
+    TARGET = TheCommitFallsBackToArtifactProperties.TARGET
+
+    def setUp(self):
+        self._real = (rev.jfrog, rev.aql, rev.gh, rev.gh_graphql)
+        outer = TheCommitFallsBackToArtifactProperties
+
+        def fake_jfrog(path):
+            if "api/storage/" in path and path.endswith("?properties"):
+                return {"properties": outer.PROPS}
+            if "api/build/" in path:
+                return outer.BUILD_INFO
+            if "api/storage/" in path:
+                return {"checksums": {"sha256": "abc123"}}
+            return {}
+
+        rev.jfrog = fake_jfrog
+        rev.aql = lambda _q: {"results": [{
+            "repo": "database-rpm-dev-local", "path": "el9/x86_64",
+            "name": "aerospike-server-community-8.2.0.0-12.el9.x86_64.rpm"}]}
+        rev.gh = lambda _p: None
+        rev.gh_graphql = lambda _q, **_v: None
+
+    def tearDown(self):
+        rev.jfrog, rev.aql, rev.gh, rev.gh_graphql = self._real
+
+    def test_the_document_never_claims_build_info_records_the_revision(self):
+        ev = rev.collect(self.TARGET, "")
+        out = rev.render_markdown(ev, rev.document(ev))
+        self.assertNotIn("Build-info records `vcs.revision", out)
+        self.assertIn("jf.revision", out)
+
+    def test_the_custody_row_is_sourced_to_the_property(self):
+        ev = rev.collect(self.TARGET, "")
+        row = next(r for r in rev.custody_rows(ev) if r[0] == "Build from that commit")
+        self.assertEqual(row[2], "JFrog artifact properties")
+        self.assertIn("build-info holds no VCS block", row[1])
+
+
+class MixedCommitSourcesReportTheWeakerRecord(unittest.TestCase):
+    """A bundle whose files carry commits from different records rests on the weakest of them."""
+
+    def evidence(self, *commit_froms):
+        artifacts = [{"type": "debian", "path": f"a{i}.deb", "commit": "c" * 40,
+                      "commit_from": cf, "attestation": None, "public": None, "repos": [],
+                      "published_build_linked": None, "sealed": True}
+                     for i, cf in enumerate(commit_froms)]
+        return {
+            "release": None, "promotions": [], "pr": None, "project": "database",
+            "artifacts": artifacts, "signatures": {}, "about": "",
+            "source": {"repo": "a/b", "commit": "c" * 40, "run": "", "env": 0,
+                       "commit_from": commit_froms[0], "build": "b", "vcs_build": None,
+                       "artifact": "a0.deb", "artifact_build": "1", "subject": ""},
+            "derived": {"types": ["debian"], "attested_types": [], "unattested_types": ["debian"],
+                        "stages": [], "terminal_stage": None, "sealed": True,
+                        "stages_reached": ["DEV"], "resident_stages": ["DEV"],
+                        "skipped_stages": [], "pending_stages": ["TEST"],
+                        "self_approved": False, "independently_approved": False,
+                        "unlinked_published": [], "any_commit": True},
+        }
+
+    def test_one_signed_file_does_not_clear_the_warning_for_the_rest(self):
+        ev = self.evidence("JFrog build-info", "JFrog artifact properties",
+                           "JFrog artifact properties")
+        self.assertIn("The source commit rests on a mutable property",
+                      [row[0] for row in rev.warning_rows(ev)])
+
+    def test_the_warning_counts_the_files_resting_on_the_property(self):
+        ev = self.evidence("JFrog build-info", "JFrog artifact properties",
+                           "JFrog artifact properties")
+        row = next(r for r in rev.warning_rows(ev)
+                   if r[0] == "The source commit rests on a mutable property")
+        self.assertIn("2 of the 3 files carrying a commit", row[1])
+
+    def test_a_release_wholly_on_the_property_counts_nothing(self):
+        ev = self.evidence("JFrog artifact properties", "JFrog artifact properties")
+        row = next(r for r in rev.warning_rows(ev)
+                   if r[0] == "The source commit rests on a mutable property")
+        self.assertNotIn("files carrying a commit", row[1])
+
+    def test_the_claim_names_the_property_when_any_file_rests_on_it(self):
+        ev = self.evidence("JFrog build-info", "JFrog artifact properties")
+        row = next(r for r in rev.claim_rows(ev) if "carry commit" in r[0])
+        self.assertIn("jf.revision", row[1])
+
+    def test_a_wholly_signed_release_still_names_the_build_info(self):
+        ev = self.evidence("JFrog build-info", "JFrog build-info")
+        row = next(r for r in rev.claim_rows(ev) if "carry commit" in r[0])
+        self.assertIn("JFrog build-info record", row[1])
+        self.assertEqual([], [r for r in rev.warning_rows(ev)
+                              if r[0] == "The source commit rests on a mutable property"])
+
+
+class ThePromotedBundleWinsOverTheFirstDigestHit(unittest.TestCase):
+    """The same bytes sit in every bundle that shipped them, superseded ones included."""
+
+    OLD = {"repo": "database-release-bundles-v2", "path": "old/1.0.0/artifacts/x.deb",
+           "created": "2026-01-01T00:00:00Z"}
+    NEW = {"repo": "database-release-bundles-v2", "path": "new/2.0.0/artifacts/x.deb",
+           "created": "2026-06-01T00:00:00Z"}
+
+    def setUp(self):
+        self._real = (rev.jfrog, rev.aql)
+
+    def tearDown(self):
+        rev.jfrog, rev.aql = self._real
+
+    def listed(self, *hits):
+        """AQL returns digest hits in no defined order, so each test states the one it wants."""
+        rev.aql = lambda _q: {"results": [dict(h) for h in hits]}
+
+    def stub(self, promoted):
+        def fake_jfrog(path):
+            if path.endswith("/x.deb"):
+                return {"checksums": {"sha256": "abc"}}
+            for bundle in promoted:
+                if path.endswith(f"/{bundle}"):
+                    return {"children": [{"uri": "/promotion-TEST.evd"}]}
+            return {"children": []}
+        rev.jfrog = fake_jfrog
+
+    def test_a_promotion_record_beats_both_listing_order_and_recency(self):
+        self.listed(self.NEW, self.OLD)
+        self.stub(["old/1.0.0"])
+        self.assertEqual(rev.find_release("database-deb-dev-local/x.deb")[1], "old/1.0.0")
+
+    def test_the_newest_wins_when_none_is_promoted(self):
+        self.listed(self.OLD, self.NEW)
+        self.stub([])
+        self.assertEqual(rev.find_release("database-deb-dev-local/x.deb")[1], "new/2.0.0")
+
+    def test_the_newest_promoted_wins_when_several_are(self):
+        self.listed(self.OLD, self.NEW)
+        self.stub(["old/1.0.0", "new/2.0.0"])
+        self.assertEqual(rev.find_release("database-deb-dev-local/x.deb")[1], "new/2.0.0")
+
+    def test_an_artifact_in_no_bundle_is_not_an_error(self):
+        self.listed({"repo": "database-deb-dev-local", "path": "x.deb"})
+        self.stub([])
+        self.assertIsNone(rev.find_release("database-deb-dev-local/x.deb"))
+
+
+class TheCommitClaimCoversOnlyTheFilesCarryingIt(unittest.TestCase):
+    """A commit on one file is not evidence for a file that carries none."""
+
+    @staticmethod
+    def art(pkg_type, commit, commit_from, attested=False):
+        return {"type": pkg_type, "path": f"a.{pkg_type}", "commit": commit,
+                "commit_from": commit_from, "public": None, "repos": [],
+                "published_build_linked": None, "sealed": True,
+                "attestation": {"builder": "b", "runner": "github-hosted", "predicate": "p",
+                                "buildType": "t"} if attested else None}
+
+    def evidence(self, artifacts, unattested):
+        return {
+            "release": None, "promotions": [], "pr": None, "project": "database",
+            "artifacts": artifacts, "signatures": {}, "about": "", "source": None,
+            "derived": {"types": sorted({a["type"] for a in artifacts}),
+                        "attested_types": sorted({a["type"] for a in artifacts
+                                                  if a["attestation"]}),
+                        "unattested_types": unattested, "stages": [], "terminal_stage": None,
+                        "sealed": True, "stages_reached": ["DEV"], "resident_stages": ["DEV"],
+                        "skipped_stages": [], "pending_stages": [], "self_approved": False,
+                        "independently_approved": False, "unlinked_published": [],
+                        "any_commit": any(a["commit"] for a in artifacts)},
+        }
+
+    def commit_rows(self, ev):
+        return [r for r in rev.claim_rows(ev) if "carry commit" in r[0]]
+
+    def test_a_type_carrying_no_commit_claims_none(self):
+        ev = self.evidence([self.art("docker", "d" * 40, "GitHub attestation", attested=True),
+                            self.art("debian", None, None)], ["debian"])
+        self.assertEqual([], self.commit_rows(ev))
+
+    def test_only_the_types_that_carry_the_commit_are_named(self):
+        ev = self.evidence([self.art("debian", "a" * 40, "JFrog build-info"),
+                            self.art("yum", None, None)], ["debian", "yum"])
+        rows = self.commit_rows(ev)
+        self.assertEqual(1, len(rows))
+        self.assertIn("deb package", rows[0][0])
+        self.assertNotIn("rpm package", rows[0][0])
+
+    def test_two_commits_in_one_bundle_get_a_row_each(self):
+        ev = self.evidence([self.art("debian", "a" * 40, "JFrog build-info"),
+                            self.art("yum", "b" * 40, "JFrog artifact properties")],
+                           ["debian", "yum"])
+        rows = self.commit_rows(ev)
+        self.assertEqual(2, len(rows))
+        self.assertIn("JFrog build-info record", next(r[1] for r in rows if "aaaaaaaa" in r[0]))
+        self.assertIn("jf.revision", next(r[1] for r in rows if "bbbbbbbb" in r[0]))
+
+    def test_the_warning_count_ignores_files_carrying_no_commit(self):
+        ev = self.evidence([self.art("debian", "a" * 40, "JFrog artifact properties"),
+                            self.art("yum", "a" * 40, "JFrog build-info"),
+                            self.art("generic", None, None)], ["debian", "yum", "generic"])
+        row = next(r for r in rev.warning_rows(ev)
+                   if r[0] == "The source commit rests on a mutable property")
+        self.assertIn("1 of the 2 files carrying a commit", row[1])
