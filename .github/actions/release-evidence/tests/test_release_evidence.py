@@ -1376,3 +1376,165 @@ class ThePropertySourcedCommitIsNotAttributedToBuildInfo(unittest.TestCase):
         row = next(r for r in rev.custody_rows(ev) if r[0] == "Build from that commit")
         self.assertEqual(row[2], "JFrog artifact properties")
         self.assertIn("build-info holds no VCS block", row[1])
+
+
+class MixedCommitSourcesReportTheWeakerRecord(unittest.TestCase):
+    """A bundle whose files carry commits from different records rests on the weakest of them."""
+
+    def evidence(self, *commit_froms):
+        artifacts = [{"type": "debian", "path": f"a{i}.deb", "commit": "c" * 40,
+                      "commit_from": cf, "attestation": None, "public": None, "repos": [],
+                      "published_build_linked": None, "sealed": True}
+                     for i, cf in enumerate(commit_froms)]
+        return {
+            "release": None, "promotions": [], "pr": None, "project": "database",
+            "artifacts": artifacts, "signatures": {}, "about": "",
+            "source": {"repo": "a/b", "commit": "c" * 40, "run": "", "env": 0,
+                       "commit_from": commit_froms[0], "build": "b", "vcs_build": None,
+                       "artifact": "a0.deb", "artifact_build": "1", "subject": ""},
+            "derived": {"types": ["debian"], "attested_types": [], "unattested_types": ["debian"],
+                        "stages": [], "terminal_stage": None, "sealed": True,
+                        "stages_reached": ["DEV"], "resident_stages": ["DEV"],
+                        "skipped_stages": [], "pending_stages": ["TEST"],
+                        "self_approved": False, "independently_approved": False,
+                        "unlinked_published": [], "any_commit": True},
+        }
+
+    def test_one_signed_file_does_not_clear_the_warning_for_the_rest(self):
+        ev = self.evidence("JFrog build-info", "JFrog artifact properties",
+                           "JFrog artifact properties")
+        self.assertIn("The source commit rests on a mutable property",
+                      [row[0] for row in rev.warning_rows(ev)])
+
+    def test_the_warning_counts_the_files_resting_on_the_property(self):
+        ev = self.evidence("JFrog build-info", "JFrog artifact properties",
+                           "JFrog artifact properties")
+        row = next(r for r in rev.warning_rows(ev)
+                   if r[0] == "The source commit rests on a mutable property")
+        self.assertIn("2 of the 3 files carrying a commit", row[1])
+
+    def test_a_release_wholly_on_the_property_counts_nothing(self):
+        ev = self.evidence("JFrog artifact properties", "JFrog artifact properties")
+        row = next(r for r in rev.warning_rows(ev)
+                   if r[0] == "The source commit rests on a mutable property")
+        self.assertNotIn("files carrying a commit", row[1])
+
+    def test_the_claim_names_the_property_when_any_file_rests_on_it(self):
+        ev = self.evidence("JFrog build-info", "JFrog artifact properties")
+        row = next(r for r in rev.claim_rows(ev) if "carry commit" in r[0])
+        self.assertIn("jf.revision", row[1])
+
+    def test_a_wholly_signed_release_still_names_the_build_info(self):
+        ev = self.evidence("JFrog build-info", "JFrog build-info")
+        row = next(r for r in rev.claim_rows(ev) if "carry commit" in r[0])
+        self.assertIn("JFrog build-info record", row[1])
+        self.assertEqual([], [r for r in rev.warning_rows(ev)
+                              if r[0] == "The source commit rests on a mutable property"])
+
+
+class ThePromotedBundleWinsOverTheFirstDigestHit(unittest.TestCase):
+    """The same bytes sit in every bundle that shipped them, superseded ones included."""
+
+    OLD = {"repo": "database-release-bundles-v2", "path": "old/1.0.0/artifacts/x.deb",
+           "created": "2026-01-01T00:00:00Z"}
+    NEW = {"repo": "database-release-bundles-v2", "path": "new/2.0.0/artifacts/x.deb",
+           "created": "2026-06-01T00:00:00Z"}
+
+    def setUp(self):
+        self._real = (rev.jfrog, rev.aql)
+
+    def tearDown(self):
+        rev.jfrog, rev.aql = self._real
+
+    def listed(self, *hits):
+        """AQL returns digest hits in no defined order, so each test states the one it wants."""
+        rev.aql = lambda _q: {"results": [dict(h) for h in hits]}
+
+    def stub(self, promoted):
+        def fake_jfrog(path):
+            if path.endswith("/x.deb"):
+                return {"checksums": {"sha256": "abc"}}
+            for bundle in promoted:
+                if path.endswith(f"/{bundle}"):
+                    return {"children": [{"uri": "/promotion-TEST.evd"}]}
+            return {"children": []}
+        rev.jfrog = fake_jfrog
+
+    def test_a_promotion_record_beats_both_listing_order_and_recency(self):
+        self.listed(self.NEW, self.OLD)
+        self.stub(["old/1.0.0"])
+        self.assertEqual(rev.find_release("database-deb-dev-local/x.deb")[1], "old/1.0.0")
+
+    def test_the_newest_wins_when_none_is_promoted(self):
+        self.listed(self.OLD, self.NEW)
+        self.stub([])
+        self.assertEqual(rev.find_release("database-deb-dev-local/x.deb")[1], "new/2.0.0")
+
+    def test_the_newest_promoted_wins_when_several_are(self):
+        self.listed(self.OLD, self.NEW)
+        self.stub(["old/1.0.0", "new/2.0.0"])
+        self.assertEqual(rev.find_release("database-deb-dev-local/x.deb")[1], "new/2.0.0")
+
+    def test_an_artifact_in_no_bundle_is_not_an_error(self):
+        self.listed({"repo": "database-deb-dev-local", "path": "x.deb"})
+        self.stub([])
+        self.assertIsNone(rev.find_release("database-deb-dev-local/x.deb"))
+
+
+class TheCommitClaimCoversOnlyTheFilesCarryingIt(unittest.TestCase):
+    """A commit on one file is not evidence for a file that carries none."""
+
+    @staticmethod
+    def art(pkg_type, commit, commit_from, attested=False):
+        return {"type": pkg_type, "path": f"a.{pkg_type}", "commit": commit,
+                "commit_from": commit_from, "public": None, "repos": [],
+                "published_build_linked": None, "sealed": True,
+                "attestation": {"builder": "b", "runner": "github-hosted", "predicate": "p",
+                                "buildType": "t"} if attested else None}
+
+    def evidence(self, artifacts, unattested):
+        return {
+            "release": None, "promotions": [], "pr": None, "project": "database",
+            "artifacts": artifacts, "signatures": {}, "about": "", "source": None,
+            "derived": {"types": sorted({a["type"] for a in artifacts}),
+                        "attested_types": sorted({a["type"] for a in artifacts
+                                                  if a["attestation"]}),
+                        "unattested_types": unattested, "stages": [], "terminal_stage": None,
+                        "sealed": True, "stages_reached": ["DEV"], "resident_stages": ["DEV"],
+                        "skipped_stages": [], "pending_stages": [], "self_approved": False,
+                        "independently_approved": False, "unlinked_published": [],
+                        "any_commit": any(a["commit"] for a in artifacts)},
+        }
+
+    def commit_rows(self, ev):
+        return [r for r in rev.claim_rows(ev) if "carry commit" in r[0]]
+
+    def test_a_type_carrying_no_commit_claims_none(self):
+        ev = self.evidence([self.art("docker", "d" * 40, "GitHub attestation", attested=True),
+                            self.art("debian", None, None)], ["debian"])
+        self.assertEqual([], self.commit_rows(ev))
+
+    def test_only_the_types_that_carry_the_commit_are_named(self):
+        ev = self.evidence([self.art("debian", "a" * 40, "JFrog build-info"),
+                            self.art("yum", None, None)], ["debian", "yum"])
+        rows = self.commit_rows(ev)
+        self.assertEqual(1, len(rows))
+        self.assertIn("deb package", rows[0][0])
+        self.assertNotIn("rpm package", rows[0][0])
+
+    def test_two_commits_in_one_bundle_get_a_row_each(self):
+        ev = self.evidence([self.art("debian", "a" * 40, "JFrog build-info"),
+                            self.art("yum", "b" * 40, "JFrog artifact properties")],
+                           ["debian", "yum"])
+        rows = self.commit_rows(ev)
+        self.assertEqual(2, len(rows))
+        self.assertIn("JFrog build-info record", next(r[1] for r in rows if "aaaaaaaa" in r[0]))
+        self.assertIn("jf.revision", next(r[1] for r in rows if "bbbbbbbb" in r[0]))
+
+    def test_the_warning_count_ignores_files_carrying_no_commit(self):
+        ev = self.evidence([self.art("debian", "a" * 40, "JFrog artifact properties"),
+                            self.art("yum", "a" * 40, "JFrog build-info"),
+                            self.art("generic", None, None)], ["debian", "yum", "generic"])
+        row = next(r for r in rev.warning_rows(ev)
+                   if r[0] == "The source commit rests on a mutable property")
+        self.assertIn("1 of the 2 files carrying a commit", row[1])

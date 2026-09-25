@@ -73,17 +73,13 @@ project="${bundle_repo%-release-bundles-v2}"
 build_name=$(jq -r '(.["build.name"]   // [])[0] // empty' <<<"$props")
 build_number=$(jq -r '(.["build.number"] // [])[0] // empty' <<<"$props")
 
-build_of() { jfrog "artifactory/api/build/$(urlencode "$1")/$(urlencode "$2")?project=$project"; }
-# Children are the modules of type "build", each id a fully qualified <name>/<number>. Selecting
-# them by name resolves nothing for a pipeline that names them differently.
-children_of() { jq -r '.buildInfo.modules[]? | select(.type == "build") | .id' <<<"$1"; }
+# shellcheck source=.github/actions/release-evidence/build-walk.sh
+source "$(dirname "${BASH_SOURCE[0]}")/build-walk.sh"
 
 vcs=''
 run=''
 if [[ -n $build_name && -n $build_number ]]; then
-    build_info=$(build_of "$build_name" "$build_number")
-    vcs=$(jq -c '.buildInfo.vcs[0] // empty' <<<"$build_info")
-    run=$(jq -r '.buildInfo.url // empty' <<<"$build_info")
+    descend "$build_name/$build_number" || true
 fi
 
 # The artifact's build property names the leaf its files were attached to, which is not always at
@@ -98,16 +94,7 @@ if [[ -z $vcs && -n $bundle_repo ]]; then
                  then . else $all end)[].builds[]? | "\(.buildName)/\(.buildNumber)"')
     while read -r root_id; do
         [[ -n $root_id ]] || continue
-        root_info=$(build_of "${root_id%/*}" "${root_id##*/}")
-        vcs=$(jq -c '.buildInfo.vcs[0] // empty' <<<"$root_info")
-        [[ -z $run ]] && run=$(jq -r '.buildInfo.url // empty' <<<"$root_info")
-        [[ -n $vcs ]] && break
-        while read -r child_id; do
-            [[ -n $child_id ]] || continue
-            vcs=$(build_of "${child_id%/*}" "${child_id##*/}" | jq -c '.buildInfo.vcs[0] // empty')
-            [[ -n $vcs ]] && break
-        done < <(children_of "$root_info")
-        [[ -n $vcs ]] && break
+        descend "$root_id" && break
     done <<<"$roots"
 fi
 

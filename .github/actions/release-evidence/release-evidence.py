@@ -255,6 +255,17 @@ def resolve_sha(path):
     return info["checksums"]["sha256"]
 
 
+def bundle_of(path):
+    """The `name/version` a bundle repository path starts with."""
+    return "/".join(path.split("/")[:2])
+
+
+def has_promotion(bundle_repo, bundle):
+    """Whether a bundle carries a promotion record, which is what makes it the live one."""
+    listing = jfrog(f"artifactory/api/storage/{bundle_repo}/{bundle}") or {}
+    return any(child["uri"].startswith("/promotion-") for child in listing.get("children", []))
+
+
 def find_release(target):
     """The release bundle holding a target, or None when it has not been sealed into one.
 
@@ -269,13 +280,18 @@ def find_release(target):
         return f"{project}-release-bundles-v2", name_version, project
 
     sha = resolve_sha(path)
-    digest_hits = aql(f'items.find({{"sha256":"{sha}"}}).include("repo","path")')
-    found = next((h for h in digest_hits["results"]
-                  if h["repo"].endswith("-release-bundles-v2")), None)
-    if not found:
+    digest_hits = aql(f'items.find({{"sha256":"{sha}"}}).include("repo","path","created")')
+    # The same bytes sit in every bundle that ever shipped them, so taking the first names a
+    # superseded bundle as readily as the live one and then reports its empty promotion history.
+    candidates = sorted((h for h in digest_hits["results"]
+                         if h["repo"].endswith("-release-bundles-v2")),
+                        key=lambda h: h.get("created") or "", reverse=True)
+    if not candidates:
         return None
+    found = next((c for c in candidates if has_promotion(c["repo"], bundle_of(c["path"]))),
+                 candidates[0])
     project = found["repo"][: -len("-release-bundles-v2")]
-    return found["repo"], "/".join(found["path"].split("/")[:2]), project
+    return found["repo"], bundle_of(found["path"]), project
 
 
 def package_type_of_repo(repo):
@@ -1179,16 +1195,21 @@ def claim_rows(evidence):
                      "Sigstore-signed SLSA provenance held by GitHub, keyed to the artifact "
                      f'digest, with `builder.id` of `{att["builder"]}` and runner '
                      f'`{att["runner"]}`', cap(noun(pkg_type))])
-    if derived["unattested_types"] and derived["any_commit"]:
-        art = next(a for a in evidence["artifacts"] if a["commit"])
+    # Only the files this claim is about. A commit on some other type is not evidence for these.
+    carrying = [a for a in evidence["artifacts"]
+                if a["commit"] and a["type"] in derived["unattested_types"]]
+    # A bundle sealed from more than one root can hold more than one commit, and a row naming
+    # only the first would put the others' files behind a commit they were not built from.
+    for commit in sorted({a["commit"] for a in carrying}):
+        share = [a for a in carrying if a["commit"] == commit]
+        # The row covers all of them, so it rests on the weakest record behind any one.
         backing = ("A `jf.revision` property on each published file, which carries no signature "
                    "and can be changed by anyone holding annotate permission"
-                   if art["commit_from"] == "JFrog artifact properties" else
+                   if any(a["commit_from"] == "JFrog artifact properties" for a in share) else
                    "A JFrog build-info record published by the build job about itself, with no "
                    "signature over it")
-        rows.append([f'The {phrase(noun(t) for t in derived["unattested_types"])} carry commit '
-                     f'`{art["commit"][:8]}`', backing,
-                     cap(phrase(noun(t) for t in derived["unattested_types"]))])
+        named = phrase(noun(t) for t in sorted({a["type"] for a in share}))
+        rows.append([f'The {named} carry commit `{commit[:8]}`', backing, cap(named)])
     return rows
 
 
@@ -1314,15 +1335,21 @@ def warning_rows(evidence):
             "metadata, because promotion retags the manifest. The join to the build still works "
             "from the bundle record and from the immutable timestamped tag, so this costs a step "
             "rather than the evidence."])
-    source = evidence.get("source") or {}
-    if source.get("commit_from") == "JFrog artifact properties":
+    # Any file resting on the property earns this, not just whichever one set the source. A
+    # bundle mixing the two records would otherwise report only the stronger.
+    on_property = [a for a in evidence["artifacts"]
+                   if a.get("commit_from") == "JFrog artifact properties"]
+    if on_property:
+        carrying = [a for a in evidence["artifacts"] if a["commit"]]
+        scope = ("" if len(on_property) == len(carrying)
+                 else f", on {len(on_property)} of the {len(carrying)} files carrying a commit")
         rows.append([
             "The source commit rests on a mutable property",
-            f'`{source["commit"][:12]}` comes from the `jf.revision` property the JFrog CLI wrote '
-            "at upload. No build-info VCS block, image label or attestation carries it, which is "
-            "what a build performed outside the publishing pipeline looks like. Anyone holding "
-            "annotate permission on the repository can change a property, so the commit is "
-            "recorded and resolvable but not signed."])
+            f'`{on_property[0]["commit"][:12]}` comes from the `jf.revision` property the JFrog '
+            f"CLI wrote at upload{scope}. No build-info VCS block, image label or attestation "
+            "carries it, which is what a build performed outside the publishing pipeline looks "
+            "like. Anyone holding annotate permission on the repository can change a property, "
+            "so the commit is recorded and resolvable but not signed."])
     return rows
 
 
