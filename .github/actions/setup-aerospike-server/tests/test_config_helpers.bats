@@ -31,14 +31,29 @@ render_default_config() {
 
 render_multi_node_config() {
     local target=$1
+    local enable_tls=${2:-false}
 
     export SECURITY=""
     export REPLICATION_FACTOR=2
-    export MESH_SEEDS="        mesh-seed-address-port aerospike-1 3002"
+    export MESH_SEEDS=$'        mesh-seed-address-port aerospike-1 3002\n        mesh-seed-address-port aerospike-2 3002\n        mesh-seed-address-port aerospike-3 3002\n'
     export NAMESPACE
     NAMESPACE=$("$ACTION_DIR/render-template.sh" "$ACTION_DIR/templates/namespace-memory.conf")
+    export_tls_template_vars "$ACTION_DIR/templates" "$enable_tls"
 
     "$ACTION_DIR/render-template.sh" "$ACTION_DIR/templates/multi-node.conf" "$target"
+}
+
+render_tls_config() {
+    local target=$1
+
+    export SECURITY=""
+    export FEATURE_KEY_FILE=""
+    export REPLICATION_FACTOR=1
+    export NAMESPACE
+    NAMESPACE=$("$ACTION_DIR/render-template.sh" "$ACTION_DIR/templates/namespace-memory.conf")
+    export_tls_template_vars "$ACTION_DIR/templates" "true"
+
+    "$ACTION_DIR/render-template.sh" "$ACTION_DIR/templates/tls.conf" "$target"
 }
 
 @test "auto edition detects enterprise image repositories" {
@@ -94,6 +109,47 @@ render_multi_node_config() {
     render_default_config "$config_path"
 
     run grep -q "feature-key-file" "$config_path"
+    [ "$status" -ne 0 ]
+}
+
+@test "multi-node config without TLS omits the TLS listener" {
+    export FEATURE_KEY_FILE=""
+    config_path="$TEST_TMPDIR/aerospike-multi-node.conf"
+    render_multi_node_config "$config_path" "false"
+
+    grep -q "mesh-seed-address-port aerospike-1 3002" "$config_path"
+    grep -q "replication-factor 2" "$config_path"
+    grep -q "address any" "$config_path"
+    run grep -q "tls-port" "$config_path"
+    [ "$status" -ne 0 ]
+    run grep -q "tls aerospike-tls" "$config_path"
+    [ "$status" -ne 0 ]
+}
+
+@test "multi-node config with TLS includes the TLS listener and mesh heartbeat" {
+    export FEATURE_KEY_FILE=""
+    config_path="$TEST_TMPDIR/aerospike-tls-multi-node.conf"
+    render_multi_node_config "$config_path" "true"
+
+    grep -q "tls aerospike-tls" "$config_path"
+    grep -q "tls-port 4333" "$config_path"
+    grep -q "tls-name aerospike-tls" "$config_path"
+    grep -q "cert-file /etc/aerospike/tls/server.crt" "$config_path"
+    grep -q "mesh-seed-address-port aerospike-3 3002" "$config_path"
+    grep -q "replication-factor 2" "$config_path"
+    grep -q "address any" "$config_path"
+    run grep -q "access-address" "$config_path"
+    [ "$status" -ne 0 ]
+}
+
+@test "single-node TLS config keeps replication-factor 1" {
+    config_path="$TEST_TMPDIR/aerospike-tls.conf"
+    render_tls_config "$config_path"
+
+    grep -q "tls-port 4333" "$config_path"
+    grep -q "tls-name aerospike-tls" "$config_path"
+    grep -q "replication-factor 1" "$config_path"
+    run grep -q "mesh-seed-address-port" "$config_path"
     [ "$status" -ne 0 ]
 }
 

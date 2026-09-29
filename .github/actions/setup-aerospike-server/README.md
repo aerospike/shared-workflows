@@ -138,6 +138,7 @@ When `publish-ports` is `false`, the action still reports `service-ports` / `tls
 For clusters (`num-nodes > 1`), the action:
 
 - Generates a mesh heartbeat config with seed addresses for all nodes
+- When `enable-tls` is set and no custom config is provided, includes the TLS listener (`tls-name aerospike-tls`, `tls-port 4333`) in that same config, with replication-factor 2
 - Bypasses the container entrypoint to prevent config overwrites
 - Waits for all nodes to be ready, the cluster to form, and migrations to complete
 

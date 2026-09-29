@@ -649,6 +649,15 @@ jobs:
               || { echo "Expected cluster_size=3 on $container, got $cluster_size"; exit 1; }
           done
 
+          echo "Checking replication-factor on aerospike-1..."
+          rc=0
+          ns_stats=$(docker run --rm --network "$network" "$tools_image" \
+            asinfo -h aerospike-1 -p 3000 -U admin -P admin -v "namespace/test" 2>&1) || rc=$?
+          replication_factor=$(echo "$ns_stats" | tr ';' '\n' | grep -oP 'replication-factor=\K\d+' || echo "N/A")
+          echo "replication-factor: $replication_factor (exit code: $rc)"
+          [[ $rc -eq 0 && "$replication_factor" == "2" ]] \
+            || { echo "Expected replication-factor=2 on the generated TLS multi-node config, got $replication_factor"; exit 1; }
+
       - name: Verify authenticated TLS connection on each node
         run: |
           tools_image="aerospike.jfrog.io/database-docker-virtual/aerospike-tools:12.1.1_2"
