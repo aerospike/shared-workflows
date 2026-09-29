@@ -9,8 +9,6 @@ ENTRYPOINT="$ACTION_DIR/entrypoint.sh"
     run env \
         CONTAINER_NAMES="" \
         AEROSPIKE_NETWORK_NAME="aerospike-net" \
-        CLIENT_IMAGE="alpine:3.20" \
-        CLIENT_COMMAND="true" \
         bash "$ENTRYPOINT"
 
     [ "$status" -ne 0 ]
@@ -21,44 +19,16 @@ ENTRYPOINT="$ACTION_DIR/entrypoint.sh"
     run env \
         CONTAINER_NAMES="aerospike-1" \
         AEROSPIKE_NETWORK_NAME="" \
-        CLIENT_IMAGE="alpine:3.20" \
-        CLIENT_COMMAND="true" \
         bash "$ENTRYPOINT"
 
     [ "$status" -ne 0 ]
     [[ "$output" == *"aerospike-network-name is required"* ]]
 }
 
-@test "entrypoint requires client-image" {
-    run env \
-        CONTAINER_NAMES="aerospike-1" \
-        AEROSPIKE_NETWORK_NAME="aerospike-net" \
-        CLIENT_IMAGE="" \
-        CLIENT_COMMAND="true" \
-        bash "$ENTRYPOINT"
-
-    [ "$status" -ne 0 ]
-    [[ "$output" == *"client-image is required"* ]]
-}
-
-@test "entrypoint requires client-command" {
-    run env \
-        CONTAINER_NAMES="aerospike-1" \
-        AEROSPIKE_NETWORK_NAME="aerospike-net" \
-        CLIENT_IMAGE="alpine:3.20" \
-        CLIENT_COMMAND="" \
-        bash "$ENTRYPOINT"
-
-    [ "$status" -ne 0 ]
-    [[ "$output" == *"client-command is required"* ]]
-}
-
 @test "entrypoint rejects an invalid endpoint hostname" {
     run env \
         CONTAINER_NAMES="aerospike-1" \
         AEROSPIKE_NETWORK_NAME="aerospike-net" \
-        CLIENT_IMAGE="alpine:3.20" \
-        CLIENT_COMMAND="true" \
         ENDPOINT_HOSTNAME="not a host" \
         bash "$ENTRYPOINT"
 

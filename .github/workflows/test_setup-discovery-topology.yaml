@@ -87,10 +87,13 @@ jobs:
         with:
           container-names: ${{ steps.aerospike.outputs.container-names }}
           aerospike-network-name: ${{ steps.aerospike.outputs.network-name }}
-          client-image: alpine:3.20
           client-network-name: discovery-client-net
           enable-bash-trace-mode: ${{ env.ENABLE_BASH_TRACE_MODE }}
-          client-command: |
+
+      - name: Verify client network isolation
+        run: |
+          client_net="${{ steps.topology.outputs.client-network-name }}"
+          docker run --rm --network "$client_net" alpine:3.20 sh -c '
             set -eu
             getent hosts as-endpoint.test >/dev/null
             if getent hosts discovery-as-1 >/dev/null 2>&1; then
@@ -98,6 +101,7 @@ jobs:
               exit 1
             fi
             wget -q -O- http://toxiproxy:8474/version
+          '
 
       - name: Verify topology outputs
         run: |
