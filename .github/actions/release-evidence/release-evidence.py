@@ -1075,6 +1075,9 @@ def duties(evidence):
     publisher = people.get(last["by"]) if gated else None
     # The terminal promotion is the last record, so everything before it is a prior role.
     earlier = roles[:-1] if last and last["by"] else roles
+    # A repeat promotion to the terminal stage is the same gate, not a prior role.
+    if last:
+        earlier = [(r, w) for r, w in earlier if r != f'promoted it to {last["stage"]}']
 
     pr = evidence["pr"]
     selfies = [a for a in (pr["approvers"] if pr else [])

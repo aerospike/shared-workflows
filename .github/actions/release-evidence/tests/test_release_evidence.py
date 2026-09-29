@@ -844,6 +844,15 @@ class SeparationOfDuties(unittest.TestCase):
         self.assertTrue(line.startswith("**PASS WITH WARNING."), line)
         self.assertIn("also authorized the publish", line)
 
+    def test_a_repeat_promotion_to_the_terminal_stage_is_not_a_prior_role(self):
+        ev = self.evidence(pr=self.pr("abhilashmandaliya", ["mphanias"]),
+                           created_by="token:gh-citrusleaf/abhilashmandaliya",
+                           promotions=[self.promotion("STAGE", "ramya@aerospike.com"),
+                                       self.promotion("PROD", "rbotzer@aerospike.com"),
+                                       self.promotion("PROD", "rbotzer@aerospike.com")])
+        self.assertEqual(ev["duties"]["warnings"], [])
+        self.assertTrue(ev["duties"]["separated"])
+
     def test_a_second_company_address_is_the_same_person(self):
         # A promotion recorded against joem@ and a token resolving to jmartin@ are one human, so
         # the publish gate added nobody. Without this the chain reads as separated.
