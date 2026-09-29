@@ -53,6 +53,7 @@ REPO_TYPE_PACKAGE = {"deb": "debian", "rpm": "yum", "container": "docker", "carg
 MAX_BUILD_DEPTH = 8
 # Reachability, not maturity: STAGE_ORDER would rank INTERNAL above STAGE.
 PUBLICITY = ["PROD", "PREVIEW", "INTERNAL", "STAGE", "TEST", "DEV"]
+CUSTOMER_STAGES = {"PROD", "PREVIEW", "INTERNAL"}
 
 
 # ----------------------------------------------------------------- transport
@@ -219,11 +220,17 @@ def classify_stages(promoted, resident):
     """Where a release has got to, which required gates it passed over, and which lie ahead.
 
     A promotion record is the stronger reading of maturity; repository residence still places an
-    artifact in the pipeline, and is the only reading available before a bundle exists. DEV and
+    artifact in the pipeline, and is the only reading available before anything is promoted.
+    Once promotions are recorded, a copy above DEV with no promotion of its own was put there
+    some other way, so it is reported as unpromoted rather than as a stage reached. DEV and
     PREVIEW are optional, so their absence is reported neither as a gap nor as pending work.
     """
-    reached = [s for s in STAGE_ORDER if s in set(promoted) | set(resident)]
-    if "INTERNAL" in promoted or "INTERNAL" in resident:
+    # An unreadable promotion may be the one that put a copy there.
+    readable = promoted and "UNKNOWN" not in promoted
+    unpromoted = [s for s in resident if readable and s != "DEV" and s not in promoted]
+    counted = set(promoted) | (set(resident) - set(unpromoted))
+    reached = [s for s in STAGE_ORDER if s in counted]
+    if "INTERNAL" in counted:
         reached.append("INTERNAL")
     expected = STAGE_ORDER[:-1] if "INTERNAL" in reached else STAGE_ORDER
     furthest = max((expected.index(s) for s in reached if s in expected), default=-1)
@@ -232,6 +239,7 @@ def classify_stages(promoted, resident):
         "skipped_stages": [s for s in expected[:furthest + 1]
                            if s not in reached and s not in OPTIONAL_STAGES],
         "pending_stages": [s for s in expected[furthest + 1:] if s not in OPTIONAL_STAGES],
+        "unpromoted_stages": unpromoted,
     }
 
 
@@ -1250,6 +1258,12 @@ def gap_rows(evidence):
         rows.append(["An approving review on the authorizing pull request",
                      f'That someone other than `{pr["author"]}` examined this change. PR '
                      f'#{pr["number"]} carries no approval from a second person.'])
+    for stage, repos in unpromoted_copies(evidence).items():
+        if stage not in CUSTOMER_STAGES:
+            rows.append([f'A promotion record for the {stage} copy',
+                         f'That these bytes passed a gate into {stage}. They sit in '
+                         f'{phrase(f"`{r}`" for r in repos)}, but no promotion record exists for '
+                         f'{stage}, so nothing names who moved them or shows they were tested.'])
     unattributed = [p["stage"] for p in evidence["promotions"] if not p["by"]]
     if unattributed:
         rows.append([f'An identity on the {phrase(unattributed)} promotion',
@@ -1280,6 +1294,10 @@ def position_blocks(evidence):
         text += (f' No promotion record exists for {gates}, below where it has got to, so '
                  f'{"that gate was" if len(derived["skipped_stages"]) == 1 else "those gates were"} '
                  "passed over.")
+    for stage, repos in unpromoted_copies(evidence).items():
+        text += (f' Copies also sit in {phrase(f"`{r}`" for r in repos)} with no promotion record '
+                 f"behind them, so {stage} is not counted as reached, and any publish made from "
+                 "there is outside these records.")
     if not derived["sealed"]:
         text += (" Nothing has been sealed into a release bundle, so the custody claims below are "
                  "limited to what the build itself recorded.")
@@ -1301,9 +1319,26 @@ def shipped_untested(evidence):
              f'for {gates}. Nothing shows they were tested before they shipped.']]
 
 
+def unpromoted_copies(evidence):
+    """Each stage holding a copy that no promotion put there, with the repositories holding it."""
+    return {stage: sorted({r for a in evidence["artifacts"] for r in a["repos"]
+                           if stage_of_repo(r) == stage})
+            for stage in evidence["derived"].get("unpromoted_stages", [])}
+
+
+def published_unpromoted(evidence):
+    """A customer-facing copy that no promotion record accounts for."""
+    return [[f'In a {stage} repository with no promotion record',
+             f'These bytes sit in {phrase(f"`{r}`" for r in repos)}, and no promotion record '
+             f'exists for {stage}. They were placed there outside a release-bundle promotion, '
+             "so nothing names who authorized that publish."]
+            for stage, repos in unpromoted_copies(evidence).items() if stage in CUSTOMER_STAGES]
+
+
 def failures(evidence):
     """Everything that makes this release a FAIL, worst first."""
-    return (evidence.get("duties") or {}).get("violations", []) + shipped_untested(evidence)
+    return ((evidence.get("duties") or {}).get("violations", []) + shipped_untested(evidence)
+            + published_unpromoted(evidence))
 
 
 def warning_rows(evidence):

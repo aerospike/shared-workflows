@@ -125,6 +125,17 @@ class StageClassification(unittest.TestCase):
         self.assertNotIn("PROD", d["skipped_stages"])
         self.assertNotIn("PROD", d["pending_stages"])
 
+    def test_a_copy_above_dev_with_no_promotion_of_its_own_is_not_a_stage_reached(self):
+        d = self.derive(["DEV"], ["clients-maven-dev-local", "clients-maven-stage-local"])
+        self.assertEqual(d["stages_reached"], ["DEV"])
+        self.assertEqual(d["skipped_stages"], [])
+        self.assertEqual(d["unpromoted_stages"], ["STAGE"])
+
+    def test_dev_residence_without_a_dev_promotion_is_not_unpromoted(self):
+        d = self.derive(["TEST"], ["clients-pypi-dev-local", "clients-pypi-test-local"])
+        self.assertEqual(d["unpromoted_stages"], [])
+        self.assertIn("DEV", d["stages_reached"])
+
     def test_nothing_anywhere_is_pending_rather_than_skipped(self):
         d = self.derive([], [])
         self.assertEqual(d["stages_reached"], [])
@@ -530,6 +541,21 @@ class Verdict(unittest.TestCase):
         self.assertEqual(call["gaps"], 0)
         self.assertIn("The public copy carries no build link",
                       [w[0] for w in rev.warning_rows(ev)])
+
+    def test_an_unpromoted_stage_copy_is_a_gap_naming_the_repository(self):
+        ev = self.evidence(["DEV"], ["TEST", "STAGE", "PROD"], {"unpromoted_stages": ["STAGE"]})
+        ev["artifacts"] = [{"repos": ["clients-maven-dev-local", "clients-maven-stage-local"]}]
+        call = rev.verdict(ev)
+        self.assertEqual(call["status"], "FAIL")
+        self.assertEqual(call["finding"], "A promotion record for the STAGE copy")
+        self.assertIn("`clients-maven-stage-local`", rev.gap_rows(ev)[0][1])
+
+    def test_an_unpromoted_customer_facing_copy_is_a_control_failure(self):
+        ev = self.evidence(["DEV", "TEST", "STAGE"], ["PROD"], {"unpromoted_stages": ["PROD"]})
+        ev["artifacts"] = [{"repos": ["clients-maven-prod-public-local"]}]
+        call = rev.verdict(ev)
+        self.assertEqual(call["reason"], "a control did not happen")
+        self.assertEqual(call["finding"], "In a PROD repository with no promotion record")
 
     def test_a_clean_release_in_prod_passes(self):
         call = rev.verdict(self.evidence(["DEV", "TEST", "STAGE", "PROD"], []))
