@@ -342,6 +342,7 @@ runs:
           export NAMESPACE=$("$render_tpl" "$tpl_dir/namespace-memory.conf")
         fi
 
+        feature_key_container_path=""
         if [[ "$server_edition" == "community" ]]; then
           if [[ -n "$features_path" || -n "${FEATURES_CONTENT}" ]]; then
             echo "::notice::Ignoring features-file/features-content for Aerospike Server Community"
@@ -355,14 +356,14 @@ runs:
             echo "Wrote features-content to $features_path"
           fi
 
-          if ! should_use_features_file "$server_edition" "$features_path"; then
-            export FEATURE_KEY_FILE=""
-            features_path=""
-          else
+          if [[ -n "$features_path" ]]; then
             features_conf_filename=$(basename "$features_path")
+            feature_key_container_path="${{ steps.server-volume.outputs.conf_volume_dest_dir }}/$features_conf_filename"
 
             export FEATURE_KEY_FILE
-            FEATURE_KEY_FILE=$(build_feature_key_file_directive "$server_edition" "${{ inputs.features-file }}" "${FEATURES_CONTENT}" "${{ steps.server-volume.outputs.conf_volume_dest_dir }}/$features_conf_filename")
+            FEATURE_KEY_FILE=$(build_feature_key_file_directive "$server_edition" "${{ inputs.features-file }}" "${FEATURES_CONTENT}" "$feature_key_container_path")
+          else
+            export FEATURE_KEY_FILE=""
           fi
         fi
 
@@ -392,6 +393,16 @@ runs:
           fi
           if [[ "$enable_sc" == "true" ]]; then
             echo "::warning::Strong consistency directives must be present in your custom config; the action does not inject namespace SC settings into user-provided configs"
+          fi
+
+          # Generated templates already expand feature-key-file. A custom config
+          # that omits it cannot name the mounted features file, so inject the
+          # directive. Leave an existing feature-key-file line unchanged.
+          if [[ -n "$feature_key_container_path" ]] && ! config_declares_feature_key_file "$config_path"; then
+            injected_config_path="$(mktemp)"
+            inject_feature_key_file_directive "$config_path" "$injected_config_path" "$feature_key_container_path"
+            config_path="$injected_config_path"
+            echo "Injected feature-key-file ${feature_key_container_path} into custom config"
           fi
         fi
 

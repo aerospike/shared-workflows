@@ -143,7 +143,7 @@ For clusters (`num-nodes > 1`), the action:
 
 If you provide a custom config via `config-file` or `config-content`, it must include a `heartbeat` section with `mode mesh`. The action will inject `mesh-seed-address-port` entries automatically.
 
-For `server-edition: enterprise`, the action requires `features-file` or `features-content` for multi-node clusters. For `server-edition: community`, it does not render or mount a features file because `feature-key-file` is Enterprise-only.
+For `server-edition: enterprise`, the action requires `features-file` or `features-content` for multi-node clusters. When either is set, the action mounts that file and, if the custom config does not already contain `feature-key-file`, injects that directive pointing at the mounted path. An existing `feature-key-file` directive is left unchanged. For `server-edition: community`, it does not render or mount a features file because `feature-key-file` is Enterprise-only, and it removes that directive from custom configs.
 
 ## TLS
 

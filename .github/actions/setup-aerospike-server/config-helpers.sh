@@ -25,13 +25,6 @@ resolve_server_edition() {
     esac
 }
 
-should_use_features_file() {
-    local server_edition=$1
-    local features_path=$2
-
-    [[ $server_edition == "enterprise" && -n $features_path ]]
-}
-
 build_feature_key_file_directive() {
     local server_edition=$1
     local features_path=$2
@@ -54,4 +47,31 @@ strip_feature_key_file_directive() {
     local target_config=$2
 
     sed '/^[[:space:]]*feature-key-file[[:space:]]/d' "$source_config" >"$target_config"
+}
+
+# Insert feature-key-file into the first service context, or append a service
+# context when the config has none. The caller skips configs that already
+# declare the directive.
+inject_feature_key_file_directive() {
+    local source_config=$1
+    local target_config=$2
+    local feature_path_in_container=$3
+
+    awk -v path="$feature_path_in_container" '
+        BEGIN { inserted = 0 }
+        /^[[:space:]]*service[[:space:]]*\{/ && inserted == 0 {
+            print
+            print "    feature-key-file " path
+            inserted = 1
+            next
+        }
+        { print }
+        END {
+            if (inserted == 0) {
+                print "service {"
+                print "    feature-key-file " path
+                print "}"
+            }
+        }
+    ' "$source_config" >"$target_config"
 }
