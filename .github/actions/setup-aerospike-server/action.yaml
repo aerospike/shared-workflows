@@ -409,11 +409,10 @@ runs:
           fi
         fi
 
-        # Single-node defaults only. Multi-node configs are rendered when the
-        # containers start. Generating tls.conf or default.conf here would set
-        # config_path, and the multi-node step would only splice mesh seeds
-        # into that single-node file: replication-factor stays 1, and a TLS
-        # cluster never gets the mesh heartbeat settings.
+        # config_path is still empty when neither config-file nor config-content
+        # was set. Render the single-node default here. Leave multi-node empty
+        # so start-containers takes its generated-config branch and renders
+        # multi-node.conf, including the TLS listener when enable-tls is set.
         if [[ "$num_nodes" -eq 1 && -z "$config_path" ]]; then
           if [[ "${{ inputs.enable-tls }}" == "true" ]]; then
             export_tls_template_vars "$tpl_dir" "true"
@@ -562,8 +561,8 @@ runs:
             export MESH_SEEDS="$mesh_seeds"
             export_tls_template_vars "$tpl_dir" "$enable_tls"
 
-            # Render multi-node template. TLS, when enabled, is part of this
-            # file rather than a single-node tls.conf with mesh seeds spliced in.
+            # No config-file or config-content. Render multi-node.conf, with
+            # the TLS listener included when enable-tls is set.
             config_path="$(mktemp)"
             "$render_tpl" "$tpl_dir/multi-node.conf" "$config_path"
           else
