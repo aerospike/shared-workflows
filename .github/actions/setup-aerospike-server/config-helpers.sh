@@ -25,13 +25,6 @@ resolve_server_edition() {
     esac
 }
 
-should_use_features_file() {
-    local server_edition=$1
-    local features_path=$2
-
-    [[ $server_edition == "enterprise" && -n $features_path ]]
-}
-
 build_feature_key_file_directive() {
     local server_edition=$1
     local features_path=$2
