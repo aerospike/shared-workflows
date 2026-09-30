@@ -49,19 +49,13 @@ strip_feature_key_file_directive() {
     sed '/^[[:space:]]*feature-key-file[[:space:]]/d' "$source_config" >"$target_config"
 }
 
-# Insert feature-key-file into a custom aerospike.conf that does not already
-# declare it. The directive goes in the first service context, or a service
-# context is appended when the config has none. An existing line is copied
-# through unchanged so the caller's path is the one the server loads.
+# Insert feature-key-file into the first service context, or append a service
+# context when the config has none. The caller skips configs that already
+# declare the directive.
 inject_feature_key_file_directive() {
     local source_config=$1
     local target_config=$2
     local feature_path_in_container=$3
-
-    if config_declares_feature_key_file "$source_config"; then
-        cp "$source_config" "$target_config"
-        return
-    fi
 
     awk -v path="$feature_path_in_container" '
         BEGIN { inserted = 0 }
