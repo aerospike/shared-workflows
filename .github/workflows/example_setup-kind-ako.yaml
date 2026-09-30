@@ -1,0 +1,35 @@
+name: Example Setup kind and AKO
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  setup:
+    name: kind plus AKO
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup kind and AKO
+        id: kind-ako
+        uses: ./.github/actions/setup-kind-ako
+        with:
+          features-content: ${{ secrets.AEROSPIKE_FEATURE_KEY }}
+
+      - name: Verify the pinned NodePort range
+        run: |
+          [[ "${{ steps.kind-ako.outputs.node-port-range }}" == "30000-32767" ]]
+          [[ -n "${{ steps.kind-ako.outputs.ingress-endpoints }}" ]]
+          [[ -n "${{ steps.kind-ako.outputs.service-node-ports }}" ]]
+          echo "endpoint ${{ steps.kind-ako.outputs.endpoint-hostname }}"
+          echo "ingress ${{ steps.kind-ako.outputs.ingress-endpoints }}"
+          echo "node ports ${{ steps.kind-ako.outputs.service-node-ports }}"
