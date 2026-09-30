@@ -105,6 +105,13 @@ on:
         required: false
         type: string
         default: bundle-metadata
+      slack-notify-on-failure:
+        description: |
+          When true, post a Slack alert if this job fails. Requires vars.SLACK_CHANNEL_ID
+          and secrets.SLACK_BOT_TOKEN on the caller (via secrets: inherit).
+        required: false
+        type: boolean
+        default: false
     outputs:
       jf-build-id:
         description: JFrog build ID for the parent build info published by this deploy
@@ -117,6 +124,11 @@ on:
       bundle-metadata-available:
         description: Whether Maven bundle metadata was uploaded as a GitHub artifact
         value: ${{ jobs.deploy.outputs.bundle-metadata-available }}
+
+    secrets:
+      SLACK_BOT_TOKEN:
+        required: false
+
 permissions:
   contents: read
   id-token: write
@@ -138,6 +150,7 @@ jobs:
           egress-policy: audit
 
       - name: Install xmllint and Verify
+        id: install-xmllint
         shell: bash
         run: |
           echo "Attempting to install libxml2-utils for xmllint..."
@@ -171,6 +184,7 @@ jobs:
           oidc-audience: ${{ inputs.oidc-audience }}
 
       - name: Check JFrog Configuration
+        id: jf-check
         run: |
           jf c show
           jf rt ping
@@ -298,3 +312,28 @@ jobs:
           path: structured_build_artifacts/.maven-bundle-metadata.json
           include-hidden-files: true
           if-no-files-found: error
+
+      - name: Notify Slack on failure
+        if: failure() && inputs.slack-notify-on-failure && github.repository != 'aerospike/shared-workflows' && vars.SLACK_CHANNEL_ID != ''
+        continue-on-error: true
+        uses: ./.github/actions/notify-workflow-failure
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+        with:
+          gh-checkout-path: ${{ inputs.gh-checkout-path }}
+          called-workflow: reusable_deploy-artifacts.yaml
+          called-workflow-ref: ${{ inputs.gh-workflows-ref }}
+          title: Deploy failed
+          subtitle: ${{ inputs.jf-build-name }}@${{ inputs.version }}
+          detail-label: Build
+          detail-name: ${{ inputs.jf-build-name }}
+          detail-version: ${{ inputs.version }}
+          slack-channel-id: ${{ vars.SLACK_CHANNEL_ID }}
+          failed-step-checks-json: |
+            [
+              {"name":"Install xmllint and Verify","outcome":"${{ steps.install-xmllint.outcome }}"},
+              {"name":"Check JFrog Configuration","outcome":"${{ steps.jf-check.outcome }}"},
+              {"name":"Detect artifact types","outcome":"${{ steps.detect-artifacts.outcome }}"},
+              {"name":"Deploy Artifacts","outcome":"${{ steps.deploy.outcome }}"},
+              {"name":"Upload Maven bundle metadata","outcome":"${{ steps.upload-bundle-metadata.outcome }}"}
+            ]

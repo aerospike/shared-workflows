@@ -78,6 +78,17 @@ on:
         required: false
         type: string
         default: ubuntu-22.04
+      slack-notify-on-failure:
+        description: |
+          When true, post a Slack alert if this job fails. Requires vars.SLACK_CHANNEL_ID
+          and secrets.SLACK_BOT_TOKEN on the caller (via secrets: inherit).
+        required: false
+        type: boolean
+        default: false
+
+    secrets:
+      SLACK_BOT_TOKEN:
+        required: false
 
 permissions:
   contents: read
@@ -113,6 +124,7 @@ jobs:
           oidc-audience: ${{ inputs.oidc-audience }}
 
       - name: Check JFrog Configuration
+        id: jf-check
         run: |
           jf c show
           jf rt ping
@@ -126,6 +138,7 @@ jobs:
           path: .bundle-metadata-dl
 
       - name: Verify Maven bundle metadata download
+        id: verify-bundle-metadata
         if: always() && !cancelled() && inputs.gh-bundle-metadata-artifact-name != ''
         shell: bash
         run: |
@@ -168,6 +181,7 @@ jobs:
           fi
 
       - name: Create Release Bundle
+        id: create-release-bundle
         shell: bash
         run: |
           entrypoint="${{ inputs.gh-checkout-path }}/.github/workflows/create-release-bundle/entrypoint.sh"
@@ -192,3 +206,28 @@ jobs:
             --version "${{ inputs.version }}" \
             "${meta_arg[@]}" \
             $dry_run_arg
+
+      - name: Notify Slack on failure
+        if: failure() && inputs.slack-notify-on-failure && github.repository != 'aerospike/shared-workflows' && vars.SLACK_CHANNEL_ID != ''
+        continue-on-error: true
+        uses: ./.github/actions/notify-workflow-failure
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+        with:
+          gh-checkout-path: ${{ inputs.gh-checkout-path }}
+          called-workflow: reusable_create-release-bundle.yaml
+          called-workflow-ref: ${{ inputs.gh-workflows-ref }}
+          title: Release bundle failed
+          subtitle: ${{ inputs.jf-bundle-name }}@${{ inputs.version }}
+          detail-label: Bundle
+          detail-name: ${{ inputs.jf-bundle-name }}
+          detail-version: ${{ inputs.version }}
+          slack-channel-id: ${{ vars.SLACK_CHANNEL_ID }}
+          failed-step-checks-json: |
+            [
+              {"name":"Check JFrog Configuration","outcome":"${{ steps.jf-check.outcome }}"},
+              {"name":"Download Maven bundle metadata artifact","outcome":"${{ steps.download-bundle-metadata.outcome }}"},
+              {"name":"Verify Maven bundle metadata download","outcome":"${{ steps.verify-bundle-metadata.outcome }}"},
+              {"name":"Resolve bundle metadata path","outcome":"${{ steps.bundle-meta.outcome }}"},
+              {"name":"Create Release Bundle","outcome":"${{ steps.create-release-bundle.outcome }}"}
+            ]
