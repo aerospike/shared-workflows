@@ -164,7 +164,7 @@ EOF
     ' "$injected_path"
 }
 
-@test "custom config rewrites an existing feature-key-file path" {
+@test "custom config keeps an existing feature-key-file path" {
     config_path="$TEST_TMPDIR/aerospike.conf"
     injected_path="$TEST_TMPDIR/aerospike-injected.conf"
     cat > "$config_path" <<'EOF'
@@ -176,9 +176,10 @@ EOF
 
     inject_feature_key_file_directive "$config_path" "$injected_path" "/etc/aerospike-custom/tmp.AbCdEf"
 
-    grep -q $'\tfeature-key-file /etc/aerospike-custom/tmp.AbCdEf' "$injected_path"
-    run grep -q "caller-does-not-know-this-name" "$injected_path"
+    grep -q $'\tfeature-key-file /tmp/caller-does-not-know-this-name' "$injected_path"
+    run grep -q "/etc/aerospike-custom/tmp.AbCdEf" "$injected_path"
     [ "$status" -ne 0 ]
+    grep -q "cluster-name docker" "$injected_path"
     [ "$(grep -c 'feature-key-file' "$injected_path")" -eq 1 ]
 }
 

@@ -395,10 +395,10 @@ runs:
             echo "::warning::Strong consistency directives must be present in your custom config; the action does not inject namespace SC settings into user-provided configs"
           fi
 
-          # Generated templates already expand feature-key-file. Custom configs
-          # do not, and features-content is written to a temp file whose name
-          # the caller cannot know. Point the custom config at the mounted file.
-          if [[ -n "$feature_key_container_path" ]]; then
+          # Generated templates already expand feature-key-file. A custom config
+          # that omits it cannot name the mounted features file, so inject the
+          # directive. Leave an existing feature-key-file line unchanged.
+          if [[ -n "$feature_key_container_path" ]] && ! config_declares_feature_key_file "$config_path"; then
             injected_config_path="$(mktemp)"
             inject_feature_key_file_directive "$config_path" "$injected_config_path" "$feature_key_container_path"
             config_path="$injected_config_path"
