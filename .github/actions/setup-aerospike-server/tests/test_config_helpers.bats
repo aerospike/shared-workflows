@@ -193,13 +193,3 @@ EOF
     grep -q "feature-key-file /etc/aerospike-custom/features.conf" "$injected_path"
     [ "$(grep -c 'feature-key-file' "$injected_path")" -eq 1 ]
 }
-
-@test "community does not mount features file" {
-    run should_use_features_file community "$TEST_TMPDIR/features.conf"
-
-    [ "$status" -ne 0 ]
-}
-
-@test "enterprise mounts features file" {
-    should_use_features_file enterprise "$TEST_TMPDIR/features.conf"
-}

@@ -356,15 +356,14 @@ runs:
             echo "Wrote features-content to $features_path"
           fi
 
-          if ! should_use_features_file "$server_edition" "$features_path"; then
-            export FEATURE_KEY_FILE=""
-            features_path=""
-          else
+          if [[ -n "$features_path" ]]; then
             features_conf_filename=$(basename "$features_path")
             feature_key_container_path="${{ steps.server-volume.outputs.conf_volume_dest_dir }}/$features_conf_filename"
 
             export FEATURE_KEY_FILE
             FEATURE_KEY_FILE=$(build_feature_key_file_directive "$server_edition" "${{ inputs.features-file }}" "${FEATURES_CONTENT}" "$feature_key_container_path")
+          else
+            export FEATURE_KEY_FILE=""
           fi
         fi
 
