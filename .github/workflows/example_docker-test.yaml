@@ -91,7 +91,7 @@ jobs:
     with:
       gh-workflows-ref: ${{ github.sha }}
       jf-project: test
-      jf-build-names: test-container:${{ github.run_number }}
+      jf-build-names: ${{ needs.build-test-deploy.outputs.jf-build-name }}:${{ needs.build-test-deploy.outputs.jf-build-id }}
       jf-bundle-name: test-docker-release
       version: ${{ needs.extract-version.outputs.version }}
       oidc-provider-name: gh-aerospike

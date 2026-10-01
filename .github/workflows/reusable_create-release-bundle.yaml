@@ -6,9 +6,12 @@ on:
       # Required inputs
       jf-build-names:
         description: |
-          Comma-separated list of build name:version pairs to include in the release bundle.
-          Format: "build-name1:version1,build-name2:version2"
-          Example: "database-build:v1.2.3,app-build:v2.1.0"
+          Comma-separated list of build-name:build-number pairs to include in the release bundle.
+          The build number is the JFrog build-info number the deploy job published, not the
+          release version. Take it from the deploy job's `jf-build-id` output
+          (reusable_artifacts-cicd.yaml, reusable_docker-build-deploy.yaml, reusable_deploy-artifacts.yaml).
+          Format: "build-name1:build-number1,build-name2:build-number2"
+          Example: "my-app:24873310921-1,my-container:412"
         required: true
         type: string
       jf-bundle-name:
