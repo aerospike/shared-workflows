@@ -148,7 +148,7 @@ When `enable-tls: "true"`, the action generates a self-signed CA and server/clie
 
 - `ca.crt` / `ca.key` -- CA certificate and key
 - `server.crt` / `server.key` -- server certificate and key
-- `client.crt` / `client.key` -- client certificate and key
+- `client.crt` / `client.key` -- X.509 v3 client certificate and key (`basicConstraints=CA:FALSE`, `extendedKeyUsage=clientAuth`)
 
 `server.crt` is valid for `aerospike-tls` (the generated config's `tls-name` and the certificate CN), each container name (`<container-name-prefix>-N`), `localhost`, `docker`, and `127.0.0.1`.
 
