@@ -309,6 +309,10 @@ jobs:
           for f in ca.crt ca.key server.crt server.key client.crt client.key; do
             [[ -f "$cert_dir/$f" ]] || { echo "Missing cert file: $f"; exit 1; }
           done
+          san=$(openssl x509 -in "$cert_dir/server.crt" -noout -ext subjectAltName)
+          echo "$san"
+          echo "$san" | grep -Eq '(^|[[:space:],])DNS:aerospike-tls(,|$)' \
+            || { echo "server.crt SAN is missing aerospike-tls"; exit 1; }
           echo "All expected cert files present"
 
       - name: Verify non-TLS port still works
@@ -502,6 +506,10 @@ jobs:
           for f in ca.crt ca.key server.crt server.key client.crt client.key; do
             [[ -f "$cert_dir/$f" ]] || { echo "Missing cert file: $f"; exit 1; }
           done
+          san=$(openssl x509 -in "$cert_dir/server.crt" -noout -ext subjectAltName)
+          echo "$san"
+          echo "$san" | grep -Eq '(^|[[:space:],])DNS:aerospike-tls(,|$)' \
+            || { echo "server.crt SAN is missing aerospike-tls"; exit 1; }
           echo "All expected cert files present"
 
       - name: Verify authenticated access on service port
