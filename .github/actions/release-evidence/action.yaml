@@ -37,8 +37,8 @@ outputs:
     value: ${{ steps.evidence.outputs.document }}
   verdict:
     description: >
-      The call on this release: FAIL, PASS WITH WARNING, ON TRACK WITH WARNING, ON TRACK, or
-      PASS. Gate with startsWith(..., 'FAIL').
+      The call on this release: FAIL, SUPERSEDED, PASS WITH WARNING, ON TRACK WITH WARNING,
+      ON TRACK, or PASS. Gate with startsWith(..., 'FAIL').
     value: ${{ steps.evidence.outputs.verdict }}
   finding:
     description: The one finding that decided the verdict, empty on a clean PASS or ON TRACK

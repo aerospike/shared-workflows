@@ -8,6 +8,7 @@ artifact sits in the pipeline, whether a gap is a skipped gate or work still to 
 whether a claim has a record behind it.
 """
 import importlib.util
+import json
 import pathlib
 import sys
 import unittest
@@ -1573,3 +1574,177 @@ class TheCommitClaimCoversOnlyTheFilesCarryingIt(unittest.TestCase):
         row = next(r for r in rev.warning_rows(ev)
                    if r[0] == "The source commit rests on a mutable property")
         self.assertIn("1 of the 2 files carrying a commit", row[1])
+
+
+def supersede(replaced, replaced_by, stage="TEST", at="2026-09-30T19:44:19Z"):
+    return {"schema": rev.SUPERSEDE_PREDICATE, "project": "connect", "bundle": "chart",
+            "stage": stage, "replaced": replaced, "replacedBy": replaced_by, "at": at,
+            "actor": "writer", "reason": "failed QE",
+            "run": "https://github.com/citrusleaf/a-repo/actions/runs/1/attempts/1"}
+
+
+class SupersedeRecords(unittest.TestCase):
+    """Un-promote deletes the signed promotion, so the store is the only trace of it."""
+
+    BASE = "artifactory/release-evidence-local/evidence/supersede/connect/chart"
+
+    def setUp(self):
+        self._real = (rev.jfrog, rev.jfrog_bytes, rev.verify_supersede)
+        self.files, self.readable, self.repos = {}, True, []
+
+        def fake_jfrog(path):
+            if path.endswith("/evidence/supersede"):
+                return {"children": []} if self.readable else None
+            if path.endswith("?list&deep=1"):
+                uris = [p[len(self.BASE):] for p in self.files if p.startswith(self.BASE)]
+                return {"files": [{"uri": u} for u in uris]} if uris else None
+            return None
+
+        def fake_verify(_record, bundle, repo):
+            self.repos.append(repo)
+            return bundle == b"signed"
+
+        rev.jfrog, rev.jfrog_bytes = fake_jfrog, self.files.get
+        rev.verify_supersede = fake_verify
+
+    def tearDown(self):
+        rev.jfrog, rev.jfrog_bytes, rev.verify_supersede = self._real
+
+    def store(self, name, record, bundle=b"signed"):
+        path = f"{self.BASE}/TEST/{name}"
+        self.files[path] = record if isinstance(record, bytes) else json.dumps(record).encode()
+        self.files[path.removesuffix(".json") + ".sigstore.json"] = bundle
+
+    def test_an_unreadable_store_is_not_an_empty_one(self):
+        self.readable = False
+        self.assertIsNone(rev.supersede_records("connect", "chart", "r1"))
+
+    def test_a_revision_is_found_whether_it_was_replaced_or_replacing(self):
+        self.store("1-r2.json", supersede(["r1"], "r2"))
+        self.store("2-r4.json", supersede(["r3"], "r4"))
+        replaced = rev.supersede_records("connect", "chart", "r1")
+        replacing = rev.supersede_records("connect", "chart", "r2")
+        self.assertEqual([r["replacedBy"] for r in replaced], ["r2"])
+        self.assertEqual([r["replacedBy"] for r in replacing], ["r2"])
+
+    def test_the_stored_attestation_is_never_read_as_a_record(self):
+        self.store("1-r2.json", supersede(["r1"], "r2"))
+        self.assertEqual(len(rev.supersede_records("connect", "chart", "r1")), 1)
+
+    def test_it_verifies_against_the_repository_that_ran_the_supersede(self):
+        self.store("1-r2.json", supersede(["r1"], "r2"))
+        [record] = rev.supersede_records("connect", "chart", "r1")
+        self.assertTrue(record["verified"])
+        self.assertEqual(self.repos, ["citrusleaf/a-repo"])
+
+    def test_a_record_that_does_not_verify_is_kept_unverified(self):
+        self.store("1-r2.json", supersede(["r1"], "r2"), bundle=b"forged")
+        [record] = rev.supersede_records("connect", "chart", "r1")
+        self.assertFalse(record["verified"])
+
+    def test_an_unparseable_record_is_kept_and_unverified(self):
+        self.store("1-r2.json", b"{not json")
+        [record] = rev.supersede_records("connect", "chart", "r1")
+        self.assertFalse(record["verified"])
+
+    def test_a_record_naming_another_bundle_is_ignored(self):
+        other = supersede(["r1"], "r2")
+        other["bundle"] = "other-chart"
+        self.store("1-r2.json", other)
+        self.assertEqual(rev.supersede_records("connect", "chart", "r1"), [])
+
+
+class SupersedeState(unittest.TestCase):
+    """A revision is superseded only when it lost the furthest stage it ever held."""
+
+    def records(self, *specs, verified=True):
+        return [{**supersede(replaced, by, stage, at), "verified": verified}
+                for replaced, by, stage, at in specs]
+
+    def test_replaced_at_its_furthest_stage_it_is_superseded(self):
+        records = self.records((["r1"], "r2", "TEST", "t1"))
+        self.assertIs(rev.supersede_state(records, "r1", set()), records[0])
+
+    def test_replaced_below_a_stage_it_still_holds_it_is_not(self):
+        records = self.records((["r1"], "r2", "DEV", "t1"))
+        self.assertIsNone(rev.supersede_state(records, "r1", {"TEST"}))
+        self.assertTrue(records[0]["counts"])
+
+    def test_still_holding_the_stage_contradicts_the_record(self):
+        records = self.records((["r1"], "r2", "TEST", "t1"))
+        self.assertIsNone(rev.supersede_state(records, "r1", {"TEST"}))
+        self.assertTrue(records[0]["contradicted"])
+        self.assertFalse(records[0]["counts"])
+
+    def test_an_unverified_record_supersedes_nothing(self):
+        records = self.records((["r1"], "r2", "TEST", "t1"), verified=False)
+        self.assertIsNone(rev.supersede_state(records, "r1", set()))
+
+    def test_a_later_return_to_the_stage_ends_the_supersede(self):
+        records = self.records((["r1"], "r2", "TEST", "t1"), (["r2"], "r1", "TEST", "t2"))
+        self.assertIsNone(rev.supersede_state(records, "r1", {"TEST"}))
+        self.assertFalse(records[0]["contradicted"])
+        self.assertEqual([r["role"] for r in records], ["replaced", "replacing"])
+
+
+class SupersededVerdict(unittest.TestCase):
+    """A replaced revision is neither on its way nor failing."""
+
+    def evidence(self, supersedes, reached, superseded_by=None):
+        return {"release": None, "pr": None, "source": None, "signatures": {},
+                "promotions": [], "artifacts": [], "supersedes": supersedes,
+                "duties": {"warnings": [], "violations": [], "unproven": []},
+                "derived": {"stages_reached": reached, "pending_stages": ["STAGE", "PROD"],
+                            "skipped_stages": [], "sealed": True, "any_commit": True,
+                            "unlinked_published": [], "independently_approved": True,
+                            "superseded_by": superseded_by}}
+
+    def record(self, role, verified=True, contradicted=False):
+        return {**supersede(["r1"], "r2"), "role": role, "verified": verified,
+                "contradicted": contradicted, "counts": verified and not contradicted,
+                "path": "release-evidence-local/evidence/supersede/connect/chart/TEST/1-r2.json"}
+
+    def test_a_superseded_revision_has_its_own_status(self):
+        record = self.record("replaced")
+        ev = self.evidence([record], [], superseded_by=record)
+        call = rev.verdict(ev)
+        self.assertEqual(call["status"], "SUPERSEDED")
+        self.assertEqual(call["finding"], "Superseded at TEST by r2")
+        line = rev.verdict_block(ev, [], [])[-1]
+        self.assertTrue(line.startswith("**SUPERSEDED.** Replaced at TEST by `r2`"), line)
+
+    def test_where_this_is_names_the_stage_it_lost(self):
+        record = self.record("replaced")
+        ev = self.evidence([record], ["DEV", "TEST"], superseded_by=record)
+        ev["derived"]["stages"] = ["DEV"]
+        text = rev.position_blocks(ev)[1][1]
+        self.assertTrue(text.startswith(
+            "This was superseded at TEST by `r2` 2026-09-30 19:44:19 UTC."), text)
+        self.assertIn("It still holds DEV.", text)
+
+    def test_a_residence_copy_is_not_a_stage_still_held(self):
+        record = self.record("replaced")
+        ev = self.evidence([record], ["DEV", "TEST"], superseded_by=record)
+        ev["derived"]["stages"] = []
+        self.assertNotIn("still holds", rev.position_blocks(ev)[1][1])
+
+    def test_the_replacement_shows_what_it_replaced_without_a_warning(self):
+        ev = self.evidence([self.record("replacing")], ["DEV", "TEST"])
+        self.assertEqual(rev.verdict(ev)["status"], "ON TRACK")
+        row = next(r for r in rev.custody_rows(ev) if r[0] == "TEST supersede")
+        self.assertIn("Replaced `r1`", row[1])
+        self.assertIn("failed QE", row[1])
+
+    def test_an_unverified_record_is_incomplete_evidence(self):
+        ev = self.evidence([self.record("replaced", verified=False)], [])
+        call = rev.verdict(ev)
+        self.assertEqual((call["status"], call["reason"]), ("FAIL", "evidence incomplete"))
+        self.assertEqual(call["finding"], "A verified attestation on the supersede record")
+
+    def test_a_record_the_promotions_contradict_is_incomplete_evidence(self):
+        ev = self.evidence([self.record("replaced", contradicted=True)], ["DEV", "TEST"])
+        self.assertEqual(rev.verdict(ev)["finding"], "A completed supersede at TEST")
+
+    def test_an_unreadable_store_fails_a_sealed_release(self):
+        call = rev.verdict(self.evidence(None, ["DEV", "TEST"]))
+        self.assertEqual(call["finding"], "A readable supersede store")

@@ -33,16 +33,16 @@ JFrog auth comes from `JFROG_TOKEN`. GitHub auth comes from the `gh` CLI or `GIT
 | `jf-url`      | No       | `https://aerospike.jfrog.io` | JFrog platform URL                                                 |
 | `jfrog-token` | No       | -                            | Overrides `JFROG_TOKEN` and the JFrog CLI config                   |
 
-| Output     | Description                                                                 |
-| ---------- | --------------------------------------------------------------------------- |
-| `document` | Path to the written document, empty when it went to stdout                  |
-| `verdict`  | `FAIL`, `PASS WITH WARNING`, `ON TRACK WITH WARNING`, `ON TRACK`, or `PASS` |
-| `finding`  | The one finding that decided it, empty on a clean `PASS` or `ON TRACK`      |
-| `reason`   | Why it came out that way, one clause                                        |
-| `problems` | Count of controls that did not happen                                       |
-| `gaps`     | Count of records due at this stage that do not exist                        |
-| `warnings` | Count of findings that thin the chain without failing it                    |
-| `complete` | `true` once the release has reached PROD or INTERNAL                        |
+| Output     | Description                                                                               |
+| ---------- | ----------------------------------------------------------------------------------------- |
+| `document` | Path to the written document, empty when it went to stdout                                |
+| `verdict`  | `FAIL`, `SUPERSEDED`, `PASS WITH WARNING`, `ON TRACK WITH WARNING`, `ON TRACK`, or `PASS` |
+| `finding`  | The one finding that decided it, empty on a clean `PASS` or `ON TRACK`                    |
+| `reason`   | Why it came out that way, one clause                                                      |
+| `problems` | Count of controls that did not happen                                                     |
+| `gaps`     | Count of records due at this stage that do not exist                                      |
+| `warnings` | Count of findings that thin the chain without failing it                                  |
+| `complete` | `true` once the release has reached PROD or INTERNAL                                      |
 
 The verdict is computed whatever `format` is asked for, so a caller can gate on it and still
 publish markdown.
@@ -52,6 +52,8 @@ publish markdown.
 A JFrog token, resolved in this order: the `jfrog-token` input, then `JFROG_TOKEN` in the environment, then an already-configured JFrog CLI.
 
 SLSA provenance lookups use `gh`, so the job needs a token that can read attestations on the repository that built the artifact.
+
+Supersede records are read from `release-evidence-local`, so the JFrog token needs READ on `evidence/**` there. Without it every sealed release reports `FAIL` with the gap `A readable supersede store`. Each record is verified against the attestation stored beside it, which needs `gh` but no GitHub access.
 
 ## Example
 
@@ -79,6 +81,8 @@ SLSA provenance lookups use `gh`, so the job needs a token that can read attesta
 `FAIL` is the only status that means a control did not happen or a record due at this stage does
 not exist. `ON TRACK` is a correct release with stages still ahead of it, so a gate that also
 blocks on `ON TRACK` will block every healthy pre-PROD promotion.
+
+`SUPERSEDED` means a later revision replaced this one at the furthest stage it reached. The `FAIL` gate below does not block it.
 
 ```yaml
 - name: Record release evidence
