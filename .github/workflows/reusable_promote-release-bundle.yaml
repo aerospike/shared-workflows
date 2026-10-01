@@ -207,9 +207,22 @@ jobs:
           echo "file=${file}" >>"$GITHUB_OUTPUT"
 
       - name: Attest the supersede record
+        id: attest
         if: steps.record.outputs.file != ''
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-path: ${{ steps.record.outputs.file }}
           predicate-type: https://aerospike.com/schemas/supersede/v1
           predicate-path: ${{ steps.record.outputs.file }}
+
+      - name: Store the attestation beside the record
+        if: steps.attest.outputs.bundle-path != ''
+        shell: bash
+        env:
+          RECORD_REPO: ${{ steps.promote.outputs.supersede-record-repo }}
+          RECORD_PATH: ${{ steps.promote.outputs.supersede-record-path }}
+          BUNDLE_PATH: ${{ steps.attest.outputs.bundle-path }}
+        # gh attestation verify --bundle accepts only a .json or .jsonl extension.
+        run: |
+          set -euo pipefail
+          jf rt upload "$BUNDLE_PATH" "${RECORD_REPO}/${RECORD_PATH%.json}.sigstore.json" --flat

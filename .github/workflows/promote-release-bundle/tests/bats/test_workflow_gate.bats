@@ -54,3 +54,9 @@ print($1)
     [[ $attest =~ actions/attest@[0-9a-f]{40} ]]
     [[ $attest == *"https://aerospike.com/schemas/supersede/v1"* ]]
 }
+
+@test "the attestation bundle is stored beside the record" {
+    store=$(query "[s for s in d['jobs']['promote-release-bundle']['steps'] if 'bundle-path' in str(s.get('env',''))]")
+    [[ $store == *"steps.attest.outputs.bundle-path"* ]]
+    [[ $store == *".sigstore.json"* ]]
+}
