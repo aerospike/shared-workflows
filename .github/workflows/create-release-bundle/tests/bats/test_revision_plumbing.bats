@@ -12,8 +12,7 @@ setup() {
 
     step="$(yq -r '.runs.steps[] | select(.id == "create")' "$ACTION")"
     [[ $step == *'BUNDLE_REVISION: ${{ inputs.bundle-revision }}'* ]]
-    [[ $step == *'--revision "$revision"'* ]]
-    [[ $step == *'${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}'* ]]
+    [[ $step == *'--revision "$BUNDLE_REVISION"'* ]]
 }
 
 @test "the workflow takes bundle-revision and returns bundle-version" {
@@ -23,13 +22,12 @@ setup() {
 
     step="$(yq -r '.jobs["create-release-bundle"].steps[] | select(.id == "create")' "$WORKFLOW")"
     [[ $step == *'BUNDLE_REVISION: ${{ inputs.bundle-revision }}'* ]]
-    [[ $step == *'--revision "$revision"'* ]]
-    [[ $step == *'${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}'* ]]
+    [[ $step == *'--revision "$BUNDLE_REVISION"'* ]]
 }
 
 @test "the revision never reaches the script as an expression" {
     for file in "$ACTION" "$WORKFLOW"; do
-        run grep -F 'revision="${{' "$file"
+        run grep -F -e '--revision "${{' "$file"
         [ "$status" -eq 1 ]
     done
 }

@@ -48,8 +48,8 @@ on:
         description: |
           Appended to `version` to form the bundle version, so a rebuild of a release becomes a
           new bundle revision rather than colliding with the bundle the first build created. The
-          artifacts keep the clean release version. Set to `auto` to use the run id and attempt.
-          Leave unset for a bundle version equal to the release version.
+          artifacts keep the clean release version. `auto` uses the run id and attempt. Unset keeps
+          the release version, with a warning that a future release will always add a revision.
         required: false
         type: string
         default: ""
@@ -204,19 +204,11 @@ jobs:
           if [[ -n "$bm" ]]; then
             meta_arg=(--bundle-metadata "$bm")
           fi
-          revision_arg=()
-          revision="$BUNDLE_REVISION"
-          if [[ "$revision" == "auto" ]]; then
-            revision="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          fi
-          if [[ -n "$revision" ]]; then
-            revision_arg=(--revision "$revision")
-          fi
           "$entrypoint" \
             --project "${{ inputs.jf-project }}" \
             --build-names "${{ inputs.jf-build-names }}" \
             --bundle-name "${{ inputs.jf-bundle-name }}" \
             --version "${{ inputs.version }}" \
             "${meta_arg[@]}" \
-            "${revision_arg[@]}" \
+            --revision "$BUNDLE_REVISION" \
             $dry_run_arg
