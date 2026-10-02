@@ -189,6 +189,9 @@ fi
 if ! echo "$output" | grep -q '"version": "v1.2.3-4711-2"'; then
     test6_success=false
 fi
+if echo "$output" | grep -q "::warning title=bundle-revision"; then
+    test6_success=false
+fi
 
 record_test_result "Test 6: Revision appends to the bundle version (dry-run)" "$test6_success"
 
@@ -223,6 +226,40 @@ if ! grep -q "^bundle-version=v9.9.9-1-1$" "$TEST_DIR/gh-output"; then
 fi
 
 record_test_result "Test 8: Bundle version is written to GITHUB_OUTPUT" "$test8_success"
+
+# Test 9: Unset revision
+echo ""
+echo "Test 9: Unset revision warns that a revision will always be added (dry-run)"
+test9_success=true
+
+cd "$TEST_DIR"
+output=$("$SCRIPT_DIR/entrypoint.sh" --project test-project --build-names "test-build:1728052628123" --bundle-name warn-bundle --version v1.2.3 --revision "" --dry-run 2>&1)
+
+if ! echo "$output" | grep -q "::warning title=bundle-revision::bundle-revision is unset"; then
+    test9_success=false
+fi
+if ! echo "$output" | grep -q "jf release-bundle-create warn-bundle v1.2.3 "; then
+    test9_success=false
+fi
+
+record_test_result "Test 9: Unset revision warns that a revision will always be added (dry-run)" "$test9_success"
+
+# Test 10: Revision auto
+echo ""
+echo "Test 10: Revision auto uses GITHUB_RUN_ID and GITHUB_RUN_ATTEMPT (dry-run)"
+test10_success=true
+
+cd "$TEST_DIR"
+output=$(GITHUB_RUN_ID=555 GITHUB_RUN_ATTEMPT=3 "$SCRIPT_DIR/entrypoint.sh" --project test-project --build-names "test-build:1728052628123" --bundle-name auto-bundle --version v1.2.3 --revision auto --dry-run 2>&1)
+
+if ! echo "$output" | grep -q "jf release-bundle-create auto-bundle v1.2.3-555-3"; then
+    test10_success=false
+fi
+if echo "$output" | grep -q "::warning"; then
+    test10_success=false
+fi
+
+record_test_result "Test 10: Revision auto uses GITHUB_RUN_ID and GITHUB_RUN_ATTEMPT (dry-run)" "$test10_success"
 
 # Summary
 echo ""

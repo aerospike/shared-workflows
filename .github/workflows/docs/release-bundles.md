@@ -58,7 +58,7 @@ Set `dry-run: true` to validate the configuration and JFrog authentication witho
 
 ### Bundle revisions
 
-The bundle version defaults to the release version, so a rebuild of a release collides with the bundle the first build created. Pass `bundle-revision: auto` to `reusable_create-release-bundle.yaml` to give each build its own bundle version (`1.2.3-<run_id>-<run_attempt>`) while the artifacts keep the clean release version. Promote the workflow's `bundle-version` output, not `version`.
+The bundle version defaults to the release version, so a rebuild of a release collides with the bundle the first build created. Pass `bundle-revision: auto` to `reusable_create-release-bundle.yaml` to give each build its own bundle version (`1.2.3-<run_id>-<run_attempt>`) while the artifacts keep the clean release version. Promote the workflow's `bundle-version` output, not `version`. Unset, it logs a warning that a future release will always add a revision.
 
 ### Promoting a bundle
 

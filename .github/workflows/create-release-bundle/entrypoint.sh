@@ -45,8 +45,9 @@ show_help() {
     echo "                            jf release-bundle-annotate after create." >&2
     echo "  --revision <revision>      Appended to the version to form the bundle version, so a" >&2
     echo "                            rebuild of a release becomes a new bundle revision instead of" >&2
-    echo "                            colliding with the existing one. Leave unset for a bundle" >&2
-    echo "                            version equal to the release version." >&2
+    echo "                            colliding with the existing one. 'auto' uses the run id and" >&2
+    echo "                            attempt. Unset keeps the release version, with a warning that" >&2
+    echo "                            a future release will always add a revision." >&2
     echo "  --help, -h                 Show this help message" >&2
     echo "" >&2
     echo "Examples:" >&2
@@ -179,6 +180,15 @@ main() {
     echo "Build names: $BUILD_NAMES" >&2
     echo "Bundle name: $BUNDLE_NAME" >&2
     echo "Version: $VERSION" >&2
+
+    case $REVISION in
+    "")
+        echo "::warning title=bundle-revision::bundle-revision is unset, so the bundle version is the release version ${VERSION}. A future release will always add a revision, defaulting to auto (${VERSION}-<run_id>-<run_attempt>). Set bundle-revision to auto to adopt that now."
+        ;;
+    auto)
+        REVISION="${GITHUB_RUN_ID:?bundle-revision auto needs GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT:?bundle-revision auto needs GITHUB_RUN_ATTEMPT}"
+        ;;
+    esac
 
     # Only the bundle version takes the revision. Artifacts keep $VERSION.
     BUNDLE_VERSION="$VERSION"
