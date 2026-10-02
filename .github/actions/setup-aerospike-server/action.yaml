@@ -246,12 +246,16 @@ runs:
           -keyout ca.key -out ca.crt -days 365 \
           -subj "/CN=Aerospike-Server-Test-CA"
 
-        # Build SAN extension file covering all container names
+        # SANs must include the server tls-name. The generated config and the
+        # certificate CN both use aerospike-tls, and clients that ignore CN
+        # verify that name against this list. Container names stay so a
+        # client can also match prefix-N.
         {
           echo "[v3_req]"
           echo "subjectAltName = @alt_names"
           echo "[alt_names]"
-          dns_idx=1
+          echo "DNS.1 = aerospike-tls"
+          dns_idx=2
           for (( i=1; i<=num_nodes; i++ )); do
             echo "DNS.${dns_idx} = ${prefix}-${i}"
             dns_idx=$(( dns_idx + 1 ))

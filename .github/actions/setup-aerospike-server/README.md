@@ -150,6 +150,8 @@ When `enable-tls: "true"`, the action generates a self-signed CA and server/clie
 - `server.crt` / `server.key` -- server certificate and key
 - `client.crt` / `client.key` -- client certificate and key
 
+`server.crt` is valid for `aerospike-tls` (the generated config's `tls-name` and the certificate CN), each container name (`<container-name-prefix>-N`), `localhost`, `docker`, and `127.0.0.1`.
+
 ### Connecting from the runner host
 
 Use the `tls-cert-dir` and `tls-service-ports` outputs to pass the certificates to any client running directly in a workflow step:
