@@ -130,6 +130,15 @@ on:
       immutable-tag:
         description: Immutable tag (registry/image:version_timestamp)
         value: ${{ jobs.merge.outputs.immutable-tag }}
+      jf-build-name:
+        description: JFrog build-info name
+        value: ${{ jobs.merge.outputs.jf-build-name }}
+      jf-build-id:
+        description: |
+          JFrog build-info build number. Pass `<jf-build-name>:<jf-build-id>` in
+          reusable_create-release-bundle.yaml `jf-build-names`. Set on a dry run too,
+          but the build-info record is only published when `push` is true.
+        value: ${{ jobs.merge.outputs.jf-build-id }}
 
 jobs:
   # `platforms` is a comma-separated string and GHA expressions cannot split
@@ -590,6 +599,8 @@ jobs:
       image-ref: ${{ steps.manifest.outputs.image-ref }}
       tags: ${{ steps.tags.outputs.tags }}
       immutable-tag: ${{ steps.tags.outputs.immutable-tag }}
+      jf-build-name: ${{ steps.buildinfo.outputs.jf-build-name }}
+      jf-build-id: ${{ steps.buildinfo.outputs.jf-build-id }}
     steps:
       - name: Harden the runner (Audit all outbound calls)
         uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
@@ -608,6 +619,14 @@ jobs:
           version: 2.78.8
           oidc-provider-name: ${{ inputs.oidc-provider-name }}
           oidc-audience: ${{ inputs.oidc-audience }}
+
+      - name: Record build-info name and number
+        id: buildinfo
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "jf-build-name=${JFROG_CLI_BUILD_NAME}" >> "$GITHUB_OUTPUT"
+          echo "jf-build-id=${JFROG_CLI_BUILD_NUMBER}" >> "$GITHUB_OUTPUT"
 
       - name: Docker login to Artifactory
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
