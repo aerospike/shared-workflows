@@ -467,16 +467,17 @@ upload_pypi_packages() {
         local pkg="$1"
         [[ -f $pkg ]] || return 0
 
-        local -a metadata
-        read -r -a metadata < <(get_pypi_metadata "$pkg")
-        local pkgname="${metadata[0]}"
-        local pkgversion="${metadata[1]}"
+        # A failure inside the process substitution leaves read with no input; without the
+        # `|| true`, set -e would exit right here with no message.
+        local -a metadata=()
+        read -r -a metadata < <(get_pypi_metadata "$pkg") || true
+        local pkgname="${metadata[0]-}"
+        local pkgversion="${metadata[1]-}"
         local pkg_filename
         pkg_filename=$(basename "$pkg")
 
         if [[ -z $pkgname ]] || [[ -z $pkgversion ]]; then
-            echo "Warning: Failed to extract metadata from $pkg, skipping" >&2
-            return 0
+            error "Failed to extract PyPI metadata from $pkg"
         fi
 
         local normalized_name

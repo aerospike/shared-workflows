@@ -155,3 +155,53 @@ teardown_file() {
 
     [[ $wrong_route == false ]] || (echo "Non-sdist .tar.gz was uploaded to pypi repository" >&2 && return 1)
 }
+
+# The deploy calls get_pypi_metadata under `set -euo pipefail` inside `read < <(...)`, where a
+# SIGPIPE in an archive pipeline aborts the deploy without a message. ~1MB of metadata (a long
+# embedded README) makes that race near-certain, so these fail reliably if extraction pipes
+# archive output into an early-exiting reader.
+
+# ~1MB of text standing in for a long README embedded in package metadata.
+_long_description() {
+    local line i
+    line=$(printf '%0100d' 0)
+    for ((i = 0; i < 10000; i++)); do echo "$line"; done
+}
+
+_strict_get_pypi_metadata() {
+    export DEPLOY_ARTIFACTS_DIR
+    run bash -c 'set -euo pipefail
+        source "$DEPLOY_ARTIFACTS_DIR/package_utils.sh"
+        read -r -a meta < <(get_pypi_metadata "$1")
+        echo "${meta[*]}"' _ "$1"
+}
+
+@test "get_pypi_metadata reads wheel with large METADATA under strict mode" {
+    local test_dir
+    test_dir=$(mktemp -d)
+    mkdir -p "$test_dir/temp-whl/aerospike_hello-4.0.0.dist-info"
+    {
+        echo -e "Metadata-Version: 2.1\nName: aerospike-hello\nVersion: 4.0.0\n"
+        _long_description
+    } >"$test_dir/temp-whl/aerospike_hello-4.0.0.dist-info/METADATA"
+    (cd "$test_dir/temp-whl" && zip -q -r "../aerospike_hello-4.0.0-py3-none-any.whl" .)
+    _strict_get_pypi_metadata "$test_dir/aerospike_hello-4.0.0-py3-none-any.whl"
+    rm -rf "$test_dir"
+    [[ $status -eq 0 ]] || (echo "Extraction failed ($status): $output" >&2 && return 1)
+    [[ $output == "aerospike-hello 4.0.0" ]] || (echo "Unexpected metadata: $output" >&2 && return 1)
+}
+
+@test "get_pypi_metadata reads sdist with large PKG-INFO under strict mode" {
+    local test_dir
+    test_dir=$(mktemp -d)
+    mkdir -p "$test_dir/aerospike-hello-4.0.0"
+    {
+        echo -e "Metadata-Version: 2.1\nName: aerospike-hello\nVersion: 4.0.0\n"
+        _long_description
+    } >"$test_dir/aerospike-hello-4.0.0/PKG-INFO"
+    tar -czf "$test_dir/aerospike-hello-4.0.0.tar.gz" -C "$test_dir" aerospike-hello-4.0.0/
+    _strict_get_pypi_metadata "$test_dir/aerospike-hello-4.0.0.tar.gz"
+    rm -rf "$test_dir"
+    [[ $status -eq 0 ]] || (echo "Extraction failed ($status): $output" >&2 && return 1)
+    [[ $output == "aerospike-hello 4.0.0" ]] || (echo "Unexpected metadata: $output" >&2 && return 1)
+}
