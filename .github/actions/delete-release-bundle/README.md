@@ -5,11 +5,11 @@ Check for and delete an existing JFrog release bundle version. Safe to call when
 Note that release bundles can only be deleted from DEV.
 This is to make sure that beyond DEV every bundle has unique version and SHA.
 
-Refuses deletion when the bundle version has **completed promotions beyond DEV** (TEST, STAGE, PREVIEW, INTERNAL, or PROD). A promotion-record check runs immediately before delete when a bundle exists.
+Refuses deletion when the bundle version has **completed promotions beyond DEV** (TEST, STAGE, PREVIEW, INTERNAL, or PROD). A promotion-record check runs immediately before delete when a bundle exists. If the promotion records cannot be read, the check refuses the delete.
 
 ## Prerequisites
 
-JFrog CLI must be configured before calling this action (via `setup-jfrog-cli`).
+JFrog CLI must be configured before calling this action (via `setup-jfrog-cli`), with an access token: the check reads the promotion records with that token and `curl`.
 
 ## Inputs
 
