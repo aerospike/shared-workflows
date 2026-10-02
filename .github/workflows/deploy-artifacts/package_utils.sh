@@ -550,6 +550,18 @@ _normalize_pypi_name() {
     echo "$name" | tr '[:upper:]' '[:lower:]' | sed -E 's/[-_.]+/-/g'
 }
 
+# Print a header field (e.g. Name, Version) from PKG-INFO / METADATA text, or nothing if absent.
+# Callers buffer the archive output before searching it: piping `tar`/`unzip` straight into an
+# early-exiting `grep -m1` kills the writer with SIGPIPE whenever the metadata (which embeds the
+# README) spans more than one write, and under pipefail that silently aborts the deploy.
+# Args: <metadata_text> <field>
+_pypi_metadata_field() {
+    local line
+    line=$(grep -m1 -i "^$2:" <<<"$1") || return 0
+    line="${line#* }"
+    echo "${line%$'\r'}"
+}
+
 # Extract metadata from a wheel file.
 # Parses filename first, then overrides from .dist-info/METADATA if available.
 # Args: <whl_file>
@@ -568,12 +580,14 @@ _get_wheel_metadata() {
 
     # Try to get canonical name from METADATA inside the wheel (ZIP format)
     if command -v unzip >/dev/null 2>&1 && [[ -f $package ]]; then
-        local metadata_file
-        metadata_file=$(unzip -Z1 "$package" 2>/dev/null | grep -E '\.dist-info/METADATA$' | head -n1)
+        local listing metadata_file
+        listing=$(unzip -Z1 "$package" 2>/dev/null) || true
+        metadata_file=$(grep -m1 -E '\.dist-info/METADATA$' <<<"$listing") || true
         if [[ -n $metadata_file ]]; then
-            local meta_name meta_version
-            meta_name=$(unzip -p "$package" "$metadata_file" 2>/dev/null | grep -m1 -i '^Name:' | cut -d' ' -f2- | tr -d '\r')
-            meta_version=$(unzip -p "$package" "$metadata_file" 2>/dev/null | grep -m1 -i '^Version:' | cut -d' ' -f2- | tr -d '\r')
+            local metadata meta_name meta_version
+            metadata=$(unzip -p "$package" "$metadata_file" 2>/dev/null) || true
+            meta_name=$(_pypi_metadata_field "$metadata" Name)
+            meta_version=$(_pypi_metadata_field "$metadata" Version)
             [[ -n $meta_name ]] && pkgname="$meta_name"
             [[ -n $meta_version ]] && version="$meta_version"
         fi
@@ -593,11 +607,14 @@ _get_sdist_metadata() {
     local pkgname="" version=""
 
     # Try to extract from PKG-INFO inside the tarball
-    local pkg_info_path
-    pkg_info_path=$(tar -tzf "$package" 2>/dev/null | grep -E '^[^/]+/PKG-INFO$' | head -n1)
+    local listing pkg_info_path
+    listing=$(tar -tzf "$package" 2>/dev/null) || true
+    pkg_info_path=$(grep -m1 -E '^[^/]+/PKG-INFO$' <<<"$listing") || true
     if [[ -n $pkg_info_path ]]; then
-        pkgname=$(tar -xOzf "$package" "$pkg_info_path" 2>/dev/null | grep -m1 -i '^Name:' | cut -d' ' -f2- | tr -d '\r')
-        version=$(tar -xOzf "$package" "$pkg_info_path" 2>/dev/null | grep -m1 -i '^Version:' | cut -d' ' -f2- | tr -d '\r')
+        local pkg_info
+        pkg_info=$(tar -xOzf "$package" "$pkg_info_path" 2>/dev/null) || true
+        pkgname=$(_pypi_metadata_field "$pkg_info" Name)
+        version=$(_pypi_metadata_field "$pkg_info" Version)
     fi
 
     # Fallback: parse filename ({name}-{version}.tar.gz or .tgz)
