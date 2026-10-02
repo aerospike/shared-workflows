@@ -20,6 +20,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -54,6 +55,11 @@ MAX_BUILD_DEPTH = 8
 # Reachability, not maturity: STAGE_ORDER would rank INTERNAL above STAGE.
 PUBLICITY = ["PROD", "PREVIEW", "INTERNAL", "STAGE", "TEST", "DEV"]
 CUSTOMER_STAGES = {"PROD", "PREVIEW", "INTERNAL"}
+EVIDENCE_REPO = "release-evidence-local"
+SUPERSEDE_PREDICATE = "https://aerospike.com/schemas/supersede/v1"
+SUPERSEDE_SIGNER = ("aerospike/shared-workflows/.github/workflows/"
+                    "reusable_promote-release-bundle.yaml")
+SLSA_PREDICATE = "https://slsa.dev/provenance/v1"
 
 
 # ----------------------------------------------------------------- transport
@@ -64,13 +70,21 @@ def jfrog_token():
     return tok
 
 
-def jfrog(path):
+def jfrog_bytes(path):
     req = urllib.request.Request(f"{JF_BASE}/{path}",
                                 headers={"Authorization": f"Bearer {jfrog_token()}"})
     try:
         with urllib.request.urlopen(req) as resp:
-            return json.load(resp)
-    except (urllib.error.HTTPError, json.JSONDecodeError):
+            return resp.read()
+    except urllib.error.HTTPError:
+        return None
+
+
+def jfrog(path):
+    body = jfrog_bytes(path)
+    try:
+        return json.loads(body) if body is not None else None
+    except json.JSONDecodeError:
         return None
 
 
@@ -558,6 +572,83 @@ def primary_artifacts(record):
     return out
 
 
+def verify_supersede(record, bundle, repo):
+    """Whether the promotion workflow signed exactly these record bytes, run from repo."""
+    if not (record and bundle and repo and shutil.which("gh")):
+        return False
+    with tempfile.TemporaryDirectory() as tmp:
+        record_file = os.path.join(tmp, "record.json")
+        bundle_file = os.path.join(tmp, "record.sigstore.json")
+        with open(record_file, "wb") as out:
+            out.write(record)
+        with open(bundle_file, "wb") as out:
+            out.write(bundle)
+        done = subprocess.run(
+            ["gh", "attestation", "verify", record_file, "--bundle", bundle_file,
+             "--repo", repo, "--predicate-type", SUPERSEDE_PREDICATE,
+             "--signer-workflow", SUPERSEDE_SIGNER],
+            capture_output=True, text=True)
+    return done.returncode == 0
+
+
+def supersede_records(project, name, version):
+    """Every supersede record naming this revision, oldest first, or None if unreadable."""
+    # A token without READ on the store gets a 404 here, where AQL would answer an empty list
+    # and pass for a revision that was never superseded.
+    if jfrog(f"artifactory/api/storage/{EVIDENCE_REPO}/evidence/supersede") is None:
+        return None
+    base = f"evidence/supersede/{project}/{name}"
+    listing = jfrog(f"artifactory/api/storage/{EVIDENCE_REPO}/{base}?list&deep=1") or {}
+    records = []
+    for entry in listing.get("files", []):
+        uri = entry["uri"]
+        if not uri.endswith(".json") or uri.endswith(".sigstore.json"):
+            continue
+        body = jfrog_bytes(f"artifactory/{EVIDENCE_REPO}/{base}{uri}")
+        try:
+            record = json.loads(body) if body else {}
+        except json.JSONDecodeError:
+            record = {}
+        # Skipping an unreadable record would hide a supersede of this revision.
+        if record and (record.get("project") != project or record.get("bundle") != name
+                       or (version not in (record.get("replaced") or [])
+                           and record.get("replacedBy") != version)):
+            continue
+        run = re.match(r"https://github\.com/([^/]+/[^/]+)/", record.get("run") or "")
+        stem = uri.removesuffix(".json")
+        bundle = jfrog_bytes(f"artifactory/{EVIDENCE_REPO}/{base}{stem}.sigstore.json")
+        records.append({**record, "path": f"{EVIDENCE_REPO}/{base}{uri}",
+                        "verified": bool(record) and verify_supersede(
+                            body, bundle, run.group(1) if run else None)})
+    return sorted(records, key=lambda r: r.get("at") or "")
+
+
+def supersede_state(records, version, held):
+    """Mark each record's role, and find the supersede that took its furthest stage.
+
+    Returns None while the revision still holds the furthest stage it ever reached.
+    """
+    rank = {s: i for i, s in enumerate(STAGE_ORDER)}
+    latest = {}
+    for record in records:
+        record["role"] = ("replaced" if version in (record.get("replaced") or [])
+                          else "replacing")
+        if record["verified"]:
+            latest[record["stage"]] = record
+    for record in records:
+        # A failed un-promote leaves a record of a supersede that did not happen.
+        record["contradicted"] = (record["role"] == "replaced" and record.get("stage") in held
+                                  and latest.get(record.get("stage")) is record)
+        record["counts"] = record["verified"] and not record["contradicted"]
+    out = {s: r for s, r in latest.items()
+           if r["role"] == "replaced" and r["counts"]}
+    ever = set(held) | set(out)
+    if not ever:
+        return None
+    furthest = max(ever, key=lambda s: rank.get(s, len(STAGE_ORDER)))
+    return out.get(furthest)
+
+
 def collect(target, about, as_of=None):
     release_ref = find_release(target)
     labels_root = None
@@ -609,6 +700,14 @@ def collect(target, about, as_of=None):
             })
         promotions.sort(key=lambda p: p["when"] or "")
 
+    supersedes, superseded_by = [], None
+    if release_ref:
+        name, version = bundle.split("/", 1)
+        supersedes = supersede_records(project, name, version)
+        if supersedes:
+            superseded_by = supersede_state(supersedes, version,
+                                            {p["stage"] for p in promotions})
+
     roots, build_cache = bundle_roots(seal), {}
     artifacts, source = [], None
     for art in entries:
@@ -652,7 +751,9 @@ def collect(target, about, as_of=None):
 
         attestation = None
         if repo:
-            found = gh(f"repos/{repo}/attestations/sha256:{sha}")
+            # Unfiltered, the first attestation can be an SBOM, which has no buildDefinition.
+            found = gh(f"repos/{repo}/attestations/sha256:{sha}"
+                       f"?predicate_type={urllib.parse.quote(SLSA_PREDICATE, safe='')}")
             stmt = None
             if found and found.get("attestations"):
                 stmt = statement(found["attestations"][0]["bundle"]["dsseEnvelope"])
@@ -740,11 +841,12 @@ def collect(target, about, as_of=None):
                      "subjects": len(seal.get("subject", []))},
         } if release_ref else None,
         "signatures": signatures, "pr": pull_request, "promotions": promotions,
-        "artifacts": artifacts, "source": source,
+        "supersedes": supersedes, "artifacts": artifacts, "source": source,
         "derived": {
             "types": types, "attested_types": attested,
             "unattested_types": [t for t in types if t not in attested],
             "stages": stages, "terminal_stage": stages[-1] if stages else None,
+            "superseded_by": superseded_by,
             "sealed": bool(release_ref),
             "resident_stages": resident,
             **classify_stages(stages, resident),
@@ -871,6 +973,19 @@ def verify_commands(evidence):
                     "mutable: .predicate.mutable,",
                     "       seal: .predicate.provenance[0].digest.sha256}'", ""]
 
+    for record in evidence.get("supersedes") or []:
+        if not record["counts"]:
+            continue
+        run = re.match(r"https://github\.com/([^/]+/[^/]+)/", record.get("run") or "")
+        out += [f'# The {record["stage"]} supersede record, and the attestation stored beside it.',
+                f'get "artifactory/{record["path"]}" > record.json',
+                f'get "artifactory/{record["path"].removesuffix(".json")}.sigstore.json" '
+                "> record.sigstore.json",
+                "gh attestation verify record.json --bundle record.sigstore.json \\",
+                f'  --repo {run.group(1) if run else "<the repository that ran it>"} \\',
+                f"  --predicate-type {SUPERSEDE_PREDICATE} \\",
+                f"  --signer-workflow {SUPERSEDE_SIGNER}", ""]
+
     if source and source.get("vcs_build"):
         note = ""
         if source["vcs_build"] != source.get("artifact_build"):
@@ -900,7 +1015,8 @@ def verify_commands(evidence):
 
     if art.get("attestation"):
         out += ["# The GitHub build provenance for these bytes.",
-                f'gh api repos/{source["repo"]}/attestations/sha256:$SHA \\',
+                f'gh api "repos/{source["repo"]}/attestations/sha256:$SHA'
+                f'?predicate_type={urllib.parse.quote(SLSA_PREDICATE, safe="")}" \\',
                 "  --jq '.attestations[0].bundle.dsseEnvelope.payload' | base64 -d |",
                 "  jq '{predicateType, builder: .predicate.runDetails.builder.id,",
                 "       buildType: .predicate.buildDefinition.buildType}'", ""]
@@ -996,6 +1112,17 @@ def custody_rows(evidence):
                      f'{when(last["when"])} UTC by `{last["by"]}`, targeting '
                      f'{phrase(f"`{r}`" for r in last["repos"])}, marked '
                      f'`mutable: {str(last["mutable"]).lower()}`', "Signed promotion attestation"])
+    for record in evidence.get("supersedes") or []:
+        if not record["counts"]:
+            continue
+        if record["role"] == "replaced":
+            step, what = f'{record["stage"]} superseded', f'Replaced by `{record["replacedBy"]}`'
+        else:
+            step = f'{record["stage"]} supersede'
+            what = f'Replaced {phrase(f"`{v}`" for v in record["replaced"])}'
+        rows.append([step, f'{what} {when(record["at"])} UTC by `{record["actor"]}`: '
+                           f'{record.get("reason") or "no reason recorded"}',
+                     "Attested supersede record"])
     return rows
 
 
@@ -1269,6 +1396,23 @@ def gap_rows(evidence):
         rows.append([f'An identity on the {phrase(unattributed)} promotion',
                      "Who authorized it. The promotion is recorded but names nobody, so that "
                      "transition has no accountable person."])
+    supersedes = evidence.get("supersedes", [])
+    if derived["sealed"] and supersedes is None:
+        rows.append(["A readable supersede store",
+                     "That no later revision replaced this one at any stage. "
+                     f"`{EVIDENCE_REPO}` could not be read with this token, so a supersede "
+                     "would not show here."])
+    for record in supersedes or []:
+        if not record["verified"]:
+            rows.append(["A verified attestation on the supersede record",
+                         f'That the promotion workflow wrote `{record["path"]}`. No stored '
+                         "attestation verifies it against `reusable_promote-release-bundle.yaml`, "
+                         f"and any identity that can promote can also write to `{EVIDENCE_REPO}`."])
+        elif record["contradicted"]:
+            rows.append([f'A completed supersede at {record["stage"]}',
+                         f'That the replacement took effect. `{record["path"]}` says this '
+                         f'revision was replaced by `{record["replacedBy"]}`, but it still holds '
+                         f'{record["stage"]}.'])
     return rows
 
 
@@ -1285,10 +1429,23 @@ def position_blocks(evidence):
     """Where this has got to, stated before any claim that depends on having got there."""
     derived = evidence["derived"]
     reached = phrase(derived["stages_reached"]) if derived["stages_reached"] else "no stage"
-    text = f"This has reached {reached}."
-    if derived["pending_stages"]:
-        text += (f' It has not been promoted to {phrase(derived["pending_stages"])} yet, so the '
-                 "records those stages would produce do not exist.")
+    replaced = [r for r in evidence.get("supersedes") or []
+                if r["counts"] and r["role"] == "replaced"]
+    events = phrase(f'superseded at {r["stage"]} by `{r["replacedBy"]}` {when(r["at"])} UTC'
+                    for r in replaced)
+    if derived.get("superseded_by"):
+        text = f"This was {events}."
+        # Residence would name the replacement's copy when both revisions carry the same bytes.
+        held = list(dict.fromkeys(derived.get("stages") or []))
+        if held:
+            text += f" It still holds {phrase(held)}."
+    else:
+        text = f"This has reached {reached}."
+        if derived["pending_stages"]:
+            text += (f' It has not been promoted to {phrase(derived["pending_stages"])} yet, so '
+                     "the records those stages would produce do not exist.")
+        if replaced:
+            text += f" It was {events}."
     if derived["skipped_stages"]:
         gates = phrase(derived["skipped_stages"])
         text += (f' No promotion record exists for {gates}, below where it has got to, so '
@@ -1404,6 +1561,10 @@ def verdict(evidence):
         status, reason, finding = "FAIL", "a control did not happen", problems[0][0]
     elif gaps:
         status, reason, finding = "FAIL", "evidence incomplete", gaps[0][0]
+    elif evidence["derived"].get("superseded_by"):
+        by = evidence["derived"]["superseded_by"]
+        status, reason = "SUPERSEDED", "a later revision replaced it"
+        finding = f'Superseded at {by["stage"]} by {by["replacedBy"]}'
     elif warnings:
         status = "PASS WITH WARNING" if done else "ON TRACK WITH WARNING"
         reason, finding = "the chain is thin", warnings[0][0]
@@ -1431,6 +1592,12 @@ def verdict_block(evidence, problems, gaps):
                 "**ON TRACK.** Correct so far. Everything the pipeline should have recorded by "
                 f'{phrase(evidence["derived"]["stages_reached"]) or "this point"} exists'
                 + (f', and {ahead} lie ahead.' if ahead else "."))
+    if call["status"] == "SUPERSEDED":
+        by = evidence["derived"]["superseded_by"]
+        return ("panel", "warning",
+                f'**SUPERSEDED.** Replaced at {by["stage"]} by `{by["replacedBy"]}` '
+                f'{when(by["at"])} UTC by `{by["actor"]}`: '
+                f'{by.get("reason") or "no reason recorded"}.')
     if call["status"].startswith(("PASS", "ON TRACK")):
         lead = ("Nothing here blocks the release." if call["complete"] else
                 f'Nothing here is wrong for something with {ahead} still ahead of it.')
