@@ -56,7 +56,15 @@ release-bundle:
 
 Set `dry-run: true` to validate the configuration and JFrog authentication without actually creating the bundle. In dry-run mode the workflow echoes the commands it would run instead of calling `jf release-bundle-create`.
 
-There is a composite action that may be used for promotion of bundles documented at [Promote Release Bundle Composite Action](https://github.com/aerospike/shared-workflows/blob/main/.github/actions/promote-release-bundle/README.md). The `promote-release-bundle` action accepts `include-repos` and `exclude-repos` (semicolon-separated repo lists, e.g. `my-project-deb-dev-local;my-project-rpm-dev-local`) to scope which repositories are promoted. With neither set, all repositories in the bundle are promoted.
+### Bundle revisions
+
+The bundle version defaults to the release version, so a rebuild of a release collides with the bundle the first build created. Pass `bundle-revision: auto` to `reusable_create-release-bundle.yaml` to give each build its own bundle version (`1.2.3-<run_id>-<run_attempt>`) while the artifacts keep the clean release version. Two builds of one release can then coexist, which is what makes superseding a rejected build possible. Use the workflow's `bundle-version` output as the version to promote.
+
+### Promoting a bundle
+
+Use `reusable_promote-release-bundle.yaml`. It advances a bundle one stage and enforces the promotion rules: a version must already be at the stage before the target, promoting into a stage that holds a different version fails rather than overwriting, replacing an incumbent requires `supersede: true` with a reason, and supersede is refused at PREVIEW, INTERNAL and PROD. Passing `gh-environment` attaches a GitHub environment to the promotion job so its reviewers are the gate owner, which a composite action cannot do. See [Promote Release Bundle](../promote-release-bundle/README.md).
+
+The lower-level [promote-release-bundle action](https://github.com/aerospike/shared-workflows/blob/main/.github/actions/promote-release-bundle/README.md) promotes without any of those checks. Both it and the workflow accept `include-repos` and `exclude-repos` (semicolon-separated repo lists, e.g. `my-project-deb-dev-local;my-project-rpm-dev-local`) to scope which repositories are promoted. With neither set, all repositories in the bundle are promoted.
 
 ### Deleting a bundle before re-deploy
 
