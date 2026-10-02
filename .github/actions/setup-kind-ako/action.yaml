@@ -1,0 +1,220 @@
+name: Setup kind and AKO
+description: >
+  Starts a kind cluster, installs the Aerospike Kubernetes Operator, applies an
+  AerospikeCluster, installs ingress-nginx with a tcp-services ConfigMap, and
+  adds the CoreDNS entry K-10's T3 variant needs. The NodePort range is pinned
+  to 30000-32767 and checked against the API server.
+
+inputs:
+  admin-password:
+    description: Aerospike admin password. Generated when empty.
+    required: false
+    default: ""
+  ako-chart-version:
+    description: aerospike-kubernetes-operator Helm chart version
+    required: false
+    default: 4.5.0
+  ako-helm-repo:
+    description: Helm repository for the AKO chart
+    required: false
+    default: https://aerospike.github.io/aerospike-kubernetes-enterprise
+  ako-namespace:
+    description: Namespace the AKO controller is installed into
+    required: false
+    default: ako
+  cert-manager-chart-version:
+    description: cert-manager Helm chart version
+    required: false
+    default: v1.17.0
+  cert-manager-helm-repo:
+    description: Helm repository for cert-manager
+    required: false
+    default: https://charts.jetstack.io
+  client-ports:
+    description: >
+      Ports published from the kind node to 127.0.0.1 for the client process
+      on the runner. Comma-separated N or N-M. The default is the full NodePort
+      range so an advertised NodePort is reachable on the same number.
+    required: false
+    default: 30000-32767
+  cluster-name:
+    description: AerospikeCluster name
+    required: false
+    default: aerocluster
+  cluster-namespace:
+    description: Namespace the AerospikeCluster is created in
+    required: false
+    default: aerospike
+  cluster-size:
+    description: AerospikeCluster size. One kind node runs every pod.
+    required: false
+    default: "2"
+  enable-bash-trace-mode:
+    description: Show commands being executed in shell scripts for debugging
+    required: false
+    default: "false"
+  endpoint-hostname:
+    description: >
+      Hostname written as the configured alternate-access address on every
+      node, into CoreDNS, and into the runner hosts file.
+    required: false
+    default: as-endpoint.test
+  features-content:
+    description: >
+      Enterprise feature-key file contents. Ignored when features-file is set.
+    required: false
+    default: ""
+  features-file:
+    description: Path to an Enterprise feature-key file on the runner
+    required: false
+    default: ""
+  helm-version:
+    description: Helm version installed on the runner
+    required: false
+    default: v3.18.4
+  ingress-namespace:
+    description: Namespace ingress-nginx is installed into
+    required: false
+    default: ingress-nginx
+  ingress-nginx-chart-version:
+    description: ingress-nginx Helm chart version
+    required: false
+    default: 4.12.1
+  ingress-nginx-helm-repo:
+    description: Helm repository for ingress-nginx
+    required: false
+    default: https://kubernetes.github.io/ingress-nginx
+  ingress-port-base:
+    description: >
+      First host port published for ingress-nginx tcp-services. One port per
+      pod, outside the NodePort range.
+    required: false
+    default: "9000"
+  kind-cluster-name:
+    description: kind cluster name
+    required: false
+    default: kind-ako
+  kind-node-image:
+    description: kind node image. AKO 4.5.0 supports Kubernetes through 1.35.
+    required: false
+    default: kindest/node:v1.35.0
+  kind-version:
+    description: kind version installed on the runner
+    required: false
+    default: v0.33.0
+  kubectl-version:
+    description: kubectl version installed on the runner
+    required: false
+    default: v1.35.0
+  server-image:
+    description: Aerospike server image used by the AerospikeCluster
+    required: false
+    default: aerospike/aerospike-server-enterprise:8.1.2.5
+  startup-timeout:
+    description: Seconds to wait for the AerospikeCluster phase to become Completed
+    required: false
+    default: "600"
+
+outputs:
+  admin-password:
+    description: Aerospike admin password
+    value: ${{ steps.publish.outputs.admin-password }}
+  cluster-name:
+    description: AerospikeCluster name
+    value: ${{ steps.publish.outputs.cluster-name }}
+  cluster-namespace:
+    description: Namespace the AerospikeCluster was created in
+    value: ${{ steps.publish.outputs.cluster-namespace }}
+  endpoint-address:
+    description: Address the runner uses for endpoint-hostname
+    value: ${{ steps.publish.outputs.endpoint-address }}
+  endpoint-hostname:
+    description: Hostname the client and the server both resolve
+    value: ${{ steps.publish.outputs.endpoint-hostname }}
+  ingress-endpoints:
+    description: Comma-separated endpoint-hostname:ingress-port pairs
+    value: ${{ steps.publish.outputs.ingress-endpoints }}
+  ingress-ports:
+    description: Comma-separated ingress-nginx tcp-services host ports
+    value: ${{ steps.publish.outputs.ingress-ports }}
+  kind-cluster-name:
+    description: kind cluster name
+    value: ${{ steps.publish.outputs.kind-cluster-name }}
+  kubeconfig:
+    description: kubeconfig written by kind
+    value: ${{ steps.publish.outputs.kubeconfig }}
+  node-port-range:
+    description: NodePort range the API server was asserted to be serving
+    value: ${{ steps.publish.outputs.node-port-range }}
+  service-endpoints:
+    description: Comma-separated endpoint-hostname:nodePort pairs for the Aerospike service port
+    value: ${{ steps.publish.outputs.service-endpoints }}
+  service-node-ports:
+    description: Comma-separated NodePorts for the Aerospike service port, pod order
+    value: ${{ steps.publish.outputs.service-node-ports }}
+
+runs:
+  using: composite
+  steps:
+    - name: Record inputs
+      shell: bash
+      env:
+        ADMIN_PASSWORD: ${{ inputs.admin-password }}
+        AKO_CHART_VERSION: ${{ inputs.ako-chart-version }}
+        AKO_HELM_REPO: ${{ inputs.ako-helm-repo }}
+        AKO_NAMESPACE: ${{ inputs.ako-namespace }}
+        CERT_MANAGER_CHART_VERSION: ${{ inputs.cert-manager-chart-version }}
+        CERT_MANAGER_HELM_REPO: ${{ inputs.cert-manager-helm-repo }}
+        CLIENT_PORTS: ${{ inputs.client-ports }}
+        CLUSTER_NAME: ${{ inputs.cluster-name }}
+        CLUSTER_NAMESPACE: ${{ inputs.cluster-namespace }}
+        CLUSTER_SIZE: ${{ inputs.cluster-size }}
+        ENABLE_BASH_TRACE_MODE: ${{ inputs.enable-bash-trace-mode }}
+        ENDPOINT_HOSTNAME: ${{ inputs.endpoint-hostname }}
+        FEATURES_CONTENT: ${{ inputs.features-content }}
+        FEATURES_FILE: ${{ inputs.features-file }}
+        HELM_VERSION: ${{ inputs.helm-version }}
+        INGRESS_NAMESPACE: ${{ inputs.ingress-namespace }}
+        INGRESS_NGINX_CHART_VERSION: ${{ inputs.ingress-nginx-chart-version }}
+        INGRESS_NGINX_HELM_REPO: ${{ inputs.ingress-nginx-helm-repo }}
+        INGRESS_PORT_BASE: ${{ inputs.ingress-port-base }}
+        KIND_CLUSTER_NAME: ${{ inputs.kind-cluster-name }}
+        KIND_NODE_IMAGE: ${{ inputs.kind-node-image }}
+        KIND_VERSION: ${{ inputs.kind-version }}
+        KUBECTL_VERSION: ${{ inputs.kubectl-version }}
+        SERVER_IMAGE: ${{ inputs.server-image }}
+        STARTUP_TIMEOUT: ${{ inputs.startup-timeout }}
+      run: bash "${{ github.action_path }}/entrypoint.sh" record-inputs
+
+    - name: Install kind, helm, and kubectl
+      shell: bash
+      run: bash "${{ github.action_path }}/entrypoint.sh" install-tools
+
+    - name: Create kind cluster
+      shell: bash
+      run: bash "${{ github.action_path }}/entrypoint.sh" create-cluster
+
+    - name: Assert NodePort range is 30000-32767
+      shell: bash
+      run: bash "${{ github.action_path }}/entrypoint.sh" assert-nodeport-range
+
+    - name: Label the node and add the CoreDNS entry
+      shell: bash
+      run: bash "${{ github.action_path }}/entrypoint.sh" prepare-node
+
+    - name: Install cert-manager and AKO
+      shell: bash
+      run: bash "${{ github.action_path }}/entrypoint.sh" install-ako
+
+    - name: Apply AerospikeCluster
+      shell: bash
+      run: bash "${{ github.action_path }}/entrypoint.sh" deploy-cluster
+
+    - name: Install ingress-nginx and tcp-services
+      shell: bash
+      run: bash "${{ github.action_path }}/entrypoint.sh" install-ingress
+
+    - name: Publish outputs
+      id: publish
+      shell: bash
+      run: bash "${{ github.action_path }}/entrypoint.sh" publish-outputs
