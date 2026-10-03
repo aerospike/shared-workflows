@@ -62,7 +62,9 @@ The bundle version defaults to the release version, so a rebuild of a release co
 
 ### Promoting a bundle
 
-There is a composite action that may be used for promotion of bundles documented at [Promote Release Bundle Composite Action](https://github.com/aerospike/shared-workflows/blob/main/.github/actions/promote-release-bundle/README.md). The `promote-release-bundle` action accepts `include-repos` and `exclude-repos` (semicolon-separated repo lists, e.g. `my-project-deb-dev-local;my-project-rpm-dev-local`) to scope which repositories are promoted. With neither set, all repositories in the bundle are promoted.
+Use `reusable_promote-release-bundle.yaml`. It refuses a promotion that skips a required stage: STAGE requires TEST, and PREVIEW, INTERNAL and PROD require STAGE. DEV and PREVIEW are optional. Passing `gh-environment` attaches a GitHub environment to the promotion job, so its required reviewers approve the promotion. See [Promote Release Bundle](../promote-release-bundle/README.md).
+
+The [promote-release-bundle composite action](https://github.com/aerospike/shared-workflows/blob/main/.github/actions/promote-release-bundle/README.md) promotes without the order check. Both accept `include-repos` and `exclude-repos` (semicolon-separated repo lists, e.g. `my-project-deb-dev-local;my-project-rpm-dev-local`) to scope which repositories are promoted. With neither set, all repositories in the bundle are promoted.
 
 ### Deleting a bundle before re-deploy
 
