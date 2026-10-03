@@ -90,7 +90,7 @@ with:
   bundle-revision: auto # bundle becomes 1.2.3-<run_id>-<run_attempt>
 ```
 
-The artifacts inside keep the clean release version. Only the bundle version carries the
+The artifacts inside keep the clean release version. Only the bundle version has the
 revision, so two builds of one release can exist at once.
 
 The resolved bundle version is available as the `bundle-version` output. Promote that value,
