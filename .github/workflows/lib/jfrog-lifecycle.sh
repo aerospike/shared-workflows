@@ -32,7 +32,8 @@ CURLRC
 )
 
 # A bundle with no promotions answers 200 with an empty array, so an unreadable response must
-# fail rather than read as "nothing is promoted". The same holds for a page not fetched.
+# fail rather than read as "nothing is promoted". The same is true of a page that was not
+# fetched.
 jfrog_promotion_records() {
     local bundle_name="$1" project="$2" offset=0 pages="" page count total
     while :; do
