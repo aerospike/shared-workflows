@@ -190,7 +190,7 @@ main() {
         ;;
     esac
 
-    # Only the bundle version takes the revision. Artifacts keep $VERSION.
+    # Only the bundle version gets the revision. Artifacts stay at $VERSION.
     BUNDLE_VERSION="$VERSION"
     if [[ -n $REVISION ]]; then
         BUNDLE_VERSION="${VERSION}-${REVISION}"
