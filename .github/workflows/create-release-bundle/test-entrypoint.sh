@@ -16,6 +16,8 @@ TEST_DIR="$GIT_ROOT/.github/workflows/create-release-bundle/test-artifacts"
 rm -rf "$TEST_DIR"
 mkdir -p "$TEST_DIR"
 TEST_REPORT_FILE="$TEST_DIR/test-report.txt"
+# In CI this suite runs inside a step; without this, every test writes to that step's outputs.
+export GITHUB_OUTPUT="$TEST_DIR/github-output"
 trap 'handle_error ${LINENO}' ERR
 
 # shellcheck disable=SC2317
@@ -260,6 +262,22 @@ if echo "$output" | grep -q "::warning"; then
 fi
 
 record_test_result "Test 10: Revision auto uses GITHUB_RUN_ID and GITHUB_RUN_ATTEMPT (dry-run)" "$test10_success"
+
+# Test 11: No bundle version output when the bundle is not created
+echo ""
+echo "Test 11: A failed create writes no bundle version to GITHUB_OUTPUT"
+test11_success=true
+
+cd "$TEST_DIR"
+: >"$TEST_DIR/gh-output"
+if GITHUB_OUTPUT="$TEST_DIR/gh-output" "$SCRIPT_DIR/entrypoint.sh" --project test-project --build-names "test-build" --bundle-name fail-bundle --version v9.9.9 --revision 1-1 --dry-run >/dev/null 2>&1; then
+    test11_success=false
+fi
+if grep -q "^bundle-version=" "$TEST_DIR/gh-output"; then
+    test11_success=false
+fi
+
+record_test_result "Test 11: A failed create writes no bundle version to GITHUB_OUTPUT" "$test11_success"
 
 # Summary
 echo ""

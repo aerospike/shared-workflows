@@ -196,9 +196,6 @@ main() {
         BUNDLE_VERSION="${VERSION}-${REVISION}"
         echo "Bundle version: $BUNDLE_VERSION (revision $REVISION)" >&2
     fi
-    if [[ -n ${GITHUB_OUTPUT-} ]]; then
-        echo "bundle-version=$BUNDLE_VERSION" >>"$GITHUB_OUTPUT"
-    fi
     echo "Dry run: $DRY_RUN" >&2
     if [[ -n ${BUNDLE_METADATA_PATH-} ]]; then
         echo "Bundle metadata: $BUNDLE_METADATA_PATH" >&2
@@ -229,6 +226,10 @@ EOF
         --spec build-artifacts/release-bundle-spec.json \
         --project="$PROJECT" \
         --signing-key="aerospike"
+
+    if [[ -n ${GITHUB_OUTPUT-} ]]; then
+        echo "bundle-version=$BUNDLE_VERSION" >>"$GITHUB_OUTPUT"
+    fi
 
     if [[ -n ${BUNDLE_METADATA_PATH-} ]]; then
         if [[ ! -f $BUNDLE_METADATA_PATH ]]; then
