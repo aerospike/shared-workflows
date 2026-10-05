@@ -14,7 +14,7 @@ This workflow creates JFrog release bundles by bundling one or more builds into 
 | `jf-build-names`                   | Comma-separated list of `build-name:version` pairs to include (e.g. `"app-build:1.2.3,client-build:2.1.0"`)                                                                                                                                                                                                                              | Yes      | -                               |
 | `jf-bundle-name`                   | Name for the release bundle                                                                                                                                                                                                                                                                                                              | Yes      | -                               |
 | `version`                          | Version of the release bundle                                                                                                                                                                                                                                                                                                            | Yes      | -                               |
-| `bundle-revision`                  | Appended to `version` to form the bundle version, so a rebuild of a release becomes a new bundle revision instead of colliding with the existing bundle. Artifacts keep the clean release version. `auto` uses the run id and attempt. Unset keeps the release version, with a warning that a future release will always add a revision. | No       | `""`                            |
+| `jf-bundle-revision`               | Appended to `version` to form the bundle version, so a rebuild of a release becomes a new bundle revision instead of colliding with the existing bundle. Artifacts keep the clean release version. `auto` uses the run id and attempt. Unset keeps the release version, with a warning that a future release will always add a revision. | No       | `""`                            |
 | `jf-url`                           | JFrog Artifactory URL                                                                                                                                                                                                                                                                                                                    | No       | `https://artifact.aerospike.io` |
 | `oidc-provider-name`               | OIDC provider name for authentication                                                                                                                                                                                                                                                                                                    | No       | `gh-aerospike`                  |
 | `oidc-audience`                    | OIDC audience for authentication                                                                                                                                                                                                                                                                                                         | No       | `aerospike`                     |
@@ -80,21 +80,25 @@ Run the basic test suite:
 
 ## Bundle revisions
 
-A release version alone is not unique per build, so rebuilding a release collides with the
-bundle its first build created. Set `bundle-revision` to give each build its own bundle
-version:
+A release version alone is not unique per build, so a second bundle for the same release collides
+with the bundle version its first build created. Set `jf-bundle-revision` to give each build its
+own bundle version:
 
 ```yaml
 with:
   version: 1.2.3
-  bundle-revision: auto # bundle becomes 1.2.3-<run_id>-<run_attempt>
+  jf-bundle-revision: auto # bundle becomes 1.2.3-<run_id>-<run_attempt>
 ```
 
-The artifacts inside keep the clean release version. Only the bundle version has the
-revision, so two builds of one release can exist at once.
+The artifacts inside keep the clean release version. Only the bundle version has the revision.
 
-The resolved bundle version is available as the `bundle-version` output. Promote that value,
-not `version`.
+The revision removes the bundle-version collision only. A rebuild deploys its artifacts to the same
+paths, so once an earlier revision's bundle is promoted to DEV, the rebuild's deploy fails on those
+locked paths. `delete-release-bundle` takes the bundle version: to free the paths, pass the earlier
+revision's bundle version, not the release version.
 
-Leaving `bundle-revision` unset keeps the bundle version equal to the release version and logs a
+The resolved bundle version is the `bundle-version` output, set once the bundle is created. In
+dry-run it is the version that would be created. Promote that value, not `version`.
+
+Leaving `jf-bundle-revision` unset keeps the bundle version equal to the release version and logs a
 warning: a future release will always add a revision, defaulting to `auto`.

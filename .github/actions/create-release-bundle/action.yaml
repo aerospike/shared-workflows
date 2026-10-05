@@ -66,11 +66,15 @@ runs:
         if [[ -n "${{ inputs.bundle-metadata-path }}" ]]; then
           meta_arg=(--bundle-metadata "${{ inputs.bundle-metadata-path }}")
         fi
+        revision_arg=()
+        if [[ -n "$BUNDLE_REVISION" ]]; then
+          revision_arg=(--revision "$BUNDLE_REVISION")
+        fi
         "$entrypoint" \
           --project "${{ inputs.jf-project }}" \
           --build-names "${{ inputs.build-names }}" \
           --bundle-name "${{ inputs.bundle-name }}" \
           --version "${{ inputs.version }}" \
           "${meta_arg[@]}" \
-          --revision "$BUNDLE_REVISION" \
+          "${revision_arg[@]}" \
           $dry_run_arg

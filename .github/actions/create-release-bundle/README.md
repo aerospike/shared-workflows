@@ -9,15 +9,22 @@ Create a JFrog release bundle from one or more builds. Wraps the `create-release
 
 ## Inputs
 
-| Input                  | Required | Default                                                 | Description                                                                                                                                    |
-| ---------------------- | -------- | ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `build-names`          | Yes      |                                                         | Comma-separated `name:version` pairs                                                                                                           |
-| `bundle-name`          | Yes      |                                                         | Release bundle name                                                                                                                            |
-| `version`              | Yes      |                                                         | Release bundle version                                                                                                                         |
-| `jf-project`           | Yes      |                                                         | JFrog project key                                                                                                                              |
-| `dry-run`              | No       | `false`                                                 | Run without creating the bundle                                                                                                                |
-| `bundle-metadata-path` | No       | _(empty)_                                               | Path to `.maven-bundle-metadata.json` from detect-artifacts; when present, applied to the bundle via `jf release-bundle-annotate` after create |
-| `entrypoint-path`      | No       | `.github/workflows/create-release-bundle/entrypoint.sh` | Path to the entrypoint script                                                                                                                  |
+| Input                  | Required | Default                                                 | Description                                                                                                                                                                                                                        |
+| ---------------------- | -------- | ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `build-names`          | Yes      |                                                         | Comma-separated `name:version` pairs                                                                                                                                                                                               |
+| `bundle-name`          | Yes      |                                                         | Release bundle name                                                                                                                                                                                                                |
+| `version`              | Yes      |                                                         | Release bundle version                                                                                                                                                                                                             |
+| `jf-project`           | Yes      |                                                         | JFrog project key                                                                                                                                                                                                                  |
+| `dry-run`              | No       | `false`                                                 | Run without creating the bundle                                                                                                                                                                                                    |
+| `bundle-metadata-path` | No       | _(empty)_                                               | Path to `.maven-bundle-metadata.json` from detect-artifacts; when present, applied to the bundle via `jf release-bundle-annotate` after create                                                                                     |
+| `bundle-revision`      | No       | _(empty)_                                               | Appended to `version` to form the bundle version. `auto` uses the run id and attempt. Unset keeps the release version and logs a warning. See [Bundle revisions](../../workflows/create-release-bundle/README.md#bundle-revisions) |
+| `entrypoint-path`      | No       | `.github/workflows/create-release-bundle/entrypoint.sh` | Path to the entrypoint script                                                                                                                                                                                                      |
+
+## Outputs
+
+| Output           | Description                                                                                                                                                      |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `bundle-version` | Bundle version created, including the revision. Set once the bundle is created; in dry-run, the version that would be created. Promote this value, not `version` |
 
 ## Example Usage
 

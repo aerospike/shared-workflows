@@ -58,7 +58,9 @@ Set `dry-run: true` to validate the configuration and JFrog authentication witho
 
 ### Bundle revisions
 
-The bundle version defaults to the release version, so a rebuild of a release collides with the bundle the first build created. Pass `bundle-revision: auto` to `reusable_create-release-bundle.yaml` to give each build its own bundle version (`1.2.3-<run_id>-<run_attempt>`) while the artifacts keep the clean release version. Promote the workflow's `bundle-version` output, not `version`. Unset, it logs a warning that a future release will always add a revision.
+The bundle version defaults to the release version, so a rebuild of a release collides with the bundle the first build created. Pass `jf-bundle-revision: auto` to `reusable_create-release-bundle.yaml` to give each build its own bundle version (`1.2.3-<run_id>-<run_attempt>`) while the artifacts keep the clean release version. Promote the workflow's `bundle-version` output, not `version`. Unset, it logs a warning that a future release will always add a revision.
+
+The revision removes the bundle-version collision only. A rebuild deploys to the same artifact paths, so once an earlier revision's bundle is promoted to DEV, the rebuild's deploy fails on those locked paths. See [Deleting a bundle before re-deploy](#deleting-a-bundle-before-re-deploy).
 
 ### Promoting a bundle
 
@@ -66,7 +68,7 @@ There is a composite action that may be used for promotion of bundles documented
 
 ### Deleting a bundle before re-deploy
 
-The `delete-release-bundle` composite action deletes a bundle version safely: it searches first, no-ops when the bundle is absent, and reports `existed=true/false` rather than failing. A **promotion guard** runs when a bundle exists, refusing deletion when the version is promoted beyond DEV (TEST, STAGE, PREVIEW, INTERNAL, or PROD). Wire it to run before deploy when you may re-run a pipeline against an already-promoted bundle (promoted bundles lock the underlying dev-local artifacts).
+The `delete-release-bundle` composite action deletes a bundle version safely: it searches first, no-ops when the bundle is absent, and reports `existed=true/false` rather than failing. A **promotion guard** runs when a bundle exists, refusing deletion when the version is promoted, or being promoted, to any stage other than DEV. A promotion that failed does not count. Wire it to run before deploy when you may re-run a pipeline against an already-promoted bundle (promoted bundles lock the underlying dev-local artifacts). `version` is the bundle version: with a revision, pass the earlier revision's bundle version, not the release version.
 
 ```yaml
 delete-existing-bundle:
