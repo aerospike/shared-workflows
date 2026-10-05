@@ -24,7 +24,7 @@ jobs:
         id: kind-ako
         uses: ./.github/actions/setup-kind-ako
         with:
-          features-content: ${{ secrets.AEROSPIKE_FEATURE_KEY }}
+          features-content: ${{ secrets.AES_FEATURES_CONF }}
 
       - name: Verify the pinned NodePort range
         run: |
