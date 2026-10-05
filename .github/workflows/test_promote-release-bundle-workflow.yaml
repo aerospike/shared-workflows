@@ -52,16 +52,15 @@ jobs:
       - name: Promote to STAGE without TEST
         shell: bash
         run: |
-          set -uo pipefail
-          output=$(.github/workflows/promote-release-bundle/entrypoint.sh \
+          set -euo pipefail
+          if output=$(.github/workflows/promote-release-bundle/entrypoint.sh \
             --bundle-name test-promote-guard-probe --version v1.0.0 --project test \
-            --target-stage STAGE --dry-run 2>&1)
-          status=$?
-          echo "$output"
-          if ((status == 0)); then
+            --target-stage STAGE --dry-run 2>&1); then
+            echo "$output"
             echo "::error::the promotion to STAGE was not refused"
             exit 1
           fi
+          echo "$output"
           grep -Fq "is not promoted to TEST, so it cannot be promoted to STAGE" <<<"$output"
 
   run-tests:
