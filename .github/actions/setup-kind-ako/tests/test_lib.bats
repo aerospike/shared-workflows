@@ -163,6 +163,9 @@ teardown() {
 @test "AerospikeCluster uses configuredIP and a single shared hostname is not a port map" {
     manifest=$(render_cluster_manifest aerospike aerocluster aerospike/aerospike-server-enterprise:8.1.2.5 2)
 
+    [[ "$manifest" == *"skipWorkDirValidate: true"* ]]
+    [[ "$manifest" == *"work-directory: /opt/aerospike"* ]]
+    [[ "$manifest" == *"path: /opt/aerospike"* ]]
     [[ "$manifest" == *"alternateAccess: configuredIP"* ]]
     [[ "$manifest" == *"multiPodPerHost: true"* ]]
     [[ "$manifest" == *"feature-key-file: /etc/aerospike/secret/features.conf"* ]]

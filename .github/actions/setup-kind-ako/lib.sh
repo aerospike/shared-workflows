@@ -422,6 +422,10 @@ spec:
   image: ${image}
   podSpec:
     multiPodPerHost: true
+  validationPolicy:
+    # AKO otherwise requires /opt/aerospike on a persistent volume. emptyDir is
+    # not one. Setting work-directory still checks that this path is mounted.
+    skipWorkDirValidate: true
   aerospikeNetworkPolicy:
     access: pod
     alternateAccess: configuredIP
@@ -453,6 +457,7 @@ spec:
   aerospikeConfig:
     service:
       feature-key-file: /etc/aerospike/secret/features.conf
+      work-directory: /opt/aerospike
       cgroup-mem-tracking: true
     security: {}
     network:
