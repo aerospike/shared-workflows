@@ -15,7 +15,7 @@ JFrog [Release Bundles v2](https://jfrog.com/help/r/jfrog-artifactory-documentat
 Artifacts flow through gated promotion stages. Each gate has an owner and requirements that must be met before promotion.
 
 ```text
-CI/Build  ->  DEV  ->  TEST  ->  STAGE  ->  PREVIEW  ->  PROD
+CI/Build  ->  [DEV]  ->  TEST  ->  STAGE  ->  [PREVIEW]  ->  PROD
                                           ->  INTERNAL
 ```
 
@@ -27,6 +27,8 @@ CI/Build  ->  DEV  ->  TEST  ->  STAGE  ->  PREVIEW  ->  PROD
 | PREVIEW         | Product     | Customer preview validation              |
 | PROD            | Product     | Security review and production readiness |
 | INTERNAL        | Engineering | Internal-only artifacts (not public)     |
+
+DEV and PREVIEW, in brackets, are optional: a version can go from CI straight to TEST, and from STAGE straight to PROD. STAGE requires TEST, and PREVIEW, INTERNAL and PROD require STAGE.
 
 The release bundle is created after deployment to DEV (at the DEV to TEST gate). From that point forward, the bundle carries all artifacts and metadata through the remaining promotion stages.
 
