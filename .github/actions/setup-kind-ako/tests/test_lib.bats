@@ -172,6 +172,7 @@ teardown() {
 @test "single-node cluster uses replication factor 1" {
     manifest=$(render_cluster_manifest aerospike aerocluster aerospike/aerospike-server:1.0.0 1)
 
+    [[ "$manifest" == *"size: 1"* ]]
     [[ "$manifest" == *"replication-factor: 1"* ]]
 }
 
@@ -189,7 +190,7 @@ teardown() {
     export FEATURES_CONTENT=""
     export ADMIN_PASSWORD="testpassword"
     export CLIENT_PORTS="4000"
-    export CLUSTER_SIZE="1"
+    unset CLUSTER_SIZE
 
     run "$ACTION_DIR/entrypoint.sh" record-inputs
 

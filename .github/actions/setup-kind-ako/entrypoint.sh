@@ -98,7 +98,7 @@ cmd_record_inputs() {
     local helm_version=${HELM_VERSION:-v3.18.4}
     local client_ports=${CLIENT_PORTS:-30000-32767}
     local ingress_port_base=${INGRESS_PORT_BASE:-9000}
-    local cluster_size=${CLUSTER_SIZE:-2}
+    local cluster_size=${CLUSTER_SIZE:-1}
     local cluster_name=${CLUSTER_NAME:-aerocluster}
     local cluster_namespace=${CLUSTER_NAMESPACE:-aerospike}
     local ako_namespace=${AKO_NAMESPACE:-ako}

@@ -46,9 +46,11 @@ inputs:
     required: false
     default: aerospike
   cluster-size:
-    description: AerospikeCluster size. One kind node runs every pod.
+    description: >
+      Initial AerospikeCluster size. One server keeps setup inside the L3
+      3-5 minute budget. One kind node runs every pod.
     required: false
-    default: "2"
+    default: "1"
   enable-bash-trace-mode:
     description: Show commands being executed in shell scripts for debugging
     required: false

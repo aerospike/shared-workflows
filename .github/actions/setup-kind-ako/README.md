@@ -30,18 +30,17 @@ The API server NodePort range is pinned to **30000-32767**, the Kubernetes defau
 runner (client JVM)
   /etc/hosts: as-endpoint.test -> 127.0.0.1
   127.0.0.1:9000  -> ingress tcp-services -> aerocluster-0-0:3000
-  127.0.0.1:9001  -> ingress tcp-services -> aerocluster-0-1:3000
   127.0.0.1:<nodePort> -> kind extraPortMappings -> Service nodePort
 
 kind node
   CoreDNS: as-endpoint.test -> node InternalIP
   node label aerospike.com/configured-alternate-access-address=as-endpoint.test
-  AerospikeCluster alternateAccess: configuredIP, multiPodPerHost: true
+  AerospikeCluster size 1, alternateAccess: configuredIP, multiPodPerHost: true
 ```
 
 Inside the cluster the hostname resolves to the node IP, which is enough for the server to start. AKO writes a DNS name into `alternate-access-address` from that label; that path is unsupported and works because nothing rejects it yet. On the runner the same name resolves to `127.0.0.1`, where the published ports are listening.
 
-The cluster is one control-plane node with the control-plane taint removed, so every pod lands on the node whose ports are published.
+The kind cluster is one control-plane node with the control-plane taint removed, so every pod lands on the node whose ports are published. The Aerospike cluster starts at one server. Testing Strategy §7 budgets L3 at 3–5 minutes including kind spin-up, and the scale tests grow the cluster after this action returns. Raise `cluster-size` when a caller needs the extra pods up front. Each added pod gets the next ingress port (`9001`, `9002`, …).
 
 ## Inputs
 
@@ -56,7 +55,7 @@ The cluster is one control-plane node with the control-plane taint removed, so e
 | `client-ports`                | `30000-32767`                                                 | Ports published to `127.0.0.1`. `N` or `N-M`, comma-separated         |
 | `cluster-name`                | `aerocluster`                                                 | AerospikeCluster name                                                 |
 | `cluster-namespace`           | `aerospike`                                                   | AerospikeCluster namespace                                            |
-| `cluster-size`                | `2`                                                           | Pods in the initial cluster. Maximum 8                                |
+| `cluster-size`                | `1`                                                           | Initial Aerospike servers. Maximum 8                                  |
 | `enable-bash-trace-mode`      | `false`                                                       | Print shell commands as they run                                      |
 | `endpoint-hostname`           | `as-endpoint.test`                                            | Shared alternate-access hostname                                      |
 | `features-content`            |                                                               | Feature-key file contents. Ignored when `features-file` is set        |
