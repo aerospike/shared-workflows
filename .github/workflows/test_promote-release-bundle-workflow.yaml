@@ -5,6 +5,7 @@ on:
     branches: [main]
 
 permissions:
+  attestations: write
   id-token: write
   contents: read
 
@@ -14,6 +15,7 @@ jobs:
     uses: ./.github/workflows/reusable_promote-release-bundle.yaml
     with:
       gh-workflows-ref: ${{ github.sha }}
+      gh-checkout-path: .
       jf-project: test
       jf-bundle-name: test-promote-guard-probe
       version: v1.0.0
@@ -23,8 +25,49 @@ jobs:
       oidc-audience: aerospike
       dry-run: true
 
+  # Never promote test-promote-guard-probe to TEST: this job needs it to have no TEST promotion.
+  test-refuses-a-skipped-stage:
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup JFrog CLI
+        uses: step-security/setup-jfrog-cli@53aeacb709fce45d0baf69a13ec3342f7e2d71a9 # v5.1.0
+        env:
+          JF_URL: https://artifact.aerospike.io
+          JF_PROJECT: test
+        with:
+          oidc-provider-name: gh-aerospike
+          oidc-audience: aerospike
+
+      - name: Promote to STAGE without TEST
+        shell: bash
+        run: |
+          set -uo pipefail
+          output=$(.github/workflows/promote-release-bundle/entrypoint.sh \
+            --bundle-name test-promote-guard-probe --version v1.0.0 --project test \
+            --target-stage STAGE --dry-run 2>&1)
+          status=$?
+          echo "$output"
+          if ((status == 0)); then
+            echo "::error::the promotion to STAGE was not refused"
+            exit 1
+          fi
+          grep -Fq "is not promoted to TEST, so it cannot be promoted to STAGE" <<<"$output"
+
   run-tests:
     runs-on: ubuntu-22.04
+    permissions:
+      contents: read
     steps:
       - name: Harden the runner (Audit all outbound calls)
         uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
