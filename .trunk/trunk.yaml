@@ -9,6 +9,26 @@ plugins:
     - id: trunk
       ref: v1.7.4
       uri: https://github.com/trunk-io/plugins
+# Plugin v1.7.4 downloads the x86_64 ShellCheck build for macOS arm64 and expects Rosetta.
+# Use the native aarch64 build so `trunk check` can run on Apple Silicon without Rosetta.
+downloads:
+  - name: shellcheck
+    downloads:
+      - os:
+          linux: linux
+        cpu:
+          arm_64: aarch64
+          x86_64: x86_64
+        url: https://github.com/koalaman/shellcheck/releases/download/v${version}/shellcheck-v${version}.${os}.${cpu}.tar.xz
+        strip_components: 1
+      - os: macos
+        cpu: x86_64
+        url: https://github.com/koalaman/shellcheck/releases/download/v${version}/shellcheck-v${version}.darwin.x86_64.tar.xz
+        strip_components: 1
+      - os: macos
+        cpu: arm_64
+        url: https://github.com/koalaman/shellcheck/releases/download/v${version}/shellcheck-v${version}.darwin.aarch64.tar.xz
+        strip_components: 1
 # Many linters and tools depend on runtimes - configure them here. (https://docs.trunk.io/runtimes)
 runtimes:
   enabled:
