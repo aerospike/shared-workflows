@@ -91,8 +91,9 @@ teardown() {
     run render_kind_config "4000" 9000 1
 
     [ "$status" -eq 0 ]
-    [[ "$output" == *"- name: service-node-port-range"* ]]
-    [[ "$output" == *'value: "30000-32767"'* ]]
+    [[ "$output" == *"apiVersion: kubeadm.k8s.io/v1beta3"* ]]
+    [[ "$output" == *"service-node-port-range: \"30000-32767\""* ]]
+    [[ "$output" != *"- name: service-node-port-range"* ]]
     [[ "$output" != *"30000-32768"* ]]
     [[ "$output" != *"30000-40000"* ]]
     [[ "$output" == *"containerPort: 4000"* ]]

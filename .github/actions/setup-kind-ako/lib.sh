@@ -213,6 +213,10 @@ render_kind_config() {
     done <<<"$combined"
     ((${#ports[@]} > 0)) || error "no ports to publish"
 
+    # kind v0.33 emits kubeadm v1beta3, with extraArgs as a map, for every
+    # Kubernetes version below 1.36. A v1beta4 list does not match that
+    # document, so kubeadm never receives the flag. Keep this patch on
+    # v1beta3 while KIND_NODE_IMAGE stays below v1.36.
     cat <<EOF
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
@@ -222,12 +226,11 @@ nodes:
   - role: control-plane
     kubeadmConfigPatches:
       - |
-        apiVersion: kubeadm.k8s.io/v1beta4
+        apiVersion: kubeadm.k8s.io/v1beta3
         kind: ClusterConfiguration
         apiServer:
           extraArgs:
-            - name: service-node-port-range
-              value: "$(pinned_nodeport_range)"
+            service-node-port-range: "$(pinned_nodeport_range)"
     extraPortMappings:
 EOF
     for port in "${ports[@]}"; do
