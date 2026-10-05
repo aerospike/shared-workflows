@@ -151,6 +151,13 @@ teardown() {
     [[ "$manifest" == *'"9001": "aerospike/aerocluster-0-1:3000"'* ]]
 }
 
+@test "ingress chart does not publish host ports 80 and 443" {
+    values=$(render_ingress_values)
+
+    [[ "$values" == *"enabled: false"* ]]
+    [[ "$values" != *"enabled: true"* ]]
+}
+
 @test "ingress patch points the controller at tcp-services and host ports" {
     patch=$(render_ingress_container_patch ingress-nginx 9000 2)
 

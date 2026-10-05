@@ -506,8 +506,12 @@ render_ingress_values() {
     cat <<'EOF'
 controller:
   replicaCount: 1
+  # 80 and 443 are unused. Enabling hostPort for them deadlocks a rolling
+  # update on the one kind node: the new pod cannot bind those ports while
+  # the previous controller still holds them. The tcp-services port is added
+  # later as hostPort 9000.
   hostPort:
-    enabled: true
+    enabled: false
   admissionWebhooks:
     enabled: false
   service:
