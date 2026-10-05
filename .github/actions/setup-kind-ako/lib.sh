@@ -467,7 +467,8 @@ spec:
         replication-factor: ${rf}
         storage-engine:
           type: memory
-          data-size: 134217728
+          # Server 8.1.2 rejects a memory data-size below 512MiB.
+          data-size: 536870912
 EOF
 }
 

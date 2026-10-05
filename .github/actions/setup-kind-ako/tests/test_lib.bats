@@ -168,6 +168,7 @@ teardown() {
     [[ "$manifest" == *"feature-key-file: /etc/aerospike/secret/features.conf"* ]]
     [[ "$manifest" == *"replication-factor: 2"* ]]
     [[ "$manifest" == *"size: 2"* ]]
+    [[ "$manifest" == *"data-size: 536870912"* ]]
 }
 
 @test "single-node cluster uses replication factor 1" {
