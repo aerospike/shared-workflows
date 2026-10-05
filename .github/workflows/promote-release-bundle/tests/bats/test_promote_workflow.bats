@@ -53,10 +53,10 @@ STUB
     done
 }
 
-@test "the job asks for contents read, id-token write and attestations write only" {
+@test "only the job asks for attestations write" {
     expected="attestations=write,contents=read,id-token=write"
     [ "$(yq -r "${JOB}.permissions | to_entries | map(.key + \"=\" + .value) | sort | join(\",\")" "$WORKFLOW")" = "$expected" ]
-    [ "$(yq -r '.permissions | to_entries | map(.key + "=" + .value) | sort | join(",")' "$WORKFLOW")" = "$expected" ]
+    [ "$(yq -r '.permissions | to_entries | map(.key + "=" + .value) | sort | join(",")' "$WORKFLOW")" = "contents=read,id-token=write" ]
 }
 
 @test "promotions of one bundle to one stage run one at a time" {
