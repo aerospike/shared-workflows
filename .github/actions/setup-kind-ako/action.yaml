@@ -81,7 +81,7 @@ inputs:
   ingress-nginx-chart-version:
     description: ingress-nginx Helm chart version
     required: false
-    default: 4.12.1
+    default: 4.15.1
   ingress-nginx-helm-repo:
     description: Helm repository for ingress-nginx
     required: false

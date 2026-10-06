@@ -62,7 +62,7 @@ The kind cluster is one control-plane node with the control-plane taint removed,
 | `features-file`               |                                                               | Path to a feature-key file on the runner                              |
 | `helm-version`                | `v3.18.4`                                                     | Helm version installed on the runner                                  |
 | `ingress-namespace`           | `ingress-nginx`                                               | ingress-nginx namespace                                               |
-| `ingress-nginx-chart-version` | `4.12.1`                                                      | ingress-nginx chart version                                           |
+| `ingress-nginx-chart-version` | `4.15.1`                                                      | ingress-nginx chart version                                           |
 | `ingress-nginx-helm-repo`     | `https://kubernetes.github.io/ingress-nginx`                  | ingress-nginx chart repository                                        |
 | `ingress-port-base`           | `9000`                                                        | First tcp-services host port. One port per pod, outside `30000-32767` |
 | `kind-cluster-name`           | `kind-ako`                                                    | kind cluster name                                                     |

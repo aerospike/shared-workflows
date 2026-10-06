@@ -109,7 +109,7 @@ cmd_record_inputs() {
     local ako_helm_repo=${AKO_HELM_REPO:-https://aerospike.github.io/aerospike-kubernetes-enterprise}
     local cert_manager_chart_version=${CERT_MANAGER_CHART_VERSION:-v1.17.0}
     local cert_manager_helm_repo=${CERT_MANAGER_HELM_REPO:-https://charts.jetstack.io}
-    local ingress_nginx_chart_version=${INGRESS_NGINX_CHART_VERSION:-4.12.1}
+    local ingress_nginx_chart_version=${INGRESS_NGINX_CHART_VERSION:-4.15.1}
     local ingress_nginx_helm_repo=${INGRESS_NGINX_HELM_REPO:-https://kubernetes.github.io/ingress-nginx}
     local startup_timeout=${STARTUP_TIMEOUT:-600}
     local trace=${ENABLE_BASH_TRACE_MODE:-false}
