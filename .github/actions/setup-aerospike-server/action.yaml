@@ -409,19 +409,21 @@ runs:
           fi
         fi
 
-        # Generate default TLS-enabled config if TLS is on and no custom config
-        if [[ "${{ inputs.enable-tls }}" == "true" && -z "$config_path" ]]; then
-          config_path="$(mktemp)"
-          "$render_tpl" "$tpl_dir/tls.conf" "$config_path"
-          echo "Generated default TLS-enabled aerospike.conf at $config_path"
-        fi
-
-        # Generate default config when security or SC is enabled but no TLS and no custom config
-        if [[ "${{ inputs.enable-tls }}" != "true" && -z "$config_path" \
-              && ( "$effective_security" == "true" || "$enable_sc" == "true" ) ]]; then
-          config_path="$(mktemp)"
-          "$render_tpl" "$tpl_dir/default.conf" "$config_path"
-          echo "Generated default security/SC-enabled aerospike.conf at $config_path"
+        # config_path is still empty when neither config-file nor config-content
+        # was set. Render the single-node default here. Leave multi-node empty
+        # so start-containers takes its generated-config branch and renders
+        # multi-node.conf, including the TLS listener when enable-tls is set.
+        if [[ "$num_nodes" -eq 1 && -z "$config_path" ]]; then
+          if [[ "${{ inputs.enable-tls }}" == "true" ]]; then
+            export_tls_template_vars "$tpl_dir" "true"
+            config_path="$(mktemp)"
+            "$render_tpl" "$tpl_dir/tls.conf" "$config_path"
+            echo "Generated default TLS-enabled aerospike.conf at $config_path"
+          elif [[ "$effective_security" == "true" || "$enable_sc" == "true" ]]; then
+            config_path="$(mktemp)"
+            "$render_tpl" "$tpl_dir/default.conf" "$config_path"
+            echo "Generated default security/SC-enabled aerospike.conf at $config_path"
+          fi
         fi
 
         echo "features-path=$features_path" >> "$GITHUB_OUTPUT"
@@ -557,8 +559,10 @@ runs:
             fi
 
             export MESH_SEEDS="$mesh_seeds"
+            export_tls_template_vars "$tpl_dir" "$enable_tls"
 
-            # Render multi-node template
+            # No config-file or config-content. Render multi-node.conf, with
+            # the TLS listener included when enable-tls is set.
             config_path="$(mktemp)"
             "$render_tpl" "$tpl_dir/multi-node.conf" "$config_path"
           else
