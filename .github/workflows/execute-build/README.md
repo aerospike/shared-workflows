@@ -157,7 +157,7 @@ Your build script should:
 
 ## Docker images
 
-When `docker info` succeeds, the job logs in to the host of `jf-url` with the OIDC token before the build script. Pull compile and base images from `<host>/<jf-project>-docker-virtual/...`. The `hi` test app does this (`artifact.aerospike.io/test-docker-virtual/...`).
+When `docker info` succeeds, the job logs in to `aerospike.jfrog.io` with the OIDC token before the build script. Pull compile and base images from `aerospike.jfrog.io/<jf-project>-docker-virtual/...`. The `hi` test app does this (`aerospike.jfrog.io/test-docker-virtual/...`).
 
 ## Reading the matrix entry from a build script
 

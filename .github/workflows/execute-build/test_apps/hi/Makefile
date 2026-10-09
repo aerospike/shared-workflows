@@ -11,7 +11,7 @@ EMULATED ?= false
 
 # Compile images come from the test project's Docker virtual. Official
 # library images keep the library/ prefix that Artifactory uses.
-DOCKER_REGISTRY ?= artifact.aerospike.io/test-docker-virtual
+DOCKER_REGISTRY ?= aerospike.jfrog.io/test-docker-virtual
 DOCKER_IMAGE_jammy = $(DOCKER_REGISTRY)/library/ubuntu:22.04
 DOCKER_IMAGE_noble = $(DOCKER_REGISTRY)/library/ubuntu:24.04
 DOCKER_IMAGE_focal = $(DOCKER_REGISTRY)/library/ubuntu:20.04
