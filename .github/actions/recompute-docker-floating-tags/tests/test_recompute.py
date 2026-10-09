@@ -118,6 +118,23 @@ class SelectTest(unittest.TestCase):
         done = run("select", "--request", "latest-slim", "--tag", "3.9.0-slim", "--tag", "3.10.0-slim", "--tag", "3.11.0")
         self.assertEqual(done.stdout.strip(), "set latest-slim 3.10.0-slim")
 
+    def test_suffix_is_taken_from_the_explicit_floating_tag(self):
+        done = run(
+            "select",
+            "--request",
+            "latest-debug",
+            "--tag",
+            "1.0.0-debug",
+            "--tag",
+            "1.2.0-debug",
+            "--tag",
+            "9.0.0",
+            "--tag",
+            "3.3.2-slim",
+        )
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertEqual(done.stdout.strip(), "set latest-debug 1.2.0-debug")
+
 
 class RepoTest(unittest.TestCase):
     def test_mapping_target_is_used_unchanged(self):

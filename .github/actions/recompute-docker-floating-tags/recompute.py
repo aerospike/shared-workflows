@@ -24,7 +24,6 @@ import urllib.parse
 
 IMMUTABLE = re.compile(r"_[0-9]{8}T[0-9]{6}Z$")
 PLAIN_VERSION = re.compile(r"^[0-9]+(?:\.[0-9]+)+$")
-SLIM_VERSION = re.compile(r"^[0-9]+(?:\.[0-9]+)+-slim$")
 MANIFEST_ACCEPT = ", ".join(
     [
         "application/vnd.oci.image.index.v1+json",
@@ -73,26 +72,27 @@ def ignored_tag(tag):
     return IMMUTABLE.search(tag) is not None
 
 
-def choose(requests, tags):
-    """Pick a version tag for each floating tag, or mark it for removal.
+def floating_suffix(name):
+    """Variant named by an explicit floating tag. ``latest`` has none; ``latest-slim`` is ``-slim``."""
+    if name == "latest":
+        return ""
+    if name.startswith("latest-") and len(name) > len("latest-"):
+        return name[len("latest") :]
+    raise SystemExit(f"unsupported floating tag: {name}")
 
-    ``latest`` uses tags that do not end in ``-slim``. ``latest-slim`` uses tags
-    that do, compared after the suffix is removed. Equal versions keep the first.
+
+def choose(requests, tags):
+    """Pick a version tag for each explicit floating tag, or mark it for removal.
+
+    ``latest`` uses dotted versions with no variant suffix. ``latest-<suffix>``
+    uses versions that end in that suffix, compared after the suffix is removed.
+    A version is not turned into a floating tag here. Equal versions keep the first.
     """
-    best_plain = ""
-    best_slim = ""
-    best_slim_ver = ""
+    pool = []
     for tag in tags:
         if ignored_tag(tag):
             continue
-        if PLAIN_VERSION.match(tag):
-            if not best_plain or newer(tag, best_plain):
-                best_plain = tag
-        elif SLIM_VERSION.match(tag):
-            ver = tag[: -len("-slim")]
-            if not best_slim or newer(ver, best_slim_ver):
-                best_slim = tag
-                best_slim_ver = ver
+        pool.append(tag)
 
     decisions = []
     seen = set()
@@ -100,12 +100,24 @@ def choose(requests, tags):
         if req in seen:
             continue
         seen.add(req)
-        if req == "latest":
-            decisions.append(("set", req, best_plain) if best_plain else ("delete", req, ""))
-        elif req == "latest-slim":
-            decisions.append(("set", req, best_slim) if best_slim else ("delete", req, ""))
-        else:
-            raise SystemExit(f"unsupported floating tag: {req}")
+        suffix = floating_suffix(req)
+        best = ""
+        best_ver = ""
+        for tag in pool:
+            if suffix:
+                if not tag.endswith(suffix):
+                    continue
+                ver = tag[: -len(suffix)]
+            else:
+                if not PLAIN_VERSION.match(tag):
+                    continue
+                ver = tag
+            if not PLAIN_VERSION.match(ver):
+                continue
+            if not best or newer(ver, best_ver):
+                best = tag
+                best_ver = ver
+        decisions.append(("set", req, best) if best else ("delete", req, ""))
     return decisions
 
 

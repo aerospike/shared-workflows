@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Decide which pushed image refs belong in build-info, and which floating tags
-# an image declares. Floating tags (latest, latest-*) stay out of the image file.
-# Digest refs are never written.
+# an image declares. The mutable version of an immutable tag (the timestamp
+# stripped) is included. latest and latest-* are recorded only when the tag
+# list names them. Digest refs are never written.
 set -euo pipefail
 
 usage() {
@@ -35,10 +36,12 @@ is_floating_tag() {
     [[ $portion == latest || $portion == latest-* ]]
 }
 
-is_version_tag() {
-    local portion
-    portion=$(tag_portion "$1")
-    [[ $portion =~ ^[0-9]+(\.[0-9]+)+(-slim)?$ ]]
+# 3.3.2_20261007T212412Z -> 3.3.2. Empty when the ref is not an immutable tag.
+mutable_tag() {
+    local portion=$1
+    if [[ $portion =~ ^(.+)_[0-9]{8}T[0-9]{6}Z$ ]]; then
+        printf '%s\n' "${BASH_REMATCH[1]}"
+    fi
 }
 
 MODE=${1-}
@@ -100,11 +103,26 @@ image-file)
     if [[ $DIGEST != sha256:* ]]; then
         DIGEST="sha256:${DIGEST}"
     fi
+    seen=";"
+    emit_ref() {
+        local ref=$1
+        [[ $seen == *";${ref};"* ]] && return 0
+        seen+="${ref};"
+        printf '%s\n' "${ref}@${DIGEST}"
+    }
     if ((${#REFS[@]} > 0)); then
         for ref in "${REFS[@]}"; do
             is_digest_ref "$ref" && continue
             is_floating_tag "$ref" && continue
-            printf '%s\n' "${ref}@${DIGEST}"
+            emit_ref "$ref"
+            portion=$(tag_portion "$ref")
+            mutable=$(mutable_tag "$portion")
+            [[ -n $mutable ]] || continue
+            if [[ $ref == *:* ]]; then
+                emit_ref "${ref%:*}:${mutable}"
+            else
+                emit_ref "$mutable"
+            fi
         done
     fi
     ;;
@@ -113,27 +131,16 @@ floating-property)
         echo "floating-property requires --image-name" >&2
         exit 1
     fi
-    want_latest=false
-    want_slim=false
+    parts=()
+    seen=";"
     if ((${#REFS[@]} > 0)); then
         for ref in "${REFS[@]}"; do
-            is_digest_ref "$ref" && continue
-            is_floating_tag "$ref" && continue
-            is_version_tag "$ref" || continue
+            is_floating_tag "$ref" || continue
             portion=$(tag_portion "$ref")
-            if [[ $portion == *-slim ]]; then
-                want_slim=true
-            else
-                want_latest=true
-            fi
+            [[ $seen == *";${portion};"* ]] && continue
+            seen+="${portion};"
+            parts+=("${IMAGE_NAME}:${portion}")
         done
-    fi
-    parts=()
-    if [[ $want_latest == true ]]; then
-        parts+=("${IMAGE_NAME}:latest")
-    fi
-    if [[ $want_slim == true ]]; then
-        parts+=("${IMAGE_NAME}:latest-slim")
     fi
     if ((${#parts[@]} > 0)); then
         IFS=';'
