@@ -153,8 +153,8 @@ jobs:
       MULTI_IMAGE_REF: ${{ needs.test-docker-build-deploy.outputs.image-ref }}
       MULTI_TAGS: ${{ needs.test-docker-build-deploy.outputs.tags }}
       SINGLE_IMMUTABLE: ${{ needs.test-docker-build-deploy-single.outputs.immutable-tag }}
-      BUILD_NAME: test-container
-      BUILD_NUMBER: ${{ github.run_number }}
+      BUILD_NAME: ${{ needs.test-docker-build-deploy.outputs.jf-build-name }}
+      BUILD_NUMBER: ${{ needs.test-docker-build-deploy.outputs.jf-build-id }}
       JF_URL: https://artifact.aerospike.io
     steps:
       - name: Harden the runner (Audit all outbound calls)
@@ -255,6 +255,18 @@ jobs:
           done
           echo "ok: native runners, push inside token lifetime"
 
+      - name: Build-info outputs carry the build name and run number
+        shell: bash
+        env:
+          RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          set -euo pipefail
+          # Consumers that pass <name>:<github.run_number> in jf-build-names
+          # break if the build number stops being run_number.
+          [ "$BUILD_NAME" = "test-container" ] || { echo "::error::jf-build-name is '$BUILD_NAME', expected test-container"; exit 1; }
+          [ "$BUILD_NUMBER" = "$RUN_NUMBER" ] || { echo "::error::jf-build-id is '$BUILD_NUMBER', expected run_number $RUN_NUMBER"; exit 1; }
+          echo "ok: jf-build-name=$BUILD_NAME jf-build-id=$BUILD_NUMBER"
+
       - name: One build-info record references the manifest-list digest
         shell: bash
         env:
@@ -263,9 +275,7 @@ jobs:
           set -euo pipefail
           # Build-info published under a JFrog project must be queried with the
           # project param; the global /api/build/<name>/<number> path 404s for
-          # project-scoped builds. The build number is github.run_number (the
-          # setup-jfrog-cli default), which is what consumer release-bundle
-          # references rely on.
+          # project-scoped builds.
           code=$(curl -s -o /tmp/bi.json -w '%{http_code}' \
             -H "Authorization: Bearer $TOKEN" \
             "$JF_URL/artifactory/api/build/${BUILD_NAME}/${BUILD_NUMBER}?project=test")

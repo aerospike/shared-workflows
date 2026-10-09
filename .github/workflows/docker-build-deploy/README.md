@@ -58,12 +58,26 @@ jobs:
 - `image-ref`: Primary tag with `@digest`
 - `tags`: Comma separated list of tags used
 - `immutable-tag`: Immutable tag (registry/image:version_timestamp)
+- `jf-build-name`: JFrog build-info name (`jf-build-name` input, or the workflow name)
+- `jf-build-id`: JFrog build-info build number (`github.run_number`)
 
-On a dry run (`push: false`), `digest` and `image-ref` are empty; `tags` and `immutable-tag` are still computed.
+On a dry run (`push: false`), `digest` and `image-ref` are empty; `tags`, `immutable-tag`, `jf-build-name` and `jf-build-id` are still computed, but no build-info record is published.
+
+To put the image in a release bundle, pass the build-info outputs to `reusable_create-release-bundle.yaml`. The part after `:` is the build number, not the image version:
+
+```yaml
+bundle:
+  needs: [build-docker-deploy]
+  uses: aerospike/shared-workflows/.github/workflows/reusable_create-release-bundle.yaml@<sha>
+  with:
+    jf-build-names: ${{ needs.build-docker-deploy.outputs.jf-build-name }}:${{ needs.build-docker-deploy.outputs.jf-build-id }}
+    version: ${{ needs.extract-version.outputs.version }}
+    # ...
+```
 
 ## Multi-arch build and caching
 
-The workflow builds each requested platform **natively**: a setup step parses `platforms` into a matrix, each platform builds on its own runner (`linux/amd64` on `ubuntu-24.04`, `linux/arm64` on `ubuntu-24.04-arm`), and QEMU emulation is used only for a platform that has no native runner. Each leg pushes its image **by digest**; a final merge step assembles one multi-platform manifest index (`docker buildx imagetools create`) and applies the tags. A single-platform build still produces a manifest index. The four outputs (digest, image-ref, tags, immutable-tag) and the single build-info record are produced by the merge step; the build-info build number is `github.run_number`, unchanged, so release-bundle references of the form `<build-name>:${{ github.run_number }}` keep resolving. Each leg and the merge step mint their own short-lived OIDC token immediately before pushing, so total build time no longer has to fit inside one token's lifetime.
+The workflow builds each requested platform **natively**: a setup step parses `platforms` into a matrix, each platform builds on its own runner (`linux/amd64` on `ubuntu-24.04`, `linux/arm64` on `ubuntu-24.04-arm`), and QEMU emulation is used only for a platform that has no native runner. Each leg pushes its image **by digest**; a final merge step assembles one multi-platform manifest index (`docker buildx imagetools create`) and applies the tags. A single-platform build still produces a manifest index. The outputs and the single build-info record are produced by the merge step. Each leg and the merge step mint their own short-lived OIDC token immediately before pushing, so total build time no longer has to fit inside one token's lifetime.
 
 Two independent caching levers reduce repeat work:
 

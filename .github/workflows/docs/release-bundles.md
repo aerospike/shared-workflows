@@ -43,16 +43,18 @@ Use `reusable_create-release-bundle.yaml` to create a release bundle as a standa
 
 ```yaml
 release-bundle:
-  needs: [deploy]
-  uses: aerospike/shared-workflows/.github/workflows/reusable_create-release-bundle.yaml@v3.2.0
+  needs: [artifacts, image]
+  uses: aerospike/shared-workflows/.github/workflows/reusable_create-release-bundle.yaml@<sha> # vX.Y.Z
   with:
-    gh-workflows-ref: v3.2.0
-    jf-build-names: "my-app:1.2.3,my-container:1.2.3"
+    gh-workflows-ref: <sha> # vX.Y.Z
+    jf-build-names: >-
+      ${{ needs.artifacts.outputs.jf-build-name }}:${{ needs.artifacts.outputs.jf-build-id }},${{ needs.image.outputs.jf-build-name }}:${{ needs.image.outputs.jf-build-id }}
     jf-bundle-name: my-release
     version: 1.2.3
     jf-project: my-project
-  secrets: inherit
 ```
+
+Each `jf-build-names` entry is `build-name:build-number`, where the build number is the JFrog build-info number the deploy job published, not the release version. Take both halves from the deploy job's outputs. See [Build names and numbers](../create-release-bundle/README.md#build-names-and-numbers) for the number each deploy workflow uses.
 
 Set `dry-run: true` to validate the configuration and JFrog authentication without actually creating the bundle. In dry-run mode the workflow echoes the commands it would run instead of calling `jf release-bundle-create`.
 
@@ -81,7 +83,9 @@ Set `gh-upload-bundle-metadata: false` on deploy when the metadata handoff is no
 
 ## Troubleshooting
 
-**Bundle creation fails**: confirm the `jf-build-names` input is a comma-separated list of `name:version` pairs that exist in JFrog, and that your project permissions allow bundle creation. Bundle creation requires higher permissions than artifact upload.
+**Bundle creation fails with `Build not found`**: the build number in `jf-build-names` does not match a published build-info record. The usual cause is passing the release version (`my-app:1.2.3`) instead of the deploy job's `jf-build-id` output.
+
+**Bundle creation fails otherwise**: confirm that your project permissions allow bundle creation. Bundle creation requires higher permissions than artifact upload.
 
 **Promoted bundle locks artifacts**: promoted bundles lock the underlying artifacts in dev-local repos, causing re-deploy uploads to fail with permission errors. Either delete the old bundle before deploying (use the `delete-release-bundle` action), or increment the version/build ID.
 
