@@ -313,6 +313,9 @@ jobs:
           echo "$san"
           echo "$san" | grep -Eq '(^|[[:space:],])DNS:aerospike-tls(,|$)' \
             || { echo "server.crt SAN is missing aerospike-tls"; exit 1; }
+          openssl x509 -in "$cert_dir/client.crt" -noout -text \
+            | grep -q 'Version: 3' \
+            || { echo "client.crt is not an X.509 v3 certificate"; exit 1; }
           echo "All expected cert files present"
 
       - name: Verify non-TLS port still works
@@ -510,6 +513,9 @@ jobs:
           echo "$san"
           echo "$san" | grep -Eq '(^|[[:space:],])DNS:aerospike-tls(,|$)' \
             || { echo "server.crt SAN is missing aerospike-tls"; exit 1; }
+          openssl x509 -in "$cert_dir/client.crt" -noout -text \
+            | grep -q 'Version: 3' \
+            || { echo "client.crt is not an X.509 v3 certificate"; exit 1; }
           echo "All expected cert files present"
 
       - name: Verify authenticated access on service port

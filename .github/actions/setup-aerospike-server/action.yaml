@@ -275,13 +275,23 @@ runs:
           -out server.crt -days 365 \
           -extensions v3_req -extfile san.ext
 
-        # Generate client key and CA-signed cert
+        # A client cert with no extensions is X.509 v1. rustls rejects that
+        # (UnsupportedCertVersion). basicConstraints forces v3; clientAuth
+        # marks the purpose. Neither extension is critical.
+        {
+          echo "[client_cert]"
+          echo "basicConstraints = CA:FALSE"
+          echo "extendedKeyUsage = clientAuth"
+        } >> san.ext
+
+        # Generate client key and CA-signed v3 cert
         openssl req -newkey rsa:4096 -nodes \
           -keyout client.key -out client.csr \
           -subj "/CN=Aerospike-Server-Test-Client"
         openssl x509 -req -in client.csr \
           -CA ca.crt -CAkey ca.key -CAcreateserial \
-          -out client.crt -days 365
+          -out client.crt -days 365 \
+          -extensions client_cert -extfile san.ext
 
         # Clean up CSR and serial files
         rm -f *.csr *.srl san.ext
