@@ -139,6 +139,7 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       matrix: ${{ steps.parse.outputs.matrix }}
+      invocation-key: ${{ steps.parse.outputs.invocation-key }}
     steps:
       - name: Harden the runner (Audit all outbound calls)
         uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
@@ -150,13 +151,42 @@ jobs:
         shell: bash
         env:
           PLATFORMS: ${{ inputs.platforms }}
+          IMAGE_NAME: ${{ inputs.image-name }}
+          # Empty jf-build-name falls back to the workflow name, same as
+          # JFROG_CLI_BUILD_NAME on the build and merge jobs.
+          BUILD_NAME: ${{ inputs.jf-build-name || github.workflow }}
+          APP_VERSION: ${{ inputs.app-version }}
         run: |
           set -euo pipefail
+
+          # Artifact names and the Actions cache scope share one key:
+          # <image>--<build>--<app-version>--<platform>. `--` is only the
+          # separator, so a value cannot match another that merely starts
+          # with the same text (test-image vs test-image-ctx, 3.3.2 vs
+          # 3.3.2-slim). Characters outside the artifact-name / cache-scope
+          # set collapse to a single `-`.
+          sanitize_part() {
+            local s="$1"
+            s="$(printf '%s' "$s" | LC_ALL=C tr -c 'A-Za-z0-9._-' '-')"
+            while [[ "$s" == *"--"* ]]; do
+              s="${s//--/-}"
+            done
+            printf '%s' "$s"
+          }
+
+          require_part() {
+            local label="$1" value="$2"
+            if [[ -z "$value" ]]; then
+              echo "::error::${label} is empty after sanitizing; it cannot form an artifact name"
+              exit 1
+            fi
+          }
+
           # `unique` guards against repeated platform inputs.
           matrix="$(jq -nc --arg p "$PLATFORMS" '
             [ $p | split(",")[] | gsub("^\\s+|\\s+$"; "") | select(. != "") ]
             | unique
-            | map({platform: ., sanitized: gsub("/"; "-")}
+            | map({platform: .}
                   + (if   . == "linux/amd64" then {runner: "ubuntu-24.04",     qemu: false}
                      elif . == "linux/arm64" then {runner: "ubuntu-24.04-arm", qemu: false}
                      else                         {runner: "ubuntu-24.04",     qemu: true}
@@ -165,8 +195,38 @@ jobs:
             echo "::error::no platforms parsed from input '$PLATFORMS'"
             exit 1
           fi
-          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
+          map_json='{}'
+          while IFS= read -r platform; do
+            san="$(sanitize_part "$platform")"
+            require_part "platform ${platform}" "$san"
+            map_json="$(jq -c --arg p "$platform" --arg s "$san" '.[$p] = $s' <<<"$map_json")"
+          done < <(jq -r '.[].platform' <<<"$matrix")
+          matrix="$(jq -c --argjson san "$map_json" 'map(.sanitized = $san[.platform])' <<<"$matrix")"
+
+          dups="$(jq -r '[group_by(.sanitized)[] | select(length > 1) | .[0].sanitized] | join(", ")' <<<"$matrix")"
+          if [[ -n "$dups" ]]; then
+            echo "::error::distinct platforms sanitize to the same name segment: ${dups}"
+            exit 1
+          fi
+
+          image_name="$(sanitize_part "$IMAGE_NAME")"
+          build_name="$(sanitize_part "$BUILD_NAME")"
+          # Same tag form as the merge job: one leading v, `+` becomes `-`.
+          app_version="${APP_VERSION#v}"
+          app_version="${app_version//+/-}"
+          app_version="$(sanitize_part "$app_version")"
+          require_part "image-name" "$image_name"
+          require_part "jf-build-name" "$build_name"
+          require_part "app-version" "$app_version"
+          invocation_key="${image_name}--${build_name}--${app_version}"
+
+          {
+            echo "matrix=${matrix}"
+            echo "invocation-key=${invocation_key}"
+          } >> "$GITHUB_OUTPUT"
           echo "Parsed platform matrix: $matrix"
+          echo "Invocation key: ${invocation_key}"
 
   build:
     needs: parse-platforms
@@ -514,10 +574,11 @@ jobs:
           build-args: ${{ env.BUILD_ARGS }}
           labels: ${{ env.LABELS }}
           secret-files: ${{ env.BUILD_SECRET_FILES }}
-          # Scoped per platform; a shared scope would have legs overwrite each
-          # other's cache.
-          cache-from: type=gha,scope=${{ matrix.sanitized }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.sanitized }}
+          # Scope is the invocation key plus the platform. Legs must not
+          # overwrite each other's cache, and two Dockerfiles that share
+          # image-name must not fill the cache the other reads.
+          cache-from: type=gha,scope=${{ needs.parse-platforms.outputs.invocation-key }}--${{ matrix.sanitized }}
+          cache-to: type=gha,mode=max,scope=${{ needs.parse-platforms.outputs.invocation-key }}--${{ matrix.sanitized }}
           outputs: type=image,name=${{ env.REGISTRY }}/${{ inputs.image-name }},push-by-digest=true,name-canonical=true,push=${{ inputs.push }}
 
       - name: Record push time
@@ -554,23 +615,29 @@ jobs:
             '{platform:$platform, digest:$digest, runner_arch:$runner_arch, token_fetched_at:($fetched_at|tonumber), push_completed_at:($pushed_at|tonumber)}' \
             > "${RUNNER_TEMP}/legmeta/${SANITIZED}.json"
 
-      # image-name namespaces the artifact so two invocations in one run do not
-      # collide, and `--` keeps the merge job's glob from matching an image-name
-      # that another one is a prefix of. image-name must not itself contain `--`.
+      # digests-<image>--<build>--<app-version>--<platform> (legmeta- uses the
+      # same suffix). image-name alone does not separate two calls that publish
+      # the same repository: the build name and the tag form of app-version do.
+      # Each part is sanitized so `--` appears only as the separator, which
+      # keeps a name from matching another that merely starts with the same
+      # text. overwrite is false so a second job that uploads this name fails
+      # instead of leaving two artifacts for the merge to choose between.
       - name: Upload digest
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: digests-${{ inputs.image-name }}--${{ matrix.sanitized }}
+          name: digests-${{ needs.parse-platforms.outputs.invocation-key }}--${{ matrix.sanitized }}
           path: ${{ runner.temp }}/digests/*
           if-no-files-found: error
+          overwrite: false
           retention-days: 1
 
       - name: Upload leg metadata
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: legmeta-${{ inputs.image-name }}--${{ matrix.sanitized }}
+          name: legmeta-${{ needs.parse-platforms.outputs.invocation-key }}--${{ matrix.sanitized }}
           path: ${{ runner.temp }}/legmeta/*
           if-no-files-found: error
+          overwrite: false
           retention-days: 1
 
   merge:
@@ -652,11 +719,14 @@ jobs:
           echo "tags=${tags_array[*]}" >> "$GITHUB_OUTPUT"
           echo "immutable-tag=${immutable}" >> "$GITHUB_OUTPUT"
 
+      # `*` is only the platform. The invocation key in front of it stops this
+      # call from downloading another call's legs, including one whose
+      # image-name, build name, or app-version has this call's value as a prefix.
       - name: Download per-leg digests
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           path: ${{ runner.temp }}/digests
-          pattern: digests-${{ inputs.image-name }}--*
+          pattern: digests-${{ needs.parse-platforms.outputs.invocation-key }}--*
           merge-multiple: true
 
       - name: Create multi-platform manifest
@@ -667,6 +737,7 @@ jobs:
           TAGS: ${{ steps.tags.outputs.tags }}
           IMMUTABLE_TAG: ${{ steps.tags.outputs.immutable-tag }}
           PUSH: ${{ inputs.push }}
+          PLATFORM_MATRIX: ${{ needs.parse-platforms.outputs.matrix }}
         run: |
           set -euo pipefail
           if [ "$PUSH" != "true" ]; then
@@ -682,15 +753,26 @@ jobs:
             tag_args+=("-t" "$t")
           done
 
-          src_args=()
-          shopt -s nullglob
-          for f in "${RUNNER_TEMP}/digests"/*; do
-            src_args+=("${REGISTRY}/${IMAGE}@sha256:$(basename "$f")")
-          done
-          if [ "${#src_args[@]}" -eq 0 ]; then
-            echo "::error::no per-leg digests found to assemble"
+          # One file per platform of this invocation. The artifact name is what
+          # keeps another image out of the download; this rejects a partial
+          # download, or a glob that also returned extra files.
+          expected="$(jq 'length' <<<"$PLATFORM_MATRIX")"
+          files=()
+          while IFS= read -r -d '' digest_file; do
+            files+=("$digest_file")
+          done < <(find "${RUNNER_TEMP}/digests" -type f -print0)
+          if [ "${#files[@]}" -ne "$expected" ]; then
+            echo "::error::expected ${expected} per-leg digests for this invocation, found ${#files[@]}"
+            if [ "${#files[@]}" -gt 0 ]; then
+              printf 'digest file: %s\n' "${files[@]}"
+            fi
             exit 1
           fi
+
+          src_args=()
+          for digest_file in "${files[@]}"; do
+            src_args+=("${REGISTRY}/${IMAGE}@sha256:$(basename "$digest_file")")
+          done
 
           docker buildx imagetools create "${tag_args[@]}" "${src_args[@]}"
 
