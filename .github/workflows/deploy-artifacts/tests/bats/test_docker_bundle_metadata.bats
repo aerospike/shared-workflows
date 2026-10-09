@@ -81,6 +81,8 @@ EOF
     [[ "$(cat "$out")" == '{"package_name":"aerospike-server","package_version":"8.1.0.0","source_repository_key":"database-docker-dev-local"}' ]]
     _assert_manifest_generic "$wd/structured_build_artifacts/.manifest"
     [[ "$(find "$wd/structured_build_artifacts" -name 'docker-images.json' | wc -l | tr -d ' ')" == "1" ]]
+    [[ ! -e $wd/structured_build_artifacts/generic/docker/docker-floating-tags.json ]]
+    ! grep -q 'docker-floating-tags.json' "$wd/structured_build_artifacts/.manifest"
 }
 
 @test "oci tag rows are written the same way as docker tags" {
@@ -339,4 +341,74 @@ EOF
     ! grep -q 'old-prefilter' "$out"
     [[ "$(find "$wd/structured_build_artifacts" -name 'docker-images.json' | wc -l | tr -d ' ')" == "1" ]]
     [[ "$(grep -c 'docker-images.json' "$wd/structured_build_artifacts/.manifest")" == "1" ]]
+}
+
+@test "timestamped and version tags are both rows, latest is not, and floating tags are a sidecar" {
+    _require_bash4_for_detect_types
+    local wd root out sidecar manifest
+    wd=$(_new_artifacts_wd both-tags)
+    root="$wd/build-artifacts"
+    mkdir -p "$root"
+    cat >"$root/release-bundle-record.json" <<'EOF'
+{
+  "properties": [
+    {
+      "key": "docker.floating_tags",
+      "values": ["aerospike-graph-service:latest;aerospike-graph-service:latest-slim"]
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "artifacts/docker/aerospike-graph-service/3.3.2_20261007T212412Z/list.manifest.json",
+      "package_type": "docker",
+      "package_name": "aerospike-graph-service",
+      "package_version": "3.3.2_20261007T212412Z",
+      "source_repository_key": "connect-docker-dev-local"
+    },
+    {
+      "path": "artifacts/docker/aerospike-graph-service/3.3.2/list.manifest.json",
+      "package_type": "docker",
+      "package_name": "aerospike-graph-service",
+      "package_version": "3.3.2",
+      "source_repository_key": "connect-docker-dev-local"
+    },
+    {
+      "path": "artifacts/docker/aerospike-graph-service/3.3.2-slim/list.manifest.json",
+      "package_type": "docker",
+      "package_name": "aerospike-graph-service",
+      "package_version": "3.3.2-slim",
+      "source_repository_key": "connect-docker-dev-local"
+    },
+    {
+      "path": "artifacts/docker/aerospike-graph-service/latest/list.manifest.json",
+      "package_type": "docker",
+      "package_name": "aerospike-graph-service",
+      "package_version": "latest",
+      "source_repository_key": "connect-docker-dev-local"
+    },
+    {
+      "path": "artifacts/docker/aerospike-graph-service/latest-slim/list.manifest.json",
+      "package_type": "docker",
+      "package_name": "aerospike-graph-service",
+      "package_version": "latest-slim",
+      "source_repository_key": "connect-docker-dev-local"
+    }
+  ]
+}
+EOF
+
+    (cd "$wd" && "$DEPLOY_ARTIFACTS_DIR/detect_types.sh" --artifacts-dir build-artifacts >/dev/null)
+
+    out="$wd/structured_build_artifacts/generic/docker/docker-images.json"
+    sidecar="$wd/structured_build_artifacts/generic/docker/docker-floating-tags.json"
+    manifest="$wd/structured_build_artifacts/.manifest"
+    [[ "$(grep -c . "$out")" == "3" ]]
+    [[ "$(sed -n '1p' "$out")" == '{"package_name":"aerospike-graph-service","package_version":"3.3.2_20261007T212412Z","source_repository_key":"connect-docker-dev-local"}' ]]
+    [[ "$(sed -n '2p' "$out")" == '{"package_name":"aerospike-graph-service","package_version":"3.3.2","source_repository_key":"connect-docker-dev-local"}' ]]
+    [[ "$(sed -n '3p' "$out")" == '{"package_name":"aerospike-graph-service","package_version":"3.3.2-slim","source_repository_key":"connect-docker-dev-local"}' ]]
+    ! grep -q '"package_version":"latest"' "$out"
+    ! grep -q 'latest-slim' "$out"
+    [[ "$(cat "$sidecar")" == '{"docker.floating_tags":"aerospike-graph-service:latest;aerospike-graph-service:latest-slim"}' ]]
+    grep -qE 'generic/docker/docker-floating-tags\.json[[:space:]]+generic$' "$manifest"
+    [[ "$(grep -c 'docker-floating-tags.json' "$manifest")" == "1" ]]
 }

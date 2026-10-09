@@ -166,8 +166,66 @@ fi
 if ! echo "$output" | grep -q "maven_module_count=2"; then
     test5_success=false
 fi
+if echo "$output" | grep -q "docker.floating_tags="; then
+    test5_success=false
+fi
 
 record_test_result "Test 5: Bundle metadata dotfile path triggers annotate (dry-run)" "$test5_success"
+
+# Test 6: Floating tags from included builds are annotated, and dry-run does not call JFrog
+echo ""
+echo "Test 6: Floating tags annotate in dry-run without calling JFrog"
+test6_success=true
+
+cd "$TEST_DIR"
+mkdir -p "$TEST_DIR/bin" "$TEST_DIR/build-info"
+cat >"$TEST_DIR/bin/jf" <<'EOF'
+#!/bin/sh
+echo "jf invoked: $*" >>"${JF_CALL_LOG:?}"
+exit 99
+EOF
+chmod +x "$TEST_DIR/bin/jf"
+: >"$TEST_DIR/jf-calls.log"
+cat >"$TEST_DIR/build-info/01-graph.json" <<'EOF'
+{"buildInfo":{"properties":{"buildInfo.env.DOCKER_FLOATING_TAGS":"aerospike-graph-service:latest"}}}
+EOF
+cat >"$TEST_DIR/build-info/02-slim.json" <<'EOF'
+{"buildInfo":{"properties":{"buildInfo.env.DOCKER_FLOATING_TAGS":"aerospike-graph-service:latest-slim"}}}
+EOF
+cat >"$TEST_DIR/.maven-bundle-metadata.json" <<'JSON'
+{"is_multi_package":true,"maven_module_count":2}
+JSON
+
+output=$(
+    PATH="$TEST_DIR/bin:$PATH" \
+        JF_CALL_LOG="$TEST_DIR/jf-calls.log" \
+        CREATE_RELEASE_BUNDLE_BUILD_INFO_DIR="$TEST_DIR/build-info" \
+        "$SCRIPT_DIR/entrypoint.sh" \
+        --project test-project \
+        --build-names "graph:1,slim:2" \
+        --bundle-name graph-bundle \
+        --version 3.3.2 \
+        --bundle-metadata "$TEST_DIR/.maven-bundle-metadata.json" \
+        --dry-run 2>&1
+) || test6_success=false
+
+if ! echo "$output" | grep -q "jf release-bundle-annotate"; then
+    test6_success=false
+fi
+if ! echo "$output" | grep -q "is_multi_package=true"; then
+    test6_success=false
+fi
+if ! echo "$output" | grep -q "docker.floating_tags=aerospike-graph-service:latest"; then
+    test6_success=false
+fi
+if ! echo "$output" | grep -q "aerospike-graph-service:latest-slim"; then
+    test6_success=false
+fi
+if [[ -s $TEST_DIR/jf-calls.log ]]; then
+    test6_success=false
+fi
+
+record_test_result "Test 6: Floating tags annotate in dry-run without calling JFrog" "$test6_success"
 
 # Summary
 echo ""
