@@ -227,11 +227,33 @@ jobs:
             *) echo "::error::single-platform result is not a manifest index: $mt"; exit 1 ;;
           esac
 
+      # Same tag form as the reusable workflow's artifact key: one leading v,
+      # `+` replaced with `-`, then characters illegal in an artifact name
+      # collapsed so `--` stays the separator.
+      - name: Artifact version segment
+        id: artifact_version
+        shell: bash
+        env:
+          APP_VERSION: ${{ needs.extract-version.outputs.version }}
+        run: |
+          set -euo pipefail
+          v="${APP_VERSION#v}"
+          v="${v//+/-}"
+          v="$(printf '%s' "$v" | LC_ALL=C tr -c 'A-Za-z0-9._-' '-')"
+          while [[ "$v" == *"--"* ]]; do
+            v="${v//--/-}"
+          done
+          if [[ -z "$v" ]]; then
+            echo "::error::app-version is empty after sanitizing"
+            exit 1
+          fi
+          echo "version=${v}" >> "$GITHUB_OUTPUT"
+
       - name: Download per-leg metadata (multi)
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           path: ${{ runner.temp }}/legmeta
-          pattern: legmeta-test-image--*
+          pattern: legmeta-test-image--test-container--${{ steps.artifact_version.outputs.version }}--*
           merge-multiple: true
 
       - name: Native runner per arch, and push completes inside the token lifetime
@@ -293,7 +315,7 @@ jobs:
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           path: ${{ runner.temp }}/ctxlegmeta
-          pattern: legmeta-test-image-ctx--*
+          pattern: legmeta-test-image-ctx--test-container-ctx--${{ steps.artifact_version.outputs.version }}--*
           merge-multiple: true
 
       # Extracting from each leg's own image proves COPY saw the delivered bytes
