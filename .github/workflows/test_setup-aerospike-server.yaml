@@ -352,6 +352,10 @@ jobs:
           echo "$san"
           echo "$san" | grep -Eq '(^|[[:space:],])DNS:aerospike-tls(,|$)' \
             || { echo "server.crt SAN is missing aerospike-tls"; exit 1; }
+          subject=$(openssl x509 -in "$cert_dir/server.crt" -noout -subject -nameopt RFC2253)
+          subject=${subject#subject=}
+          [[ "$subject" == "CN=aerospike-tls" ]] \
+            || { echo "Unexpected server cert CN: $subject"; exit 1; }
           openssl x509 -in "$cert_dir/client.crt" -noout -text \
             | grep -q 'Version: 3' \
             || { echo "client.crt is not an X.509 v3 certificate"; exit 1; }
@@ -552,6 +556,10 @@ jobs:
           echo "$san"
           echo "$san" | grep -Eq '(^|[[:space:],])DNS:aerospike-tls(,|$)' \
             || { echo "server.crt SAN is missing aerospike-tls"; exit 1; }
+          subject=$(openssl x509 -in "$cert_dir/server.crt" -noout -subject -nameopt RFC2253)
+          subject=${subject#subject=}
+          [[ "$subject" == "CN=aerospike-tls" ]] \
+            || { echo "Unexpected server cert CN: $subject"; exit 1; }
           openssl x509 -in "$cert_dir/client.crt" -noout -text \
             | grep -q 'Version: 3' \
             || { echo "client.crt is not an X.509 v3 certificate"; exit 1; }

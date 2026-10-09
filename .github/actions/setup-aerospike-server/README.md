@@ -93,33 +93,35 @@ With `server-edition: auto`, the action infers `enterprise` from repositories na
 
 ## Inputs
 
-| Input                          | Required | Default                                               | Description                                                                                 |
-| ------------------------------ | -------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `oidc-provider`                | Yes      |                                                       | JFrog OIDC provider name                                                                    |
-| `oidc-audience`                | Yes      |                                                       | JFrog OIDC audience                                                                         |
-| `server-tag`                   | No       | `latest`                                              | Aerospike Server Docker image tag                                                           |
-| `num-nodes`                    | No       | `1`                                                   | Number of cluster nodes                                                                     |
-| `container-name-prefix`        | No       | `aerospike`                                           | Container name prefix (nodes: `prefix-1`, `prefix-2`, ...)                                  |
-| `features-file`                | No       |                                                       | Path to `features.conf` on the runner                                                       |
-| `features-content`             | No       |                                                       | Raw `features.conf` content (e.g., from a secret). Ignored if `features-file` is set        |
-| `config-file`                  | No       |                                                       | Path to `aerospike.conf` on the runner                                                      |
-| `config-content`               | No       |                                                       | Raw `aerospike.conf` content. Ignored if `config-file` is set                               |
-| `env-vars`                     | No       |                                                       | Semicolon-delimited `KEY=VALUE` pairs passed as `-e` flags. Use `\;` for literal semicolons |
-| `network-name`                 | No       | `aerospike-net`                                       | Docker network name                                                                         |
-| `base-port`                    | No       | `3000`                                                | Base host port (node N maps to `base-port + N - 1`)                                         |
-| `service-port`                 | No       | `3000`                                                | Aerospike service port inside the container (must match `aerospike.conf`)                   |
-| `publish-ports`                | No       | `true`                                                | Publish container ports to the runner host. Set `false` for L2 discovery topologies         |
-| `startup-timeout`              | No       | `30`                                                  | Seconds to wait for node readiness and cluster formation                                    |
-| `enable-tls`                   | No       | `false`                                               | Enable TLS on Aerospike Server containers                                                   |
-| `tls-base-port`                | No       | `4333`                                                | Base host TLS port (node N maps to `tls-base-port + N - 1`)                                 |
-| `enable-security`              | No       | `false`                                               | Enable Aerospike security (authentication with default admin/admin credentials)             |
-| `enable-strong-consistency`    | No       | `false`                                               | Enable strong consistency on the `test` namespace. Requires a features file                 |
-| `sc-stability-timeout-seconds` | No       | `30`                                                  | Seconds to wait for SC cluster stability after roster setup                                 |
-| `tools-tag`                    | No       | `12.1.1_2`                                            | Aerospike tools Docker image tag                                                            |
-| `container-repo-url`           | No       | `aerospike.jfrog.io`                                  | Docker registry hostname                                                                    |
-| `server-container-repo`        | No       | `database-docker-virtual/aerospike-server-enterprise` | Image repository path                                                                       |
-| `server-edition`               | No       | `auto`                                                | Server edition: `auto`, `enterprise`, or `community`; set explicitly for custom repo names  |
-| `jfrog-platform-url`           | No       | `https://aerospike.jfrog.io`                          | JFrog platform URL                                                                          |
+| Input                          | Required | Default                                               | Description                                                                                   |
+| ------------------------------ | -------- | ----------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `oidc-provider`                | Yes      |                                                       | JFrog OIDC provider name                                                                      |
+| `oidc-audience`                | Yes      |                                                       | JFrog OIDC audience                                                                           |
+| `server-tag`                   | No       | `latest`                                              | Aerospike Server Docker image tag                                                             |
+| `num-nodes`                    | No       | `1`                                                   | Number of cluster nodes                                                                       |
+| `container-name-prefix`        | No       | `aerospike`                                           | Container name prefix (nodes: `prefix-1`, `prefix-2`, ...)                                    |
+| `features-file`                | No       |                                                       | Path to `features.conf` on the runner                                                         |
+| `features-content`             | No       |                                                       | Raw `features.conf` content (e.g., from a secret). Ignored if `features-file` is set          |
+| `config-file`                  | No       |                                                       | Path to `aerospike.conf` on the runner                                                        |
+| `config-content`               | No       |                                                       | Raw `aerospike.conf` content. Ignored if `config-file` is set                                 |
+| `env-vars`                     | No       |                                                       | Semicolon-delimited `KEY=VALUE` pairs passed as `-e` flags. Use `\;` for literal semicolons   |
+| `network-name`                 | No       | `aerospike-net`                                       | Docker network name                                                                           |
+| `base-port`                    | No       | `3000`                                                | Base host port (node N maps to `base-port + N - 1`)                                           |
+| `service-port`                 | No       | `3000`                                                | Aerospike service port inside the container (must match `aerospike.conf`)                     |
+| `publish-ports`                | No       | `true`                                                | Publish container ports to the runner host. Set `false` for L2 discovery topologies           |
+| `startup-timeout`              | No       | `30`                                                  | Seconds to wait for node readiness and cluster formation                                      |
+| `enable-tls`                   | No       | `false`                                               | Enable TLS on Aerospike Server containers                                                     |
+| `tls-base-port`                | No       | `4333`                                                | Base host TLS port (node N maps to `tls-base-port + N - 1`)                                   |
+| `tls-cert-cn`                  | No       | `aerospike-tls`                                       | Common Name on the generated server certificate. Use another DNS name for a SAN-only tls-name |
+| `tls-name-san`                 | No       | `true`                                                | Include `aerospike-tls` as a DNS SAN. Set `false` to leave that name only in the CN           |
+| `enable-security`              | No       | `false`                                               | Enable Aerospike security (authentication with default admin/admin credentials)               |
+| `enable-strong-consistency`    | No       | `false`                                               | Enable strong consistency on the `test` namespace. Requires a features file                   |
+| `sc-stability-timeout-seconds` | No       | `30`                                                  | Seconds to wait for SC cluster stability after roster setup                                   |
+| `tools-tag`                    | No       | `12.1.1_2`                                            | Aerospike tools Docker image tag                                                              |
+| `container-repo-url`           | No       | `aerospike.jfrog.io`                                  | Docker registry hostname                                                                      |
+| `server-container-repo`        | No       | `database-docker-virtual/aerospike-server-enterprise` | Image repository path                                                                         |
+| `server-edition`               | No       | `auto`                                                | Server edition: `auto`, `enterprise`, or `community`; set explicitly for custom repo names    |
+| `jfrog-platform-url`           | No       | `https://aerospike.jfrog.io`                          | JFrog platform URL                                                                            |
 
 ## Outputs
 
@@ -154,7 +156,26 @@ When `enable-tls: "true"`, the action generates a self-signed CA and server/clie
 - `server.crt` / `server.key` -- server certificate and key
 - `client.crt` / `client.key` -- X.509 v3 client certificate and key (`basicConstraints=CA:FALSE`, `extendedKeyUsage=clientAuth`)
 
-`server.crt` is valid for `aerospike-tls` (the generated config's `tls-name` and the certificate CN), each container name (`<container-name-prefix>-N`), `localhost`, `docker`, and `127.0.0.1`.
+`server.crt` is valid for each container name (`<container-name-prefix>-N`), `localhost`, `docker`, and `127.0.0.1`. By default it is also valid for `aerospike-tls`: that name is both the certificate CN and a DNS SAN, and it is the `tls-name` in the generated config.
+
+`tls-cert-cn` and `tls-name-san` change that shape without changing the server `tls-name`. Other SANs stay in place.
+
+SAN-only tls-name (the CN does not match), for a client that requires the name in a dNSName SAN:
+
+```yaml
+enable-tls: "true"
+tls-cert-cn: not-the-tls-name
+tls-name-san: "true"
+```
+
+CN-only tls-name (no DNS SAN for `aerospike-tls`):
+
+```yaml
+enable-tls: "true"
+tls-name-san: "false"
+```
+
+The connection examples below assume the default shape, where `aerospike-tls` is both the CN and a DNS SAN.
 
 ### Connecting from the runner host
 
