@@ -23,9 +23,10 @@ After `jf release-bundle-promote` succeeds, this action recomputes Docker floati
 
 For each image named by the bundle property `docker.floating_tags`:
 
-- `latest` points at the highest dotted version tag that does not end in `-slim`.
-- `latest-slim` points at the highest version tag that ends in `-slim`, compared after stripping that suffix.
-- Digest tags and immutable tags (`_<YYYYMMDD>T<HHMMSS>Z`) are ignored. A slim tag never becomes `latest`.
+- A floating tag is recomputed only when the bundle names it. `3.3.2` does not imply `latest`, and `3.3.2-slim` does not imply `latest-slim`.
+- `latest` points at the highest dotted version tag with no variant suffix.
+- `latest-<suffix>` (for example `latest-slim`) points at the highest version tag that ends in that suffix, compared after stripping it.
+- Digest tags and immutable tags (`_<YYYYMMDD>T<HHMMSS>Z`) are ignored. A suffixed tag never becomes `latest`.
 - If the repository has no candidate version tag, the floating tag is removed.
 
 An older release promoted into a repository that already has a newer version tag leaves `latest` on the newer tag.

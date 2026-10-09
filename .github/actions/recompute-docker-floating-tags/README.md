@@ -10,10 +10,11 @@ The bundle property `docker.floating_tags` names the images and floating tags, f
 
 For each image, in the repository you pass:
 
-- `latest` tracks the highest dotted version among tags that do not end in `-slim` (`3.3.2` > `3.3.1`, `8.2.0.0` > `8.1.0.0`).
-- `latest-slim` tracks the highest version among tags that end in `-slim`, compared after stripping `-slim`.
+- The property lists only floating tags the build was asked to push. A version tag does not add `latest` or `latest-slim`.
+- `latest` tracks the highest dotted version with no variant suffix (`3.3.2` > `3.3.1`, `8.2.0.0` > `8.1.0.0`).
+- `latest-<suffix>` (for example `latest-slim`) tracks the highest version that ends in that suffix, compared after stripping it.
 - Digest tags (`sha256:` / `sha256__`) and immutable tags (`_<YYYYMMDD>T<HHMMSS>Z`) are ignored.
-- A slim tag never becomes `latest`.
+- A suffixed tag never becomes `latest`.
 - If the repository has no candidate version tag, the floating tag is removed.
 - Promoting an older release while a newer version tag is already present leaves `latest` on the newer tag.
 
