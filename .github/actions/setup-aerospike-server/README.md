@@ -113,7 +113,7 @@ With `server-edition: auto`, the action infers `enterprise` from repositories na
 | `enable-tls`                   | No       | `false`                                               | Enable TLS on Aerospike Server containers                                                     |
 | `tls-base-port`                | No       | `4333`                                                | Base host TLS port (node N maps to `tls-base-port + N - 1`)                                   |
 | `tls-cert-cn`                  | No       | `aerospike-tls`                                       | Common Name on the generated server certificate. Use another DNS name for a SAN-only tls-name |
-| `tls-name-san`                 | No       | `true`                                                | Include `aerospike-tls` as a DNS SAN. Set `false` to leave that name only in the CN           |
+| `include-tls-name-san`         | No       | `true`                                                | Include `aerospike-tls` as a DNS SAN. Set `false` to leave that name only in the CN           |
 | `enable-security`              | No       | `false`                                               | Enable Aerospike security (authentication with default admin/admin credentials)               |
 | `enable-strong-consistency`    | No       | `false`                                               | Enable strong consistency on the `test` namespace. Requires a features file                   |
 | `sc-stability-timeout-seconds` | No       | `30`                                                  | Seconds to wait for SC cluster stability after roster setup                                   |
@@ -158,21 +158,21 @@ When `enable-tls: "true"`, the action generates a self-signed CA and server/clie
 
 `server.crt` is valid for each container name (`<container-name-prefix>-N`), `localhost`, `docker`, and `127.0.0.1`. By default it is also valid for `aerospike-tls`: that name is both the certificate CN and a DNS SAN, and it is the `tls-name` in the generated config.
 
-`tls-cert-cn` and `tls-name-san` change that shape without changing the server `tls-name`. Other SANs stay in place.
+`tls-cert-cn` and `include-tls-name-san` change that shape without changing the server `tls-name`. Other SANs stay in place.
 
 SAN-only tls-name (the CN does not match), for a client that requires the name in a dNSName SAN:
 
 ```yaml
 enable-tls: "true"
 tls-cert-cn: not-the-tls-name
-tls-name-san: "true"
+include-tls-name-san: "true"
 ```
 
 CN-only tls-name (no DNS SAN for `aerospike-tls`):
 
 ```yaml
 enable-tls: "true"
-tls-name-san: "false"
+include-tls-name-san: "false"
 ```
 
 The connection examples below assume the default shape, where `aerospike-tls` is both the CN and a DNS SAN.

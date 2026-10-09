@@ -3,9 +3,9 @@
 #
 # The server config tls-name stays aerospike-tls. Callers choose whether that
 # name is the certificate CN, a DNS SAN, or both:
-#   both (default):  --cn aerospike-tls --tls-name-san true
-#   SAN only (N-6):  --cn not-the-tls-name --tls-name-san true
-#   CN only (N-17):  --cn aerospike-tls --tls-name-san false
+#   both (default):  --cn aerospike-tls --include-tls-name-san true
+#   SAN only (N-6):  --cn not-the-tls-name --include-tls-name-san true
+#   CN only (N-17):  --cn aerospike-tls --include-tls-name-san false
 set -euo pipefail
 
 if [[ ${ENABLE_BASH_TRACE_MODE-} == "true" ]]; then
@@ -19,11 +19,11 @@ error() {
 
 show_help() {
     cat <<'EOF'
-Usage: generate-tls-certs.sh --out-dir DIR --num-nodes N --name-prefix PREFIX --cn CN --tls-name NAME --tls-name-san true|false [--key-bits N]
+Usage: generate-tls-certs.sh --out-dir DIR --num-nodes N --name-prefix PREFIX --cn CN --tls-name NAME --include-tls-name-san true|false [--key-bits N]
 
 Write ca.crt, ca.key, server.crt, server.key, client.crt, and client.key into DIR.
 
---tls-name is the server config tls-name. --tls-name-san controls whether that
+--tls-name is the server config tls-name. --include-tls-name-san controls whether that
 name is also a DNS SAN. --cn is independent, so a test can put the tls-name
 only in the CN or only in the SANs. Container names, localhost, docker, and
 127.0.0.1 are always SANs.
@@ -47,7 +47,7 @@ require_option_value() {
 write_server_san_ext() {
     local dest=$1
     local tls_name=$2
-    local tls_name_san=$3
+    local include_tls_name_san=$3
     local num_nodes=$4
     local name_prefix=$5
     local dns_idx=1
@@ -57,7 +57,7 @@ write_server_san_ext() {
         echo "[v3_req]"
         echo "subjectAltName = @alt_names"
         echo "[alt_names]"
-        if [[ $tls_name_san == "true" ]]; then
+        if [[ $include_tls_name_san == "true" ]]; then
             echo "DNS.${dns_idx} = ${tls_name}"
             dns_idx=$((dns_idx + 1))
         fi
@@ -78,7 +78,7 @@ main() {
     local name_prefix=""
     local cn=""
     local tls_name=""
-    local tls_name_san=""
+    local include_tls_name_san=""
     local key_bits="4096"
 
     while [[ $# -gt 0 ]]; do
@@ -112,9 +112,9 @@ main() {
             tls_name=$2
             shift 2
             ;;
-        --tls-name-san)
+        --include-tls-name-san)
             require_option_value "$@"
-            tls_name_san=$2
+            include_tls_name_san=$2
             shift 2
             ;;
         --key-bits)
@@ -133,12 +133,12 @@ main() {
     [[ -n $name_prefix ]] || error "--name-prefix is required"
     [[ -n $cn ]] || error "--cn is required"
     [[ -n $tls_name ]] || error "--tls-name is required"
-    [[ -n $tls_name_san ]] || error "--tls-name-san is required"
+    [[ -n $include_tls_name_san ]] || error "--include-tls-name-san is required"
 
     [[ $num_nodes =~ ^[1-9][0-9]*$ ]] || error "--num-nodes must be a positive integer (got: '$num_nodes')"
     [[ $key_bits =~ ^[1-9][0-9]*$ ]] || error "--key-bits must be a positive integer (got: '$key_bits')"
-    [[ $tls_name_san == "true" || $tls_name_san == "false" ]] ||
-        error "--tls-name-san must be 'true' or 'false' (got: '$tls_name_san')"
+    [[ $include_tls_name_san == "true" || $include_tls_name_san == "false" ]] ||
+        error "--include-tls-name-san must be 'true' or 'false' (got: '$include_tls_name_san')"
     is_dns_name "$cn" || error "--cn must be a DNS name (got: '$cn')"
     is_dns_name "$tls_name" || error "--tls-name must be a DNS name (got: '$tls_name')"
     [[ $name_prefix != *[[:space:]/]* ]] || error "--name-prefix must not contain whitespace or '/'"
@@ -151,7 +151,7 @@ main() {
         -keyout "$out_dir/ca.key" -out "$out_dir/ca.crt" -days 365 \
         -subj "/CN=Aerospike-Server-Test-CA"
 
-    write_server_san_ext "$san_ext" "$tls_name" "$tls_name_san" "$num_nodes" "$name_prefix"
+    write_server_san_ext "$san_ext" "$tls_name" "$include_tls_name_san" "$num_nodes" "$name_prefix"
 
     openssl req -newkey "rsa:${key_bits}" -nodes \
         -keyout "$out_dir/server.key" -out "$out_dir/server.csr" \

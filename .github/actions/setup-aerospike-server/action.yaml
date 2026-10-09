@@ -96,7 +96,7 @@ inputs:
       test needs that tls-name only as a SAN.
     required: false
     default: aerospike-tls
-  tls-name-san:
+  include-tls-name-san:
     description: >
       Include the config tls-name (aerospike-tls) as a DNS SAN on the
       server certificate. Set false when a test needs that name only in
@@ -175,8 +175,8 @@ runs:
         if [[ "${{ inputs.enable-tls }}" == "true" ]]; then
           [[ "${{ inputs.tls-base-port }}" =~ ^[1-9][0-9]*$ ]] \
             || error "tls-base-port must be a positive integer (got: '${{ inputs.tls-base-port }}')"
-          [[ "${{ inputs.tls-name-san }}" == "true" || "${{ inputs.tls-name-san }}" == "false" ]] \
-            || error "tls-name-san must be 'true' or 'false' (got: '${{ inputs.tls-name-san }}')"
+          [[ "${{ inputs.include-tls-name-san }}" == "true" || "${{ inputs.include-tls-name-san }}" == "false" ]] \
+            || error "include-tls-name-san must be 'true' or 'false' (got: '${{ inputs.include-tls-name-san }}')"
           [[ "${{ inputs.tls-cert-cn }}" =~ ^[A-Za-z0-9]([A-Za-z0-9.-]{0,251}[A-Za-z0-9])?$ ]] \
             || error "tls-cert-cn must be a DNS name (got: '${{ inputs.tls-cert-cn }}')"
         fi
@@ -258,7 +258,7 @@ runs:
         # Prevents subject name from being treated like a path while running openssl commands
         MSYS_NO_PATHCONV: 1
         TLS_CERT_CN: ${{ inputs.tls-cert-cn }}
-        TLS_NAME_SAN: ${{ inputs.tls-name-san }}
+        INCLUDE_TLS_NAME_SAN: ${{ inputs.include-tls-name-san }}
         TLS_NUM_NODES: ${{ inputs.num-nodes }}
         TLS_NAME_PREFIX: ${{ inputs.container-name-prefix }}
       run: |
@@ -269,14 +269,14 @@ runs:
         cert_dir="$(mktemp -d)"
 
         # tls-name is fixed in templates/tls-service.conf and tls-network.conf.
-        # tls-cert-cn and tls-name-san change only the certificate shape.
+        # tls-cert-cn and include-tls-name-san change only the certificate shape.
         "${{ github.action_path }}/generate-tls-certs.sh" \
           --out-dir "$cert_dir" \
           --num-nodes "$TLS_NUM_NODES" \
           --name-prefix "$TLS_NAME_PREFIX" \
           --cn "$TLS_CERT_CN" \
           --tls-name aerospike-tls \
-          --tls-name-san "$TLS_NAME_SAN"
+          --include-tls-name-san "$INCLUDE_TLS_NAME_SAN"
 
         echo "Generated TLS certificates in $cert_dir"
         ls -la "$cert_dir"

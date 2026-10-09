@@ -54,7 +54,7 @@ assert_san_lacks() {
         --name-prefix aerospike \
         --cn aerospike-tls \
         --tls-name aerospike-tls \
-        --tls-name-san true
+        --include-tls-name-san true
 
     [[ $(server_subject) == "CN=aerospike-tls" ]]
     san=$(server_san)
@@ -74,7 +74,7 @@ assert_san_lacks() {
         --name-prefix aerospike \
         --cn not-the-tls-name \
         --tls-name aerospike-tls \
-        --tls-name-san true
+        --include-tls-name-san true
 
     [[ $(server_subject) == "CN=not-the-tls-name" ]]
     san=$(server_san)
@@ -88,7 +88,7 @@ assert_san_lacks() {
         --name-prefix as \
         --cn aerospike-tls \
         --tls-name aerospike-tls \
-        --tls-name-san false
+        --include-tls-name-san false
 
     [[ $(server_subject) == "CN=aerospike-tls" ]]
     san=$(server_san)
@@ -105,7 +105,7 @@ assert_san_lacks() {
         --name-prefix aerospike \
         --cn aerospike-tls \
         --tls-name aerospike-tls \
-        --tls-name-san yes
+        --include-tls-name-san yes
     [ "$status" -ne 0 ]
 }
 
@@ -115,14 +115,14 @@ assert_san_lacks() {
         --name-prefix aerospike \
         --cn "not a name" \
         --tls-name aerospike-tls \
-        --tls-name-san true
+        --include-tls-name-san true
     [ "$status" -ne 0 ]
 }
 
 @test "action wires cert shape inputs through to the generator" {
     grep -q 'tls-cert-cn:' "$ACTION_DIR/action.yaml"
-    grep -q 'tls-name-san:' "$ACTION_DIR/action.yaml"
+    grep -q 'include-tls-name-san:' "$ACTION_DIR/action.yaml"
     grep -q -- '--cn "$TLS_CERT_CN"' "$ACTION_DIR/action.yaml"
     grep -q -- '--tls-name aerospike-tls' "$ACTION_DIR/action.yaml"
-    grep -q -- '--tls-name-san "$TLS_NAME_SAN"' "$ACTION_DIR/action.yaml"
+    grep -q -- '--include-tls-name-san "$INCLUDE_TLS_NAME_SAN"' "$ACTION_DIR/action.yaml"
 }
