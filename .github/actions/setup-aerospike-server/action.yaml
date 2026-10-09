@@ -89,6 +89,21 @@ inputs:
     description: Base host port for TLS (node N maps to tls-base-port + N - 1)
     required: false
     default: "4333"
+  tls-cert-cn:
+    description: >
+      Common Name on the generated server certificate. Defaults to the
+      config tls-name (aerospike-tls). Set a different DNS name when a
+      test needs that tls-name only as a SAN.
+    required: false
+    default: aerospike-tls
+  include-tls-name-san:
+    description: >
+      Include the config tls-name (aerospike-tls) as a DNS SAN on the
+      server certificate. Set false when a test needs that name only in
+      the CN. Other SANs (container names, localhost, docker, 127.0.0.1)
+      are always included.
+    required: false
+    default: "true"
   enable-security:
     description: Enable Aerospike security (authentication with default admin/admin credentials)
     required: false
@@ -160,6 +175,10 @@ runs:
         if [[ "${{ inputs.enable-tls }}" == "true" ]]; then
           [[ "${{ inputs.tls-base-port }}" =~ ^[1-9][0-9]*$ ]] \
             || error "tls-base-port must be a positive integer (got: '${{ inputs.tls-base-port }}')"
+          [[ "${{ inputs.include-tls-name-san }}" == "true" || "${{ inputs.include-tls-name-san }}" == "false" ]] \
+            || error "include-tls-name-san must be 'true' or 'false' (got: '${{ inputs.include-tls-name-san }}')"
+          [[ "${{ inputs.tls-cert-cn }}" =~ ^[A-Za-z0-9]([A-Za-z0-9.-]{0,251}[A-Za-z0-9])?$ ]] \
+            || error "tls-cert-cn must be a DNS name (got: '${{ inputs.tls-cert-cn }}')"
         fi
 
         effective_security="${{ inputs.enable-security }}"
@@ -238,71 +257,26 @@ runs:
       env:
         # Prevents subject name from being treated like a path while running openssl commands
         MSYS_NO_PATHCONV: 1
+        TLS_CERT_CN: ${{ inputs.tls-cert-cn }}
+        INCLUDE_TLS_NAME_SAN: ${{ inputs.include-tls-name-san }}
+        TLS_NUM_NODES: ${{ inputs.num-nodes }}
+        TLS_NAME_PREFIX: ${{ inputs.container-name-prefix }}
       run: |
         if [[ "$ENABLE_BASH_TRACE_MODE" == "true" ]]; then
           set -x
         fi
 
         cert_dir="$(mktemp -d)"
-        cd "$cert_dir"
 
-        num_nodes=${{ inputs.num-nodes }}
-        prefix="${{ inputs.container-name-prefix }}"
-
-        # Generate CA key and self-signed cert
-        openssl req -x509 -newkey rsa:4096 -nodes \
-          -keyout ca.key -out ca.crt -days 365 \
-          -subj "/CN=Aerospike-Server-Test-CA"
-
-        # SANs must include the server tls-name. The generated config and the
-        # certificate CN both use aerospike-tls, and clients that ignore CN
-        # verify that name against this list. Container names stay so a
-        # client can also match prefix-N.
-        {
-          echo "[v3_req]"
-          echo "subjectAltName = @alt_names"
-          echo "[alt_names]"
-          echo "DNS.1 = aerospike-tls"
-          dns_idx=2
-          for (( i=1; i<=num_nodes; i++ )); do
-            echo "DNS.${dns_idx} = ${prefix}-${i}"
-            dns_idx=$(( dns_idx + 1 ))
-          done
-          echo "DNS.${dns_idx} = localhost"
-          dns_idx=$(( dns_idx + 1 ))
-          echo "DNS.${dns_idx} = docker"
-          echo "IP.1 = 127.0.0.1"
-        } > san.ext
-
-        # Generate server key, CSR, and CA-signed cert with SANs
-        openssl req -newkey rsa:4096 -nodes \
-          -keyout server.key -out server.csr \
-          -subj "/CN=aerospike-tls"
-        openssl x509 -req -in server.csr \
-          -CA ca.crt -CAkey ca.key -CAcreateserial \
-          -out server.crt -days 365 \
-          -extensions v3_req -extfile san.ext
-
-        # A client cert with no extensions is X.509 v1. rustls rejects that
-        # (UnsupportedCertVersion). basicConstraints forces v3; clientAuth
-        # marks the purpose. Neither extension is critical.
-        {
-          echo "[client_cert]"
-          echo "basicConstraints = CA:FALSE"
-          echo "extendedKeyUsage = clientAuth"
-        } >> san.ext
-
-        # Generate client key and CA-signed v3 cert
-        openssl req -newkey rsa:4096 -nodes \
-          -keyout client.key -out client.csr \
-          -subj "/CN=Aerospike-Server-Test-Client"
-        openssl x509 -req -in client.csr \
-          -CA ca.crt -CAkey ca.key -CAcreateserial \
-          -out client.crt -days 365 \
-          -extensions client_cert -extfile san.ext
-
-        # Clean up CSR and serial files
-        rm -f *.csr *.srl san.ext
+        # tls-name is fixed in templates/tls-service.conf and tls-network.conf.
+        # tls-cert-cn and include-tls-name-san change only the certificate shape.
+        "${{ github.action_path }}/generate-tls-certs.sh" \
+          --out-dir "$cert_dir" \
+          --num-nodes "$TLS_NUM_NODES" \
+          --name-prefix "$TLS_NAME_PREFIX" \
+          --cn "$TLS_CERT_CN" \
+          --tls-name aerospike-tls \
+          --include-tls-name-san "$INCLUDE_TLS_NAME_SAN"
 
         echo "Generated TLS certificates in $cert_dir"
         ls -la "$cert_dir"
