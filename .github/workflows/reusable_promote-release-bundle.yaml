@@ -1,0 +1,181 @@
+name: Promote Release Bundle
+
+on:
+  workflow_call:
+    inputs:
+      # Required inputs
+      jf-bundle-name:
+        description: Name of the release bundle to promote
+        required: true
+        type: string
+      jf-project:
+        description: JFrog Artifactory project name
+        required: true
+        type: string
+      target-stage:
+        description: |
+          Promotion stage to promote to: DEV, TEST, STAGE, PREVIEW, INTERNAL or PROD.
+          STAGE requires the version at TEST; PREVIEW, INTERNAL and PROD require it at STAGE.
+          DEV and PREVIEW are optional.
+        required: true
+        type: string
+      version:
+        description: Version of the release bundle to promote (create-release-bundle's bundle-version output)
+        required: true
+        type: string
+      gh-workflows-ref:
+        description: |
+          Git reference for shared-workflows checkout. Should match the version in your 'uses:' line.
+          GitHub Actions doesn't expose the called workflow's ref, so this is required.
+          See: .github/workflows/docs/why-gh-workflows-ref.md
+        required: true
+        type: string
+
+      # Optional inputs
+      dry-run:
+        description: Whether to run in dry-run mode
+        required: false
+        type: boolean
+        default: false
+      exclude-repos:
+        description: Semicolon-separated list of target repos to exclude from promotion
+        required: false
+        type: string
+        default: ""
+      gh-checkout-path:
+        description: Directory to checkout the shared-workflows repository into
+        required: false
+        type: string
+        default: shared-workflows
+      gh-environment:
+        description: |
+          GitHub environment to set on the promotion job, so its required reviewers approve the
+          promotion. A composite action cannot set an environment on the caller's job. Give the
+          environment required reviewers: GitHub creates a missing environment with none, and this
+          workflow does not check for them.
+        required: false
+        type: string
+        default: ""
+      include-repos:
+        description: Semicolon-separated list of target repos to include in promotion (limits scope)
+        required: false
+        type: string
+        default: ""
+      jf-url:
+        description: JFrog Artifactory URL
+        required: false
+        type: string
+        default: https://artifact.aerospike.io
+      oidc-audience:
+        description: OIDC audience
+        required: false
+        type: string
+        default: aerospike
+      oidc-provider-name:
+        description: OIDC provider name
+        required: false
+        type: string
+        default: gh-aerospike
+      runs-on:
+        description: The runner to use
+        required: false
+        type: string
+        default: ubuntu-22.04
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  promote-release-bundle:
+    runs-on: ${{ inputs.runs-on }}
+    environment: ${{ inputs.gh-environment }}
+    concurrency:
+      group: promote-release-bundle-${{ inputs.jf-project }}-${{ inputs.jf-bundle-name }}-${{ inputs.target-stage }}
+      cancel-in-progress: false
+    permissions:
+      attestations: write
+      contents: read
+      id-token: write
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout shared-workflows repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: aerospike/shared-workflows
+          ref: ${{ inputs.gh-workflows-ref }}
+          path: ${{ inputs.gh-checkout-path }}
+          fetch-depth: 1
+
+      - name: Verify the checkout is this workflow's commit
+        shell: bash
+        env:
+          INPUT_CHECKOUT_PATH: ${{ inputs.gh-checkout-path }}
+        run: |
+          set -euo pipefail
+          # -H would put the request token in argv.
+          response=$(curl -sS --fail --connect-timeout 10 --max-time 30 --retry 3 \
+            --config - "$ACTIONS_ID_TOKEN_REQUEST_URL" <<CURLRC
+          header = "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}"
+          CURLRC
+          )
+          payload=$(jq -r '.value | split(".")[1]' <<<"$response" | tr '_-' '/+')
+          while ((${#payload} % 4)); do payload+="="; done
+          workflow_sha=$(base64 -d <<<"$payload" | jq -r '.job_workflow_sha // empty')
+          head=$(git -C "$INPUT_CHECKOUT_PATH" rev-parse HEAD)
+          if [[ -z $workflow_sha || $head != "$workflow_sha" ]]; then
+            echo "::error::The shared-workflows checkout (${head}) is not the commit this workflow runs from (${workflow_sha:-unknown}). Set gh-workflows-ref to the ref in your uses: line."
+            exit 1
+          fi
+
+      - name: Setup JFrog CLI
+        uses: step-security/setup-jfrog-cli@53aeacb709fce45d0baf69a13ec3342f7e2d71a9 # v5.1.0
+        env:
+          JF_URL: ${{ inputs.jf-url }}
+          JF_PROJECT: ${{ inputs.jf-project }}
+        with:
+          oidc-provider-name: ${{ inputs.oidc-provider-name }}
+          oidc-audience: ${{ inputs.oidc-audience }}
+
+      - name: Check JFrog Configuration
+        run: |
+          jf c show
+          jf rt ping
+
+      - name: Promote Release Bundle
+        shell: bash
+        env:
+          INPUT_CHECKOUT_PATH: ${{ inputs.gh-checkout-path }}
+          INPUT_BUNDLE_NAME: ${{ inputs.jf-bundle-name }}
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_TARGET_STAGE: ${{ inputs.target-stage }}
+          INPUT_PROJECT: ${{ inputs.jf-project }}
+          INPUT_INCLUDE_REPOS: ${{ inputs.include-repos }}
+          INPUT_EXCLUDE_REPOS: ${{ inputs.exclude-repos }}
+          INPUT_DRY_RUN: ${{ inputs.dry-run }}
+        run: |
+          set -euo pipefail
+          entrypoint="${INPUT_CHECKOUT_PATH}/.github/workflows/promote-release-bundle/entrypoint.sh"
+          if [[ ! -f "$entrypoint" ]]; then
+            echo "Error: entrypoint not found at $entrypoint" >&2
+            exit 1
+          fi
+          chmod +x "$entrypoint"
+
+          args=(
+            --bundle-name "$INPUT_BUNDLE_NAME"
+            --version "$INPUT_VERSION"
+            --target-stage "$INPUT_TARGET_STAGE"
+            --project "$INPUT_PROJECT"
+            --include-repos "$INPUT_INCLUDE_REPOS"
+            --exclude-repos "$INPUT_EXCLUDE_REPOS"
+          )
+          if [[ "$INPUT_DRY_RUN" == "true" ]]; then
+            args+=(--dry-run)
+          fi
+
+          "$entrypoint" "${args[@]}"

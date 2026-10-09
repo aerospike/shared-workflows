@@ -61,3 +61,50 @@ jfrog_stages_not_failed() {
     jq -r '[.promotions[] | select(.status != "FAILED" and .status != "REJECTED") | .environment]
         | unique | .[]' <<<"$1"
 }
+
+jfrog_completed_promotion_ids() {
+    jq -r --arg stage "$2" '.promotions[]
+        | select(.status == "COMPLETED" and .environment == $stage)
+        | .created_millis // error("promotion record without created_millis")' <<<"$1"
+}
+
+# Prints the version's artifact paths, relative to their repo.
+jfrog_bundle_artifact_paths() {
+    local bundle_name="$1" version="$2" project="$3" path record paths
+    path="lifecycle/api/v2/release_bundle/records/$(jfrog_uri_encode "$bundle_name")/$(jfrog_uri_encode "$version")"
+    path+="?project=$(jfrog_uri_encode "$project")"
+    record=$(jfrog_lifecycle_get "$path") || {
+        echo "Error: could not read the artifacts of ${bundle_name}/${version}" >&2
+        return 1
+    }
+    paths=$(jq -r '
+        if (.artifacts | type) == "array"
+            and all(.artifacts[]; (.path | type) == "string")
+            and (.total_artifacts_count // (.artifacts | length)) == (.artifacts | length)
+        then .artifacts[].path
+        else error("unexpected release bundle record") end' <<<"$record") || {
+        echo "Error: unexpected release bundle record for ${bundle_name}/${version}: ${record}" >&2
+        return 1
+    }
+    [[ -z $paths ]] || LC_ALL=C sort -u <<<"$paths"
+}
+
+# Prints the artifact paths one promotion placed, relative to their repo. Unlike a bundle
+# record's paths, a promotion record's paths start with the target repo.
+jfrog_promotion_artifact_paths() {
+    local bundle_name="$1" version="$2" project="$3" created_millis="$4" path detail paths
+    path="lifecycle/api/v2/promotion/records/$(jfrog_uri_encode "$bundle_name")/$(jfrog_uri_encode "$version")"
+    path+="/$(jfrog_uri_encode "$created_millis")?project=$(jfrog_uri_encode "$project")"
+    detail=$(jfrog_lifecycle_get "$path") || {
+        echo "Error: could not read promotion ${created_millis} of ${bundle_name}/${version}" >&2
+        return 1
+    }
+    paths=$(jq -r '
+        if (.artifacts | type) == "array" and all(.artifacts[]; (.path | type) == "string")
+        then .artifacts[].path | sub("^[^/]+/"; "")
+        else error("unexpected promotion record") end' <<<"$detail") || {
+        echo "Error: unexpected promotion record ${created_millis} for ${bundle_name}/${version}: ${detail}" >&2
+        return 1
+    }
+    [[ -z $paths ]] || LC_ALL=C sort -u <<<"$paths"
+}

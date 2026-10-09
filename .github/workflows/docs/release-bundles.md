@@ -17,7 +17,7 @@ These properties make bundles the right unit for our SDLC promotion model.
 Artifacts flow through gated promotion stages. Each gate has an owner and requirements that must be met before promotion.
 
 ```text
-CI/Build  ->  DEV  ->  TEST  ->  STAGE  ->  PREVIEW  ->  PROD
+CI/Build  ->  [DEV]  ->  TEST  ->  STAGE  ->  [PREVIEW]  ->  PROD
                                           ->  INTERNAL
 ```
 
@@ -29,6 +29,8 @@ CI/Build  ->  DEV  ->  TEST  ->  STAGE  ->  PREVIEW  ->  PROD
 | PREVIEW         | Product     | Customer preview validation              |
 | PROD            | Product     | Security review and production readiness |
 | INTERNAL        | Engineering | Internal-only artifacts (not public)     |
+
+DEV and PREVIEW, in brackets, are optional: a version can go from CI straight to TEST, and from STAGE straight to PROD. STAGE requires TEST, and PREVIEW, INTERNAL and PROD require STAGE.
 
 The release bundle is created after deployment to DEV (at the DEV to TEST gate). From that point forward, the bundle carries all artifacts and metadata through the remaining promotion stages.
 
@@ -64,7 +66,9 @@ The revision removes the bundle-version collision only. A rebuild deploys to the
 
 ### Promoting a bundle
 
-There is a composite action that may be used for promotion of bundles documented at [Promote Release Bundle Composite Action](https://github.com/aerospike/shared-workflows/blob/main/.github/actions/promote-release-bundle/README.md). The `promote-release-bundle` action accepts `include-repos` and `exclude-repos` (semicolon-separated repo lists, e.g. `my-project-deb-dev-local;my-project-rpm-dev-local`) to scope which repositories are promoted. With neither set, all repositories in the bundle are promoted.
+Use `reusable_promote-release-bundle.yaml`. It refuses a promotion that skips a required stage: STAGE requires TEST, and PREVIEW, INTERNAL and PROD require STAGE. DEV and PREVIEW are optional. Passing `gh-environment` attaches a GitHub environment to the promotion job, so its required reviewers approve the promotion. See [Promote Release Bundle](../promote-release-bundle/README.md).
+
+The [promote-release-bundle composite action](https://github.com/aerospike/shared-workflows/blob/main/.github/actions/promote-release-bundle/README.md) promotes without the order check. Both accept `include-repos` and `exclude-repos` (semicolon-separated repo lists, e.g. `my-project-deb-dev-local;my-project-rpm-dev-local`) to scope which repositories are promoted. With neither set, all repositories in the bundle are promoted.
 
 ### Deleting a bundle before re-deploy
 
