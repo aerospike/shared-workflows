@@ -1,0 +1,52 @@
+name: Recompute Docker floating tags
+description: >-
+  Point latest and latest-* in a caller-supplied stage Docker repository at the
+  highest version tag still in that repository. Run this again after a release
+  leaves the stage. Does not delete the release bundle.
+inputs:
+  jf-project:
+    description: JFrog project key
+    required: true
+  docker-repo:
+    description: >-
+      Stage Docker or OCI repository key to retag (for example
+      connect-docker-stage-local). Supply the repository directly; this action
+      does not rewrite a dev-local name.
+    required: true
+  bundle-name:
+    description: Release bundle whose docker.floating_tags property names the images
+    required: true
+  version:
+    description: Release bundle version
+    required: true
+  floating-tags:
+    description: >-
+      Optional docker.floating_tags value
+      (image:latest;image:latest-slim). When empty, the value is read from
+      the release bundle.
+    required: false
+    default: ""
+runs:
+  using: composite
+  steps:
+    - name: Recompute floating tags
+      shell: bash
+      env:
+        JF_PROJECT: ${{ inputs.jf-project }}
+        DOCKER_REPO: ${{ inputs.docker-repo }}
+        BUNDLE_NAME: ${{ inputs.bundle-name }}
+        BUNDLE_VERSION: ${{ inputs.version }}
+        FLOATING_TAGS: ${{ inputs.floating-tags }}
+      run: |
+        set -euo pipefail
+        args=(
+          retag
+          --project "$JF_PROJECT"
+          --repo "$DOCKER_REPO"
+          --bundle-name "$BUNDLE_NAME"
+          --version "$BUNDLE_VERSION"
+        )
+        if [[ -n $FLOATING_TAGS ]]; then
+          args+=(--floating-tags "$FLOATING_TAGS")
+        fi
+        python3 "${{ github.action_path }}/recompute.py" "${args[@]}"
