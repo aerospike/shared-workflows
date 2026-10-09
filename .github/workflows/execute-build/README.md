@@ -155,6 +155,10 @@ Your build script should:
 - Build script should create artifacts in the specified directory
 - No additional system dependencies (build script handles its own requirements)
 
+## Docker images
+
+When `docker info` succeeds, the job logs in to `aerospike.jfrog.io` with the OIDC token before the build script. Pull compile and base images from `aerospike.jfrog.io/<jf-project>-docker-virtual/...`. The `hi` test app does this (`aerospike.jfrog.io/test-docker-virtual/...`).
+
 ## Reading the matrix entry from a build script
 
 When invoked through `reusable_artifacts-cicd.yaml`, the orchestrator sets `matrix-json-data` to the current matrix entry. The build script can read it via `$MATRIX_JSON`:

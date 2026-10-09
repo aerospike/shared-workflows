@@ -77,6 +77,8 @@ Two independent caching levers reduce repeat work:
 
    Keep the `@sha256:` digest pins. The virtuals (Docker Hub, RedHat, Quay, ghcr.io, gcr.io, registry.k8s.io, public.ecr.aws, mcr.microsoft.com) are provided per project; your repo's OIDC grant must include read + cache-deploy on the public-mirror remotes for the first uncached pull to succeed (this is granted by the standard per-repo OIDC mapping; see OIDC below).
 
+   The workflow pulls the BuildKit builder image from `<jf-registry-base>/<jf-project>-docker-virtual/moby/buildkit:buildx-stable-1` after the Artifactory login, so creating the builder uses the same cache. Artifactory serves those images under the virtual's repository path (`<project>-docker-virtual/library/ubuntu`, `<project>-docker-virtual/rockylinux`).
+
 2. **Build-step cache (secondary).** The workflow uses the GitHub Actions cache (`type=gha`, `mode=max`) so unchanged builder-stage layers are reused on warm runs. Nothing is written to JFrog. It is best-effort: the per-repo GHA cache quota is finite, so on large matrices a miss simply rebuilds.
 
 ## OIDC

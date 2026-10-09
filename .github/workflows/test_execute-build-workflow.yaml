@@ -41,6 +41,25 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install JFrog CLI
+        id: jf
+        uses: step-security/setup-jfrog-cli@53aeacb709fce45d0baf69a13ec3342f7e2d71a9 # v5.1.0
+        env:
+          JF_URL: https://aerospike.jfrog.io
+          JF_PROJECT: test
+        with:
+          version: 2.78.8
+          oidc-provider-name: gh-dev-test
+          oidc-audience: aerospike/testing
+
+      - name: Docker login to Artifactory
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: aerospike.jfrog.io
+          username: ${{ steps.jf.outputs.oidc-user }}
+          password: ${{ steps.jf.outputs.oidc-token }}
+
       - name: Test Entrypoint
         run: |
           .github/workflows/execute-build/test-entrypoint.sh
