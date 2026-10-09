@@ -55,7 +55,9 @@ jobs:
       - name: Checkout shared-workflows (actions)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          sparse-checkout: .github/actions
+          sparse-checkout: |
+            .github/actions
+            .github/workflows/lib
           sparse-checkout-cone-mode: false
       - name: Setup JFrog CLI
         uses: step-security/setup-jfrog-cli@53aeacb709fce45d0baf69a13ec3342f7e2d71a9 # v5.1.0
