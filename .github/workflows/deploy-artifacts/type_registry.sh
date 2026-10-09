@@ -146,7 +146,7 @@ get_known_extensions() {
     # Maven metadata and sidecar checksums belong to JAR/POM processing: exclude
     # them from the generic find pass so they aren't double-structured into the
     # generic repo.
-    exts+=("*.asc" "*.prov" "*.pom" "*.module" "*.csproj" "docker-images.json" "*.md5" "*.sha1")
+    exts+=("*.asc" "*.prov" "*.pom" "*.module" "*.csproj" "docker-images.json" "docker-floating-tags.json" "*.md5" "*.sha1")
     printf '%s\n' "${exts[@]}"
 }
 

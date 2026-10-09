@@ -45,4 +45,52 @@ runs:
         if [[ -n "${{ inputs.exclude-repos }}" ]]; then
           promote_args+=(--exclude-repos="${{ inputs.exclude-repos }}")
         fi
-        jf release-bundle-promote "${promote_args[@]}"
+        set -o pipefail
+        jf release-bundle-promote "${promote_args[@]}" | tee "${RUNNER_TEMP}/release-bundle-promote.out"
+
+    - name: Recompute Docker floating tags in the target repository
+      shell: bash
+      env:
+        BUNDLE_NAME: ${{ inputs.bundle-name }}
+        BUNDLE_VERSION: ${{ inputs.version }}
+        JF_PROJECT: ${{ inputs.jf-project }}
+        ENVIRONMENT: ${{ inputs.environment }}
+      run: |
+        set -euo pipefail
+        # Same retag as .github/actions/recompute-docker-floating-tags. GitHub
+        # checks out the action repository, so the sibling script is on disk.
+        script="${{ github.action_path }}/../recompute-docker-floating-tags/recompute.py"
+        if [[ ! -f $script ]]; then
+          echo "::error::recompute-docker-floating-tags is not available next to this action"
+          exit 1
+        fi
+        tags=$(python3 "$script" print-property \
+          --project "$JF_PROJECT" --bundle-name "$BUNDLE_NAME" --version "$BUNDLE_VERSION")
+        if [[ -z $tags ]]; then
+          echo "Bundle has no docker.floating_tags property; not retagging."
+          exit 0
+        fi
+        out="${RUNNER_TEMP}/release-bundle-promote.out"
+        repos=""
+        if [[ -s $out ]] && jq -e . "$out" >/dev/null 2>&1; then
+          repos=$(python3 "$script" repos --environment "$ENVIRONMENT" --version "$BUNDLE_VERSION" <"$out")
+        fi
+        if [[ -z $repos ]]; then
+          enc_project=$(jq -rn --arg v "$JF_PROJECT" '$v|@uri')
+          catalog=$(jf rt curl -XGET "/api/repositories?project=${enc_project}" \
+            -H "Accept: application/json" --silent)
+          repos=$(printf '%s\n' "$catalog" | python3 "$script" repos --environment "$ENVIRONMENT" --version "$BUNDLE_VERSION")
+        fi
+        if [[ -z $repos ]]; then
+          echo "::error::docker.floating_tags is set but the promotion result has no target Docker repository"
+          exit 1
+        fi
+        while IFS= read -r repo; do
+          [[ -n $repo ]] || continue
+          python3 "$script" retag \
+            --project "$JF_PROJECT" \
+            --repo "$repo" \
+            --bundle-name "$BUNDLE_NAME" \
+            --version "$BUNDLE_VERSION" \
+            --floating-tags "$tags"
+        done <<<"$repos"

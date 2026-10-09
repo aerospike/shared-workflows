@@ -598,6 +598,22 @@ jobs:
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # The merge job's checkout above is the caller repo (build-add-git reads it).
+      # job.workflow_sha is this reusable workflow's own commit, so the tag script
+      # matches the workflow the caller invoked without a new input.
+      - name: Checkout shared-workflows tag scripts
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # job.workflow_* is this reusable workflow's own repository and commit.
+          # fromJSON(toJSON(job)) keeps that lookup while actionlint 1.7.9's job
+          # type still omits the fields.
+          repository: ${{ fromJSON(toJSON(job)).workflow_repository }}
+          ref: ${{ fromJSON(toJSON(job)).workflow_sha }}
+          path: _shared-workflows-docker
+          sparse-checkout: |
+            .github/workflows/docker-build-deploy
+          sparse-checkout-cone-mode: true
+
       - name: Install JFrog CLI
         id: jf
         uses: step-security/setup-jfrog-cli@53aeacb709fce45d0baf69a13ec3342f7e2d71a9 # v5.1.0
@@ -704,14 +720,38 @@ jobs:
         if: ${{ inputs.push }}
         shell: bash
         env:
-          IMAGE_REF: ${{ steps.manifest.outputs.image-ref }}
+          TAGS: ${{ steps.tags.outputs.tags }}
+          DIGEST: ${{ steps.manifest.outputs.digest }}
+          IMAGE: ${{ inputs.image-name }}
           JF_REPO: ${{ inputs.jf-project }}${{ inputs.repo-scope }}
         run: |
           set -euo pipefail
           # The build number stays at the setup-jfrog-cli default (github.run_number):
           # consumer release-bundle references of the form <name>:<run_number> resolve
-          # against it.
-          jf rt build-docker-create --image-file <(echo "$IMAGE_REF") "$JF_REPO"
+          # against it. One build-docker-create per tag still merges into that build;
+          # build-publish below sends it once.
+          #
+          # JFrog CLI 2.78.8 (jfrog-cli-core v2.59.6 GetImageTagWithDigest) accepts
+          # exactly one `image-tag@sha256` line. A second `@` is "unexpected file format".
+          refs="$GITHUB_WORKSPACE/_shared-workflows-docker/.github/workflows/docker-build-deploy/image_file_refs.sh"
+          image_file="${RUNNER_TEMP}/docker-build-info-images.txt"
+          bash "$refs" image-file --digest "$DIGEST" --tags-csv "$TAGS" >"$image_file"
+          if [[ ! -s $image_file ]]; then
+            echo "::error::no non-floating image refs to record in build-info"
+            exit 1
+          fi
+          while IFS= read -r line; do
+            [[ -n $line ]] || continue
+            printf '%s\n' "$line" >"${RUNNER_TEMP}/docker-image-ref.txt"
+            jf rt build-docker-create --image-file "${RUNNER_TEMP}/docker-image-ref.txt" "$JF_REPO"
+          done <"$image_file"
+
+          # build-collect-env in the next step records this as
+          # buildInfo.env.DOCKER_FLOATING_TAGS. latest itself is not a build artifact.
+          floating=$(bash "$refs" floating-property --image-name "$IMAGE" --tags-csv "$TAGS")
+          if [[ -n $floating ]]; then
+            echo "DOCKER_FLOATING_TAGS=${floating}" >>"$GITHUB_ENV"
+          fi
 
       - name: Publish Build Info
         if: ${{ inputs.push }}

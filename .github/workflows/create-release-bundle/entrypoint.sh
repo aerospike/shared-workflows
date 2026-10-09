@@ -42,6 +42,8 @@ show_help() {
     echo "  --bundle-metadata <path>  Optional JSON (e.g. .maven-bundle-metadata.json from detect-artifacts)." >&2
     echo "                            When the file exists, key=value pairs are applied to the bundle via" >&2
     echo "                            jf release-bundle-annotate after create." >&2
+    echo "                            docker.floating_tags from the included builds is applied in the same" >&2
+    echo "                            annotate. Dry-run prints the command and does not call JFrog." >&2
     echo "  --help, -h                 Show this help message" >&2
     echo "" >&2
     echo "Examples:" >&2
@@ -130,6 +132,10 @@ run() {
     fi
 }
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/floating_tags.sh"
+
 # Function to generate the files array JSON
 generate_files_json() {
     echo "["
@@ -201,6 +207,7 @@ EOF
         --project="$PROJECT" \
         --signing-key="aerospike"
 
+    local rb_props=""
     if [[ -n ${BUNDLE_METADATA_PATH-} ]]; then
         if [[ ! -f $BUNDLE_METADATA_PATH ]]; then
             echo "Warning: bundle metadata path is not a file (skipping annotate): $BUNDLE_METADATA_PATH" >&2
@@ -210,18 +217,31 @@ EOF
             fi
             jq -e . "$BUNDLE_METADATA_PATH" >/dev/null ||
                 error "invalid or unreadable bundle metadata JSON: $BUNDLE_METADATA_PATH"
-            local rb_props
             rb_props=$(jq -r 'to_entries | map("\(.key)=\(.value|tostring)") | join(";")' "$BUNDLE_METADATA_PATH") ||
                 error "failed to build properties string from $BUNDLE_METADATA_PATH"
             if [[ -n $rb_props ]]; then
                 echo "Applying release bundle properties from bundle metadata (${#rb_props} chars)" >&2
-                run jf release-bundle-annotate "$BUNDLE_NAME" "$VERSION" \
-                    --project="$PROJECT" \
-                    --properties="$rb_props"
             else
                 echo "Bundle metadata produced no properties (empty object); skipping annotate" >&2
             fi
         fi
+    fi
+
+    local floating escaped
+    floating=$(collect_docker_floating_tags)
+    if [[ -n $floating ]]; then
+        escaped=$(escape_jf_property_value "$floating")
+        echo "Docker floating tags for this bundle: $floating" >&2
+        if [[ -n $rb_props ]]; then
+            rb_props="${rb_props};docker.floating_tags=${escaped}"
+        else
+            rb_props="docker.floating_tags=${escaped}"
+        fi
+    fi
+    if [[ -n $rb_props ]]; then
+        run jf release-bundle-annotate "$BUNDLE_NAME" "$VERSION" \
+            --project="$PROJECT" \
+            --properties="$rb_props"
     fi
 
     echo "Create release bundle workflow completed successfully!" >&2

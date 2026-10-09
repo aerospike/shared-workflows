@@ -91,6 +91,12 @@ The workflow automatically generates tags based on the `app-version` input:
 2. **Version tag** (when `versions-override` is not provided): `{registry}/{image-name}:{app-version}` (e.g., `artifact.aerospike.io/database-docker-dev-local/test-image:7.0.0`)
 3. **Custom tags** (when `versions-override` is provided): Only the immutable tag plus the override tags are generated (e.g., with `versions-override: "dev"`, for app version `7.0.0`, the tag portions would be `7.0.0_20251202T021054Z, dev`).
 
+A floating tag (`latest`, or any `latest-*` such as `latest-slim`) is not one of these. The workflow does not add one. If `versions-override` names one, that tag is still pushed to the dev repository with the others, and it is left out of build-info.
+
+Every other tag is part of the single build-info record for this build: the immutable tag and each version or override tag, each as `tag@digest` of the manifest index. A release bundle created from that build includes those tags, and promotion copies them. Floating tags are not build-info artifacts and are not copied as bundle artifacts.
+
+The build also records floating-tag intent for the image. A version tag such as `3.3.2` declares `latest`. A version tag that ends in `-slim` (the graph slim image uses app version `3.3.2-slim`) declares `latest-slim`. An image with no version tag declares none. Promotion recomputes those tags in the target repository from the version tags present there, so a rebuild of an older version does not move `latest` backwards.
+
 The registry is automatically constructed from `jf-registry` (if provided) or `{jf-registry-base}/{jf-project}{repo-scope}`.
 
 ## Delivering artifacts into the build context
