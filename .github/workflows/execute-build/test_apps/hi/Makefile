@@ -9,16 +9,18 @@ DISTRO ?= jammy
 ARCH ?= x86_64
 EMULATED ?= false
 
-# Docker image mapping
-DOCKER_IMAGE_jammy = ubuntu:22.04
-DOCKER_IMAGE_noble = ubuntu:24.04
-DOCKER_IMAGE_focal = ubuntu:20.04
-DOCKER_IMAGE_bullseye = debian:11
-DOCKER_IMAGE_bookworm = debian:12
-DOCKER_IMAGE_trixie = debian:13
-DOCKER_IMAGE_el8 = rockylinux:8
-DOCKER_IMAGE_el9 = rockylinux:9
-DOCKER_IMAGE_amzn2023 = amazonlinux:2023
+# Compile images come from the test project's Docker virtual. Official
+# library images keep the library/ prefix that Artifactory uses.
+DOCKER_REGISTRY ?= artifact.aerospike.io/test-docker-virtual
+DOCKER_IMAGE_jammy = $(DOCKER_REGISTRY)/library/ubuntu:22.04
+DOCKER_IMAGE_noble = $(DOCKER_REGISTRY)/library/ubuntu:24.04
+DOCKER_IMAGE_focal = $(DOCKER_REGISTRY)/library/ubuntu:20.04
+DOCKER_IMAGE_bullseye = $(DOCKER_REGISTRY)/library/debian:11
+DOCKER_IMAGE_bookworm = $(DOCKER_REGISTRY)/library/debian:12
+DOCKER_IMAGE_trixie = $(DOCKER_REGISTRY)/library/debian:13
+DOCKER_IMAGE_el8 = $(DOCKER_REGISTRY)/rockylinux:8
+DOCKER_IMAGE_el9 = $(DOCKER_REGISTRY)/rockylinux:9
+DOCKER_IMAGE_amzn2023 = $(DOCKER_REGISTRY)/amazonlinux:2023
 
 # Get the Docker image for the current distro
 DOCKER_IMAGE = $(DOCKER_IMAGE_$(DISTRO))

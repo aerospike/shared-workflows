@@ -314,6 +314,7 @@ jobs:
           version: ${{ inputs.helm-version }}
 
       - name: Set up JFrog CLI
+        id: jf
         uses: step-security/setup-jfrog-cli@53aeacb709fce45d0baf69a13ec3342f7e2d71a9 # v5.1.0
         env:
           JF_URL: ${{ inputs.jf-url }}
@@ -321,6 +322,34 @@ jobs:
         with:
           oidc-provider-name: ${{ inputs.oidc-provider-name }}
           oidc-audience: ${{ inputs.oidc-audience }}
+
+      # Build scripts pull compile images from the project Docker virtual.
+      # The login runs when docker info succeeds. Native macOS packaging
+      # runners have no daemon.
+      - name: Detect Docker
+        id: docker
+        shell: bash
+        env:
+          JF_URL: ${{ inputs.jf-url }}
+        run: |
+          set -euo pipefail
+          registry="${JF_URL#https://}"
+          registry="${registry#http://}"
+          registry="${registry%%/*}"
+          echo "registry=$registry" >> "$GITHUB_OUTPUT"
+          if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Docker login to Artifactory
+        if: steps.docker.outputs.available == 'true'
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ${{ steps.docker.outputs.registry }}
+          username: ${{ steps.jf.outputs.oidc-user }}
+          password: ${{ steps.jf.outputs.oidc-token }}
 
       - name: Execute Build Script
         shell: bash
