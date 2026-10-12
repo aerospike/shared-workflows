@@ -21,10 +21,8 @@ inputs:
     default: "false"
   bundle-revision:
     description: |
-      Appended to `version` to form the bundle version, so a rebuild of a release becomes a new
-      bundle revision rather than colliding with the bundle the first build created. The artifacts
-      keep the clean release version. `auto` uses the run id and attempt. Unset keeps the release
-      version, with a warning that a future release will always add a revision.
+      Appended to `version` to form the bundle version, so each build of a release gets its own
+      bundle. The artifacts keep `version`. `auto` uses `<run_id>-<run_attempt>`.
     required: false
     default: ""
   entrypoint-path:
@@ -40,7 +38,7 @@ inputs:
     default: ""
 outputs:
   bundle-version:
-    description: Bundle version that was created, including the revision when one was requested
+    description: The bundle version created, `version` plus any revision
     value: ${{ steps.create.outputs.bundle-version }}
 runs:
   using: composite

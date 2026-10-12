@@ -16,7 +16,7 @@ TEST_DIR="$GIT_ROOT/.github/workflows/create-release-bundle/test-artifacts"
 rm -rf "$TEST_DIR"
 mkdir -p "$TEST_DIR"
 TEST_REPORT_FILE="$TEST_DIR/test-report.txt"
-# In CI this suite runs inside a step; without this, every test writes to that step's outputs.
+# Keeps the tests out of the CI step's own outputs.
 export GITHUB_OUTPUT="$TEST_DIR/github-output"
 trap 'handle_error ${LINENO}' ERR
 
@@ -182,7 +182,7 @@ output=$("$SCRIPT_DIR/entrypoint.sh" --project test-project --build-names "test-
 if ! echo "$output" | grep -q "jf release-bundle-create rev-bundle v1.2.3-4711-2"; then
     test6_success=false
 fi
-if ! echo "$output" | grep -q "Bundle version: v1.2.3-4711-2 (revision 4711-2)"; then
+if ! echo "$output" | grep -q "Bundle version: v1.2.3-4711-2$"; then
     test6_success=false
 fi
 if ! echo "$output" | grep -q '"description": "Release for build version v1.2.3"'; then
@@ -191,7 +191,7 @@ fi
 if ! echo "$output" | grep -q '"version": "v1.2.3-4711-2"'; then
     test6_success=false
 fi
-if echo "$output" | grep -q "::warning title=bundle-revision"; then
+if echo "$output" | grep -q "::warning"; then
     test6_success=false
 fi
 
@@ -208,7 +208,7 @@ output=$("$SCRIPT_DIR/entrypoint.sh" --project test-project --build-names "test-
 if ! echo "$output" | grep -q "jf release-bundle-create norev-bundle v1.2.3"; then
     test7_success=false
 fi
-if echo "$output" | grep -q "Bundle version:"; then
+if ! echo "$output" | grep -q "Bundle version: v1.2.3$"; then
     test7_success=false
 fi
 
@@ -237,7 +237,7 @@ test9_success=true
 cd "$TEST_DIR"
 output=$("$SCRIPT_DIR/entrypoint.sh" --project test-project --build-names "test-build:1728052628123" --bundle-name warn-bundle --version v1.2.3 --revision "" --dry-run 2>&1)
 
-if ! echo "$output" | grep -q "::warning title=bundle-revision::bundle-revision is unset"; then
+if ! echo "$output" | grep -q "::warning title=Bundle revision::No bundle revision is set"; then
     test9_success=false
 fi
 if ! echo "$output" | grep -q "jf release-bundle-create warn-bundle v1.2.3 "; then

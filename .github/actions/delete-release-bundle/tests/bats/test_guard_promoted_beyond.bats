@@ -47,19 +47,12 @@ records() {
 }
 
 guard() {
-    run bash "$GUARD" my-bundle "$1" test "test guard"
-}
-
-@test "refuses a version promoted beyond DEV" {
-    records 1.0.0 DEV TEST
-    guard 1.0.0
-    [ "$status" -eq 1 ]
-    [[ $output == *"beyond DEV (TEST)"* ]]
+    run bash "$GUARD" my-bundle "$1" test
 }
 
 @test "refuses at every stage past DEV" {
     for stage in TEST STAGE PREVIEW INTERNAL PROD; do
-        records 1.0.0 "$stage"
+        records 1.0.0 DEV "$stage"
         guard 1.0.0
         [ "$status" -eq 1 ]
         [[ $output == *"beyond DEV ($stage)"* ]]
@@ -88,21 +81,21 @@ guard() {
     records 1.0.0 DEV TEST:FAILED
     guard 1.0.0
     [ "$status" -eq 0 ]
-    [[ $output == *"existing promotions: DEV."* ]]
+    [[ $output == *"is not promoted beyond DEV"* ]]
 }
 
 @test "allows a version promoted only to DEV" {
     records 1.0.0 DEV
     guard 1.0.0
     [ "$status" -eq 0 ]
-    [[ $output == *"existing promotions: DEV."* ]]
+    [[ $output == *"is not promoted beyond DEV"* ]]
 }
 
 @test "allows a version with no promotions" {
     records 1.0.0
     guard 1.0.0
     [ "$status" -eq 0 ]
-    [[ $output == *"no existing promotions"* ]]
+    [[ $output == *"is not promoted beyond DEV"* ]]
 }
 
 @test "reads only the requested version's records" {
@@ -124,14 +117,14 @@ guard() {
     records 1.0.0 DEV
     CURL_FAILS=1 guard 1.0.0
     [ "$status" -eq 1 ]
-    [[ $output == *"could not verify promotions"* ]]
+    [[ $output == *"Could not read the promotion records"* ]]
 }
 
 @test "refuses when the response has more records than it returned" {
     jq -n '{total: 2, promotions: [{environment: "DEV", status: "COMPLETED"}]}' >"${JF_RECORDS}/1.0.0.json"
     guard 1.0.0
     [ "$status" -eq 1 ]
-    [[ $output == *"could not verify promotions"* ]]
+    [[ $output == *"Could not read the promotion records"* ]]
 }
 
 @test "refuses when a record has no stage or status" {
@@ -145,7 +138,7 @@ guard() {
 
 @test "keeps the token out of xtrace" {
     records 1.0.0 DEV
-    run bash -x "$GUARD" my-bundle 1.0.0 test "test guard"
+    run bash -x "$GUARD" my-bundle 1.0.0 test
     [ "$status" -eq 0 ]
     [[ $output != *tkn* ]]
     [[ $output != *"$(printf '%s' '{"url":"https://jfrog.test/","accessToken":"tkn"}' | base64)"* ]]

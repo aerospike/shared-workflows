@@ -10,8 +10,6 @@ JFrog [Release Bundles v2](https://jfrog.com/help/r/jfrog-artifactory-documentat
 - **Promotion tracking**: each promotion-stage transition (DEV to TEST, TEST to STAGE, etc.) is recorded with who promoted and when, creating an auditable chain of custody.
 - **Multi-artifact grouping**: a single bundle can reference multiple builds (e.g., artifact pipeline + Docker pipeline), so everything for a release moves together.
 
-These properties make bundles the right unit for our SDLC promotion model.
-
 ## Aerospike's promotion pipeline
 
 Artifacts flow through gated promotion stages. Each gate has an owner and requirements that must be met before promotion.
@@ -32,11 +30,6 @@ CI/Build  ->  DEV  ->  TEST  ->  STAGE  ->  PREVIEW  ->  PROD
 
 The release bundle is created after deployment to DEV (at the DEV to TEST gate). From that point forward, the bundle carries all artifacts and metadata through the remaining promotion stages.
 
-For the full gate definitions and evidence requirements, see:
-
-- [Pipeline with gates, QE, Cloud, Product](https://aerospike.atlassian.net/wiki/spaces/DevOps/pages/4577493063/Pipeline+with+gates+QE+Cloud+Product)
-- [SDLC pipeline with JFrog](https://aerospike.atlassian.net/wiki/spaces/DevOps/pages/4329996803/SDLC+pipeline+with+jfrog)
-
 ## Using bundles in shared-workflows
 
 Use `reusable_create-release-bundle.yaml` to create a release bundle as a standalone job in your pipeline. It handles checkout and JFrog setup.
@@ -51,16 +44,13 @@ release-bundle:
     jf-bundle-name: my-release
     version: 1.2.3
     jf-project: my-project
-  secrets: inherit
 ```
 
-Set `dry-run: true` to validate the configuration and JFrog authentication without actually creating the bundle. In dry-run mode the workflow echoes the commands it would run instead of calling `jf release-bundle-create`.
+Set `dry-run: true` to check the configuration and JFrog authentication: the workflow prints the JFrog commands instead of running them.
 
 ### Bundle revisions
 
-The bundle version defaults to the release version, so a rebuild of a release collides with the bundle the first build created. Pass `jf-bundle-revision: auto` to `reusable_create-release-bundle.yaml` to give each build its own bundle version (`1.2.3-<run_id>-<run_attempt>`) while the artifacts keep the clean release version. Promote the workflow's `bundle-version` output, not `version`. Unset, it logs a warning that a future release will always add a revision.
-
-The revision removes the bundle-version collision only. A rebuild deploys to the same artifact paths, so once an earlier revision's bundle is promoted to DEV, the rebuild's deploy fails on those locked paths. See [Deleting a bundle before re-deploy](#deleting-a-bundle-before-re-deploy).
+Set `jf-bundle-revision` to give each build of a release its own bundle version. See [Bundle revisions](../create-release-bundle/README.md#bundle-revisions).
 
 ### Promoting a bundle
 
@@ -68,7 +58,7 @@ There is a composite action that may be used for promotion of bundles documented
 
 ### Deleting a bundle before re-deploy
 
-The `delete-release-bundle` composite action deletes a bundle version safely: it searches first, no-ops when the bundle is absent, and reports `existed=true/false` rather than failing. A **promotion guard** runs when a bundle exists, refusing deletion when the version is promoted, or being promoted, to any stage other than DEV. A promotion that failed does not count. Wire it to run before deploy when you may re-run a pipeline against an already-promoted bundle (promoted bundles lock the underlying dev-local artifacts). `version` is the bundle version: with a revision, pass the earlier revision's bundle version, not the release version.
+The `delete-release-bundle` composite action deletes a bundle version if it exists and outputs `existed`. It refuses when the version is promoted, or being promoted, to any stage other than DEV; a failed promotion does not count. Run it before deploy when a re-run would redeploy paths that a bundle at DEV has locked. `version` is the bundle version: with a revision, pass that revision's bundle version, not the release version.
 
 ```yaml
 delete-existing-bundle:
@@ -91,9 +81,7 @@ Set `gh-upload-bundle-metadata: false` on deploy when the metadata handoff is no
 
 **Bundle creation fails**: confirm the `jf-build-names` input is a comma-separated list of `name:version` pairs that exist in JFrog, and that your project permissions allow bundle creation. Bundle creation requires higher permissions than artifact upload.
 
-**Promoted bundle locks artifacts**: promoted bundles lock the underlying artifacts in dev-local repos, causing re-deploy uploads to fail with permission errors. Either delete the old bundle before deploying (use the `delete-release-bundle` action), or increment the version/build ID.
-
-**Re-running a pipeline**: if the bundle already exists and has been promoted, delete it before deploying new artifacts with the same names/path. The `delete-release-bundle` action is safe to call unconditionally (it no-ops when the bundle is absent), so it can run on every pipeline before deploy.
+**Re-deploy fails with a permission error**: a promoted bundle locks its artifacts in the dev-local repos, so a re-run that uploads the same paths fails. If the bundle is promoted only to DEV, delete it first with `delete-release-bundle`, which is safe to run on every pipeline. Past DEV it refuses; deploy a new version instead.
 
 ## References
 
@@ -106,6 +94,6 @@ Set `gh-upload-bundle-metadata: false` on deploy when the metadata handoff is no
 
 ### Aerospike Confluence
 
-- [SDLC pipeline with JFrog](https://aerospike.atlassian.net/wiki/spaces/DevOps/pages/4329996803/SDLC+pipeline+with+jfrog) -- foundational pipeline design
-- [Pipeline with gates, QE, Cloud, Product](https://aerospike.atlassian.net/wiki/spaces/DevOps/pages/4577493063/Pipeline+with+gates+QE+Cloud+Product) -- gate definitions and evidence requirements
-- [Artifact Repository Strategy for CI/CD with JFrog](https://aerospike.atlassian.net/wiki/spaces/AE/pages/4993155080/OPEN+Artifact+Repository+Strategy+for+CI+CD+with+JFrog) -- stable vs preview repository separation
+- [SDLC pipeline with JFrog](https://aerospike.atlassian.net/wiki/spaces/DevOps/pages/4329996803/SDLC+pipeline+with+jfrog): foundational pipeline design
+- [Pipeline with gates, QE, Cloud, Product](https://aerospike.atlassian.net/wiki/spaces/DevOps/pages/4577493063/Pipeline+with+gates+QE+Cloud+Product): gate definitions and evidence requirements
+- [Artifact Repository Strategy for CI/CD with JFrog](https://aerospike.atlassian.net/wiki/spaces/AE/pages/4993155080/OPEN+Artifact+Repository+Strategy+for+CI+CD+with+JFrog): stable vs preview repository separation

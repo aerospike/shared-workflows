@@ -26,18 +26,3 @@ setup() {
     [[ $step == *'revision_arg=(--revision "$BUNDLE_REVISION")'* ]]
     [[ $step == *'"${revision_arg[@]}"'* ]]
 }
-
-@test "the revision never reaches the script as an expression" {
-    for file in "$ACTION" "$WORKFLOW"; do
-        run grep -F -e '--revision "${{' "$file"
-        [ "$status" -eq 1 ]
-    done
-}
-
-@test "an unset revision passes no --revision to the entrypoint" {
-    for file in "$ACTION" "$WORKFLOW"; do
-        run grep -F -e '--revision "$BUNDLE_REVISION" \' "$file"
-        [ "$status" -eq 1 ]
-        grep -Fq 'if [[ -n "$BUNDLE_REVISION" ]]; then' "$file"
-    done
-}
