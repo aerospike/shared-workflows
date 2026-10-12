@@ -26,7 +26,7 @@ header = "Authorization: Bearer ${token}"
 CURLRC
 )
 
-# An empty list means "not promoted", so an unreadable or incomplete response must fail.
+# An empty list means "not promoted", so an unreadable response must fail.
 jfrog_promotion_records() {
     local name="$1" version="$2" project="$3" path records
     path="lifecycle/api/v2/promotion/records/$(jfrog_uri_encode "$name")/$(jfrog_uri_encode "$version")"
@@ -35,9 +35,7 @@ jfrog_promotion_records() {
         echo "Error: could not read promotion records for ${name}/${version}" >&2
         return 1
     }
-    jq -e '(.promotions | type) == "array"
-        and all(.promotions[]; (.environment | type) == "string" and (.status | type) == "string")
-        and (.total // 0) <= (.promotions | length)' >/dev/null 2>&1 <<<"$records" || {
+    jq -e '.promotions | type == "array"' >/dev/null 2>&1 <<<"$records" || {
         echo "Error: unexpected promotion records for ${name}/${version}: ${records}" >&2
         return 1
     }

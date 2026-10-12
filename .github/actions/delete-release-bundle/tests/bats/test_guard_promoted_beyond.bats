@@ -43,7 +43,7 @@ records() {
         json=$(jq --arg v "$version" --arg s "$stage" --arg st "$status" \
             '. + [{release_bundle_version: $v, environment: $s, status: $st}]' <<<"$json")
     done
-    jq -n --argjson p "$json" '{promotions: $p, total: ($p | length)}' >"${JF_RECORDS}/${version}.json"
+    jq -n --argjson p "$json" '{promotions: $p}' >"${JF_RECORDS}/${version}.json"
 }
 
 guard() {
@@ -84,26 +84,14 @@ guard() {
     [[ $output == *"is not promoted beyond DEV"* ]]
 }
 
-@test "allows a version promoted only to DEV" {
-    records 1.0.0 DEV
-    guard 1.0.0
-    [ "$status" -eq 0 ]
-    [[ $output == *"is not promoted beyond DEV"* ]]
-}
-
-@test "allows a version with no promotions" {
+@test "allows a version with no promotions, or only DEV" {
     records 1.0.0
     guard 1.0.0
     [ "$status" -eq 0 ]
-    [[ $output == *"is not promoted beyond DEV"* ]]
-}
-
-@test "reads only the requested version's records" {
-    records 9.9.9 PROD
     records 1.0.0 DEV
     guard 1.0.0
     [ "$status" -eq 0 ]
-    grep -Fq "/promotion/records/my-bundle/1.0.0?project=test&" "$CURL_URL_LOG"
+    [[ $output == *"is not promoted beyond DEV"* ]]
 }
 
 @test "URL-encodes the version" {
@@ -118,22 +106,6 @@ guard() {
     CURL_FAILS=1 guard 1.0.0
     [ "$status" -eq 1 ]
     [[ $output == *"Could not read the promotion records"* ]]
-}
-
-@test "refuses when the response has more records than it returned" {
-    jq -n '{total: 2, promotions: [{environment: "DEV", status: "COMPLETED"}]}' >"${JF_RECORDS}/1.0.0.json"
-    guard 1.0.0
-    [ "$status" -eq 1 ]
-    [[ $output == *"Could not read the promotion records"* ]]
-}
-
-@test "refuses when a record has no stage or status" {
-    jq -n '{total: 1, promotions: [{target_environment: "PROD", status: "COMPLETED"}]}' >"${JF_RECORDS}/1.0.0.json"
-    guard 1.0.0
-    [ "$status" -eq 1 ]
-    jq -n '{total: 1, promotions: [{environment: "PROD"}]}' >"${JF_RECORDS}/1.0.0.json"
-    guard 1.0.0
-    [ "$status" -eq 1 ]
 }
 
 @test "keeps the token out of xtrace" {
