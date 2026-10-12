@@ -1,0 +1,143 @@
+name: Snyk Container Scan
+description: >
+  Run a Snyk container image security scan on a promoted artifact. Emits a PASS/FAIL verdict
+  and per-severity counts, optionally records the image in the Snyk portal, and can write
+  SARIF for code-scanning upload. Tests and reports only; promotes nothing.
+inputs:
+  image:
+    description: Container image reference to scan (host optional, e.g. repo/name:tag)
+    required: true
+  severity-threshold:
+    description: Lowest severity that counts against the verdict — low, medium, high, or critical
+    required: false
+    default: high
+  fail-on-issues:
+    description: >
+      Exit non-zero when the verdict is FAIL. Leave true for standalone gating; a calling
+      workflow that owns the gate sets this false and reads the verdict output instead.
+    required: false
+    default: "true"
+  monitor:
+    description: Also run `snyk container monitor` to record the image in the Snyk portal
+    required: false
+    default: "true"
+  platform:
+    description: Platform to scan for a multi-arch tag, e.g. linux/amd64
+    required: false
+    default: ""
+  sarif-output-path:
+    description: Write SARIF here for a later code-scanning upload
+    required: false
+    default: ""
+  json-output-path:
+    description: Keep the raw Snyk JSON report here
+    required: false
+    default: ""
+  timeout:
+    description: >
+      Wall-clock cap for the scan (e.g. 10m). On expiry the verdict is TIMEOUT — a slow scan
+      degrades instead of hanging the caller. Empty means no cap.
+    required: false
+    default: ""
+  jf-url:
+    description: JFrog platform URL, used as the registry host for docker login
+    required: false
+    default: https://aerospike.jfrog.io
+  jfrog-token:
+    description: >
+      JFrog access token for pulling the image. Leave unset to inherit JFROG_TOKEN from the
+      environment. Skip entirely when the runner is already authenticated to the registry.
+    required: false
+    default: ""
+  registry-username:
+    description: Docker-login username. Defaults to the JFrog token's subject.
+    required: false
+    default: ""
+  snyk-token:
+    description: Snyk API token. Leave unset to inherit SNYK_TOKEN from the environment.
+    required: false
+    default: ""
+  snyk-org:
+    description: Snyk org id. Required only when monitor is true.
+    required: false
+    default: ""
+  snyk-cli-version:
+    description: >
+      Break-glass override of the Snyk CLI version (e.g. v1.1307.2). Leave empty to use the
+      version pinned in snyk-cli.pin, which only @aerospike/seceng can change (CODEOWNERS). The
+      prod gate does not plumb this input, so promotions always use the pinned version. Any
+      version supplied here is still GPG-verified against Snyk's committed signing key, and is
+      still subject to the minimum bake (see min-age-hours).
+    required: false
+    default: ""
+  min-age-hours:
+    description: >
+      Minimum age of the chosen Snyk CLI release before it may be installed — a freshly
+      published, possibly compromised release is never adopted on day zero. Applies to the
+      pinned version and to any break-glass override. Lower it only as a deliberate, visible
+      exception. Set 0 to disable the check.
+    required: false
+    default: "48"
+outputs:
+  verdict:
+    description: PASS or FAIL. Gate with startsWith(..., 'FAIL'). FAIL means findings at or above the threshold.
+    value: ${{ steps.scan.outputs.verdict }}
+  critical:
+    description: Count of unique critical-severity findings
+    value: ${{ steps.scan.outputs.critical }}
+  high:
+    description: Count of unique high-severity findings
+    value: ${{ steps.scan.outputs.high }}
+  medium:
+    description: Count of unique medium-severity findings
+    value: ${{ steps.scan.outputs.medium }}
+  low:
+    description: Count of unique low-severity findings
+    value: ${{ steps.scan.outputs.low }}
+  total:
+    description: Count of unique findings across all severities
+    value: ${{ steps.scan.outputs.total }}
+  sarif:
+    description: Path to the written SARIF, empty when sarif-output-path was not set
+    value: ${{ steps.scan.outputs.sarif }}
+  report:
+    description: Path to the raw Snyk JSON report
+    value: ${{ steps.scan.outputs.report }}
+  monitored:
+    description: Snyk portal URL for the monitored project, empty when monitor was off
+    value: ${{ steps.scan.outputs.monitored }}
+runs:
+  using: composite
+  steps:
+    - name: Install verified Snyk CLI
+      shell: bash
+      env:
+        SNYK_CLI_VERSION: ${{ inputs.snyk-cli-version }}
+        MIN_AGE_HOURS: ${{ inputs.min-age-hours }}
+        GITHUB_TOKEN: ${{ github.token }}
+      run: "${GITHUB_ACTION_PATH}/install-snyk.sh"
+
+    - name: Run Snyk container scan
+      id: scan
+      shell: bash
+      env:
+        IMAGE: ${{ inputs.image }}
+        SEVERITY_THRESHOLD: ${{ inputs.severity-threshold }}
+        FAIL_ON_ISSUES: ${{ inputs.fail-on-issues }}
+        MONITOR: ${{ inputs.monitor }}
+        PLATFORM: ${{ inputs.platform }}
+        SARIF_OUTPUT_PATH: ${{ inputs.sarif-output-path }}
+        JSON_OUTPUT_PATH: ${{ inputs.json-output-path }}
+        TIMEOUT: ${{ inputs.timeout }}
+        JF_URL: ${{ inputs.jf-url }}
+        REGISTRY_USERNAME: ${{ inputs.registry-username }}
+        SNYK_ORG: ${{ inputs.snyk-org }}
+        JFROG_TOKEN: ${{ inputs.jfrog-token || env.JFROG_TOKEN }}
+        SNYK_TOKEN: ${{ inputs.snyk-token || env.SNYK_TOKEN }}
+      run: |
+        set -euo pipefail
+        if [[ -z "${SNYK_TOKEN:-}" ]]; then
+          echo "::error::snyk-container-scan: no Snyk token. Set the snyk-token input or export SNYK_TOKEN." >&2
+          exit 1
+        fi
+        "${GITHUB_ACTION_PATH}/scan.sh" "${IMAGE}"

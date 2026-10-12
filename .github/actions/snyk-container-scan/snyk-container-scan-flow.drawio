@@ -1,0 +1,217 @@
+<mxfile host="Electron" agent="claude-code">
+  <diagram name="snyk-container-scan flow" id="snyk-flow-1">
+    <mxGraphModel dx="1029" dy="1099" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="2500" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="legend" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#666666;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;fontSize=11;" value="LEGEND&#xa;Box = a step    Diamond = a decision&#xa;Yellow = trust / verify step&#xa;Red = FAIL CLOSED → exit 1 (never proceed)&#xa;Green = outputs / success&#xa;Sections 1 · 2 · 6 are the CALLER (not this action)" vertex="1">
+          <mxGeometry height="130" width="300" x="725" y="70" as="geometry" />
+        </mxCell>
+        <mxCell id="secTrig" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E1D5E7;strokeColor=#9673A6;opacity=40;verticalAlign=top;fontStyle=1;fontSize=13;arcSize=4;" value="1 · TRIGGER (promotion workflow)" vertex="1">
+          <mxGeometry height="180" width="1000" x="40" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="secOrch" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;opacity=40;verticalAlign=top;fontStyle=1;fontSize=13;arcSize=4;" value="2 · CALLER — promotion workflow (owns the gate, by severity)" vertex="1">
+          <mxGeometry height="180" width="1000" x="40" y="250" as="geometry" />
+        </mxCell>
+        <mxCell id="secInstall" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFE6CC;strokeColor=#D79B00;opacity=50;verticalAlign=top;fontStyle=1;fontSize=13;arcSize=3;" value="3 · ACTION STEP — Install &amp; VERIFY Snyk CLI  (fail-closed trust chain)" vertex="1">
+          <mxGeometry height="740" width="1000" x="40" y="460" as="geometry" />
+        </mxCell>
+        <mxCell id="secScan" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;opacity=40;verticalAlign=top;fontStyle=1;fontSize=13;arcSize=3;" value="4 · ACTION STEP — scan.sh" vertex="1">
+          <mxGeometry height="720" width="1000" x="40" y="1230" as="geometry" />
+        </mxCell>
+        <mxCell id="secOut" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#D5E8D4;strokeColor=#82B366;opacity=40;verticalAlign=top;fontStyle=1;fontSize=13;arcSize=4;" value="5 · ACTION OUTPUTS + caller SARIF/artifact upload" vertex="1">
+          <mxGeometry height="170" width="1000" x="40" y="1980" as="geometry" />
+        </mxCell>
+        <mxCell id="secGate" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#666666;opacity=50;verticalAlign=top;fontStyle=1;fontSize=13;arcSize=4;" value="6 · CALLER gate — the promotion decision (by severity)" vertex="1">
+          <mxGeometry height="280" width="1000" x="40" y="2180" as="geometry" />
+        </mxCell>
+        <mxCell id="T1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#9673A6;" value="Promotion workflow tags image → PROD in JFrog&#xa;(e.g. database-docker-prod-public-local/aerospike-aql:9.2.9-3)" vertex="1">
+          <mxGeometry height="50" width="360" x="360" y="80" as="geometry" />
+        </mxCell>
+        <mxCell id="T2" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#9673A6;" value="calls snyk-container-scan action&#xa;inputs: image · severity-threshold · platform · timeout" vertex="1">
+          <mxGeometry height="50" width="360" x="360" y="150" as="geometry" />
+        </mxCell>
+        <mxCell id="O1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6C8EBF;" value="caller step: setup-jfrog-cli (OIDC)&#xa;so this action can pull the private image" vertex="1">
+          <mxGeometry height="50" width="360" x="360" y="290" as="geometry" />
+        </mxCell>
+        <mxCell id="O2" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6C8EBF;" value="caller runs snyk-container-scan&#xa;(image · severity-threshold · platform)" vertex="1">
+          <mxGeometry height="50" width="360" x="360" y="360" as="geometry" />
+        </mxCell>
+        <mxCell id="V0" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF2CC;strokeColor=#D79B00;fontStyle=2;" value="Always install the pinned version — never trust a snyk already on PATH.&#xa;Resolve version: snyk-cli-version input, else SNYK_CLI_DEFAULT_VERSION (pin).&#xa;Enforce 48h minimum bake (verify_cli_age.py) — refuse a day-zero release." vertex="1">
+          <mxGeometry height="65" width="360" x="360" y="495" as="geometry" />
+        </mxCell>
+        <mxCell id="V1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#D79B00;" value="Import committed snyk-code-signing.asc&#xa;(key from snyk/cli source repo)" vertex="1">
+          <mxGeometry height="50" width="360" x="360" y="610" as="geometry" />
+        </mxCell>
+        <mxCell id="V2" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FFF2CC;strokeColor=#D79B00;" value="imported fingerprint&#xa;== SNYK_GPG_FINGERPRINT (pin)?" vertex="1">
+          <mxGeometry height="90" width="220" x="430" y="695" as="geometry" />
+        </mxCell>
+        <mxCell id="V3" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#D79B00;" value="Download release sha256sums.txt.asc&#xa;(GPG-signed checksums manifest)" vertex="1">
+          <mxGeometry height="50" width="360" x="360" y="820" as="geometry" />
+        </mxCell>
+        <mxCell id="V4" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FFF2CC;strokeColor=#D79B00;" value="gpg --verify&#xa;Good signature?" vertex="1">
+          <mxGeometry height="80" width="200" x="440" y="905" as="geometry" />
+        </mxCell>
+        <mxCell id="V5" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#D79B00;" value="Download binary from static.snyk.io&#xa;(snyk-linux / snyk-linux-arm64 for chosen version)" vertex="1">
+          <mxGeometry height="50" width="360" x="360" y="1020" as="geometry" />
+        </mxCell>
+        <mxCell id="V6" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FFF2CC;strokeColor=#D79B00;" value="sha256 ==&#xa;signed manifest?" vertex="1">
+          <mxGeometry height="80" width="200" x="440" y="1095" as="geometry" />
+        </mxCell>
+        <mxCell id="FAIL" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8CECC;strokeColor=#B85450;fontStyle=1;" value="FAIL CLOSED&#xa;::error:: + exit 1&#xa;delete binary · never fall back&#xa;to unverified / latest" vertex="1">
+          <mxGeometry height="120" width="200" x="800" y="820" as="geometry" />
+        </mxCell>
+        <mxCell id="S1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6C8EBF;" value="Hide the tokens from the logs&#xa;(::add-mask:: → SNYK_TOKEN / JFROG_TOKEN print as ***)" vertex="1">
+          <mxGeometry height="50" width="360" x="360" y="1262" as="geometry" />
+        </mxCell>
+        <mxCell id="S2" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6C8EBF;" value="Authenticate to JFrog Artifactory so Snyk can pull a private image&#xa;(a docker login to the JFrog registry — NOT Docker Hub;&#xa;username comes from the JFrog token via its tokens/me API)&#xa;login failure is only a warning — the image may be public" vertex="1">
+          <mxGeometry height="74" width="360" x="360" y="1316" as="geometry" />
+        </mxCell>
+        <mxCell id="S3" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6C8EBF;" value="Pull the image from the registry, not the local Docker daemon&#xa;(DOCKER_HOST → dead socket; avoids a multi-arch daemon bug;&#xa;Snyk reuses the registry login from the step above)" vertex="1">
+          <mxGeometry height="60" width="360" x="360" y="1392" as="geometry" />
+        </mxCell>
+        <mxCell id="S4" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6C8EBF;" value="Run the scan — snyk container test&#xa;(--platform, --severity-threshold) → JSON report (+ SARIF if asked)" vertex="1">
+          <mxGeometry height="50" width="360" x="360" y="1455" as="geometry" />
+        </mxCell>
+        <mxCell id="S5" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;" value="Did the scan fail to run?&#xa;(snyk exit ≥ 2, or empty report)" vertex="1">
+          <mxGeometry height="80" width="200" x="440" y="1525" as="geometry" />
+        </mxCell>
+        <mxCell id="S6" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6C8EBF;" value="summarize.py → verdict (PASS/FAIL) +&#xa;critical/high/medium/low/total  (unique by vuln id)" vertex="1">
+          <mxGeometry height="50" width="360" x="360" y="1640" as="geometry" />
+        </mxCell>
+        <mxCell id="S7" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;" value="monitor?" vertex="1">
+          <mxGeometry height="70" width="150" x="200" y="1710" as="geometry" />
+        </mxCell>
+        <mxCell id="S7b" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6C8EBF;" value="snyk container monitor&#xa;→ Snyk portal project URL" vertex="1">
+          <mxGeometry height="50" width="250" x="60" y="1810" as="geometry" />
+        </mxCell>
+        <mxCell id="S8" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;" value="fail-on-issues&#xa;&amp;&amp; verdict == FAIL?&#xa;(caller sets false)" vertex="1">
+          <mxGeometry height="90" width="220" x="440" y="1710" as="geometry" />
+        </mxCell>
+        <mxCell id="S8y" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8CECC;strokeColor=#B85450;" value="exit 1&#xa;(standalone gate)" vertex="1">
+          <mxGeometry height="60" width="180" x="770" y="1725" as="geometry" />
+        </mxCell>
+        <mxCell id="FAIL2" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8CECC;strokeColor=#B85450;fontStyle=1;" value="Scan could not run&#xa;::error:: + exit 1" vertex="1">
+          <mxGeometry height="90" width="180" x="770" y="1520" as="geometry" />
+        </mxCell>
+        <mxCell id="E1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#82B366;" value="Emit outputs → verdict · critical/high/medium/low/total · sarif · report · monitored" vertex="1">
+          <mxGeometry height="50" width="360" x="360" y="2015" as="geometry" />
+        </mxCell>
+        <mxCell id="E2" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#82B366;" value="caller uploads SARIF → GitHub code scanning&#xa;(action leaves these edges to the caller)" vertex="1">
+          <mxGeometry height="50" width="360" x="360" y="2080" as="geometry" />
+        </mxCell>
+        <mxCell id="G1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#666666;" value="caller reads the verdict + counts outputs&#xa;(fail-on-issues:false — the action does not self-gate)" vertex="1">
+          <mxGeometry height="50" width="360" x="360" y="2215" as="geometry" />
+        </mxCell>
+        <mxCell id="G2" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FFF2CC;strokeColor=#D79B00;" value="verdict&#xa;== FAIL?" vertex="1">
+          <mxGeometry height="90" width="200" x="440" y="2290" as="geometry" />
+        </mxCell>
+        <mxCell id="G3" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8CECC;strokeColor=#B85450;fontStyle=1;" value="BLOCK promotion&#xa;@aerospike/seceng manual review required" vertex="1">
+          <mxGeometry height="60" width="280" x="720" y="2300" as="geometry" />
+        </mxCell>
+        <mxCell id="G4" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#D5E8D4;strokeColor=#82B366;fontStyle=1;" value="Promotion proceeds to PROD" vertex="1">
+          <mxGeometry height="60" width="260" x="80" y="2300" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" edge="1" parent="1" source="T1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" target="T2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e2" edge="1" parent="1" source="T2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" target="O1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" edge="1" parent="1" source="O1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" target="O2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e4" edge="1" parent="1" source="O2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" target="V0">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e5" edge="1" parent="1" source="V0" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" target="V1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e7" edge="1" parent="1" source="V1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" target="V2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e8" edge="1" parent="1" source="V2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" target="V3" value="yes">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e9" edge="1" parent="1" source="V2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;exitX=1;exitY=0.5;exitDx=0;exitDy=0;" target="FAIL" value="no">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e10" edge="1" parent="1" source="V3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" target="V4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e11" edge="1" parent="1" source="V4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" target="V5" value="yes">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e12" edge="1" parent="1" source="V4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;exitX=1;exitY=0.5;exitDx=0;exitDy=0;" target="FAIL" value="no">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e13" edge="1" parent="1" source="V5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" target="V6">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e14" edge="1" parent="1" source="V6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;exitX=1;exitY=0.5;exitDx=0;exitDy=0;" target="FAIL" value="no">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="900" y="1135" />
+              <mxPoint x="900" y="940" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e15" edge="1" parent="1" source="V6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" target="S1" value="yes → snyk verified">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e16" edge="1" parent="1" source="S1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" target="S2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e17" edge="1" parent="1" source="S2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" target="S3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e18" edge="1" parent="1" source="S3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" target="S4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e19" edge="1" parent="1" source="S4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" target="S5">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e20" edge="1" parent="1" source="S5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;exitX=1;exitY=0.5;exitDx=0;exitDy=0;" target="FAIL2" value="yes">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e21" edge="1" parent="1" source="S5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" target="S6" value="no">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e22" edge="1" parent="1" source="S6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" target="S8">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e23" edge="1" parent="1" source="S6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;exitX=0;exitY=0.5;exitDx=0;exitDy=0;" target="S7" value="yes">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="275" y="1665" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e24" edge="1" parent="1" source="S7" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" target="S7b" value="yes">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e25" edge="1" parent="1" source="S8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;exitX=1;exitY=0.5;exitDx=0;exitDy=0;" target="S8y" value="yes → exit 1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e26" edge="1" parent="1" source="S8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" target="E1" value="no (caller owns the gate) → exit 0">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e27" edge="1" parent="1" source="E1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" target="E2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e28" edge="1" parent="1" source="E2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" target="G1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e29" edge="1" parent="1" source="G1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" target="G2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e30" edge="1" parent="1" source="G2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;exitX=1;exitY=0.5;exitDx=0;exitDy=0;" target="G3" value="yes">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e31" edge="1" parent="1" source="G2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;exitX=0;exitY=0.5;exitDx=0;exitDy=0;" target="G4" value="no">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
