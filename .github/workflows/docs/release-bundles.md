@@ -81,7 +81,7 @@ Set `gh-upload-bundle-metadata: false` on deploy when the metadata handoff is no
 
 **Bundle creation fails**: confirm the `jf-build-names` input is a comma-separated list of `name:version` pairs that exist in JFrog, and that your project permissions allow bundle creation. Bundle creation requires higher permissions than artifact upload.
 
-**Re-deploy fails with a permission error**: a promoted bundle locks its artifacts in the dev-local repos, so a re-run that uploads the same paths fails. If the bundle is promoted only to DEV, delete it first with `delete-release-bundle`, which is safe to run on every pipeline. Past DEV it refuses; deploy a new version instead.
+**Re-deploy fails with a permission error**: a promoted bundle locks its artifacts in the dev-local repos, so a re-run that uploads the same paths fails. If the bundle is promoted only to DEV, delete it first with `delete-release-bundle`, which is safe to run on every pipeline. If the bundle is promoted past DEV, the action refuses to delete it; deploy a new version instead.
 
 ## References
 

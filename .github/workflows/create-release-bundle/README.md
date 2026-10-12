@@ -19,7 +19,7 @@
 | `jf-url`                           | JFrog URL                                                                                                                                                             | No       | `https://artifact.aerospike.io` |
 | `oidc-audience`                    | OIDC audience                                                                                                                                                         | No       | `aerospike`                     |
 | `oidc-provider-name`               | OIDC provider name                                                                                                                                                    | No       | `gh-aerospike`                  |
-| `runs-on`                          | Runner                                                                                                                                                                | No       | `ubuntu-22.04`                  |
+| `runs-on`                          | Runner label for the job                                                                                                                                              | No       | `ubuntu-22.04`                  |
 
 ## Outputs
 
