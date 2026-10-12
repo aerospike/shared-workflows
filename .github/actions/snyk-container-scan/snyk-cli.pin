@@ -1,0 +1,21 @@
+# Trust anchor for the Snyk CLI. Unlike a per-version hash, these change rarely:
+#   - SNYK_GPG_FINGERPRINT rotates only when Snyk rotates its code-signing key (the current
+#     key expires 2027-01-06). Confirm any new fingerprint against Snyk's official docs before
+#     changing it — this is the one out-of-band trust decision.
+#
+# Provenance of snyk-code-signing.asc and this fingerprint — corroborated across three
+# independent Snyk-controlled sources, all agreeing on 467717A3...D0025194:
+#   1. Snyk CLI source repo: snyk/cli  help/_about-this-project/snyk-code-signing-public.pgp
+#      (the committed .asc here was taken verbatim from this file)
+#   2. Snyk official docs: snyk/user-docs
+#      developer-tools/snyk-cli/install-the-snyk-cli/verifying-cli-standalone-binaries.md
+#   3. keys.openpgp.org verified-identity keyserver (confirmed code-signing@snyk.io binding)
+# To refresh: curl the file in (1), gpg --show-keys it, confirm the fingerprint matches, export.
+#   - SNYK_CLI_DEFAULT_VERSION is only the fallback when no version is supplied by the caller
+#     (org/environment variable or input). Point it at a release that has passed the 2-day bake.
+#
+# Integrity does NOT depend on this file naming a version: the install step verifies whatever
+# version is chosen against Snyk's committed signing key (snyk-code-signing.asc), so no
+# per-version checksums are maintained here.
+SNYK_GPG_FINGERPRINT=467717A30B2B4658415975629691DA64D0025194
+SNYK_CLI_DEFAULT_VERSION=v1.1307.2

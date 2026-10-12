@@ -22,8 +22,10 @@ jobs:
       - name: Run unit tests
         run: python3 -m unittest discover .github/actions/snyk-container-scan/tests -v
 
-      - name: Check scan.sh syntax
-        run: bash -n .github/actions/snyk-container-scan/scan.sh
+      - name: Check shell script syntax
+        run: |
+          bash -n .github/actions/snyk-container-scan/scan.sh
+          bash -n .github/actions/snyk-container-scan/install-snyk.sh
 
       - name: Install bats
         run: |
