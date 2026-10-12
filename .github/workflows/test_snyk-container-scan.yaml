@@ -1,0 +1,37 @@
+name: "Test: Snyk Container Scan"
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  run-tests:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Run unit tests
+        run: python3 -m unittest discover .github/actions/snyk-container-scan/tests -v
+
+      - name: Check scan.sh syntax
+        run: bash -n .github/actions/snyk-container-scan/scan.sh
+
+      - name: Install bats
+        run: |
+          git clone https://github.com/bats-core/bats-core.git
+          cd bats-core
+          sudo ./install.sh /usr/local
+          cd ..
+          rm -rf bats-core
+
+      - name: Run scan.sh bats tests
+        run: bats .github/actions/snyk-container-scan/tests/
