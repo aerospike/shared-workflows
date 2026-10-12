@@ -11,7 +11,7 @@ Create a JFrog release bundle from one or more builds. Wraps the `create-release
 
 | Input                  | Required | Default                                                 | Description                                                                                                                                    |
 | ---------------------- | -------- | ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `build-names`          | Yes      |                                                         | Comma-separated `name:version` pairs                                                                                                           |
+| `build-names`          | Yes      |                                                         | Comma-separated `build-name:build-number` pairs. The build number is the build-info number, not the release version                            |
 | `bundle-name`          | Yes      |                                                         | Release bundle name                                                                                                                            |
 | `version`              | Yes      |                                                         | Release bundle version                                                                                                                         |
 | `jf-project`           | Yes      |                                                         | JFrog project key                                                                                                                              |
@@ -38,7 +38,7 @@ steps:
       oidc-audience: aerospike
   - uses: aerospike/shared-workflows/.github/actions/create-release-bundle@v3
     with:
-      build-names: my-app:1.2.3,my-container:1.2.3
+      build-names: ${{ needs.artifacts.outputs.jf-build-name }}:${{ needs.artifacts.outputs.jf-build-id }}
       bundle-name: my-release
       version: 1.2.3
       jf-project: my-project

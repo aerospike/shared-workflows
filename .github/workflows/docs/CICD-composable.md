@@ -185,7 +185,7 @@ The suffixes after `buildinfo-` are yours to choose. Use whatever uniquely ident
 
 **The parent** (produced by `reusable_deploy-artifacts.yaml`). At the end of deployment, the deploy entrypoint discovers all metadata children via an AQL query using the `jf-metadata-build-id` prefix, appends them and the artifact child via `jf rt build-append`, then publishes the parent. This is the single record that ties everything together.
 
-Release bundles reference the parent build-info by `name:version`, providing a complete chain of custody from source to distributable.
+Release bundles reference the parent build-info by `jf-build-name:jf-build-id`, providing a complete chain of custody from source to distributable.
 
 #### How the IDs connect
 

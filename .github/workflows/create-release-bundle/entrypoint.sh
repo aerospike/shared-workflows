@@ -33,7 +33,7 @@ show_help() {
     echo "" >&2
     echo "Required Arguments:" >&2
     echo "  --project <project>        JFrog Artifactory project name" >&2
-    echo "  --build-names <builds>     Comma-separated list of build name:version pairs to include" >&2
+    echo "  --build-names <builds>     Comma-separated list of build-name:build-number pairs to include" >&2
     echo "  --bundle-name <name>       Name for the release bundle" >&2
     echo "  --version <version>        Version of the release bundle" >&2
     echo "" >&2
@@ -148,7 +148,7 @@ generate_files_json() {
                 echo "    }"
             fi
         else
-            echo "Error: Build pair '$build_pair' must be in format 'name:version'" >&2
+            echo "Error: Build pair '$build_pair' must be in format 'build-name:build-number'" >&2
             exit 1
         fi
     done
@@ -175,7 +175,6 @@ main() {
         echo "Bundle metadata: $BUNDLE_METADATA_PATH" >&2
     fi
 
-    # Convert comma-separated build name:version pairs to array
     IFS=',' read -ra BUILD_ARRAY <<<"$BUILD_NAMES"
     mkdir -p build-artifacts
 

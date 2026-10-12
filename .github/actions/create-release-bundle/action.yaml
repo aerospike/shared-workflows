@@ -3,8 +3,10 @@ description: Create a JFrog release bundle from one or more builds. JFrog CLI mu
 inputs:
   build-names:
     description: |
-      Comma-separated list of build name:version pairs to include in the release bundle.
-      Format: "build-name1:version1,build-name2:version2"
+      Comma-separated list of build-name:build-number pairs to include in the release bundle.
+      The build number is the JFrog build-info number the deploy job published, not the
+      release version.
+      Format: "build-name1:build-number1,build-name2:build-number2"
     required: true
   bundle-name:
     description: Name for the release bundle
