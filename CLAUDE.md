@@ -1,4 +1,4 @@
-# CLAUDE.md — Project Instructions for Claude Code
+# Project Instructions for Claude Code
 
 ## Project Overview
 
@@ -22,7 +22,7 @@ This is `aerospike/shared-workflows`, a centralized collection of reusable GitHu
         └── README.md
 ```
 
-**Key constraint**: GitHub Actions requires reusable workflows at `.github/workflows/` root — they cannot be nested in subdirectories. We use prefixes (`reusable_`, `test_`, `example_`) to simulate namespacing.
+**Key constraint**: GitHub Actions requires reusable workflows at the `.github/workflows/` root; they cannot be nested in subdirectories. We use prefixes (`reusable_`, `test_`, `example_`) to simulate namespacing.
 
 ## Core Workflows
 
@@ -31,14 +31,14 @@ Two approaches are supported as first-class consumer paths:
 - **Orchestrated** (`reusable_artifacts-cicd.yaml`, `reusable_docker-build-deploy.yaml`): opinionated pipelines with good defaults that handle the full lifecycle (build, sign, deploy). Smaller input surface, less wiring, less flexibility.
 - **Composable** (`reusable_execute-build.yaml`, `reusable_sign-artifacts.yaml`, `reusable_deploy-artifacts.yaml`): call the per-stage workflows directly from your own job graph when you need custom steps between stages, per-stage overrides, or non-standard layouts. More wiring, more flexibility.
 
-Pick whichever fits the use case. The orchestrated path is generally lower-maintenance for new consumers; the composable path is the right answer when the orchestrator's opinions don't match. Both are supported, neither is a fallback.
+The orchestrated path is lower-maintenance for new consumers; use the composable path when the orchestrator's defaults do not fit.
 
 | Workflow                               | Purpose                                                         |
 | -------------------------------------- | --------------------------------------------------------------- |
 | `reusable_artifacts-cicd.yaml`         | Orchestrated build, sign, deploy                                |
 | `reusable_docker-build-deploy.yaml`    | Multi-arch OCI images with attestations                         |
 | `reusable_create-release-bundle.yaml`  | JFrog release bundles (combines artifact + docker outputs)      |
-| `reusable_promote-release-bundle.yaml` | Promote a bundle to a stage; refuses skipping a required stage  |
+| `reusable_promote-release-bundle.yaml` | Promote a bundle to a stage, enforcing stage order              |
 | `reusable_execute-build.yaml`          | Composable. Run arbitrary build script, upload artifacts        |
 | `reusable_sign-artifacts.yaml`         | Composable. GPG sign deb/rpm/generic/.tgz, SSL.com sign nupkg   |
 | `reusable_deploy-artifacts.yaml`       | Composable. Upload to JFrog Artifactory (auto-routes by type)   |
@@ -52,7 +52,7 @@ Pick whichever fits the use case. The orchestrated path is generally lower-maint
 | `send-slack`            | Low-level `chat.postMessage` transport (`slack_post.py`)      |
 | `reusable_notify-slack` | Reusable workflow wrapper (sparse checkout + notify pipeline) |
 
-Two consumer paths (same as artifact pipelines — pick what fits):
+Two consumer paths, as with the artifact pipelines:
 
 - **Reusable workflow** (`reusable_notify-slack.yaml`): lowest wiring for callers; no Slack secret passed from consumer repos.
 - **Composable actions** (`notify-slack` → `send-slack`): use when you need custom steps between build and send, or a non-standard job layout.
@@ -61,7 +61,7 @@ Architecture: `notify-slack` → `prep_blockkit.py` + `templates/container.json`
 
 Message types: `info`, `fail`, `success`, `blocked`, `warning`. Per-type icon/collapsible styling is configured in `MESSAGE_TYPE_CONFIG` inside `prep_blockkit.py`; callers supply detail via the `child-blocks` JSON input.
 
-Authentication: `SLACK_BOT_TOKEN` is a **shared-workflows repo secret**, injected via job `env:` — not an action input. Consumers still pass `slack-channel-id` (typically from their own repo `vars`/`secrets`). Dry-run does not require a token.
+Authentication: `SLACK_BOT_TOKEN` is a **shared-workflows repo secret**, injected via job `env:`, not an action input. Consumers still pass `slack-channel-id` (typically from their own repo `vars`/`secrets`). Dry-run does not require a token.
 
 Docs: `.github/actions/notify-slack/README.md`, `.github/actions/send-slack/README.md`, `.github/workflows/docs/notify-slack.md`. Examples: `example_notify-slack.yaml`, tests: `test_notify-slack.yaml`, live integration: `test_notify-slack-integration.yaml` (optional).
 
@@ -69,29 +69,29 @@ Docs: `.github/actions/notify-slack/README.md`, `.github/actions/send-slack/READ
 
 All workflow inputs use hyphens and namespace prefixes:
 
-- `jf-*` — JFrog/Artifactory params (`jf-project`, `jf-build-name`, `jf-url`)
-- `gh-*` — GitHub Actions params (`gh-artifact-name`, `gh-checkout-path`)
-- `oidc-*` — Authentication params (`oidc-provider-name`, `oidc-audience`)
+- `jf-*`: JFrog/Artifactory params (`jf-project`, `jf-build-name`, `jf-url`)
+- `gh-*`: GitHub Actions params (`gh-artifact-name`, `gh-checkout-path`)
+- `oidc-*`: Authentication params (`oidc-provider-name`, `oidc-audience`)
 - No prefix for general params (`runs-on`, `dry-run`, `version`)
 
 Required inputs listed first, then optional (alphabetical).
 
 ## gh-workflows-ref Workaround
 
-All reusable workflows require a `gh-workflows-ref` input that **must match** the version in the caller's `uses:` line. This exists because GitHub Actions provides no `github.called_workflow_ref` — reusable workflows cannot discover their own ref. Without this, entrypoint scripts would be checked out from the wrong version.
+All reusable workflows require a `gh-workflows-ref` input that **must match** the version in the caller's `uses:` line. This exists because GitHub Actions provides no `github.called_workflow_ref`, so reusable workflows cannot discover their own ref. Without this, entrypoint scripts would be checked out from the wrong version.
 
 See: `.github/workflows/docs/why-gh-workflows-ref.md`
 
 ## Artifact Pipeline Detail
 
-The `reusable_artifacts-cicd.yaml` orchestrator runs 5 jobs. Understanding the artifact transforms at each stage is critical for debugging.
+The `reusable_artifacts-cicd.yaml` orchestrator runs 5 jobs.
 
 ### Jobs: resolve -> build -> collect-matrix-artifacts -> sign -> deploy-signed
 
 ### Build stage (`reusable_execute-build.yaml`)
 
 - Each matrix variant uploads its own GH artifact: `build-artifacts-{distro}-{arch}`
-- Upload path: `{working-directory}/{gh-artifact-directory}` — contents are flattened (upload-artifact strips the path prefix)
+- Upload path: `{working-directory}/{gh-artifact-directory}`; contents are flattened (upload-artifact strips the path prefix)
 - Build scripts run as temp subprocess files. `build-env` vars are parsed (semicolon-delimited `KEY=VALUE`) and exported; `MATRIX_JSON` is carried via a dedicated `matrix-json-data` input and also exported. Vars set inside the build script with plain `VAR=val` are local. **Must `export` them** for child processes (make, docker) to see them.
 
 ### Collect stage (`collect-matrix-artifacts` job)

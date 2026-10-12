@@ -30,10 +30,8 @@ EXCLUDE_REPOS=""
 DRY_RUN="false"
 RECORDS=""
 BUNDLE_PATHS=""
-MISSING=""
 
-# DEV and PREVIEW are optional. Requiring DEV before TEST would lock the dev-local paths a
-# rebuild of the same version deploys to.
+# DEV is optional: requiring it would lock the dev-local paths a rebuild deploys to.
 stage_requires() {
     case "$1" in
     DEV | TEST) echo "" ;;
@@ -46,10 +44,8 @@ stage_requires() {
 show_help() {
     echo "Usage: $0 --bundle-name <name> --version <version> --target-stage <stage> --project <project> [OPTIONS]" >&2
     echo "" >&2
-    echo "Promote a JFrog release bundle to a stage, refusing to skip a required stage." >&2
-    echo "STAGE requires TEST; PREVIEW, INTERNAL and PROD require STAGE. DEV and PREVIEW" >&2
-    echo "are optional." >&2
-    echo "A stage counts only when completed promotions to it hold every artifact of the version." >&2
+    echo "Promote a JFrog release bundle version to a stage. STAGE requires TEST; PREVIEW, INTERNAL" >&2
+    echo "and PROD require STAGE. A stage counts only when it holds every artifact of the version." >&2
     echo "" >&2
     echo "Required Arguments:" >&2
     echo "  --bundle-name <name>       Release bundle name" >&2
@@ -83,24 +79,19 @@ promote() {
     run jf release-bundle-promote "${args[@]}"
 }
 
-# Sets MISSING to the number of the version's artifacts that no completed promotion to the stage
-# holds, or to "" when the version has no completed promotion to it.
-count_missing_at() {
-    local stage="$1" ids id held="" paths
-    MISSING=""
-    ids=$(jfrog_completed_promotion_ids "$RECORDS" "$stage") ||
-        error "unexpected promotion records for ${BUNDLE_NAME}/${VERSION}"
-    [[ -n $ids ]] || return 0
-    if [[ -z $BUNDLE_PATHS ]]; then
-        BUNDLE_PATHS=$(jfrog_bundle_artifact_paths "$BUNDLE_NAME" "$VERSION" "$PROJECT") ||
-            error "cannot promote without the artifact list of ${BUNDLE_NAME}/${VERSION}"
-    fi
-    for id in $ids; do
-        paths=$(jfrog_promotion_artifact_paths "$BUNDLE_NAME" "$VERSION" "$PROJECT" "$id") ||
+# Succeeds when completed promotions to the stage hold every artifact of the version.
+holds_version() {
+    local stage="$1" id held=""
+    for id in $(jq -r --arg stage "$stage" \
+        '.promotions[] | select(.status == "COMPLETED" and .environment == $stage) | .created_millis' <<<"$RECORDS"); do
+        held+=$(jfrog_promotion_artifact_paths "$BUNDLE_NAME" "$VERSION" "$PROJECT" "$id") ||
             error "cannot read the ${stage} promotion ${id} of ${BUNDLE_NAME}/${VERSION}"
-        held+="${paths}"$'\n'
+        held+=$'\n'
     done
-    MISSING=$(LC_ALL=C comm -23 <(printf '%s\n' "$BUNDLE_PATHS") <(printf '%s' "$held" | LC_ALL=C sort -u) | grep -c . || true)
+    [[ -n $held ]] || return 1
+    [[ -n $BUNDLE_PATHS ]] || BUNDLE_PATHS=$(jfrog_bundle_artifact_paths "$BUNDLE_NAME" "$VERSION" "$PROJECT") ||
+        error "cannot promote without the artifact list of ${BUNDLE_NAME}/${VERSION}"
+    [[ -z $(LC_ALL=C comm -23 <(printf '%s\n' "$BUNDLE_PATHS") <(LC_ALL=C sort -u <<<"$held")) ]]
 }
 
 main() {
@@ -146,7 +137,6 @@ main() {
     [[ -n $VERSION ]] || error "--version is required"
     [[ -n $TARGET_STAGE ]] || error "--target-stage is required"
     [[ -n $PROJECT ]] || error "--project is required"
-    command -v jq >/dev/null 2>&1 || error "jq is required"
 
     TARGET_STAGE="${TARGET_STAGE^^}"
     local required
@@ -156,18 +146,12 @@ main() {
     RECORDS=$(jfrog_promotion_records "$BUNDLE_NAME" "$VERSION" "$PROJECT") ||
         error "cannot promote without the promotion records for ${BUNDLE_NAME}/${VERSION}"
 
-    count_missing_at "$TARGET_STAGE"
-    if [[ $MISSING == 0 ]]; then
+    if holds_version "$TARGET_STAGE"; then
         echo "${BUNDLE_NAME}/${VERSION} is already promoted to ${TARGET_STAGE}. Nothing to do." >&2
         exit 0
     fi
-    if [[ -n $required ]]; then
-        count_missing_at "$required"
-        if [[ -z $MISSING ]]; then
-            error "${BUNDLE_NAME}/${VERSION} is not promoted to ${required}, so it cannot be promoted to ${TARGET_STAGE}"
-        elif [[ $MISSING != 0 ]]; then
-            error "${MISSING} artifacts of ${BUNDLE_NAME}/${VERSION} are not promoted to ${required}, so it cannot be promoted to ${TARGET_STAGE}"
-        fi
+    if [[ -n $required ]] && ! holds_version "$required"; then
+        error "${BUNDLE_NAME}/${VERSION} is not fully promoted to ${required}, so it cannot be promoted to ${TARGET_STAGE}"
     fi
 
     promote

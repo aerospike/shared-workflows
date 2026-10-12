@@ -1,10 +1,8 @@
 # Promote Release Bundle
 
-Promotes a JFrog release bundle to a stage, and refuses a promotion that skips a required
-stage. Use `reusable_promote-release-bundle.yaml` rather than calling
-`jf release-bundle-promote` directly. The order check is in the workflow, and only a reusable
-workflow can set a GitHub environment on the promotion job, which is how a gate owner
-approves it.
+`reusable_promote-release-bundle.yaml` promotes a JFrog release bundle version to a stage and refuses
+a promotion that skips a required stage. The `promote-release-bundle` composite action and a direct
+`jf release-bundle-promote` skip that check.
 
 ## Usage
 
@@ -25,32 +23,23 @@ promote-to-test:
     gh-environment: promote-test
 ```
 
+The calling job must grant `attestations: write`, or the run ends in `startup_failure`. The inputs
+and their defaults are in `reusable_promote-release-bundle.yaml`.
+
 ## Rules
 
-| Rule                 | Behaviour                                                                                                                                                                                                                  |
-| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Required stages      | STAGE requires the version at TEST. PREVIEW, INTERNAL and PROD require it at STAGE.                                                                                                                                        |
-| Whole version        | A stage counts only when completed promotions to it hold every artifact of the version. A promotion that is still running, or failed, does not count.                                                                      |
-| Optional stages      | DEV and PREVIEW can be skipped. A version can go straight to TEST, and from STAGE straight to PROD.                                                                                                                        |
-| Already promoted     | Promoting a version to a stage that already holds all of it does nothing.                                                                                                                                                  |
-| Records must be read | If the promotion records cannot be read, the promotion is refused.                                                                                                                                                         |
-| Gate owner           | `gh-environment` attaches a GitHub environment, so its required reviewers approve the promotion. Give the environment required reviewers: GitHub creates a missing environment with none, and the workflow does not check. |
-| Matching checkout    | The job fails unless the shared-workflows checkout at `gh-workflows-ref` is the commit the workflow runs from.                                                                                                             |
-| One at a time        | Promotions of one bundle to one stage are serialized.                                                                                                                                                                      |
-| No silent overwrite  | JFrog refuses a promotion that would overwrite another version's files at the same paths.                                                                                                                                  |
+- STAGE requires TEST. PREVIEW, INTERNAL and PROD require STAGE. DEV and PREVIEW are optional.
+- A stage counts only when completed promotions to it hold every artifact of the version.
+- Promoting to a stage that already holds the whole version does nothing.
+- If the promotion records cannot be read, the promotion is refused.
+- The job fails unless the shared-workflows checkout at `gh-workflows-ref` is the commit the workflow
+  runs from.
+- Promotions of one bundle to one stage run one at a time.
+- `gh-environment` puts the job in a GitHub environment, so its required reviewers approve the
+  promotion. Give the environment required reviewers: GitHub creates a missing environment without
+  any.
 
-Skipping DEV keeps the dev-local paths unlocked, so a rebuild of the same version can
-deploy again. A promotion to DEV locks those paths until it is removed.
-
-The job asks for `attestations: write`, so the calling job must grant it. A caller that does not
-gets a `startup_failure`.
-
-The order check runs only in this workflow. The `promote-release-bundle` composite action and a
-direct `jf release-bundle-promote` skip it.
-
-## Inputs
-
-See `reusable_promote-release-bundle.yaml` for the full input list and defaults.
+Skipping DEV keeps the dev-local paths unlocked, so a rebuild of the same version can deploy again.
 
 ## Tests
 

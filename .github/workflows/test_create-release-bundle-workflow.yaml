@@ -23,8 +23,26 @@ jobs:
       oidc-audience: aerospike
       dry-run: true
 
+  # dry-run must stay true: this runs against real JFrog.
+  test-promote-release-bundle-workflow:
+    uses: ./.github/workflows/reusable_promote-release-bundle.yaml
+    permissions:
+      attestations: write
+      contents: read
+      id-token: write
+    with:
+      gh-workflows-ref: ${{ github.sha }}
+      gh-checkout-path: .
+      jf-project: test
+      jf-bundle-name: test-promote-guard-probe
+      version: v1.0.0
+      target-stage: DEV
+      dry-run: true
+
   run-tests:
     runs-on: ubuntu-22.04
+    permissions:
+      contents: read
     steps:
       - name: Harden the runner (Audit all outbound calls)
         uses: step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed # v2.22.0
@@ -51,3 +69,5 @@ jobs:
         run: bats .github/workflows/create-release-bundle/tests/bats/
       - name: Delete guard tests
         run: bats .github/actions/delete-release-bundle/tests/bats/
+      - name: Promotion tests
+        run: bats .github/workflows/promote-release-bundle/tests/bats/

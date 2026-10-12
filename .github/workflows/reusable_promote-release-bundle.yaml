@@ -3,24 +3,22 @@ name: Promote Release Bundle
 on:
   workflow_call:
     inputs:
-      # Required inputs
       jf-bundle-name:
         description: Name of the release bundle to promote
         required: true
         type: string
       jf-project:
-        description: JFrog Artifactory project name
+        description: JFrog project key
         required: true
         type: string
       target-stage:
         description: |
-          Promotion stage to promote to: DEV, TEST, STAGE, PREVIEW, INTERNAL or PROD.
-          STAGE requires the version at TEST; PREVIEW, INTERNAL and PROD require it at STAGE.
-          DEV and PREVIEW are optional.
+          DEV, TEST, STAGE, PREVIEW, INTERNAL or PROD. STAGE requires the version at TEST;
+          PREVIEW, INTERNAL and PROD require it at STAGE.
         required: true
         type: string
       version:
-        description: Version of the release bundle to promote (create-release-bundle's bundle-version output)
+        description: Bundle version to promote (the create-release-bundle output bundle-version)
         required: true
         type: string
       gh-workflows-ref:
@@ -31,9 +29,8 @@ on:
         required: true
         type: string
 
-      # Optional inputs
       dry-run:
-        description: Whether to run in dry-run mode
+        description: Print the JFrog commands without running them
         required: false
         type: boolean
         default: false
@@ -49,10 +46,8 @@ on:
         default: shared-workflows
       gh-environment:
         description: |
-          GitHub environment to set on the promotion job, so its required reviewers approve the
-          promotion. A composite action cannot set an environment on the caller's job. Give the
-          environment required reviewers: GitHub creates a missing environment with none, and this
-          workflow does not check for them.
+          GitHub environment for the promotion job, so its required reviewers approve the promotion.
+          Give it required reviewers: GitHub creates a missing environment without any.
         required: false
         type: string
         default: ""
@@ -141,11 +136,6 @@ jobs:
           oidc-provider-name: ${{ inputs.oidc-provider-name }}
           oidc-audience: ${{ inputs.oidc-audience }}
 
-      - name: Check JFrog Configuration
-        run: |
-          jf c show
-          jf rt ping
-
       - name: Promote Release Bundle
         shell: bash
         env:
@@ -164,7 +154,6 @@ jobs:
             echo "Error: entrypoint not found at $entrypoint" >&2
             exit 1
           fi
-          chmod +x "$entrypoint"
 
           args=(
             --bundle-name "$INPUT_BUNDLE_NAME"
