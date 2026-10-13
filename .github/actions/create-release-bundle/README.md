@@ -1,25 +1,32 @@
 # Create Release Bundle
 
-Create a JFrog release bundle from one or more builds. Wraps the `create-release-bundle/entrypoint.sh` script.
+Creates a JFrog release bundle from one or more builds by running `create-release-bundle/entrypoint.sh`.
 
 ## Prerequisites
 
-- JFrog CLI must be configured before calling this action (via `setup-jfrog-cli`).
-- The entrypoint script must be available on disk. Either checkout the full repo or use sparse-checkout to include `.github/workflows/create-release-bundle/`.
+- The JFrog CLI is configured (`setup-jfrog-cli`).
+- The entrypoint is on disk: check out the repo, or sparse-check out `.github/workflows/create-release-bundle/`.
 
 ## Inputs
 
-| Input                  | Required | Default                                                 | Description                                                                                                                                    |
-| ---------------------- | -------- | ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `build-names`          | Yes      |                                                         | Comma-separated `build-name:build-number` pairs. The build number is the build-info number, not the release version                            |
-| `bundle-name`          | Yes      |                                                         | Release bundle name                                                                                                                            |
-| `version`              | Yes      |                                                         | Release bundle version                                                                                                                         |
-| `jf-project`           | Yes      |                                                         | JFrog project key                                                                                                                              |
-| `dry-run`              | No       | `false`                                                 | Run without creating the bundle                                                                                                                |
-| `bundle-metadata-path` | No       | _(empty)_                                               | Path to `.maven-bundle-metadata.json` from detect-artifacts; when present, applied to the bundle via `jf release-bundle-annotate` after create |
-| `entrypoint-path`      | No       | `.github/workflows/create-release-bundle/entrypoint.sh` | Path to the entrypoint script                                                                                                                  |
+| Input                  | Required | Default                                                 | Description                                                                                                                                |
+| ---------------------- | -------- | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `build-names`          | Yes      |                                                         | Comma-separated `build-name:build-number` pairs. The build number is the build-info number, not the release version                        |
+| `bundle-name`          | Yes      |                                                         | Release bundle name                                                                                                                        |
+| `version`              | Yes      |                                                         | Release version                                                                                                                            |
+| `jf-project`           | Yes      |                                                         | JFrog project key                                                                                                                          |
+| `dry-run`              | No       | `false`                                                 | Print the JFrog commands without running them                                                                                              |
+| `bundle-metadata-path` | No       | _(empty)_                                               | Path to `.maven-bundle-metadata.json` from detect-artifacts. When the file exists, its key=value pairs are applied to the bundle           |
+| `bundle-revision`      | No       | _(empty)_                                               | Appended to `version` to form the bundle version. See [Bundle revisions](../../workflows/create-release-bundle/README.md#bundle-revisions) |
+| `entrypoint-path`      | No       | `.github/workflows/create-release-bundle/entrypoint.sh` | Path to the entrypoint script                                                                                                              |
 
-## Example Usage
+## Outputs
+
+| Output           | Description                                                                                         |
+| ---------------- | --------------------------------------------------------------------------------------------------- |
+| `bundle-version` | The bundle version created (in dry-run, the one that would be created). Promote this, not `version` |
+
+## Example
 
 ```yaml
 steps:
@@ -44,8 +51,4 @@ steps:
       jf-project: my-project
 ```
 
-## Combining All Three Bundle Actions
-
-For the full lifecycle (delete, create, promote) in a single job, see the [example composable matrix workflow](../../workflows/example_composable-matrix.yaml).
-
-To forward Maven detection hints onto the release bundle, pass the path from detect-artifacts (e.g. `${{ steps.detect.outputs.bundle-metadata-path }}`) as `bundle-metadata-path` when calling this action or `reusable_create-release-bundle.yaml`.
+The [example composable matrix workflow](../../workflows/example_composable-matrix.yaml) runs the delete, create and promote actions as separate jobs.
