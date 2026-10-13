@@ -15,7 +15,7 @@ JFrog [Release Bundles v2](https://jfrog.com/help/r/jfrog-artifactory-documentat
 Artifacts flow through gated promotion stages. Each gate has an owner and requirements that must be met before promotion.
 
 ```text
-CI/Build  ->  DEV  ->  TEST  ->  STAGE  ->  PREVIEW  ->  PROD
+CI/Build  ->  [DEV]  ->  TEST  ->  STAGE  ->  [PREVIEW]  ->  PROD
                                           ->  INTERNAL
 ```
 
@@ -28,7 +28,9 @@ CI/Build  ->  DEV  ->  TEST  ->  STAGE  ->  PREVIEW  ->  PROD
 | PROD            | Product     | Security review and production readiness |
 | INTERNAL        | Engineering | Internal-only artifacts (not public)     |
 
-The release bundle is created after deployment to DEV (at the DEV to TEST gate). From that point forward, the bundle carries all artifacts and metadata through the remaining promotion stages.
+DEV and PREVIEW, in brackets, are optional: a version can go from CI straight to TEST, and from STAGE straight to PROD. STAGE requires TEST, and PREVIEW, INTERNAL and PROD require STAGE.
+
+The release bundle is created after the build deploys to the dev-local repositories. From then on, the bundle carries all artifacts and metadata through the remaining promotion stages.
 
 ## Using bundles in shared-workflows
 
@@ -54,7 +56,9 @@ Set `jf-bundle-revision` to give each build of a release its own bundle version.
 
 ### Promoting a bundle
 
-There is a composite action that may be used for promotion of bundles documented at [Promote Release Bundle Composite Action](https://github.com/aerospike/shared-workflows/blob/main/.github/actions/promote-release-bundle/README.md). The `promote-release-bundle` action accepts `include-repos` and `exclude-repos` (semicolon-separated repo lists, e.g. `my-project-deb-dev-local;my-project-rpm-dev-local`) to scope which repositories are promoted. With neither set, all repositories in the bundle are promoted.
+Use `reusable_promote-release-bundle.yaml`. It enforces the stage order above, and `gh-environment` lets a gate owner approve each promotion. See [Promote Release Bundle](../promote-release-bundle/README.md).
+
+The [promote-release-bundle composite action](https://github.com/aerospike/shared-workflows/blob/main/.github/actions/promote-release-bundle/README.md) skips the order check. Both take `include-repos` and `exclude-repos` (semicolon-separated target repositories, e.g. `my-project-deb-test-local;my-project-rpm-test-local`) to limit which repositories are promoted. With neither set, all repositories in the bundle are promoted.
 
 ### Deleting a bundle before re-deploy
 

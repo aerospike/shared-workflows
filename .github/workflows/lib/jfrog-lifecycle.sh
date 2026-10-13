@@ -41,3 +41,26 @@ jfrog_promotion_records() {
     }
     printf '%s\n' "$records"
 }
+
+# Prints the artifact paths in the release bundle or promotion record at an API path.
+jfrog_record_artifact_paths() {
+    local record paths
+    record=$(jfrog_lifecycle_get "$1") || return 1
+    paths=$(jq -r 'if (.artifacts | type) == "array"
+            and (.total_artifacts_count // (.artifacts | length)) == (.artifacts | length)
+        then .artifacts[].path else error("unexpected record") end' <<<"$record") || {
+        echo "Error: unexpected record at $1: ${record}" >&2
+        return 1
+    }
+    [[ -z $paths ]] || LC_ALL=C sort -u <<<"$paths"
+}
+
+jfrog_bundle_artifact_paths() {
+    jfrog_record_artifact_paths "lifecycle/api/v2/release_bundle/records/$(jfrog_uri_encode "$1")/$(jfrog_uri_encode "$2")?project=$(jfrog_uri_encode "$3")"
+}
+
+# A promotion record's paths start with the target repo; a bundle record's do not.
+jfrog_promotion_artifact_paths() {
+    jfrog_record_artifact_paths "lifecycle/api/v2/promotion/records/$(jfrog_uri_encode "$1")/$(jfrog_uri_encode "$2")/$(jfrog_uri_encode "$4")?project=$(jfrog_uri_encode "$3")" |
+        sed 's|^[^/]*/||' | LC_ALL=C sort -u
+}
