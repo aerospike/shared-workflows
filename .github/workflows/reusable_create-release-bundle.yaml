@@ -58,6 +58,13 @@ on:
         required: false
         type: string
         default: shared-workflows
+      jf-bundle-revision:
+        description: |
+          Appended to `version` to form the bundle version, so each build of a release gets its own
+          bundle. The artifacts keep `version`. `auto` uses `<run_id>-<run_attempt>`.
+        required: false
+        type: string
+        default: ""
       jf-url:
         required: false
         description: JFrog Artifactory URL
@@ -79,6 +86,11 @@ on:
         type: string
         default: ubuntu-22.04
 
+    outputs:
+      bundle-version:
+        description: The bundle version created, `version` plus any revision
+        value: ${{ jobs.create-release-bundle.outputs.bundle-version }}
+
 permissions:
   contents: read
   id-token: write
@@ -86,6 +98,8 @@ permissions:
 jobs:
   create-release-bundle:
     runs-on: ${{ inputs.runs-on }}
+    outputs:
+      bundle-version: ${{ steps.create.outputs.bundle-version }}
     permissions:
       contents: read
       id-token: write
@@ -168,7 +182,10 @@ jobs:
           fi
 
       - name: Create Release Bundle
+        id: create
         shell: bash
+        env:
+          BUNDLE_REVISION: ${{ inputs.jf-bundle-revision }}
         run: |
           entrypoint="${{ inputs.gh-checkout-path }}/.github/workflows/create-release-bundle/entrypoint.sh"
           if [[ ! -f "$entrypoint" ]]; then
@@ -185,10 +202,15 @@ jobs:
           if [[ -n "$bm" ]]; then
             meta_arg=(--bundle-metadata "$bm")
           fi
+          revision_arg=()
+          if [[ -n "$BUNDLE_REVISION" ]]; then
+            revision_arg=(--revision "$BUNDLE_REVISION")
+          fi
           "$entrypoint" \
             --project "${{ inputs.jf-project }}" \
             --build-names "${{ inputs.jf-build-names }}" \
             --bundle-name "${{ inputs.jf-bundle-name }}" \
             --version "${{ inputs.version }}" \
             "${meta_arg[@]}" \
+            "${revision_arg[@]}" \
             $dry_run_arg

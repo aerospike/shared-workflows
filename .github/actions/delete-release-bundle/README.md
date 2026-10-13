@@ -1,31 +1,29 @@
 # Delete Release Bundle
 
-Check for and delete an existing JFrog release bundle version. Safe to call when no bundle exists (outputs `existed=false` and skips deletion).
+Deletes a JFrog release bundle version if it exists. When it does not, the action outputs `existed=false` and deletes nothing.
 
-Note that release bundles can only be deleted from DEV.
-This is to make sure that beyond DEV every bundle has unique version and SHA.
-
-Refuses deletion when the bundle version has **completed promotions beyond DEV** (TEST, STAGE, PREVIEW, INTERNAL, or PROD). A promotion-record check runs immediately before delete when a bundle exists.
+It refuses to delete a version that is promoted, or being promoted, to any stage other than DEV. A failed promotion does not count. If the promotion records cannot be read, it refuses.
 
 ## Prerequisites
 
-JFrog CLI must be configured before calling this action (via `setup-jfrog-cli`).
+- The JFrog CLI is configured with an access token (`setup-jfrog-cli`).
+- A local sparse checkout (`uses: ./.github/actions/delete-release-bundle`) must include `.github/workflows/lib`, which the promotion check sources.
 
 ## Inputs
 
-| Input         | Required | Description                      |
-| ------------- | -------- | -------------------------------- |
-| `bundle-name` | Yes      | Release bundle name              |
-| `version`     | Yes      | Release bundle version to delete |
-| `jf-project`  | Yes      | JFrog project key                |
+| Input         | Required | Description                                                                                        |
+| ------------- | -------- | -------------------------------------------------------------------------------------------------- |
+| `bundle-name` | Yes      | Release bundle name                                                                                |
+| `version`     | Yes      | Bundle version to delete. With a revision, this is `<version>-<revision>`, not the release version |
+| `jf-project`  | Yes      | JFrog project key                                                                                  |
 
 ## Outputs
 
-| Output    | Description                                                      |
-| --------- | ---------------------------------------------------------------- |
-| `existed` | Whether a matching bundle was found and deleted (`true`/`false`) |
+| Output    | Description                                                         |
+| --------- | ------------------------------------------------------------------- |
+| `existed` | Whether the bundle version existed and was deleted (`true`/`false`) |
 
-## Example Usage
+## Example
 
 ```yaml
 steps:
