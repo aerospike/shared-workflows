@@ -221,6 +221,10 @@ EOF
         --project="$PROJECT" \
         --signing-key="aerospike"
 
+    run jf rt set-props \
+        "test-release-bundles-v2/test-docker-release/7.8.10/" \
+        "key1=value1;key2=value2"
+
     if [[ -n ${GITHUB_OUTPUT-} ]]; then
         echo "bundle-version=$BUNDLE_VERSION" >>"$GITHUB_OUTPUT"
     fi
