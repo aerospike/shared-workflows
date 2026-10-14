@@ -26,6 +26,12 @@ inputs:
       Stage Docker repository. Used only when latest or latest-slim is true.
     required: false
     default: ""
+  tag:
+    description: >-
+      Mutable Docker tag to point at, for example 3.3.2. Required when latest
+      or latest-slim is true.
+    required: false
+    default: ""
   image-name:
     description: >-
       Image name for latest or latest-slim. When empty, the bundle property
@@ -74,6 +80,7 @@ runs:
         BUNDLE_VERSION: ${{ inputs.version }}
         JF_PROJECT: ${{ inputs.jf-project }}
         DOCKER_REPO: ${{ inputs.docker-repo }}
+        DOCKER_TAG: ${{ inputs.tag }}
         IMAGE_NAME: ${{ inputs.image-name }}
         LATEST: ${{ inputs.latest }}
         LATEST_SLIM: ${{ inputs.latest-slim }}
@@ -81,6 +88,10 @@ runs:
         set -euo pipefail
         if [[ -z $DOCKER_REPO ]]; then
           echo "::error::docker-repo is required when latest or latest-slim is true"
+          exit 1
+        fi
+        if [[ -z $DOCKER_TAG ]]; then
+          echo "::error::tag is required when latest or latest-slim is true"
           exit 1
         fi
         script="${{ github.action_path }}/../recompute-docker-floating-tags/recompute.py"
@@ -94,6 +105,7 @@ runs:
           --repo "$DOCKER_REPO"
           --bundle-name "$BUNDLE_NAME"
           --version "$BUNDLE_VERSION"
+          --tag "$DOCKER_TAG"
         )
         if [[ -n $IMAGE_NAME ]]; then
           args+=(--image "$IMAGE_NAME")

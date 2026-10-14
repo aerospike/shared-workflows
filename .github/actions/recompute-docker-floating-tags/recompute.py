@@ -1,15 +1,13 @@
 #!/usr/bin/env python3
-"""Point a caller-named tag at this release's mutable version.
+"""Point a caller-named tag at a Docker tag the caller supplies.
 
 JFrog CLI must already be configured. With no tag named, nothing is attached.
 ``--latest`` and ``--latest-slim`` are optional and off by default. Each one
-writes that exact name. The mutable version is ``--version`` with the
-immutable timestamp stripped. The repository is not searched for a newer tag.
+writes that exact name onto ``--tag`` (for example ``3.3.2``).
 
-    recompute.py retag --project P --repo R --bundle-name N --version V --floating-tags image:dev
-    recompute.py retag --project P --repo R --bundle-name N --version V --image I --latest
+    recompute.py retag --project P --repo R --bundle-name N --version V --tag 3.3.2 --floating-tags image:dev
+    recompute.py retag --project P --repo R --bundle-name N --version V --tag 3.3.2 --image I --latest
     recompute.py print-property --project P --bundle-name N --version V
-    recompute.py repos --environment PROD --version 3.3.2 < promotion.json
     recompute.py property < record.json
 """
 
@@ -18,13 +16,11 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import re
 import subprocess
 import sys
 import tempfile
 import urllib.parse
 
-IMMUTABLE_SUFFIX = re.compile(r"_[0-9]{8}T[0-9]{6}Z$")
 MANIFEST_ACCEPT = ", ".join(
     [
         "application/vnd.oci.image.index.v1+json",
@@ -33,117 +29,10 @@ MANIFEST_ACCEPT = ", ".join(
         "application/vnd.oci.image.manifest.v1+json",
     ]
 )
-SOURCE_FIELDS = (
-    "source_repository_key",
-    "sourceRepositoryKey",
-    "source_repository",
-    "source_repo",
-    "source",
-)
-TARGET_FIELDS = (
-    "target_repository_key",
-    "targetRepositoryKey",
-    "target_repository",
-    "target_repo",
-    "target",
-)
 
 
 def quote(value):
     return urllib.parse.quote(value, safe="")
-
-
-def mutable_version(version):
-    """``3.3.2_20261007T212412Z`` becomes ``3.3.2``. Any other version is unchanged."""
-    match = IMMUTABLE_SUFFIX.search(version)
-    if match:
-        return version[: match.start()]
-    return version
-
-
-def first_text(obj, names):
-    for name in names:
-        value = obj.get(name)
-        if isinstance(value, str) and value:
-            return value
-    return ""
-
-
-def docker_target(obj):
-    source = first_text(obj, SOURCE_FIELDS)
-    target = first_text(obj, TARGET_FIELDS)
-    package = obj.get("package_type") or obj.get("packageType") or ""
-    blob = f"{source} {target}"
-    named = package in ("docker", "oci") or "-docker-" in blob or "-oci-" in blob
-    return target if named else ""
-
-
-def walk(node):
-    if isinstance(node, dict):
-        yield node
-        for value in node.values():
-            yield from walk(value)
-    elif isinstance(node, list):
-        for item in node:
-            yield from walk(item)
-
-
-def catalog_repos(items, environment):
-    wanted = environment.upper()
-    found = []
-    for item in items:
-        if not isinstance(item, dict):
-            continue
-        package = str(item.get("packageType") or item.get("package_type") or "").lower()
-        if package not in ("docker", "oci"):
-            continue
-        envs = [str(env).upper() for env in item.get("environments") or []]
-        if wanted not in envs:
-            continue
-        if str(item.get("type") or "local").lower() == "virtual":
-            continue
-        key = item.get("key") or item.get("repo") or ""
-        if key and key not in found:
-            found.append(key)
-    return sorted(found)
-
-
-def promotion_matches(promo, environment, version):
-    got = promo.get("release_bundle_version") or promo.get("releaseBundleVersion") or promo.get("version") or ""
-    if got and got != version:
-        return False
-    if (promo.get("status") or "COMPLETED") != "COMPLETED":
-        return False
-    env = promo.get("environment") or promo.get("target_environment") or promo.get("targetEnvironment") or ""
-    return env == environment
-
-
-def mapping_nodes(promo):
-    mappings = promo.get("repository_mapping") or promo.get("repositoryMapping") or promo.get("mappings") or []
-    artifacts = promo.get("artifacts") or []
-    return list(mappings) + list(artifacts)
-
-
-def target_repos(doc, environment, version):
-    """Repository keys to retag. Names are taken as written, never rewritten."""
-    if isinstance(doc, list):
-        return catalog_repos(doc, environment)
-    nodes = []
-    promotions = doc.get("promotions") if isinstance(doc, dict) else None
-    if isinstance(promotions, list):
-        for promo in promotions:
-            if isinstance(promo, dict) and promotion_matches(promo, environment, version):
-                nodes.extend(mapping_nodes(promo))
-    else:
-        nodes = list(walk(doc))
-    found = []
-    for node in nodes:
-        if not isinstance(node, dict):
-            continue
-        target = docker_target(node)
-        if target and target not in found:
-            found.append(target)
-    return sorted(found)
 
 
 def property_pieces(value):
@@ -286,18 +175,19 @@ def point_tag(repo, image, floating, version_tag):
     print(f"Pointed {repo}/{image}:{floating} at {version_tag}")
 
 
-def retag(repo, version, floating_tags):
-    """Point each named tag at this release's mutable version. Do not pick a newer tag."""
+def retag(repo, tag, floating_tags):
+    """Point each named tag at the Docker tag the caller supplied."""
     if not repo:
         raise SystemExit("--repo is required")
+    if not tag:
+        raise SystemExit("--tag is required")
     if not floating_tags:
         print("No tag was named. Attaching nothing.")
         return
-    target = mutable_version(version)
     images, by_image = parse_pairs(floating_tags)
     for image in images:
         for name in by_image[image]:
-            point_tag(repo, image, name, target)
+            point_tag(repo, image, name, tag)
 
 
 def read_json():
@@ -305,11 +195,6 @@ def read_json():
         return json.load(sys.stdin)
     except json.JSONDecodeError as exc:
         raise SystemExit(f"invalid JSON: {exc}") from exc
-
-
-def command_repos(args):
-    for repo in target_repos(read_json(), args.environment, args.version):
-        print(repo)
 
 
 def command_property(_args):
@@ -364,17 +249,20 @@ def command_retag(args):
     if not value:
         print("No tag was named. Attaching nothing.")
         return
-    retag(args.repo or "", args.version, value)
+    if not args.tag:
+        raise SystemExit("--tag is required")
+    retag(args.repo or "", args.tag, value)
 
 
 def parser():
     top = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = top.add_subparsers(dest="command", required=True)
 
-    retag_cmd = sub.add_parser("retag", help="point named tags at this release's mutable version")
+    retag_cmd = sub.add_parser("retag", help="point named tags at the Docker tag supplied with --tag")
     for flag in ("--project", "--bundle-name", "--version"):
         retag_cmd.add_argument(flag, required=True)
     retag_cmd.add_argument("--repo", default="")
+    retag_cmd.add_argument("--tag", default="")
     retag_cmd.add_argument("--image", default="")
     retag_cmd.add_argument("--floating-tags", default="")
     retag_cmd.add_argument("--latest", action="store_true")
@@ -385,11 +273,6 @@ def parser():
     for flag in ("--project", "--bundle-name", "--version"):
         show.add_argument(flag, required=True)
     show.set_defaults(func=command_print_property)
-
-    repos = sub.add_parser("repos", help="print target Docker repositories from JSON on stdin")
-    repos.add_argument("--environment", required=True)
-    repos.add_argument("--version", default="")
-    repos.set_defaults(func=command_repos)
 
     prop = sub.add_parser("property", help="print docker.floating_tags from a JSON document on stdin")
     prop.set_defaults(func=command_property)

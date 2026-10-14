@@ -1,4 +1,4 @@
-"""Selection, repository discovery, and the docker.floating_tags property."""
+"""Retag and the docker.floating_tags property."""
 
 from __future__ import annotations
 
@@ -32,105 +32,6 @@ def run(*args, stdin=""):
         capture_output=True,
         check=False,
     )
-
-
-class MutableVersionTest(unittest.TestCase):
-    def test_timestamp_is_stripped(self):
-        self.assertEqual(mod.mutable_version("3.3.2_20261007T212412Z"), "3.3.2")
-        self.assertEqual(mod.mutable_version("3.3.2-slim_20261007T212412Z"), "3.3.2-slim")
-
-    def test_plain_version_is_unchanged(self):
-        self.assertEqual(mod.mutable_version("3.3.2"), "3.3.2")
-        self.assertEqual(mod.mutable_version("3.3.2-slim"), "3.3.2-slim")
-
-
-class RepoTest(unittest.TestCase):
-    def test_mapping_target_is_used_unchanged(self):
-        done = run(
-            "repos",
-            "--environment",
-            "PROD",
-            "--version",
-            "3.3.2",
-            stdin=json.dumps(
-                {
-                    "repository_mapping": [
-                        {
-                            "source_repository_key": "connect-deb-dev-local",
-                            "target_repository_key": "connect-deb-prod-local",
-                        },
-                        {
-                            "source_repository_key": "connect-docker-dev-local",
-                            "target_repository_key": "connect-docker-prod-public-local",
-                        },
-                    ]
-                }
-            ),
-        )
-        self.assertEqual(done.returncode, 0, done.stderr)
-        self.assertEqual(done.stdout.strip(), "connect-docker-prod-public-local")
-
-    def test_promotions_are_filtered(self):
-        done = run(
-            "repos",
-            "--environment",
-            "STAGE",
-            "--version",
-            "3.3.2",
-            stdin=json.dumps(
-                {
-                    "promotions": [
-                        {
-                            "environment": "DEV",
-                            "status": "COMPLETED",
-                            "release_bundle_version": "3.3.2",
-                            "repository_mapping": [
-                                {
-                                    "source_repository_key": "connect-docker-dev-local",
-                                    "target_repository_key": "connect-docker-dev-local",
-                                }
-                            ],
-                        },
-                        {
-                            "environment": "STAGE",
-                            "status": "COMPLETED",
-                            "release_bundle_version": "3.3.2",
-                            "repository_mapping": [
-                                {
-                                    "source_repository_key": "connect-docker-dev-local",
-                                    "target_repository_key": "connect-docker-stage-local",
-                                },
-                                {
-                                    "source_repository_key": "connect-oci-dev-local",
-                                    "target_repository_key": "connect-oci-stage-local",
-                                },
-                            ],
-                        },
-                    ]
-                }
-            ),
-        )
-        self.assertEqual(done.returncode, 0, done.stderr)
-        self.assertEqual(done.stdout.splitlines(), ["connect-docker-stage-local", "connect-oci-stage-local"])
-
-    def test_catalog_uses_the_environment_assignment(self):
-        done = run(
-            "repos",
-            "--environment",
-            "PROD",
-            "--version",
-            "3.3.2",
-            stdin=json.dumps(
-                [
-                    {"key": "connect-docker-dev-local", "packageType": "Docker", "type": "LOCAL", "environments": ["DEV"]},
-                    {"key": "connect-deb-prod-public-local", "packageType": "Debian", "type": "LOCAL", "environments": ["PROD"]},
-                    {"key": "connect-docker-prod-public", "packageType": "Docker", "type": "VIRTUAL", "environments": ["PROD"]},
-                    {"key": "connect-docker-prod-public-local", "packageType": "Docker", "type": "LOCAL", "environments": ["PROD"]},
-                ]
-            ),
-        )
-        self.assertEqual(done.returncode, 0, done.stderr)
-        self.assertEqual(done.stdout.strip(), "connect-docker-prod-public-local")
 
 
 class PropertyTest(unittest.TestCase):
@@ -172,6 +73,24 @@ class RetagTest(unittest.TestCase):
         self.assertEqual(done.returncode, 0, done.stderr)
         self.assertIn("Attaching nothing.", done.stdout)
 
+    def test_tag_is_required_when_a_name_is_applied(self):
+        done = run(
+            "retag",
+            "--project",
+            "connect",
+            "--repo",
+            "connect-docker-stage-local",
+            "--bundle-name",
+            "aerospike-graph-service-container",
+            "--version",
+            "3.3.2-4711-2",
+            "--image",
+            "aerospike-graph-service",
+            "--latest",
+        )
+        self.assertNotEqual(done.returncode, 0)
+        self.assertIn("--tag is required", done.stderr)
+
     def test_latest_suffix_flag_is_rejected(self):
         done = run(
             "retag",
@@ -207,7 +126,9 @@ class RetagTest(unittest.TestCase):
                 "--bundle-name",
                 "aerospike-graph-service-container",
                 "--version",
-                "3.3.2_20261007T212412Z",
+                "3.3.2-4711-2",
+                "--tag",
+                "3.3.2",
                 "--image",
                 "aerospike-graph-service",
                 "--latest",
