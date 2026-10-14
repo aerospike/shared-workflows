@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Point latest and latest-* at the highest version tag in one stage repository.
+"""Point a caller-named tag at a version tag already in one stage repository.
 
-JFrog CLI must already be configured. The composite action calls ``retag``.
-The other commands are for a promotion step or a one-off run:
+JFrog CLI must already be configured. With no tag named, nothing is attached.
+``--latest`` and ``--latest-slim`` are optional and off by default.
 
-    recompute.py retag --project P --repo R --bundle-name N --version V
+    recompute.py retag --project P --repo R --bundle-name N --version V --floating-tags image:dev
+    recompute.py retag --project P --repo R --bundle-name N --version V --latest
     recompute.py print-property --project P --bundle-name N --version V
     recompute.py select --request latest --tag 3.3.2 --tag 3.3.1
     recompute.py repos --environment PROD --version 3.3.2 < promotion.json
@@ -73,12 +74,10 @@ def ignored_tag(tag):
 
 
 def floating_suffix(name):
-    """Variant named by an explicit floating tag. ``latest`` has none; ``latest-slim`` is ``-slim``."""
-    if name == "latest":
-        return ""
+    """Variant suffix on a tag name. ``latest-slim`` is ``-slim``. Any other name has none."""
     if name.startswith("latest-") and len(name) > len("latest-"):
         return name[len("latest") :]
-    raise SystemExit(f"unsupported floating tag: {name}")
+    return ""
 
 
 def choose(requests, tags):
@@ -418,8 +417,42 @@ def command_print_property(args):
         print(value)
 
 
+def named_tags(value, apply_latest, apply_latest_slim, image_names):
+    """Caller-typed tags, plus latest and latest-slim only when those options are on."""
+    images, by_image = parse_pairs(value)
+    kept_images = []
+    kept = {}
+    for image in images:
+        tags = [tag for tag in by_image[image] if tag not in ("latest", "latest-slim")]
+        if not tags:
+            continue
+        kept_images.append(image)
+        kept[image] = tags
+    if apply_latest or apply_latest_slim:
+        names = list(kept_images) or list(image_names)
+        for image in names:
+            if image not in kept:
+                kept_images.append(image)
+                kept[image] = []
+            if apply_latest and "latest" not in kept[image]:
+                kept[image].append("latest")
+            if apply_latest_slim and "latest-slim" not in kept[image]:
+                kept[image].append("latest-slim")
+    parts = [f"{image}:{tag}" for image in kept_images for tag in kept[image]]
+    return ";".join(parts)
+
+
 def command_retag(args):
-    retag(args.project, args.bundle_name, args.version, args.repo or "", args.floating_tags or "")
+    typed_images, _typed = parse_pairs(args.floating_tags or "")
+    image_names = list(typed_images)
+    if (args.latest or args.latest_slim) and not image_names:
+        recorded = fetch_floating_tags(args.project, args.bundle_name, args.version)
+        image_names, _recorded = parse_pairs(recorded)
+    value = named_tags(args.floating_tags or "", args.latest, args.latest_slim, image_names)
+    if not value:
+        print("No tag was named. Attaching nothing.")
+        return
+    retag(args.project, args.bundle_name, args.version, args.repo or "", value)
 
 
 def parser():
@@ -431,6 +464,8 @@ def parser():
         retag_cmd.add_argument(flag, required=True)
     retag_cmd.add_argument("--repo", default="")
     retag_cmd.add_argument("--floating-tags", default="")
+    retag_cmd.add_argument("--latest", action="store_true")
+    retag_cmd.add_argument("--latest-slim", action="store_true")
     retag_cmd.set_defaults(func=command_retag)
 
     show = sub.add_parser("print-property", help="print docker.floating_tags from the release bundle")

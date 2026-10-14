@@ -1,8 +1,7 @@
 name: Recompute Docker floating tags
 description: >-
-  Point latest and latest-* in a caller-supplied stage Docker repository at the
-  highest version tag still in that repository. Run this again after a release
-  leaves the stage. Does not delete the release bundle.
+  Point a tag the caller named at the manifest of a version tag already in the
+  given repository. With only project, repo, bundle, and version, nothing is attached.
 inputs:
   jf-project:
     description: JFrog project key
@@ -21,11 +20,18 @@ inputs:
     required: true
   floating-tags:
     description: >-
-      Optional docker.floating_tags value
-      (image:latest;image:latest-slim). When empty, the value is read from
-      the release bundle.
+      Optional image:tag list the caller typed, separated by semicolons
+      (for example aerospike-graph-service:dev).
     required: false
     default: ""
+  latest:
+    description: Apply the latest tag. Optional, off by default.
+    required: false
+    default: "false"
+  latest-slim:
+    description: Apply the latest-slim tag. Optional, off by default.
+    required: false
+    default: "false"
 runs:
   using: composite
   steps:
@@ -37,8 +43,14 @@ runs:
         BUNDLE_NAME: ${{ inputs.bundle-name }}
         BUNDLE_VERSION: ${{ inputs.version }}
         FLOATING_TAGS: ${{ inputs.floating-tags }}
+        LATEST: ${{ inputs.latest }}
+        LATEST_SLIM: ${{ inputs.latest-slim }}
       run: |
         set -euo pipefail
+        if [[ -z $FLOATING_TAGS && $LATEST != true && $LATEST_SLIM != true ]]; then
+          echo "No tag was named. latest and latest-slim are off. Attaching nothing."
+          exit 0
+        fi
         args=(
           retag
           --project "$JF_PROJECT"
@@ -48,5 +60,11 @@ runs:
         )
         if [[ -n $FLOATING_TAGS ]]; then
           args+=(--floating-tags "$FLOATING_TAGS")
+        fi
+        if [[ $LATEST == true ]]; then
+          args+=(--latest)
+        fi
+        if [[ $LATEST_SLIM == true ]]; then
+          args+=(--latest-slim)
         fi
         python3 "${{ github.action_path }}/recompute.py" "${args[@]}"
