@@ -21,30 +21,6 @@ inputs:
     description: Semicolon-separated list of target repos to exclude from promotion
     required: false
     default: ""
-  docker-repo:
-    description: >-
-      Stage Docker repository. Used only when latest or latest-slim is true.
-    required: false
-    default: ""
-  tag:
-    description: >-
-      Mutable Docker tag to point at, for example 3.3.2. Required when latest
-      or latest-slim is true.
-    required: false
-    default: ""
-  image-name:
-    description: >-
-      Image name for latest or latest-slim. Required when either input is true.
-    required: false
-    default: ""
-  latest:
-    description: Apply the latest tag after promotion. Optional, off by default.
-    required: false
-    default: "false"
-  latest-slim:
-    description: Apply the latest-slim tag after promotion. Optional, off by default.
-    required: false
-    default: "false"
 runs:
   using: composite
   steps:
@@ -70,45 +46,3 @@ runs:
           promote_args+=(--exclude-repos="${{ inputs.exclude-repos }}")
         fi
         jf release-bundle-promote "${promote_args[@]}"
-
-    - name: Apply optional latest tags
-      if: inputs.latest == 'true' || inputs.latest-slim == 'true'
-      shell: bash
-      env:
-        DOCKER_REPO: ${{ inputs.docker-repo }}
-        DOCKER_TAG: ${{ inputs.tag }}
-        IMAGE_NAME: ${{ inputs.image-name }}
-        LATEST: ${{ inputs.latest }}
-        LATEST_SLIM: ${{ inputs.latest-slim }}
-      run: |
-        set -euo pipefail
-        if [[ -z $DOCKER_REPO ]]; then
-          echo "::error::docker-repo is required when latest or latest-slim is true"
-          exit 1
-        fi
-        if [[ -z $DOCKER_TAG ]]; then
-          echo "::error::tag is required when latest or latest-slim is true"
-          exit 1
-        fi
-        if [[ -z $IMAGE_NAME ]]; then
-          echo "::error::image-name is required when latest or latest-slim is true"
-          exit 1
-        fi
-        script="${{ github.action_path }}/../recompute-docker-floating-tags/recompute.py"
-        if [[ ! -f $script ]]; then
-          echo "::error::recompute-docker-floating-tags is not available next to this action"
-          exit 1
-        fi
-        args=(
-          retag
-          --repo "$DOCKER_REPO"
-          --tag "$DOCKER_TAG"
-          --image "$IMAGE_NAME"
-        )
-        if [[ $LATEST == true ]]; then
-          args+=(--latest)
-        fi
-        if [[ $LATEST_SLIM == true ]]; then
-          args+=(--latest-slim)
-        fi
-        python3 "$script" "${args[@]}"

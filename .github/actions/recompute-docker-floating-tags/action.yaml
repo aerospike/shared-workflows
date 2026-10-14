@@ -49,23 +49,10 @@ runs:
         LATEST_SLIM: ${{ inputs.latest-slim }}
       run: |
         set -euo pipefail
-        if [[ -z $FLOATING_TAGS && $LATEST != true && $LATEST_SLIM != true ]]; then
-          echo "No tag was named. latest and latest-slim are off. Attaching nothing."
-          exit 0
+        args=(retag --repo "$DOCKER_REPO")
+        if [[ -n $DOCKER_TAG ]]; then
+          args+=(--tag "$DOCKER_TAG")
         fi
-        if [[ -z $DOCKER_TAG ]]; then
-          echo "::error::tag is required when applying a Docker tag"
-          exit 1
-        fi
-        if [[ ($LATEST == true || $LATEST_SLIM == true) && -z $IMAGE ]]; then
-          echo "::error::image is required when latest or latest-slim is true"
-          exit 1
-        fi
-        args=(
-          retag
-          --repo "$DOCKER_REPO"
-          --tag "$DOCKER_TAG"
-        )
         if [[ -n $IMAGE ]]; then
           args+=(--image "$IMAGE")
         fi

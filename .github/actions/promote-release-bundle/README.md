@@ -16,11 +16,6 @@ JFrog CLI must be configured before calling this action (via `setup-jfrog-cli`).
 | `jf-project`    | Yes      | JFrog project key                                                               |
 | `include-repos` | No       | Semicolon-separated list of target repos to include in promotion (limits scope) |
 | `exclude-repos` | No       | Semicolon-separated list of target repos to exclude from promotion              |
-| `docker-repo`   | No       | Stage Docker repository. Required when `latest` or `latest-slim` is true        |
-| `tag`           | No       | Mutable Docker tag to point at, for example `3.3.2`. Required with those inputs |
-| `image-name`    | No       | Image name for `latest` and `latest-slim`. Required when either input is true   |
-| `latest`        | No       | Apply the `latest` tag after promotion. Optional, off by default                |
-| `latest-slim`   | No       | Apply the `latest-slim` tag after promotion. Optional, off by default           |
 
 ## Image tags
 
@@ -28,7 +23,7 @@ JFrog CLI must be configured before calling this action (via `setup-jfrog-cli`).
 
 Digest references (`sha256:` and `sha256__`) are not tags. Promotion skips them.
 
-`latest` and `latest-slim` are optional inputs, and both are off by default. When one is true, this action points that exact name at `tag` in `docker-repo`. Otherwise it skips that step.
+This action does not apply `latest` or `latest-slim`. Run [recompute-docker-floating-tags](../recompute-docker-floating-tags/README.md) as the next step when those tags should move.
 
 ## Example Usage
 
