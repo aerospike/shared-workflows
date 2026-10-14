@@ -221,9 +221,10 @@ EOF
         --project="$PROJECT" \
         --signing-key="aerospike"
 
+    # Add a "mutable_tags" property with the bundle version
     run jf release-bundle-annotate "$BUNDLE_NAME" "$BUNDLE_VERSION" \
         --project="$PROJECT" \
-        --properties="hello=there;another=one;"
+        --properties="mutable_tags=$BUNDLE_VERSION;"
 
     if [[ -n ${GITHUB_OUTPUT-} ]]; then
         echo "bundle-version=$BUNDLE_VERSION" >>"$GITHUB_OUTPUT"
