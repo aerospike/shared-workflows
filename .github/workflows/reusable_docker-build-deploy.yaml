@@ -821,7 +821,6 @@ jobs:
         env:
           TAGS: ${{ steps.tags.outputs.tags }}
           DIGEST: ${{ steps.manifest.outputs.digest }}
-          IMAGE: ${{ inputs.image-name }}
           JF_REPO: ${{ inputs.jf-project }}${{ inputs.repo-scope }}
         run: |
           set -euo pipefail
@@ -844,14 +843,6 @@ jobs:
             printf '%s\n' "$line" >"${RUNNER_TEMP}/docker-image-ref.txt"
             jf rt build-docker-create --image-file "${RUNNER_TEMP}/docker-image-ref.txt" "$JF_REPO"
           done <"$image_file"
-
-          # build-collect-env in the next step records this as
-          # buildInfo.env.DOCKER_FLOATING_TAGS. Only tags the build was asked
-          # to push (latest, latest-*) are listed. A version tag does not imply one.
-          floating=$(bash "$refs" floating-property --image-name "$IMAGE" --tags-csv "$TAGS")
-          if [[ -n $floating ]]; then
-            echo "DOCKER_FLOATING_TAGS=${floating}" >>"$GITHUB_ENV"
-          fi
 
       - name: Publish Build Info
         if: ${{ inputs.push }}

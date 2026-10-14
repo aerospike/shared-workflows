@@ -466,13 +466,11 @@ _detect_structure_maven_poms() {
 # Image identity comes from those fields. list.manifest.json, manifest.json, and sha256__
 # blobs are not images, and source_repository_key is not derived from the path.
 # With no record, copy a pre-written docker-images.json. When both exist, do not copy it.
-# The bundle property docker.floating_tags is written beside docker-images.json when present.
-# A missing property writes nothing; latest is not invented.
 _detect_structure_docker_bundle_metadata() {
     local artifacts_root="$1"
     local dest="./structured_build_artifacts/generic/docker"
     local -a records=()
-    local file lines floating
+    local file lines
 
     while IFS= read -r -d '' file; do
         [[ -f $file ]] || continue
@@ -503,44 +501,14 @@ _detect_structure_docker_bundle_metadata() {
             echo "Error: failed to read release bundle record" >&2
             return 1
         fi
-        if ! floating=$(jq -c -s '
-            def strings:
-                if type == "string" then split(";")[]
-                elif type == "array" then .[] | select(type == "string") | split(";")[]
-                else empty end
-                | gsub("^\\s+|\\s+$"; "")
-                | select(. != "");
-            def from_props:
-                if type == "object" then (."docker.floating_tags" // empty) | strings
-                elif type == "array" then
-                    .[]
-                    | select(.key == "docker.floating_tags")
-                    | (.values // [(.value // empty)])
-                    | strings
-                else empty end;
-            ([ .[] | (.properties // empty) | from_props ] | unique | join(";")) as $v
-            | if $v == "" then empty else {"docker.floating_tags": $v} end
-        ' "${records[@]}"); then
-            echo "Error: failed to read docker.floating_tags from release bundle record" >&2
-            return 1
-        fi
-        if [[ -z $lines && -z $floating ]]; then
+        if [[ -z $lines ]]; then
             echo "Notice: release bundle record has no docker or oci image tags; not writing docker-images.json" >&2
             return 0
         fi
         mkdir -p "$dest"
-        if [[ -n $lines ]]; then
-            printf '%s\n' "$lines" >"$dest/docker-images.json"
-            manifest_add "$dest/docker-images.json" "generic"
-            echo "Wrote Docker bundle metadata: $dest/docker-images.json" >&2
-        else
-            echo "Notice: release bundle record has no docker or oci image tags; not writing docker-images.json" >&2
-        fi
-        if [[ -n $floating ]]; then
-            printf '%s\n' "$floating" >"$dest/docker-floating-tags.json"
-            manifest_add "$dest/docker-floating-tags.json" "generic"
-            echo "Wrote Docker floating tags: $dest/docker-floating-tags.json" >&2
-        fi
+        printf '%s\n' "$lines" >"$dest/docker-images.json"
+        manifest_add "$dest/docker-images.json" "generic"
+        echo "Wrote Docker bundle metadata: $dest/docker-images.json" >&2
         return 0
     fi
 

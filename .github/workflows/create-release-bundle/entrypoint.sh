@@ -43,8 +43,6 @@ show_help() {
     echo "  --bundle-metadata <path>  Optional JSON (e.g. .maven-bundle-metadata.json from detect-artifacts)." >&2
     echo "                            When the file exists, key=value pairs are applied to the bundle via" >&2
     echo "                            jf release-bundle-annotate after create." >&2
-    echo "                            docker.floating_tags from the included builds is applied in the same" >&2
-    echo "                            annotate. Dry-run prints the command and does not call JFrog." >&2
     echo "  --revision <revision>      Appended to the version to form the bundle version." >&2
     echo "                            'auto' uses <run_id>-<run_attempt>." >&2
     echo "  --help, -h                 Show this help message" >&2
@@ -138,10 +136,6 @@ run() {
         "$@"
     fi
 }
-
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck disable=SC1091
-source "$SCRIPT_DIR/floating_tags.sh"
 
 # Function to generate the files array JSON
 generate_files_json() {
@@ -251,17 +245,6 @@ EOF
         fi
     fi
 
-    local floating escaped
-    floating=$(collect_docker_floating_tags)
-    if [[ -n $floating ]]; then
-        escaped=$(escape_jf_property_value "$floating")
-        echo "Docker floating tags for this bundle: $floating" >&2
-        if [[ -n $rb_props ]]; then
-            rb_props="${rb_props};docker.floating_tags=${escaped}"
-        else
-            rb_props="docker.floating_tags=${escaped}"
-        fi
-    fi
     if [[ -n $rb_props ]]; then
         run jf release-bundle-annotate "$BUNDLE_NAME" "$BUNDLE_VERSION" \
             --project="$PROJECT" \

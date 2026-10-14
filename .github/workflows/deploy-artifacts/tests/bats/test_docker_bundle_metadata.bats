@@ -343,9 +343,9 @@ EOF
     [[ "$(grep -c 'docker-images.json' "$wd/structured_build_artifacts/.manifest")" == "1" ]]
 }
 
-@test "timestamped and version tags are both rows, latest is not, and floating tags are a sidecar" {
+@test "timestamped and version tags are both rows, latest is not" {
     _require_bash4_for_detect_types
-    local wd root out sidecar manifest
+    local wd root out manifest
     wd=$(_new_artifacts_wd both-tags)
     root="$wd/build-artifacts"
     mkdir -p "$root"
@@ -400,7 +400,6 @@ EOF
     (cd "$wd" && "$DEPLOY_ARTIFACTS_DIR/detect_types.sh" --artifacts-dir build-artifacts >/dev/null)
 
     out="$wd/structured_build_artifacts/generic/docker/docker-images.json"
-    sidecar="$wd/structured_build_artifacts/generic/docker/docker-floating-tags.json"
     manifest="$wd/structured_build_artifacts/.manifest"
     [[ "$(grep -c . "$out")" == "3" ]]
     [[ "$(sed -n '1p' "$out")" == '{"package_name":"aerospike-graph-service","package_version":"3.3.2_20261007T212412Z","source_repository_key":"connect-docker-dev-local"}' ]]
@@ -408,7 +407,6 @@ EOF
     [[ "$(sed -n '3p' "$out")" == '{"package_name":"aerospike-graph-service","package_version":"3.3.2-slim","source_repository_key":"connect-docker-dev-local"}' ]]
     ! grep -q '"package_version":"latest"' "$out"
     ! grep -q 'latest-slim' "$out"
-    [[ "$(cat "$sidecar")" == '{"docker.floating_tags":"aerospike-graph-service:latest;aerospike-graph-service:latest-slim"}' ]]
-    grep -qE 'generic/docker/docker-floating-tags\.json[[:space:]]+generic$' "$manifest"
-    [[ "$(grep -c 'docker-floating-tags.json' "$manifest")" == "1" ]]
+    [[ ! -e $wd/structured_build_artifacts/generic/docker/docker-floating-tags.json ]]
+    ! grep -q 'docker-floating-tags.json' "$manifest"
 }

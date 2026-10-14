@@ -18,7 +18,7 @@ JFrog CLI must be configured before calling this action (via `setup-jfrog-cli`).
 | `exclude-repos` | No       | Semicolon-separated list of target repos to exclude from promotion              |
 | `docker-repo`   | No       | Stage Docker repository. Required when `latest` or `latest-slim` is true        |
 | `tag`           | No       | Mutable Docker tag to point at, for example `3.3.2`. Required with those inputs |
-| `image-name`    | No       | Image name for those tags. The bundle property supplies it when this is empty   |
+| `image-name`    | No       | Image name for `latest` and `latest-slim`. Required when either input is true   |
 | `latest`        | No       | Apply the `latest` tag after promotion. Optional, off by default                |
 | `latest-slim`   | No       | Apply the `latest-slim` tag after promotion. Optional, off by default           |
 

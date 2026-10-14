@@ -65,35 +65,6 @@ DIGEST="sha256:indexdigestindexdigestindexdigestindexdigestindexdigest12"
     [ "$(sed -n '3p' <<<"$output")" = "${REG}:dev@${DIGEST}" ]
 }
 
-@test "a version tag does not declare latest; an explicit floating tag does" {
-    run "$SCRIPT" floating-property --image-name aerospike-graph-service -- \
-        "${REG}:3.3.2_20261007T212412Z" \
-        "${REG}:3.3.2"
-    [ "$status" -eq 0 ]
-    [ -z "$output" ]
-
-    run "$SCRIPT" floating-property --image-name aerospike-graph-service -- \
-        "${REG}:3.3.2-slim_20261007T212412Z" \
-        "${REG}:3.3.2-slim"
-    [ "$status" -eq 0 ]
-    [ -z "$output" ]
-
-    run "$SCRIPT" floating-property --image-name aerospike-graph-service -- \
-        "${REG}:3.3.2_20261007T212412Z" \
-        "${REG}:latest" \
-        "${REG}:latest-slim"
-    [ "$status" -eq 0 ]
-    [ "$output" = "aerospike-graph-service:latest;aerospike-graph-service:latest-slim" ]
-}
-
-@test "an explicit extra tag is kept and does not become a floating tag" {
-    run "$SCRIPT" floating-property --image-name aerospike-graph-service -- \
-        "${REG}:3.3.2_20261007T212412Z" \
-        "${REG}:dev"
-    [ "$status" -eq 0 ]
-    [ -z "$output" ]
-}
-
 @test "imagetools still applies every computed tag, including a caller-supplied latest" {
     grep -Fq 'docker buildx imagetools create "${tag_args[@]}" "${src_args[@]}"' "$WORKFLOW"
     grep -q "IFS=',' read -ra TAGS_ARR" "$WORKFLOW"

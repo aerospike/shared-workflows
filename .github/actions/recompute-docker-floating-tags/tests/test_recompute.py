@@ -1,9 +1,8 @@
-"""Retag and the docker.floating_tags property."""
+"""Retag named Docker tags onto a caller-supplied tag."""
 
 from __future__ import annotations
 
 import importlib.util
-import json
 import subprocess
 import sys
 import unittest
@@ -34,56 +33,29 @@ def run(*args, stdin=""):
     )
 
 
-class PropertyTest(unittest.TestCase):
-    def test_array_object_and_storage_forms(self):
-        samples = [
-            {"properties": [{"key": "docker.floating_tags", "values": ["aerospike-graph-service:latest;aerospike-graph-service:latest-slim"]}]},
-            {"properties": {"docker.floating_tags": "aerospike-graph-service:latest"}},
-            {"properties": {"docker.floating_tags": ["aerospike-graph-service:latest;aerospike-graph-service:latest-slim"]}},
-        ]
-        expected = [
-            "aerospike-graph-service:latest;aerospike-graph-service:latest-slim",
-            "aerospike-graph-service:latest",
-            "aerospike-graph-service:latest;aerospike-graph-service:latest-slim",
-        ]
-        for doc, want in zip(samples, expected):
-            done = run("property", stdin=json.dumps(doc))
-            self.assertEqual(done.returncode, 0, done.stderr)
-            self.assertEqual(done.stdout.strip(), want)
-
-    def test_missing_property_prints_nothing(self):
-        done = run("property", stdin=json.dumps({"properties": [{"key": "is_multi_package", "values": ["true"]}]}))
-        self.assertEqual(done.returncode, 0, done.stderr)
-        self.assertEqual(done.stdout, "")
-
-
 class RetagTest(unittest.TestCase):
     def test_default_retag_attaches_nothing(self):
-        done = run(
-            "retag",
-            "--project",
-            "connect",
-            "--repo",
-            "connect-docker-stage-local",
-            "--bundle-name",
-            "aerospike-graph-service-container",
-            "--version",
-            "3.3.2",
-        )
+        done = run("retag", "--repo", "connect-docker-stage-local")
         self.assertEqual(done.returncode, 0, done.stderr)
         self.assertIn("Attaching nothing.", done.stdout)
+
+    def test_image_is_required_for_latest(self):
+        done = run(
+            "retag",
+            "--repo",
+            "connect-docker-stage-local",
+            "--tag",
+            "3.3.2",
+            "--latest",
+        )
+        self.assertNotEqual(done.returncode, 0)
+        self.assertIn("--image is required", done.stderr)
 
     def test_tag_is_required_when_a_name_is_applied(self):
         done = run(
             "retag",
-            "--project",
-            "connect",
             "--repo",
             "connect-docker-stage-local",
-            "--bundle-name",
-            "aerospike-graph-service-container",
-            "--version",
-            "3.3.2-4711-2",
             "--image",
             "aerospike-graph-service",
             "--latest",
@@ -92,21 +64,10 @@ class RetagTest(unittest.TestCase):
         self.assertIn("--tag is required", done.stderr)
 
     def test_latest_suffix_flag_is_rejected(self):
-        done = run(
-            "retag",
-            "--project",
-            "connect",
-            "--repo",
-            "connect-docker-stage-local",
-            "--bundle-name",
-            "aerospike-graph-service-container",
-            "--version",
-            "3.3.2",
-            "--latest-debug",
-        )
+        done = run("retag", "--repo", "connect-docker-stage-local", "--latest-debug")
         self.assertNotEqual(done.returncode, 0)
 
-    def test_flags_point_at_this_mutable_version(self):
+    def test_flags_point_at_the_supplied_tag(self):
         calls = []
 
         def fake(method, path, headers=None, body=None):
@@ -119,14 +80,8 @@ class RetagTest(unittest.TestCase):
         mod.main(
             [
                 "retag",
-                "--project",
-                "connect",
                 "--repo",
                 "connect-docker-prod-public-local",
-                "--bundle-name",
-                "aerospike-graph-service-container",
-                "--version",
-                "3.3.2-4711-2",
                 "--tag",
                 "3.3.2",
                 "--image",

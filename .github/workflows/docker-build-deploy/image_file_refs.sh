@@ -1,13 +1,11 @@
 #!/usr/bin/env bash
-# Decide which pushed image refs belong in build-info, and which floating tags
-# an image declares. The mutable version of an immutable tag (the timestamp
-# stripped) is included. latest and latest-* are recorded only when the tag
-# list names them. Digest refs are never written.
+# Decide which pushed image refs belong in build-info. The mutable version of
+# an immutable tag (the timestamp stripped) is included. latest and latest-*
+# are left out. Digest refs are never written.
 set -euo pipefail
 
 usage() {
     echo "Usage: $0 image-file --digest DIGEST (--tags-csv LIST | -- REF...)" >&2
-    echo "       $0 floating-property --image-name NAME (--tags-csv LIST | -- REF...)" >&2
 }
 
 tag_portion() {
@@ -48,16 +46,11 @@ MODE=${1-}
 shift || true
 
 DIGEST=""
-IMAGE_NAME=""
 TAGS_CSV=""
 while [[ $# -gt 0 ]]; do
     case $1 in
     --digest)
         DIGEST=$2
-        shift 2
-        ;;
-    --image-name)
-        IMAGE_NAME=$2
         shift 2
         ;;
     --tags-csv)
@@ -124,27 +117,6 @@ image-file)
                 emit_ref "$mutable"
             fi
         done
-    fi
-    ;;
-floating-property)
-    if [[ -z $IMAGE_NAME ]]; then
-        echo "floating-property requires --image-name" >&2
-        exit 1
-    fi
-    parts=()
-    seen=";"
-    if ((${#REFS[@]} > 0)); then
-        for ref in "${REFS[@]}"; do
-            is_floating_tag "$ref" || continue
-            portion=$(tag_portion "$ref")
-            [[ $seen == *";${portion};"* ]] && continue
-            seen+="${portion};"
-            parts+=("${IMAGE_NAME}:${portion}")
-        done
-    fi
-    if ((${#parts[@]} > 0)); then
-        IFS=';'
-        printf '%s\n' "${parts[*]}"
     fi
     ;;
 *)

@@ -1,27 +1,24 @@
 name: Recompute Docker floating tags
 description: >-
   Point a tag the caller named at the Docker tag supplied in tag. With only
-  project, repo, bundle, and version, nothing is attached.
+  the repository, nothing is attached.
 inputs:
-  jf-project:
-    description: JFrog project key
-    required: true
   docker-repo:
     description: >-
       Stage Docker or OCI repository key to retag (for example
       connect-docker-stage-local). Supply the repository directly; this action
       does not rewrite a dev-local name.
     required: true
-  bundle-name:
-    description: Release bundle whose docker.floating_tags property names the images
-    required: true
-  version:
-    description: Release bundle version
-    required: true
   tag:
     description: >-
       Mutable Docker tag to point at, for example 3.3.2. Required when a tag
       is applied.
+    required: false
+    default: ""
+  image:
+    description: >-
+      Image name for latest and latest-slim. Required when either of those
+      inputs is true.
     required: false
     default: ""
   floating-tags:
@@ -44,11 +41,9 @@ runs:
     - name: Recompute floating tags
       shell: bash
       env:
-        JF_PROJECT: ${{ inputs.jf-project }}
         DOCKER_REPO: ${{ inputs.docker-repo }}
-        BUNDLE_NAME: ${{ inputs.bundle-name }}
-        BUNDLE_VERSION: ${{ inputs.version }}
         DOCKER_TAG: ${{ inputs.tag }}
+        IMAGE: ${{ inputs.image }}
         FLOATING_TAGS: ${{ inputs.floating-tags }}
         LATEST: ${{ inputs.latest }}
         LATEST_SLIM: ${{ inputs.latest-slim }}
@@ -62,14 +57,18 @@ runs:
           echo "::error::tag is required when applying a Docker tag"
           exit 1
         fi
+        if [[ ($LATEST == true || $LATEST_SLIM == true) && -z $IMAGE ]]; then
+          echo "::error::image is required when latest or latest-slim is true"
+          exit 1
+        fi
         args=(
           retag
-          --project "$JF_PROJECT"
           --repo "$DOCKER_REPO"
-          --bundle-name "$BUNDLE_NAME"
-          --version "$BUNDLE_VERSION"
           --tag "$DOCKER_TAG"
         )
+        if [[ -n $IMAGE ]]; then
+          args+=(--image "$IMAGE")
+        fi
         if [[ -n $FLOATING_TAGS ]]; then
           args+=(--floating-tags "$FLOATING_TAGS")
         fi

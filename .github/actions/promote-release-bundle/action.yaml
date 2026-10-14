@@ -34,8 +34,7 @@ inputs:
     default: ""
   image-name:
     description: >-
-      Image name for latest or latest-slim. When empty, the bundle property
-      supplies it.
+      Image name for latest or latest-slim. Required when either input is true.
     required: false
     default: ""
   latest:
@@ -76,9 +75,6 @@ runs:
       if: inputs.latest == 'true' || inputs.latest-slim == 'true'
       shell: bash
       env:
-        BUNDLE_NAME: ${{ inputs.bundle-name }}
-        BUNDLE_VERSION: ${{ inputs.version }}
-        JF_PROJECT: ${{ inputs.jf-project }}
         DOCKER_REPO: ${{ inputs.docker-repo }}
         DOCKER_TAG: ${{ inputs.tag }}
         IMAGE_NAME: ${{ inputs.image-name }}
@@ -94,6 +90,10 @@ runs:
           echo "::error::tag is required when latest or latest-slim is true"
           exit 1
         fi
+        if [[ -z $IMAGE_NAME ]]; then
+          echo "::error::image-name is required when latest or latest-slim is true"
+          exit 1
+        fi
         script="${{ github.action_path }}/../recompute-docker-floating-tags/recompute.py"
         if [[ ! -f $script ]]; then
           echo "::error::recompute-docker-floating-tags is not available next to this action"
@@ -101,15 +101,10 @@ runs:
         fi
         args=(
           retag
-          --project "$JF_PROJECT"
           --repo "$DOCKER_REPO"
-          --bundle-name "$BUNDLE_NAME"
-          --version "$BUNDLE_VERSION"
           --tag "$DOCKER_TAG"
+          --image "$IMAGE_NAME"
         )
-        if [[ -n $IMAGE_NAME ]]; then
-          args+=(--image "$IMAGE_NAME")
-        fi
         if [[ $LATEST == true ]]; then
           args+=(--latest)
         fi
