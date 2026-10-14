@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
-"""Point a caller-named tag at a version tag already in one stage repository.
+"""Point a caller-named tag at this release's mutable version.
 
 JFrog CLI must already be configured. With no tag named, nothing is attached.
-``--latest`` and ``--latest-slim`` are optional and off by default.
+``--latest`` and ``--latest-slim`` are optional and off by default. Each one
+writes that exact name. The mutable version is ``--version`` with the
+immutable timestamp stripped. The repository is not searched for a newer tag.
 
     recompute.py retag --project P --repo R --bundle-name N --version V --floating-tags image:dev
-    recompute.py retag --project P --repo R --bundle-name N --version V --latest
+    recompute.py retag --project P --repo R --bundle-name N --version V --image I --latest
     recompute.py print-property --project P --bundle-name N --version V
-    recompute.py select --request latest --tag 3.3.2 --tag 3.3.1
     recompute.py repos --environment PROD --version 3.3.2 < promotion.json
     recompute.py property < record.json
 """
@@ -23,8 +24,7 @@ import sys
 import tempfile
 import urllib.parse
 
-IMMUTABLE = re.compile(r"_[0-9]{8}T[0-9]{6}Z$")
-PLAIN_VERSION = re.compile(r"^[0-9]+(?:\.[0-9]+)+$")
+IMMUTABLE_SUFFIX = re.compile(r"_[0-9]{8}T[0-9]{6}Z$")
 MANIFEST_ACCEPT = ", ".join(
     [
         "application/vnd.oci.image.index.v1+json",
@@ -53,71 +53,12 @@ def quote(value):
     return urllib.parse.quote(value, safe="")
 
 
-def version_parts(text):
-    return [int(part) for part in text.split(".")]
-
-
-def newer(left, right):
-    """Dotted numeric compare. Missing components count as 0, so 3.3 == 3.3.0."""
-    a = version_parts(left)
-    b = version_parts(right)
-    width = max(len(a), len(b))
-    a.extend([0] * (width - len(a)))
-    b.extend([0] * (width - len(b)))
-    return a > b
-
-
-def ignored_tag(tag):
-    if tag.startswith(("sha256:", "sha256__")) or tag == "latest" or tag.startswith("latest-"):
-        return True
-    return IMMUTABLE.search(tag) is not None
-
-
-def floating_suffix(name):
-    """Variant suffix on a tag name. ``latest-slim`` is ``-slim``. Any other name has none."""
-    if name.startswith("latest-") and len(name) > len("latest-"):
-        return name[len("latest") :]
-    return ""
-
-
-def choose(requests, tags):
-    """Pick a version tag for each explicit floating tag, or mark it for removal.
-
-    ``latest`` uses dotted versions with no variant suffix. ``latest-<suffix>``
-    uses versions that end in that suffix, compared after the suffix is removed.
-    A version is not turned into a floating tag here. Equal versions keep the first.
-    """
-    pool = []
-    for tag in tags:
-        if ignored_tag(tag):
-            continue
-        pool.append(tag)
-
-    decisions = []
-    seen = set()
-    for req in requests:
-        if req in seen:
-            continue
-        seen.add(req)
-        suffix = floating_suffix(req)
-        best = ""
-        best_ver = ""
-        for tag in pool:
-            if suffix:
-                if not tag.endswith(suffix):
-                    continue
-                ver = tag[: -len(suffix)]
-            else:
-                if not PLAIN_VERSION.match(tag):
-                    continue
-                ver = tag
-            if not PLAIN_VERSION.match(ver):
-                continue
-            if not best or newer(ver, best_ver):
-                best = tag
-                best_ver = ver
-        decisions.append(("set", req, best) if best else ("delete", req, ""))
-    return decisions
+def mutable_version(version):
+    """``3.3.2_20261007T212412Z`` becomes ``3.3.2``. Any other version is unchanged."""
+    match = IMMUTABLE_SUFFIX.search(version)
+    if match:
+        return version[: match.start()]
+    return version
 
 
 def first_text(obj, names):
@@ -319,17 +260,6 @@ def fetch_floating_tags(project, bundle_name, version):
     return ""
 
 
-def remove_tag(repo, image, floating):
-    path = f"/api/docker/{quote(repo)}/v2/{quote(image)}/manifests/{quote(floating)}"
-    status, stdout, err = jf_curl("DELETE", path)
-    if status != 0:
-        if missing(status, stdout, err):
-            print(f"Floating tag {image}:{floating} is already absent in {repo}")
-            return
-        raise SystemExit(err or f"failed to delete {image}:{floating}")
-    print(f"Removed {repo}/{image}:{floating}")
-
-
 def manifest_type(raw):
     doc = load_json(raw)
     if not isinstance(doc, dict) or not raw.strip():
@@ -356,31 +286,18 @@ def point_tag(repo, image, floating, version_tag):
     print(f"Pointed {repo}/{image}:{floating} at {version_tag}")
 
 
-def list_tags(repo, image):
-    path = f"/api/docker/{quote(repo)}/v2/{quote(image)}/tags/list"
-    status, stdout, _err = jf_curl("GET", path, {"Accept": "application/json"})
-    doc = load_json(stdout) if status == 0 else None
-    tags = doc.get("tags") if isinstance(doc, dict) else None
-    if not isinstance(tags, list):
-        return []
-    return [tag for tag in tags if isinstance(tag, str) and tag]
-
-
-def retag(project, bundle_name, version, repo, floating_tags):
-    if not floating_tags:
-        floating_tags = fetch_floating_tags(project, bundle_name, version)
+def retag(repo, version, floating_tags):
+    """Point each named tag at this release's mutable version. Do not pick a newer tag."""
     if not repo:
         raise SystemExit("--repo is required")
     if not floating_tags:
-        print(f"Bundle {bundle_name}/{version} has no docker.floating_tags property; not retagging {repo}.")
+        print("No tag was named. Attaching nothing.")
         return
+    target = mutable_version(version)
     images, by_image = parse_pairs(floating_tags)
     for image in images:
-        for action, floating, target in choose(by_image[image], list_tags(repo, image)):
-            if action == "delete":
-                remove_tag(repo, image, floating)
-            else:
-                point_tag(repo, image, floating, target)
+        for name in by_image[image]:
+            point_tag(repo, image, name, target)
 
 
 def read_json():
@@ -388,16 +305,6 @@ def read_json():
         return json.load(sys.stdin)
     except json.JSONDecodeError as exc:
         raise SystemExit(f"invalid JSON: {exc}") from exc
-
-
-def command_select(args):
-    if not args.request:
-        raise SystemExit("at least one --request is required")
-    for action, floating, target in choose(args.request, args.tag or []):
-        if action == "set":
-            print(f"set {floating} {target}")
-        else:
-            print(f"delete {floating}")
 
 
 def command_repos(args):
@@ -429,7 +336,10 @@ def named_tags(value, apply_latest, apply_latest_slim, image_names):
         kept_images.append(image)
         kept[image] = tags
     if apply_latest or apply_latest_slim:
-        names = list(kept_images) or list(image_names)
+        names = list(kept_images)
+        for image in image_names:
+            if image not in names:
+                names.append(image)
         for image in names:
             if image not in kept:
                 kept_images.append(image)
@@ -445,6 +355,8 @@ def named_tags(value, apply_latest, apply_latest_slim, image_names):
 def command_retag(args):
     typed_images, _typed = parse_pairs(args.floating_tags or "")
     image_names = list(typed_images)
+    if args.image and args.image not in image_names:
+        image_names.append(args.image)
     if (args.latest or args.latest_slim) and not image_names:
         recorded = fetch_floating_tags(args.project, args.bundle_name, args.version)
         image_names, _recorded = parse_pairs(recorded)
@@ -452,17 +364,18 @@ def command_retag(args):
     if not value:
         print("No tag was named. Attaching nothing.")
         return
-    retag(args.project, args.bundle_name, args.version, args.repo or "", value)
+    retag(args.repo or "", args.version, value)
 
 
 def parser():
     top = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = top.add_subparsers(dest="command", required=True)
 
-    retag_cmd = sub.add_parser("retag", help="point floating tags at the highest version still in a repository")
+    retag_cmd = sub.add_parser("retag", help="point named tags at this release's mutable version")
     for flag in ("--project", "--bundle-name", "--version"):
         retag_cmd.add_argument(flag, required=True)
     retag_cmd.add_argument("--repo", default="")
+    retag_cmd.add_argument("--image", default="")
     retag_cmd.add_argument("--floating-tags", default="")
     retag_cmd.add_argument("--latest", action="store_true")
     retag_cmd.add_argument("--latest-slim", action="store_true")
@@ -472,11 +385,6 @@ def parser():
     for flag in ("--project", "--bundle-name", "--version"):
         show.add_argument(flag, required=True)
     show.set_defaults(func=command_print_property)
-
-    select = sub.add_parser("select", help="choose a version tag for each floating tag")
-    select.add_argument("--request", action="append", required=True)
-    select.add_argument("--tag", action="append", default=[])
-    select.set_defaults(func=command_select)
 
     repos = sub.add_parser("repos", help="print target Docker repositories from JSON on stdin")
     repos.add_argument("--environment", required=True)

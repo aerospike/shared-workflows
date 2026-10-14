@@ -1,6 +1,6 @@
 # Recompute Docker floating tags
 
-Point a tag the caller named at the manifest of a version tag already in the given repository. With only the project, repository, bundle, and version, nothing is attached. Applying `latest` and `latest-slim` is optional, and both are off by default. Promotion does not call this action. It can be run manually when a release leaves a stage.
+Point a tag the caller named at this release's mutable version, the timestamp stripped from `version`. With only the project, repository, bundle, and version, nothing is attached. Applying `latest` and `latest-slim` is optional, and both are off by default. Each flag writes that exact name. The repository is not searched for a newer tag. Promotion calls this action only when its matching input is true.
 
 Floating tags belong to the repository, not to one release bundle. Promotion copies the version tags that are in the bundle. There is no un-promote workflow in this repo, and this action does not delete the bundle. `delete-release-bundle` still refuses a bundle that has been promoted beyond DEV.
 
@@ -10,7 +10,7 @@ Floating tags belong to the repository, not to one release bundle. Promotion cop
 
 `latest` and `latest-slim` are separate inputs. Both default to off. Set `latest: true` to apply `latest`, and `latest-slim: true` to apply `latest-slim`.
 
-The named tag is pointed at the manifest of a version tag already in the repository you supply. Digest references (`sha256:` and `sha256__`) and immutable tags (`_<YYYYMMDD>T<HHMMSS>Z`) are skipped. This action does not rewrite `-dev-local` into another suffix.
+The named tag is pointed at this release's mutable version. `3.3.2_20261007T212412Z` is `3.3.2`. A newer tag already in the repository is left where it is. This action does not rewrite `-dev-local` into another suffix.
 
 ## Prerequisites
 
@@ -30,7 +30,7 @@ JFrog CLI must be configured before calling this action (via `setup-jfrog-cli`).
 
 ## Command
 
-The action runs `recompute.py retag`. The same file can be run directly when JFrog CLI is already configured. `print-property` prints the bundle property, `select` chooses a version from tags you pass, and `repos` reads a promotion result or repository catalog on stdin.
+The action runs `recompute.py retag`. The same file can be run directly when JFrog CLI is already configured. `print-property` prints the bundle property, and `repos` reads a promotion result or repository catalog on stdin.
 
 ```bash
 python3 .github/actions/recompute-docker-floating-tags/recompute.py retag \

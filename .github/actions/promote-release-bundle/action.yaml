@@ -21,6 +21,25 @@ inputs:
     description: Semicolon-separated list of target repos to exclude from promotion
     required: false
     default: ""
+  docker-repo:
+    description: >-
+      Stage Docker repository. Used only when latest or latest-slim is true.
+    required: false
+    default: ""
+  image-name:
+    description: >-
+      Image name for latest or latest-slim. When empty, the bundle property
+      supplies it.
+    required: false
+    default: ""
+  latest:
+    description: Apply the latest tag after promotion. Optional, off by default.
+    required: false
+    default: "false"
+  latest-slim:
+    description: Apply the latest-slim tag after promotion. Optional, off by default.
+    required: false
+    default: "false"
 runs:
   using: composite
   steps:
@@ -46,3 +65,43 @@ runs:
           promote_args+=(--exclude-repos="${{ inputs.exclude-repos }}")
         fi
         jf release-bundle-promote "${promote_args[@]}"
+
+    - name: Apply optional latest tags
+      if: inputs.latest == 'true' || inputs.latest-slim == 'true'
+      shell: bash
+      env:
+        BUNDLE_NAME: ${{ inputs.bundle-name }}
+        BUNDLE_VERSION: ${{ inputs.version }}
+        JF_PROJECT: ${{ inputs.jf-project }}
+        DOCKER_REPO: ${{ inputs.docker-repo }}
+        IMAGE_NAME: ${{ inputs.image-name }}
+        LATEST: ${{ inputs.latest }}
+        LATEST_SLIM: ${{ inputs.latest-slim }}
+      run: |
+        set -euo pipefail
+        if [[ -z $DOCKER_REPO ]]; then
+          echo "::error::docker-repo is required when latest or latest-slim is true"
+          exit 1
+        fi
+        script="${{ github.action_path }}/../recompute-docker-floating-tags/recompute.py"
+        if [[ ! -f $script ]]; then
+          echo "::error::recompute-docker-floating-tags is not available next to this action"
+          exit 1
+        fi
+        args=(
+          retag
+          --project "$JF_PROJECT"
+          --repo "$DOCKER_REPO"
+          --bundle-name "$BUNDLE_NAME"
+          --version "$BUNDLE_VERSION"
+        )
+        if [[ -n $IMAGE_NAME ]]; then
+          args+=(--image "$IMAGE_NAME")
+        fi
+        if [[ $LATEST == true ]]; then
+          args+=(--latest)
+        fi
+        if [[ $LATEST_SLIM == true ]]; then
+          args+=(--latest-slim)
+        fi
+        python3 "$script" "${args[@]}"

@@ -16,6 +16,10 @@ JFrog CLI must be configured before calling this action (via `setup-jfrog-cli`).
 | `jf-project`    | Yes      | JFrog project key                                                               |
 | `include-repos` | No       | Semicolon-separated list of target repos to include in promotion (limits scope) |
 | `exclude-repos` | No       | Semicolon-separated list of target repos to exclude from promotion              |
+| `docker-repo`   | No       | Stage Docker repository. Required when `latest` or `latest-slim` is true        |
+| `image-name`    | No       | Image name for those tags. The bundle property supplies it when this is empty   |
+| `latest`        | No       | Apply the `latest` tag after promotion. Optional, off by default                |
+| `latest-slim`   | No       | Apply the `latest-slim` tag after promotion. Optional, off by default           |
 
 ## Image tags
 
@@ -23,7 +27,7 @@ JFrog CLI must be configured before calling this action (via `setup-jfrog-cli`).
 
 Digest references (`sha256:` and `sha256__`) are not tags. Promotion skips them.
 
-This action does not apply `latest` or `latest-slim`.
+`latest` and `latest-slim` are optional inputs, and both are off by default. When one is true, this action points that exact name at this release's mutable version (the timestamp stripped) in `docker-repo`. Otherwise it skips that step.
 
 ## Example Usage
 
