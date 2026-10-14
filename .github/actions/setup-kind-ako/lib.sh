@@ -428,6 +428,7 @@ spec:
     skipWorkDirValidate: true
   aerospikeNetworkPolicy:
     access: pod
+    # KO-649: replace configuredIP and the node label with the CR hostname field.
     alternateAccess: configuredIP
   storage:
     filesystemVolumePolicy:

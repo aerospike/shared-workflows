@@ -374,6 +374,12 @@ cmd_prepare_node() {
     local ip corefile corefile_path label
     kubectl taint nodes --all node-role.kubernetes.io/control-plane:NoSchedule- || true
     kubectl taint nodes --all node-role.kubernetes.io/master:NoSchedule- || true
+    # ENDPOINT_HOSTNAME is a DNS name. This label is an IP field; AKO 4.5.0
+    # copies it through without validating. KO-649 adds a CR hostname field,
+    # and a later AKO release will reject a DNS name here. When bumping
+    # ako-chart-version to a release that includes KO-649, stop labeling the
+    # node and set that field in render_cluster_manifest. Label values are
+    # also limited to 63 characters, so this cannot hold a real PrivateLink name.
     label=$(configured_alternate_access_label)
     kubectl label nodes --all "${label}=${ENDPOINT_HOSTNAME}" --overwrite
 
