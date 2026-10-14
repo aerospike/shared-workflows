@@ -114,7 +114,7 @@ The workflow automatically generates tags based on the `app-version` input:
 
 Every other tag is part of the single build-info record for this build: the immutable tag, the mutable version, and each explicit non-floating tag, each as `tag@digest` of the manifest index. A release bundle created from that build includes those tags, and promotion copies them. Floating tags are not build-info artifacts and are not copied as bundle artifacts.
 
-When a floating tag was named, the build records that intent (`aerospike-graph-service:latest`, or `aerospike-graph-service:latest-slim`). A version tag on its own declares none. Promotion recomputes each named floating tag in the target repository from the version tags present there, so a rebuild of an older version does not move it backwards.
+When a floating tag was named, the build records that intent (`aerospike-graph-service:latest`, or `aerospike-graph-service:latest-slim`). A version tag on its own declares none. Promotion copies the tags in the bundle and does not apply `latest` or `latest-slim`.
 
 The registry is automatically constructed from `jf-registry` (if provided) or `{jf-registry-base}/{jf-project}{repo-scope}`.
 

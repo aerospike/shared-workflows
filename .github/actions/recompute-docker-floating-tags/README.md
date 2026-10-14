@@ -1,8 +1,8 @@
 # Recompute Docker floating tags
 
-Point `latest` and `latest-*` in one stage's Docker repository at the highest version tag still in that repository. Promotion runs this after `jf release-bundle-promote`. Run it again yourself when a release leaves a stage.
+Point `latest` and `latest-*` in one stage's Docker repository at the highest version tag still in that repository. Applying `latest` and `latest-slim` is optional, and both are off by default. Promotion does not call this action. Run it yourself when a release leaves a stage.
 
-Floating tags belong to the repository, not to one release bundle. Promotion copies the version tags that are in the bundle. This action then retags `latest` from whatever version tags are in the target repository. A release that leaves the stage does not take `latest` with it unless something recomputes the tag. There is no un-promote workflow in this repo, and this action does not delete the bundle. `delete-release-bundle` still refuses a bundle that has been promoted beyond DEV.
+Floating tags belong to the repository, not to one release bundle. Promotion copies the version tags that are in the bundle. This action retags `latest` from whatever version tags are in the target repository when you run it. A release that leaves the stage does not take `latest` with it unless something recomputes the tag. There is no un-promote workflow in this repo, and this action does not delete the bundle. `delete-release-bundle` still refuses a bundle that has been promoted beyond DEV.
 
 ## What it retags
 

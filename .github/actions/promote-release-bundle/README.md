@@ -17,21 +17,13 @@ JFrog CLI must be configured before calling this action (via `setup-jfrog-cli`).
 | `include-repos` | No       | Semicolon-separated list of target repos to include in promotion (limits scope) |
 | `exclude-repos` | No       | Semicolon-separated list of target repos to exclude from promotion              |
 
-## Floating tags
+## Image tags
 
-After `jf release-bundle-promote` succeeds, this action recomputes Docker floating tags in the target stage repository. A source-to-target mapping in the promotion result is used as written. When the result has no mapping, the Docker and OCI repositories JFrog assigned to that environment are used. Repository names are not rewritten.
+`jf release-bundle-promote` copies the image tags recorded in the bundle: the immutable tag (`{version}_{YYYYMMDD}T{HHMMSS}Z`), the mutable version (that timestamp stripped), and any other explicit tag the build recorded.
 
-For each image named by the bundle property `docker.floating_tags`:
+Digest references (`sha256:` and `sha256__`) are not tags. Promotion skips them.
 
-- A floating tag is recomputed only when the bundle names it. `3.3.2` does not imply `latest`, and `3.3.2-slim` does not imply `latest-slim`.
-- `latest` points at the highest dotted version tag with no variant suffix.
-- `latest-<suffix>` (for example `latest-slim`) points at the highest version tag that ends in that suffix, compared after stripping it.
-- Digest tags and immutable tags (`_<YYYYMMDD>T<HHMMSS>Z`) are ignored. A suffixed tag never becomes `latest`.
-- If the repository has no candidate version tag, the floating tag is removed.
-
-An older release promoted into a repository that already has a newer version tag leaves `latest` on the newer tag.
-
-There is no un-promote workflow. When a release leaves a stage, run [recompute-docker-floating-tags](../recompute-docker-floating-tags/README.md) against that stage's repository so `latest` does not stay on the release that left. That action does not delete the bundle. `delete-release-bundle` still refuses bundles promoted beyond DEV. If retag fails after a promotion that already succeeded, rerun that action instead of promoting again.
+This action does not apply `latest` or `latest-slim`.
 
 ## Example Usage
 
