@@ -6,6 +6,7 @@ set -euo pipefail
 
 usage() {
     echo "Usage: $0 image-file --digest DIGEST (--tags-csv LIST | -- REF...)" >&2
+    echo "       $0 floating-property --image-name NAME --versions-override LIST" >&2
 }
 
 tag_portion() {
@@ -47,6 +48,8 @@ shift || true
 
 DIGEST=""
 TAGS_CSV=""
+IMAGE_NAME=""
+VERSIONS_OVERRIDE=""
 while [[ $# -gt 0 ]]; do
     case $1 in
     --digest)
@@ -55,6 +58,14 @@ while [[ $# -gt 0 ]]; do
         ;;
     --tags-csv)
         TAGS_CSV=$2
+        shift 2
+        ;;
+    --image-name)
+        IMAGE_NAME=$2
+        shift 2
+        ;;
+    --versions-override)
+        VERSIONS_OVERRIDE=$2
         shift 2
         ;;
     --)
@@ -117,6 +128,27 @@ image-file)
                 emit_ref "$mutable"
             fi
         done
+    fi
+    ;;
+floating-property)
+    # Only the two names promotion can point later. A version tag does not imply them.
+    result=""
+    IFS=',' read -ra parts <<<"$VERSIONS_OVERRIDE"
+    for part in "${parts[@]}"; do
+        part="${part#"${part%%[![:space:]]*}"}"
+        part="${part%"${part##*[![:space:]]}"}"
+        [[ $part == latest || $part == latest-slim ]] || continue
+        [[ -n $IMAGE_NAME ]] || continue
+        token="${IMAGE_NAME}:${part}"
+        [[ ";${result};" == *";${token};"* ]] && continue
+        if [[ -z $result ]]; then
+            result=$token
+        else
+            result="${result};${token}"
+        fi
+    done
+    if [[ -n $result ]]; then
+        printf '%s\n' "$result"
     fi
     ;;
 *)

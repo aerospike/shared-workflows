@@ -1,6 +1,6 @@
 # Recompute Docker floating tags
 
-Point a tag the caller named at the Docker tag supplied in `tag`, for example `3.3.2`. With only the repository, nothing is attached. Applying `latest` and `latest-slim` is optional, and both are off by default. Each flag writes that exact name for the image in `image`. Promotion does not call this action. Run it as the next step when those tags should move.
+Point a tag the caller named at the Docker tag supplied in `tag`, for example `3.3.2`. With only the repository, nothing is attached. Applying `latest` and `latest-slim` is optional, and both are off by default. Each flag writes that exact name for the image in `image`. Promotion calls `from-promotion` after a successful promote, and only when the build recorded `latest` or `latest-slim` from `versions-override` and the destination is a stage repository or production.
 
 Floating tags belong to the repository, not to one release bundle. Promotion copies the version tags that are in the bundle. There is no un-promote workflow in this repo, and this action does not delete the bundle. `delete-release-bundle` still refuses a bundle that has been promoted beyond DEV.
 

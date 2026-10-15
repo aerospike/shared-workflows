@@ -23,7 +23,12 @@ JFrog CLI must be configured before calling this action (via `setup-jfrog-cli`).
 
 Digest references (`sha256:` and `sha256__`) are not tags. Promotion skips them.
 
-This action does not apply `latest` or `latest-slim`. Run [recompute-docker-floating-tags](../recompute-docker-floating-tags/README.md) as the next step when those tags should move.
+After the copy, this action points `latest` or `latest-slim` at the mutable Docker tag when both of these are true:
+
+1. The build recorded that token because `versions-override` named it. The image name and the mutable tag come from the release-bundle record.
+2. The destination is a stage repository (a Docker or OCI local repository for this environment whose key contains `-stage-`) or `environment` is `PROD`.
+
+DEV and TEST do not move those tags. A version tag does not imply `latest`.
 
 ## Example Usage
 

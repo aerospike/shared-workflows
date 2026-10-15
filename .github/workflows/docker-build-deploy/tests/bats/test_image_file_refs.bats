@@ -65,6 +65,20 @@ DIGEST="sha256:indexdigestindexdigestindexdigestindexdigestindexdigest12"
     [ "$(sed -n '3p' <<<"$output")" = "${REG}:dev@${DIGEST}" ]
 }
 
+@test "floating-property records only the tokens latest and latest-slim" {
+    run "$SCRIPT" floating-property --image-name aerospike-graph-service --versions-override "dev"
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+
+    run "$SCRIPT" floating-property --image-name aerospike-graph-service --versions-override "latestfoo,latest-debug"
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+
+    run "$SCRIPT" floating-property --image-name aerospike-graph-service --versions-override "latest, dev, latest-slim"
+    [ "$status" -eq 0 ]
+    [ "$output" = "aerospike-graph-service:latest;aerospike-graph-service:latest-slim" ]
+}
+
 @test "imagetools still applies every computed tag, including a caller-supplied latest" {
     grep -Fq 'docker buildx imagetools create "${tag_args[@]}" "${src_args[@]}"' "$WORKFLOW"
     grep -q "IFS=',' read -ra TAGS_ARR" "$WORKFLOW"

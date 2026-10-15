@@ -110,9 +110,9 @@ The workflow automatically generates tags based on the `app-version` input:
 2. **Mutable version tag** (always generated): the immutable tag with the timestamp stripped, `{registry}/{image-name}:{app-version}` (e.g., `artifact.aerospike.io/database-docker-dev-local/test-image:7.0.0`)
 3. **Explicit tags** (when `versions-override` is provided): each named tag is pushed in addition to the two above (e.g., with `versions-override: "dev"`, for app version `7.0.0`, the tag portions are `7.0.0_20251202T021054Z, 7.0.0, dev`)
 
-`latest` and `latest-*` (such as `latest-slim`) are not generated from the version. Name them in `versions-override` when the image should move that tag. A named floating tag is pushed to the dev repository and left out of build-info.
+`latest` and `latest-*` (such as `latest-slim`) are not generated from the version. Name them in `versions-override` when the image should move that tag. A named floating tag is pushed to the dev repository and left out of the build-info image list. The tokens `latest` and `latest-slim` are recorded on the build as `buildInfo.env.DOCKER_FLOATING_TAGS`.
 
-Every other tag is part of the single build-info record for this build: the immutable tag, the mutable version, and each explicit non-floating tag, each as `tag@digest` of the manifest index. A release bundle created from that build includes those tags, and promotion copies them. Floating tags are not build-info artifacts and are not copied as bundle artifacts. Promotion does not apply `latest` or `latest-slim`. Run the recompute action as the next step when those tags should move, and supply the image name there.
+Every other tag is part of the single build-info record for this build: the immutable tag, the mutable version, and each explicit non-floating tag, each as `tag@digest` of the manifest index. A release bundle created from that build includes those tags, and promotion copies them. Floating tags are not build-info artifacts and are not copied as bundle artifacts. After that copy, promotion points `latest` or `latest-slim` at the mutable version when the build recorded that token and the destination is a stage repository or production.
 
 The registry is automatically constructed from `jf-registry` (if provided) or `{jf-registry-base}/{jf-project}{repo-scope}`.
 

@@ -112,6 +112,9 @@ on:
           For app version 3.2.1 with no override the tags are "3.2.1_20251202T021054Z, 3.2.1".
           Setting this to "dev" yields "3.2.1_20251202T021054Z, 3.2.1, dev".
           latest and latest-* are not added unless named here.
+          Naming latest or latest-slim records that intent on the build.
+          Promotion points those names at the mutable version on a stage
+          repository or in production.
     secrets:
       build-secrets-json:
         required: false
@@ -822,6 +825,8 @@ jobs:
           TAGS: ${{ steps.tags.outputs.tags }}
           DIGEST: ${{ steps.manifest.outputs.digest }}
           JF_REPO: ${{ inputs.jf-project }}${{ inputs.repo-scope }}
+          IMAGE: ${{ inputs.image-name }}
+          VERSIONS_OVERRIDE: ${{ inputs.versions-override }}
         run: |
           set -euo pipefail
           # The build number stays at the setup-jfrog-cli default (github.run_number):
@@ -843,6 +848,13 @@ jobs:
             printf '%s\n' "$line" >"${RUNNER_TEMP}/docker-image-ref.txt"
             jf rt build-docker-create --image-file "${RUNNER_TEMP}/docker-image-ref.txt" "$JF_REPO"
           done <"$image_file"
+          # build-collect-env on the next step stores this as
+          # buildInfo.env.DOCKER_FLOATING_TAGS. Promotion reads it from the
+          # included build. A version tag alone writes nothing.
+          floating=$(bash "$refs" floating-property --image-name "$IMAGE" --versions-override "${VERSIONS_OVERRIDE:-}")
+          if [[ -n $floating ]]; then
+            echo "DOCKER_FLOATING_TAGS=${floating}" >>"$GITHUB_ENV"
+          fi
 
       - name: Publish Build Info
         if: ${{ inputs.push }}
