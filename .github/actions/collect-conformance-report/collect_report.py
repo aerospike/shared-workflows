@@ -540,7 +540,7 @@ def render_markdown(result: Collection) -> str:
                 gate,
             ]
         )
-    sections = [
+    rendered_lines = [
         "## Conformance",
         "",
         _table(
@@ -563,7 +563,7 @@ def render_markdown(result: Collection) -> str:
                     item.reason,
                 ]
             )
-        sections.extend(
+        rendered_lines.extend(
             [
                 "### Gate failures",
                 "",
@@ -577,7 +577,7 @@ def render_markdown(result: Collection) -> str:
             ]
         )
     else:
-        sections.extend(["No pass-to-fail regression and no undeclared unsupported result.", ""])
+        rendered_lines.extend(["No pass-to-fail regression and no undeclared unsupported result.", ""])
 
     if result.unsupported:
         rows = []
@@ -591,7 +591,7 @@ def render_markdown(result: Collection) -> str:
                     item.reason,
                 ]
             )
-        sections.extend(
+        rendered_lines.extend(
             [
                 "### Unsupported",
                 "",
@@ -613,7 +613,7 @@ def render_markdown(result: Collection) -> str:
                     item.reason,
                 ]
             )
-        sections.extend(
+        rendered_lines.extend(
             [
                 "### Fail",
                 "",
@@ -634,7 +634,7 @@ def render_markdown(result: Collection) -> str:
                     item.reason,
                 ]
             )
-        sections.extend(
+        rendered_lines.extend(
             [
                 "### Other declaration differences",
                 "",
@@ -644,7 +644,7 @@ def render_markdown(result: Collection) -> str:
                 "",
             ]
         )
-    return "\n".join(sections).rstrip() + "\n"
+    return "\n".join(rendered_lines).rstrip() + "\n"
 
 
 def _write_output(name: str, value: str) -> None:
