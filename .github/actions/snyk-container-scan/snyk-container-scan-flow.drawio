@@ -1,0 +1,41 @@
+<mxfile host="app.diagrams.net" agent="claude-code">
+  <diagram name="snyk-container-scan flow" id="snyk-flow-2">
+    <mxGraphModel dx="1100" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="900" pageHeight="1200" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="legend" parent="1" vertex="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#666666;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;fontSize=11;" value="LEGEND&#xa;Box = step   Diamond = decision&#xa;Green = output   Red = FAIL CLOSED&#xa;Dashed = CALLER (not this action)"><mxGeometry x="610" y="30" width="260" height="80" as="geometry"/></mxCell>
+
+        <mxCell id="secCaller" parent="1" vertex="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E1D5E7;strokeColor=#9673A6;opacity=40;verticalAlign=top;fontStyle=1;fontSize=13;arcSize=4;" value="CALLER — promotion / reusable workflow (owns the gate, by severity)"><mxGeometry x="30" y="40" width="540" height="190" as="geometry"/></mxCell>
+        <mxCell id="C1" parent="1" vertex="1" style="rounded=1;whiteSpace=wrap;html=1;dashed=1;fillColor=#FFFFFF;strokeColor=#9673A6;" value="Authenticate to the registry (private image)&#xa;docker login / setup-jfrog-cli (OIDC)"><mxGeometry x="90" y="80" width="420" height="50" as="geometry"/></mxCell>
+        <mxCell id="C2" parent="1" vertex="1" style="rounded=1;whiteSpace=wrap;html=1;dashed=1;fillColor=#FFFFFF;strokeColor=#9673A6;" value="calls snyk-container-scan action&#xa;inputs: image · severity-threshold · platform · fail-on-issues"><mxGeometry x="90" y="150" width="420" height="50" as="geometry"/></mxCell>
+
+        <mxCell id="secAction" parent="1" vertex="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;opacity=30;verticalAlign=top;fontStyle=1;fontSize=13;arcSize=3;" value="snyk-container-scan action (callee) — tests &amp; reports only"><mxGeometry x="30" y="270" width="540" height="560" as="geometry"/></mxCell>
+
+        <mxCell id="S1" parent="1" vertex="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF2CC;strokeColor=#D79B00;" value="1 · OFFICIAL SNYK ACTION&#xa;uses: snyk/actions/docker@&lt;sha&gt;  (SHA-pinned, Dependabot)&#xa;runs `snyk container test &lt;image&gt;`&#xa;→ --json-file-output = snyk-report.json"><mxGeometry x="90" y="320" width="420" height="80" as="geometry"/></mxCell>
+        <mxCell id="S2" parent="1" vertex="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6C8EBF;" value="report produced?&#xa;(else ERROR, exit 1)"><mxGeometry x="200" y="430" width="200" height="70" as="geometry"/></mxCell>
+        <mxCell id="S3" parent="1" vertex="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6C8EBF;" value="2 · summarize.py snyk-report.json&#xa;→ verdict (PASS/FAIL) + critical/high/medium/low/total&#xa;(unique by vuln id; threshold blocks its level and above)"><mxGeometry x="90" y="540" width="420" height="70" as="geometry"/></mxCell>
+        <mxCell id="S4" parent="1" vertex="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;" value="fail-on-issues&#xa;&amp;&amp; verdict==FAIL?&#xa;(caller sets false)"><mxGeometry x="200" y="640" width="200" height="90" as="geometry"/></mxCell>
+        <mxCell id="S4y" parent="1" vertex="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8CECC;strokeColor=#B85450;" value="exit 1&#xa;(standalone gate)"><mxGeometry x="430" y="655" width="110" height="60" as="geometry"/></mxCell>
+        <mxCell id="S5" parent="1" vertex="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF2CC;strokeColor=#D79B00;" value="3 · monitor? (optional)&#xa;snyk/actions/docker command: monitor&#xa;→ record image in Snyk portal (continuous rescan)"><mxGeometry x="90" y="760" width="420" height="55" as="geometry"/></mxCell>
+
+        <mxCell id="S2fail" parent="1" vertex="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8CECC;strokeColor=#B85450;fontStyle=1;" value="ERROR&#xa;::error:: exit 1"><mxGeometry x="430" y="435" width="110" height="60" as="geometry"/></mxCell>
+
+        <mxCell id="OUT" parent="1" vertex="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#D5E8D4;strokeColor=#82B366;fontStyle=1;fontSize=12;" value="OUTPUTS → verdict · critical/high/medium/low/total · report · sarif"><mxGeometry x="90" y="870" width="420" height="50" as="geometry"/></mxCell>
+        <mxCell id="GATE" parent="1" vertex="1" style="rounded=1;whiteSpace=wrap;html=1;dashed=1;fillColor=#E1D5E7;strokeColor=#9673A6;fontStyle=2;" value="CALLER gates: startsWith(verdict,'FAIL') → block promotion · else promote"><mxGeometry x="90" y="960" width="420" height="50" as="geometry"/></mxCell>
+
+        <mxCell id="e1" parent="1" edge="1" source="C1" target="C2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;dashed=1;strokeColor=#9673A6;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e2" parent="1" edge="1" source="C2" target="S1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e3" parent="1" edge="1" source="S1" target="S2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e4" parent="1" edge="1" source="S2" target="S2fail" value="no" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;exitX=1;exitY=0.5;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e5" parent="1" edge="1" source="S2" target="S3" value="yes" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e6" parent="1" edge="1" source="S3" target="S4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e7" parent="1" edge="1" source="S4" target="S4y" value="yes" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;exitX=1;exitY=0.5;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e8" parent="1" edge="1" source="S4" target="S5" value="no (caller owns gate)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e9" parent="1" edge="1" source="S5" target="OUT" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e10" parent="1" edge="1" source="OUT" target="GATE" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;dashed=1;strokeColor=#9673A6;"><mxGeometry relative="1" as="geometry"/></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

@@ -1,0 +1,139 @@
+name: Snyk Container Scan
+description: >
+  Scan a promoted container image with the official Snyk action and return a PASS/FAIL verdict
+  plus per-severity counts. Tests and reports only; promotes nothing — the calling workflow
+  owns the block decision. Registry auth (docker login / setup-jfrog-cli) is the caller's job.
+inputs:
+  image:
+    description: Container image reference to scan (e.g. repo/name:tag).
+    required: true
+  severity-threshold:
+    description: Lowest severity that counts against the verdict — low, medium, high, or critical.
+    required: false
+    default: high
+  fail-on-issues:
+    description: >
+      Exit non-zero when the verdict is FAIL. Leave true for standalone gating; a calling
+      workflow that owns the gate sets this false and reads the verdict output instead.
+    required: false
+    default: "true"
+  monitor:
+    description: Also record the image in the Snyk portal (`snyk container monitor`). Needs snyk-org.
+    required: false
+    default: "false"
+  platform:
+    description: Platform to scan for a multi-arch tag, e.g. linux/amd64.
+    required: false
+    default: ""
+  sarif-output-path:
+    description: Write SARIF here for a later code-scanning upload.
+    required: false
+    default: ""
+  snyk-org:
+    description: Snyk org id. Required only when monitor is true.
+    required: false
+    default: ""
+  snyk-token:
+    description: Snyk API token. Leave unset to inherit SNYK_TOKEN from the environment.
+    required: false
+    default: ""
+outputs:
+  verdict:
+    description: PASS or FAIL. Gate with startsWith(..., 'FAIL'). FAIL means findings at or above the threshold.
+    value: ${{ steps.scan.outputs.verdict }}
+  critical:
+    description: Count of unique critical-severity findings.
+    value: ${{ steps.scan.outputs.critical }}
+  high:
+    description: Count of unique high-severity findings.
+    value: ${{ steps.scan.outputs.high }}
+  medium:
+    description: Count of unique medium-severity findings.
+    value: ${{ steps.scan.outputs.medium }}
+  low:
+    description: Count of unique low-severity findings.
+    value: ${{ steps.scan.outputs.low }}
+  total:
+    description: Count of unique findings across all severities.
+    value: ${{ steps.scan.outputs.total }}
+  report:
+    description: Path to the raw Snyk JSON report.
+    value: ${{ steps.scan.outputs.report }}
+  sarif:
+    description: Path to the written SARIF, empty when sarif-output-path was not set.
+    value: ${{ steps.scan.outputs.sarif }}
+runs:
+  using: composite
+  steps:
+    # The official Snyk action runs `snyk container test` in Snyk's maintained image. We ask for
+    # the full report (no --severity-threshold) so summarize.py sees every severity and the
+    # medium/low counts are not lost — the blocking threshold is applied later, in summarize.py.
+    # Findings (exit 1) are let through; the JSON, not the exit code, is the signal. The caller
+    # must have authenticated to the registry first (docker login / setup-jfrog-cli).
+    - name: Snyk container test
+      id: snyk
+      continue-on-error: true
+      uses: snyk/actions/docker@11b673cfb4b0dc0d860a1323caa199d54950dcce # 2026-10-07
+      env:
+        SNYK_TOKEN: ${{ inputs.snyk-token || env.SNYK_TOKEN }}
+      with:
+        image: ${{ inputs.image }}
+        # Write to the workspace, not RUNNER_TEMP: the official action runs in a container that
+        # mounts GITHUB_WORKSPACE, so only paths under it persist to the host for the next step.
+        # --org keeps the test on the same Snyk org as the portal record (monitor), so policies
+        # and ignores match.
+        args: >-
+          --json-file-output=snyk-report.json
+          ${{ inputs.snyk-org && format('--org={0}', inputs.snyk-org) || '' }}
+          ${{ inputs.platform && format('--platform={0}', inputs.platform) || '' }}
+          ${{ inputs.sarif-output-path && format('--sarif-file-output={0}', inputs.sarif-output-path) || '' }}
+
+    - name: Summarize verdict
+      id: scan
+      shell: bash
+      env:
+        REPORT: ${{ github.workspace }}/snyk-report.json
+        IMAGE: ${{ inputs.image }}
+        SEVERITY_THRESHOLD: ${{ inputs.severity-threshold }}
+        FAIL_ON_ISSUES: ${{ inputs.fail-on-issues }}
+        SARIF_OUTPUT_PATH: ${{ inputs.sarif-output-path }}
+      run: |
+        set -uo pipefail
+        if [[ ! -s "$REPORT" ]]; then
+          echo "::error::snyk-container-scan: the Snyk scan produced no report for $IMAGE"
+          echo "verdict=ERROR" >>"$GITHUB_OUTPUT"
+          exit 1
+        fi
+        # summarize.py owns the PASS/FAIL decision; it emits verdict= and per-severity counts.
+        # Capture its output and check the exit code — a process substitution would swallow a
+        # summarize.py failure and silently produce no verdict.
+        if ! summary="$(python3 "${GITHUB_ACTION_PATH}/summarize.py" "$REPORT" --severity-threshold "$SEVERITY_THRESHOLD")"; then
+          echo "::error::snyk-container-scan: could not summarize the report for $IMAGE"
+          echo "verdict=ERROR" >>"$GITHUB_OUTPUT"
+          exit 1
+        fi
+        verdict=""
+        while IFS= read -r line; do
+          echo "$line" >>"$GITHUB_OUTPUT"
+          [[ "$line" == verdict=* ]] && verdict="${line#verdict=}"
+        done <<<"$summary"
+        echo "report=$REPORT" >>"$GITHUB_OUTPUT"
+        if [[ -n "$SARIF_OUTPUT_PATH" ]]; then echo "sarif=$SARIF_OUTPUT_PATH" >>"$GITHUB_OUTPUT"; else echo "sarif=" >>"$GITHUB_OUTPUT"; fi
+        echo "Verdict: ${verdict:-UNKNOWN}"
+        if [[ "$FAIL_ON_ISSUES" == "true" && "$verdict" == "FAIL" ]]; then
+          echo "::error::snyk-container-scan: $IMAGE has findings at or above $SEVERITY_THRESHOLD"
+          exit 1
+        fi
+
+    # Optional: record the image in the Snyk portal for continuous monitoring (the "week-gap"
+    # rescan). A second official-action call with command: monitor; never fails the scan.
+    - name: Snyk monitor (record to portal)
+      if: ${{ inputs.monitor == 'true' && inputs.snyk-org != '' }}
+      continue-on-error: true
+      uses: snyk/actions/docker@11b673cfb4b0dc0d860a1323caa199d54950dcce # 2026-10-07
+      env:
+        SNYK_TOKEN: ${{ inputs.snyk-token || env.SNYK_TOKEN }}
+      with:
+        image: ${{ inputs.image }}
+        command: monitor
+        args: --org=${{ inputs.snyk-org }}
