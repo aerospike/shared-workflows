@@ -59,27 +59,36 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      - name: Read the fixture set version
+        id: fixture-version
+        run: |
+          version_file=".github/actions/fetch-conformance-fixtures/fixture-set-version"
+          version="$(tr -d '[:space:]' < "$version_file")"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
       - name: Dry-run fetch
         id: fetch
         uses: ./.github/actions/fetch-conformance-fixtures
         with:
-          version: 0.1.0
+          version: "${{ steps.fixture-version.outputs.version }}"
           dry-run: "true"
 
       - name: Check the artifact path
         run: |
-          expected="database-generic-dev-local/aerospike-client-conformance/0.1.0/aerospike-client-conformance-0.1.0.zip"
+          version="${{ steps.fixture-version.outputs.version }}"
+          expected="database-generic-dev-local/aerospike-client-conformance/${version}/aerospike-client-conformance-${version}.zip"
           [[ "${{ steps.fetch.outputs.artifact-path }}" == "$expected" ]]
           [[ -z "${{ steps.fetch.outputs.fixtures-directory }}" ]]
 
       - name: Write a declared-unsupported report
         run: |
           mkdir -p reports declarations
-          cat > reports/conformance-report.json << 'EOF'
+          version="${{ steps.fixture-version.outputs.version }}"
+          cat > reports/conformance-report.json << EOF
           {
             "runtime": "java",
             "clientVersion": "9.1.0",
-            "fixtureSetVersion": "0.1.0",
+            "fixtureSetVersion": "${version}",
             "counts": {"pass": 0, "fail": 0, "unsupported": 1, "blocked": 0},
             "rows": [{
               "file": "discovery/translate/port-map.yaml",
@@ -100,7 +109,7 @@ jobs:
         with:
           reports-directory: reports
           declarations-directory: declarations
-          fixture-set-version: 0.1.0
+          fixture-set-version: "${{ steps.fixture-version.outputs.version }}"
 
       - name: Check the gate
         run: |

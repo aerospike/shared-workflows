@@ -8,7 +8,7 @@ The release zip is published to JFrog generic by that repository's tag workflow:
 <jf-project>-generic-dev-local/<package-name>/<version>/<package-name>-<version>.zip
 ```
 
-The default path for fixture set `0.1.0` is:
+The tests in this repository read that version from `fixture-set-version`. With the default project and package name, fixture set `0.1.0` is:
 
 ```text
 database-generic-dev-local/aerospike-client-conformance/0.1.0/aerospike-client-conformance-0.1.0.zip
@@ -55,7 +55,7 @@ jobs:
       - id: fixtures
         uses: aerospike/shared-workflows/.github/actions/fetch-conformance-fixtures@<sha> # vX.Y.Z
         with:
-          version: 0.1.0
+          version: 0.1.0 # same value as fixture-set-version
           oidc-provider-name: gh-aerospike
           oidc-audience: aerospike
 

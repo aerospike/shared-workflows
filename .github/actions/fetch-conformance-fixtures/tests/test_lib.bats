@@ -4,6 +4,8 @@
 
 GIT_ROOT="$(git rev-parse --show-toplevel)"
 ACTION_DIR="$GIT_ROOT/.github/actions/fetch-conformance-fixtures"
+FIXTURE_VERSION="$(tr -d '[:space:]' < "$ACTION_DIR/fixture-set-version")"
+ARTIFACT_PATH="database-generic-dev-local/aerospike-client-conformance/${FIXTURE_VERSION}/aerospike-client-conformance-${FIXTURE_VERSION}.zip"
 
 # shellcheck source=/dev/null
 source "$ACTION_DIR/lib.sh"
@@ -23,18 +25,19 @@ teardown() {
 }
 
 @test "artifact path matches the conformance release layout" {
-    run artifact_repo_path "database" "aerospike-client-conformance" "0.1.0"
+    run artifact_repo_path "database" "aerospike-client-conformance" "$FIXTURE_VERSION"
 
     [ "$status" -eq 0 ]
-    [ "$output" = "database-generic-dev-local/aerospike-client-conformance/0.1.0/aerospike-client-conformance-0.1.0.zip" ]
+    [ "$output" = "$ARTIFACT_PATH" ]
 }
 
 @test "version rejects a v prefix and a partial semver" {
-    run validate_semver "v0.1.0"
+    run validate_semver "v${FIXTURE_VERSION}"
     [ "$status" -ne 0 ]
     [[ "$output" == *"MAJOR.MINOR.PATCH"* ]]
 
-    run validate_semver "0.1"
+    partial="${FIXTURE_VERSION%.*}"
+    run validate_semver "$partial"
     [ "$status" -ne 0 ]
 }
 
@@ -54,7 +57,7 @@ teardown() {
 }
 
 @test "dry-run prints the download and does not require jf or oidc" {
-    export VERSION=0.1.0
+    export VERSION="$FIXTURE_VERSION"
     export DRY_RUN=true
     export DESTINATION=conformance-fixtures
     export GITHUB_OUTPUT="$TEST_TMPDIR/output"
@@ -62,14 +65,14 @@ teardown() {
     run "$ACTION_DIR/entrypoint.sh" fetch
 
     [ "$status" -eq 0 ]
-    [[ "$output" == *"dry-run: jf rt download database-generic-dev-local/aerospike-client-conformance/0.1.0/aerospike-client-conformance-0.1.0.zip"* ]]
-    grep -q '^artifact-path=database-generic-dev-local/aerospike-client-conformance/0.1.0/aerospike-client-conformance-0.1.0.zip$' "$GITHUB_OUTPUT"
+    [[ "$output" == *"dry-run: jf rt download ${ARTIFACT_PATH}"* ]]
+    grep -q "^artifact-path=${ARTIFACT_PATH}$" "$GITHUB_OUTPUT"
     run grep -q '^fixtures-directory=' "$GITHUB_OUTPUT"
     [ "$status" -ne 0 ]
 }
 
 @test "a real fetch without oidc fails before download" {
-    export VERSION=0.1.0
+    export VERSION="$FIXTURE_VERSION"
     export DRY_RUN=false
 
     run "$ACTION_DIR/entrypoint.sh" validate

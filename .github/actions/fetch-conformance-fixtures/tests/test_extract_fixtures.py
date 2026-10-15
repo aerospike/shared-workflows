@@ -28,8 +28,10 @@ def load():
 extract = load()
 
 PACKAGE = "aerospike-client-conformance"
-VERSION = "0.1.0"
+version_text = (ROOT / "fixture-set-version").read_text(encoding="utf-8")
+VERSION = version_text.strip()
 PREFIX = f"{PACKAGE}-{VERSION}/"
+OTHER_VERSION = "9.9.9"
 
 
 def write_release(path: Path, entries: dict[str, bytes], links: list[str] | None = None) -> None:
@@ -54,7 +56,7 @@ class ExtractFixturesTests(unittest.TestCase):
             zip_path,
             {
                 PREFIX: b"",
-                PREFIX + "VERSION": b"0.1.0\n",
+                PREFIX + "VERSION": f"{VERSION}\n".encode(),
                 PREFIX + "schema/report.schema.json": b"{}",
                 PREFIX + "discovery/translate/port-map.yaml": b"kind: translate\n",
             },
@@ -62,17 +64,17 @@ class ExtractFixturesTests(unittest.TestCase):
         dest = work / "fixtures"
         extract.extract_release_zip(zip_path, dest, PACKAGE, VERSION)
         version = (dest / "VERSION").read_text(encoding="utf-8")
-        self.assertEqual(version, "0.1.0\n")
+        self.assertEqual(version, f"{VERSION}\n")
         self.assertTrue((dest / "discovery/translate/port-map.yaml").is_file())
         self.assertFalse((dest / PREFIX.rstrip("/")).exists())
 
     def test_rejects_a_version_mismatch(self) -> None:
         work = self.work
         zip_path = work / "release.zip"
-        write_release(zip_path, {PREFIX + "VERSION": b"0.2.0\n"})
+        write_release(zip_path, {PREFIX + "VERSION": f"{OTHER_VERSION}\n".encode()})
         with self.assertRaises(extract.ExtractError) as caught:
             extract.extract_release_zip(zip_path, work / "fixtures", PACKAGE, VERSION)
-        self.assertIn("0.2.0", str(caught.exception))
+        self.assertIn(OTHER_VERSION, str(caught.exception))
 
     def test_rejects_path_traversal_and_symlinks(self) -> None:
         work = self.work
@@ -82,7 +84,7 @@ class ExtractFixturesTests(unittest.TestCase):
             extract.extract_release_zip(traversal, work / "fixtures", PACKAGE, VERSION)
 
         linked = work / "linked.zip"
-        write_release(linked, {PREFIX + "VERSION": b"0.1.0\n"}, links=[PREFIX + "link"])
+        write_release(linked, {PREFIX + "VERSION": f"{VERSION}\n".encode()}, links=[PREFIX + "link"])
         with self.assertRaises(extract.ExtractError):
             extract.extract_release_zip(linked, work / "linked-dest", PACKAGE, VERSION)
 

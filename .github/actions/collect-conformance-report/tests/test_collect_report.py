@@ -69,9 +69,15 @@ cr = load()
 
 FILE = "discovery/translate/port-map.yaml"
 CASE = "host-port-key-hit"
+version_file = ROOT.parent / "fetch-conformance-fixtures" / "fixture-set-version"
+version_text = version_file.read_text(encoding="utf-8")
+FIXTURE_VERSION = version_text.strip()
+OTHER_FIXTURE_VERSION = "9.9.9"
 
 
-def report(rows, counts=None, runtime="java", version="0.1.0"):
+def report(rows, counts=None, runtime="java", version=None):
+    if version is None:
+        version = FIXTURE_VERSION
     if counts is None:
         counts = {"pass": 0, "fail": 0, "unsupported": 0, "blocked": 0}
         for row in rows:
@@ -208,10 +214,10 @@ class CollectReportTests(unittest.TestCase):
         java.mkdir(parents=True)
         go.mkdir()
         row = {"file": FILE, "case": CASE, "result": "pass"}
-        write_report(java, report([row], runtime="java", version="0.1.0"))
-        write_report(go, report([row], runtime="go", version="0.2.0"))
+        write_report(java, report([row], runtime="java"))
+        write_report(go, report([row], runtime="go", version=OTHER_FIXTURE_VERSION))
         with self.assertRaises(cr.CollectError) as caught:
-            cr.collect(reports, None, "0.1.0")
+            cr.collect(reports, None, FIXTURE_VERSION)
         self.assertIn("disagree", str(caught.exception))
 
     def test_main_writes_summary_and_returns_the_gate(self) -> None:

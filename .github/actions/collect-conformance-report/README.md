@@ -43,7 +43,7 @@ Run this step with `if: always()` so the summary is written when the runner itse
   with:
     reports-directory: client/target
     declarations-directory: client/src/test/resources/conformance
-    fixture-set-version: 0.1.0
+    fixture-set-version: 0.1.0 # same value as fetch-conformance-fixtures/fixture-set-version
 ```
 
 `reports-directory` may contain one report per runtime, including after `actions/download-artifact` with `merge-multiple: false`. The runtime name comes from the report, and it must match the `<runtime>` in `<runtime>-declared.yaml`.
