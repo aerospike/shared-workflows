@@ -1,0 +1,39 @@
+name: Collect conformance report
+description: >
+  Read each runtime's conformance-report.json, write a step summary of
+  pass / fail / unsupported / blocked, and fail on a pass-to-fail regression
+  or an undeclared unsupported result.
+
+inputs:
+  reports-directory:
+    description: Directory to search for conformance-report.json files
+    required: true
+  declarations-directory:
+    description: >
+      Directory to search for <runtime>-declared.yaml. A row with no
+      declaration is treated as pass. Omitted declarations make every
+      unsupported row undeclared.
+    required: false
+    default: ""
+  fixture-set-version:
+    description: >
+      When set, every report must name this fixture set version
+    required: false
+    default: ""
+
+outputs:
+  gate:
+    description: success, or failure when the gate trips or a report is invalid
+    value: ${{ steps.collect.outputs.gate }}
+
+runs:
+  using: composite
+  steps:
+    - name: Collect conformance reports
+      id: collect
+      shell: bash
+      env:
+        REPORTS_DIRECTORY: ${{ inputs.reports-directory }}
+        DECLARATIONS_DIRECTORY: ${{ inputs.declarations-directory }}
+        FIXTURE_SET_VERSION: ${{ inputs.fixture-set-version }}
+      run: python3 "${{ github.action_path }}/collect_report.py"
