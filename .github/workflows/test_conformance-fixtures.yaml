@@ -41,6 +41,9 @@ jobs:
       - name: Run fetch-conformance-fixtures unit tests
         run: python3 -m unittest discover .github/actions/fetch-conformance-fixtures/tests -v
 
+      - name: Install collect-conformance-report dependencies
+        run: python3 -m pip install -r .github/actions/collect-conformance-report/requirements.txt
+
       - name: Run collect-conformance-report unit tests
         run: python3 -m unittest discover .github/actions/collect-conformance-report/tests -v
 

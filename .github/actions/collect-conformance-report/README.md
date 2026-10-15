@@ -2,7 +2,7 @@
 
 Read every `conformance-report.json` under a directory, append a step summary, and fail the job for the two results that must not pass silently.
 
-The report shape is `schema/report.schema.json` in [aerospike-client-conformance](https://github.com/aerospike/aerospike-client-conformance). Each client runner writes one report. Declarations live in the client repository as `<runtime>-declared.yaml`. The Java file is `java-declared.yaml`: a fixture path, then `result` and `reason` per case that is not an implicit pass.
+The report shape is `schema/report.schema.json` in [aerospike-client-conformance](https://github.com/aerospike/aerospike-client-conformance). Each client runner writes one report. Declarations live in the client repository as `<runtime>-declared.yaml`. The Java file is `java-declared.yaml`: a fixture path, then `result` and `reason` per case that is not an implicit pass. The action installs `PyYAML==6.0.3` to read those files.
 
 ## Gate
 

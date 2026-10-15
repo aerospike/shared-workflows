@@ -21,6 +21,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 RESULTS = ("pass", "fail", "unsupported", "blocked")
 REPORT_KEYS = {"runtime", "clientVersion", "fixtureSetVersion", "counts", "rows"}
 ROW_KEYS = {"file", "case", "result", "reason", "detail"}
@@ -37,84 +39,25 @@ def _listed(values: list[str]) -> str:
     return ", ".join(ordered)
 
 
-def _is_comment(stripped: str) -> bool:
-    return stripped.startswith("#")
+def _construct_unique_map(loader: yaml.SafeLoader, node: yaml.nodes.MappingNode) -> dict[Any, Any]:
+    mapping: dict[Any, Any] = {}
+    for key_node, value_node in node.value:
+        key = loader.construct_object(key_node, deep=False)
+        if key in mapping:
+            raise CollectError(f"duplicate key {key}")
+        value = loader.construct_object(value_node, deep=False)
+        mapping[key] = value
+    return mapping
 
 
-def _unquote(raw: str) -> str:
-    if len(raw) < 2 or not raw.startswith('"') or not raw.endswith('"'):
-        raise CollectError(f"expected a quoted string, got: {raw}")
-    inner = raw[1:-1]
-    chars: list[str] = []
-    escaped = False
-    for char in inner:
-        if escaped:
-            mapping = {'"': '"', "\\": "\\", "n": "\n", "t": "\t"}
-            if char not in mapping:
-                raise CollectError(f"unknown escape \\{char} in {raw}")
-            chars.append(mapping[char])
-            escaped = False
-            continue
-        if char == "\\":
-            escaped = True
-            continue
-        chars.append(char)
-    if escaped:
-        raise CollectError(f"truncated escape in {raw}")
-    return "".join(chars)
+class UniqueKeyLoader(yaml.SafeLoader):
+    """SafeLoader that rejects duplicate keys."""
 
 
-def _scalar(raw: str) -> str:
-    value = raw.strip()
-    if value.startswith('"'):
-        return _unquote(value)
-    if value.startswith("'") and value.endswith("'") and len(value) >= 2:
-        return value[1:-1]
-    return value
-
-
-def _split_flow(body: str) -> list[str]:
-    parts: list[str] = []
-    buf: list[str] = []
-    in_quotes = False
-    escaped = False
-    for char in body:
-        if escaped:
-            buf.append(char)
-            escaped = False
-            continue
-        if char == "\\" and in_quotes:
-            buf.append(char)
-            escaped = True
-            continue
-        if char == '"':
-            in_quotes = not in_quotes
-            buf.append(char)
-            continue
-        if char == "," and not in_quotes:
-            parts.append("".join(buf).strip())
-            buf = []
-            continue
-        buf.append(char)
-    if in_quotes or escaped:
-        raise CollectError(f"unterminated string in {{{body}}}")
-    tail = "".join(buf).strip()
-    if tail:
-        parts.append(tail)
-    return parts
-
-
-def _parse_flow(body: str) -> dict[str, str]:
-    parsed: dict[str, str] = {}
-    for part in _split_flow(body):
-        if ":" not in part:
-            raise CollectError(f"declaration entry needs a key: {part}")
-        key, raw_value = part.split(":", 1)
-        name = key.strip()
-        if name in parsed:
-            raise CollectError(f"duplicate declaration key {name}")
-        parsed[name] = _scalar(raw_value)
-    return parsed
+UniqueKeyLoader.add_constructor(
+    yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG,
+    _construct_unique_map,
+)
 
 
 def _valid_file_name(file_name: str) -> bool:
@@ -171,73 +114,35 @@ def parse_declarations(text: str) -> dict[str, dict[str, dict[str, str | None]]]
     The file is the subset the Java runner writes: a fixture path, then either
     ``case: { result: ..., reason: "..." }`` or a block ``result`` / ``reason``.
     """
+    try:
+        loaded = yaml.load(text, Loader=UniqueKeyLoader)
+    except yaml.YAMLError as exc:
+        raise CollectError(f"invalid declaration YAML: {exc}") from exc
+    if loaded is None:
+        return {}
+    if not isinstance(loaded, dict):
+        raise CollectError("declaration file must be a map of fixture files")
+
     files: dict[str, dict[str, dict[str, str | None]]] = {}
-    current_file: str | None = None
-    current_case: str | None = None
-    current_body: dict[str, str] | None = None
-
-    def commit() -> None:
-        nonlocal current_case, current_body
-        if current_case is None:
-            return
-        if current_file is None or current_body is None:
-            raise CollectError("declaration case has no fixture file")
-        _store_declaration(files, current_file, current_case, current_body)
-        current_case = None
-        current_body = None
-
-    for line_no, raw in enumerate(text.splitlines(), 1):
-        if "\t" in raw:
-            raise CollectError(f"line {line_no}: tabs are not allowed")
-        stripped = raw.strip()
-        if stripped == "" or _is_comment(stripped):
-            continue
-        indent = len(raw) - len(raw.lstrip(" "))
-        if indent == 0:
-            commit()
-            if not stripped.endswith(":"):
-                raise CollectError(f"line {line_no}: expected a fixture file, got: {stripped}")
-            file_name = stripped[:-1].strip()
-            if not _valid_file_name(file_name):
-                raise CollectError(f"line {line_no}: invalid fixture file {file_name}")
-            if file_name in files:
-                raise CollectError(f"line {line_no}: duplicate fixture file {file_name}")
-            files[file_name] = {}
-            current_file = file_name
-            continue
-        if current_file is None:
-            raise CollectError(f"line {line_no}: case is outside a fixture file")
-        if indent == 2 and ": {" in stripped and stripped.endswith("}"):
-            commit()
-            case_name, flow = stripped.split(": {", 1)
-            case_name = case_name.strip()
-            if not _valid_case_name(case_name):
-                raise CollectError(f"line {line_no}: invalid case {case_name}")
-            flow_body = flow[:-1]
-            current_case = case_name
-            current_body = _parse_flow(flow_body)
-            commit()
-            continue
-        if indent == 2 and stripped.endswith(":"):
-            commit()
-            case_name = stripped[:-1].strip()
-            if not _valid_case_name(case_name):
-                raise CollectError(f"line {line_no}: invalid case {case_name}")
-            current_case = case_name
-            current_body = {}
-            continue
-        if indent == 4 and current_case is not None and current_body is not None:
-            if ":" not in stripped:
-                raise CollectError(f"line {line_no}: expected result or reason")
-            key, raw_value = stripped.split(":", 1)
-            name = key.strip()
-            if name in current_body:
-                raise CollectError(f"line {line_no}: duplicate key {name}")
-            current_body[name] = _scalar(raw_value)
-            continue
-        raise CollectError(f"line {line_no}: unexpected declaration line: {stripped}")
-
-    commit()
+    for file_name, cases in loaded.items():
+        if not isinstance(file_name, str) or not _valid_file_name(file_name):
+            raise CollectError(f"invalid fixture file {file_name}")
+        if not isinstance(cases, dict):
+            raise CollectError(f"{file_name} must be a map of cases")
+        files[file_name] = {}
+        for case_name, body in cases.items():
+            if not isinstance(case_name, str) or not _valid_case_name(case_name):
+                raise CollectError(f"{file_name}: invalid case {case_name}")
+            if not isinstance(body, dict):
+                raise CollectError(f"{file_name}:{case_name} must be a map")
+            normalized: dict[str, str] = {}
+            for key, value in body.items():
+                if not isinstance(key, str):
+                    raise CollectError(f"{file_name}:{case_name}: invalid key {key}")
+                if not isinstance(value, str):
+                    raise CollectError(f"{file_name}:{case_name}: {key} must be a string")
+                normalized[key] = value
+            _store_declaration(files, file_name, case_name, normalized)
     return files
 
 

@@ -29,6 +29,10 @@ outputs:
 runs:
   using: composite
   steps:
+    - name: Install PyYAML
+      shell: bash
+      run: python3 -m pip install -r "${{ github.action_path }}/requirements.txt"
+
     - name: Collect conformance reports
       id: collect
       shell: bash
