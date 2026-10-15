@@ -1,0 +1,85 @@
+name: Fetch conformance fixtures
+description: >
+  Download one pinned aerospike-client-conformance release from JFrog and
+  extract it so the destination has VERSION at its root.
+
+inputs:
+  version:
+    description: Fixture set version, MAJOR.MINOR.PATCH, with no v prefix
+    required: true
+  destination:
+    description: Workspace-relative directory to extract into
+    required: false
+    default: conformance-fixtures
+  dry-run:
+    description: Print the artifact path and skip the download
+    required: false
+    default: "false"
+  jf-project:
+    description: JFrog Artifactory project that publishes the fixture set
+    required: false
+    default: database
+  jf-url:
+    description: JFrog platform URL
+    required: false
+    default: https://aerospike.jfrog.io
+  oidc-audience:
+    description: JFrog OIDC audience. Required unless dry-run is true
+    required: false
+    default: ""
+  oidc-provider-name:
+    description: JFrog OIDC provider name. Required unless dry-run is true
+    required: false
+    default: ""
+  package-name:
+    description: Release artifact name
+    required: false
+    default: aerospike-client-conformance
+
+outputs:
+  artifact-path:
+    description: Artifactory path of the release zip
+    value: ${{ steps.fetch.outputs.artifact-path }}
+  fixtures-directory:
+    description: Absolute directory containing VERSION. Empty on dry-run
+    value: ${{ steps.fetch.outputs.fixtures-directory }}
+  fixture-set-version:
+    description: Version read from the release. Empty on dry-run
+    value: ${{ steps.fetch.outputs.fixture-set-version }}
+
+runs:
+  using: composite
+  steps:
+    - name: Validate inputs
+      shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
+        PACKAGE_NAME: ${{ inputs.package-name }}
+        JF_PROJECT: ${{ inputs.jf-project }}
+        DESTINATION: ${{ inputs.destination }}
+        DRY_RUN: ${{ inputs.dry-run }}
+        OIDC_PROVIDER_NAME: ${{ inputs.oidc-provider-name }}
+        OIDC_AUDIENCE: ${{ inputs.oidc-audience }}
+      run: bash "${{ github.action_path }}/entrypoint.sh" validate
+
+    - name: Set up JFrog CLI
+      if: inputs.dry-run != 'true'
+      uses: step-security/setup-jfrog-cli@a6b41f8338bea0983ddff6bd4ede7d2dcd81e1fa # v4.8.1
+      env:
+        JF_URL: ${{ inputs.jf-url }}
+      with:
+        oidc-provider-name: ${{ inputs.oidc-provider-name }}
+        oidc-audience: ${{ inputs.oidc-audience }}
+
+    - name: Download and extract the fixture set
+      id: fetch
+      shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
+        PACKAGE_NAME: ${{ inputs.package-name }}
+        JF_PROJECT: ${{ inputs.jf-project }}
+        DESTINATION: ${{ inputs.destination }}
+        DRY_RUN: ${{ inputs.dry-run }}
+        OIDC_PROVIDER_NAME: ${{ inputs.oidc-provider-name }}
+        OIDC_AUDIENCE: ${{ inputs.oidc-audience }}
+      run: bash "${{ github.action_path }}/entrypoint.sh" fetch
