@@ -97,13 +97,13 @@ class CollectReportTests(unittest.TestCase):
 
     def test_parses_the_java_declaration_file(self) -> None:
         parsed = cr.parse_declarations(JAVA_DECLARED)
-        port_map = parsed["discovery/translate/port-map.yaml"]
+        port_map = parsed.files["discovery/translate/port-map.yaml"]
         hit = port_map["host-port-key-hit"]
-        self.assertEqual(hit["result"], "unsupported")
-        self.assertEqual(hit["reason"], "CLIENT-5641 not implemented")
-        tls_row = parsed["tls/name-matching.yaml"]["cn-only-no-san"]
-        self.assertEqual(tls_row["result"], "fail")
-        self.assertIn("legacy CN fallback", tls_row["reason"])
+        self.assertEqual(hit.result, "unsupported")
+        self.assertEqual(hit.reason, "CLIENT-5641 not implemented")
+        tls_row = parsed.files["tls/name-matching.yaml"]["cn-only-no-san"]
+        self.assertEqual(tls_row.result, "fail")
+        self.assertIn("legacy CN fallback", tls_row.reason)
         self.assertNotIn("some-other-case", port_map)
 
     def test_declared_unsupported_does_not_fail(self) -> None:
@@ -125,8 +125,8 @@ class CollectReportTests(unittest.TestCase):
             encoding="utf-8",
         )
         result = cr.collect(reports, declarations)
-        self.assertFalse(result["failed"])
-        self.assertEqual(result["unsupported"][0]["reason"], "CLIENT-5641 not implemented")
+        self.assertFalse(result.failed)
+        self.assertEqual(result.unsupported[0].reason, "CLIENT-5641 not implemented")
         markdown = cr.render_markdown(result)
         self.assertIn("CLIENT-5641 not implemented", markdown)
         self.assertIn("| java |", markdown)
@@ -142,8 +142,8 @@ class CollectReportTests(unittest.TestCase):
         }
         write_report(reports, report([row]))
         result = cr.collect(reports, None)
-        self.assertTrue(result["failed"])
-        self.assertEqual(result["findings"][0]["kind"], "undeclared-unsupported")
+        self.assertTrue(result.failed)
+        self.assertEqual(result.findings[0].kind, "undeclared-unsupported")
 
     def test_pass_to_fail_fails_and_declared_fail_does_not(self) -> None:
         reports = self.work / "reports"
@@ -169,10 +169,10 @@ class CollectReportTests(unittest.TestCase):
             encoding="utf-8",
         )
         result = cr.collect(reports, declarations)
-        self.assertTrue(result["failed"])
-        kinds = [item["kind"] for item in result["findings"]]
+        self.assertTrue(result.failed)
+        kinds = [item.kind for item in result.findings]
         self.assertEqual(kinds, ["pass-to-fail"])
-        self.assertEqual(result["findings"][0]["case"], "now-broken")
+        self.assertEqual(result.findings[0].case, "now-broken")
 
     def test_blocked_without_a_declaration_does_not_fail(self) -> None:
         reports = self.work / "reports"
@@ -180,8 +180,8 @@ class CollectReportTests(unittest.TestCase):
         row = {"file": FILE, "case": "fr-22", "result": "blocked", "reason": "TG-16"}
         write_report(reports, report([row]))
         result = cr.collect(reports, None)
-        self.assertFalse(result["failed"])
-        self.assertEqual(result["differences"], [])
+        self.assertFalse(result.failed)
+        self.assertEqual(result.differences, [])
 
     def test_count_mismatch_and_missing_reports_fail(self) -> None:
         reports = self.work / "reports"
