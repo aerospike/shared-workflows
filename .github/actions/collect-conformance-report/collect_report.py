@@ -340,12 +340,10 @@ def _load_row(row: Any, source: str, index: int) -> ReportRow:
 
     reason = ""
     detail = ""
-    if result in ("fail", "unsupported", "blocked"):
-        if "reason" not in row:
-            raise CollectError(f"{label}: a {result} row needs a reason")
+    if result in ("fail", "unsupported", "blocked") and "reason" not in row:
+        raise CollectError(f"{label}: a {result} row needs a reason")
 
-        reason = _require_text(row["reason"], f"{label}.reason")
-    elif "reason" in row:
+    if "reason" in row:
         reason = _require_text(row["reason"], f"{label}.reason")
 
     if "detail" in row:
