@@ -38,15 +38,18 @@ Use `reusable_create-release-bundle.yaml` to create a release bundle as a standa
 
 ```yaml
 release-bundle:
-  needs: [deploy]
-  uses: aerospike/shared-workflows/.github/workflows/reusable_create-release-bundle.yaml@v3.2.0
+  needs: [artifacts, image]
+  uses: aerospike/shared-workflows/.github/workflows/reusable_create-release-bundle.yaml@<sha> # vX.Y.Z
   with:
-    gh-workflows-ref: v3.2.0
-    jf-build-names: "my-app:1.2.3,my-container:1.2.3"
+    gh-workflows-ref: <sha>
+    jf-build-names: >-
+      ${{ needs.artifacts.outputs.jf-build-name }}:${{ needs.artifacts.outputs.jf-build-id }},${{ needs.image.outputs.jf-build-name }}:${{ needs.image.outputs.jf-build-id }}
     jf-bundle-name: my-release
     version: 1.2.3
     jf-project: my-project
 ```
+
+Each `jf-build-names` entry is `build-name:build-number`: the build-info number the deploy job published, not the release version. See [Build names and numbers](../create-release-bundle/README.md#build-names-and-numbers).
 
 Set `dry-run: true` to check the configuration and JFrog authentication: the workflow prints the JFrog commands instead of running them.
 
@@ -83,7 +86,9 @@ Set `gh-upload-bundle-metadata: false` on deploy when the metadata handoff is no
 
 ## Troubleshooting
 
-**Bundle creation fails**: confirm the `jf-build-names` input is a comma-separated list of `name:version` pairs that exist in JFrog, and that your project permissions allow bundle creation. Bundle creation requires higher permissions than artifact upload.
+**Bundle creation fails with `Build not found`**: a build number in `jf-build-names` does not match a published build-info record. The usual cause is passing the release version (`my-app:1.2.3`) instead of the deploy job's `jf-build-id` output.
+
+**Bundle creation fails otherwise**: confirm that your project permissions allow bundle creation. Bundle creation requires higher permissions than artifact upload.
 
 **Re-deploy fails with a permission error**: a promoted bundle locks its artifacts in the dev-local repos, so a re-run that uploads the same paths fails. If the bundle is promoted only to DEV, delete it first with `delete-release-bundle`, which is safe to run on every pipeline. If the bundle is promoted past DEV, the action refuses to delete it; deploy a new version instead.
 
