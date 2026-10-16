@@ -459,8 +459,10 @@ _detect_structure_maven_poms() {
 
 # Stage docker-images.json for downstream publish.
 # A Lifecycle release-bundle-record.json under the artifacts root is the source of truth:
-# keep package_type docker and oci, drop digest versions (sha256__ / sha256:), and emit
-# one compact {package_name, package_version, source_repository_key} object per kept row.
+# keep package_type docker and oci, drop digest versions (sha256__ / sha256:) and floating
+# tags (latest, latest-*), and emit one compact {package_name, package_version,
+# source_repository_key} object per kept row. A record that contains both an immutable
+# tag and a version tag emits both rows.
 # Image identity comes from those fields. list.manifest.json, manifest.json, and sha256__
 # blobs are not images, and source_repository_key is not derived from the path.
 # With no record, copy a pre-written docker-images.json. When both exist, do not copy it.
@@ -491,6 +493,7 @@ _detect_structure_docker_bundle_metadata() {
             | select(.package_type == "docker" or .package_type == "oci")
             | select(.package_version | nonempty)
             | select(.package_version | (startswith("sha256__") or startswith("sha256:")) | not)
+            | select(.package_version | test("^latest($|-)") | not)
             | select(.package_name | nonempty)
             | select(.source_repository_key | nonempty)
             | {package_name, package_version, source_repository_key}

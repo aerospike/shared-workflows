@@ -168,6 +168,9 @@ fi
 if ! echo "$output" | grep -q "maven_module_count=2"; then
     test5_success=false
 fi
+if echo "$output" | grep -q "docker.floating_tags="; then
+    test5_success=false
+fi
 
 record_test_result "Test 5: Bundle metadata dotfile path triggers annotate (dry-run)" "$test5_success"
 

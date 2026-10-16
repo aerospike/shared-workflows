@@ -46,3 +46,17 @@ runs:
           promote_args+=(--exclude-repos="${{ inputs.exclude-repos }}")
         fi
         jf release-bundle-promote "${promote_args[@]}"
+
+    - name: Point latest tags on stage and production
+      shell: bash
+      env:
+        JF_PROJECT: ${{ inputs.jf-project }}
+        BUNDLE_NAME: ${{ inputs.bundle-name }}
+        BUNDLE_VERSION: ${{ inputs.version }}
+        ENVIRONMENT: ${{ inputs.environment }}
+      run: |
+        python3 "${{ github.action_path }}/../recompute-docker-floating-tags/recompute.py" from-promotion \
+          --project "$JF_PROJECT" \
+          --bundle-name "$BUNDLE_NAME" \
+          --version "$BUNDLE_VERSION" \
+          --environment "$ENVIRONMENT"

@@ -225,6 +225,7 @@ EOF
         echo "bundle-version=$BUNDLE_VERSION" >>"$GITHUB_OUTPUT"
     fi
 
+    local rb_props=""
     if [[ -n ${BUNDLE_METADATA_PATH-} ]]; then
         if [[ ! -f $BUNDLE_METADATA_PATH ]]; then
             echo "Warning: bundle metadata path is not a file (skipping annotate): $BUNDLE_METADATA_PATH" >&2
@@ -234,18 +235,20 @@ EOF
             fi
             jq -e . "$BUNDLE_METADATA_PATH" >/dev/null ||
                 error "invalid or unreadable bundle metadata JSON: $BUNDLE_METADATA_PATH"
-            local rb_props
             rb_props=$(jq -r 'to_entries | map("\(.key)=\(.value|tostring)") | join(";")' "$BUNDLE_METADATA_PATH") ||
                 error "failed to build properties string from $BUNDLE_METADATA_PATH"
             if [[ -n $rb_props ]]; then
                 echo "Applying release bundle properties from bundle metadata (${#rb_props} chars)" >&2
-                run jf release-bundle-annotate "$BUNDLE_NAME" "$BUNDLE_VERSION" \
-                    --project="$PROJECT" \
-                    --properties="$rb_props"
             else
                 echo "Bundle metadata produced no properties (empty object); skipping annotate" >&2
             fi
         fi
+    fi
+
+    if [[ -n $rb_props ]]; then
+        run jf release-bundle-annotate "$BUNDLE_NAME" "$BUNDLE_VERSION" \
+            --project="$PROJECT" \
+            --properties="$rb_props"
     fi
 
     echo "Create release bundle workflow completed successfully!" >&2

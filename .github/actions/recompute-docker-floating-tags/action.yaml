@@ -1,0 +1,68 @@
+name: Recompute Docker floating tags
+description: >-
+  Point a tag the caller named at the Docker tag supplied in tag. With only
+  the repository, nothing is attached.
+inputs:
+  docker-repo:
+    description: >-
+      Stage Docker or OCI repository key to retag (for example
+      connect-docker-stage-local). Supply the repository directly; this action
+      does not rewrite a dev-local name.
+    required: true
+  tag:
+    description: >-
+      Mutable Docker tag to point at, for example 3.3.2. Required when a tag
+      is applied.
+    required: false
+    default: ""
+  image:
+    description: >-
+      Image name for latest and latest-slim. Required when either of those
+      inputs is true.
+    required: false
+    default: ""
+  floating-tags:
+    description: >-
+      Optional image:tag list the caller typed, separated by semicolons
+      (for example aerospike-graph-service:dev).
+    required: false
+    default: ""
+  latest:
+    description: Apply the latest tag. Optional, off by default.
+    required: false
+    default: "false"
+  latest-slim:
+    description: Apply the latest-slim tag. Optional, off by default.
+    required: false
+    default: "false"
+runs:
+  using: composite
+  steps:
+    - name: Recompute floating tags
+      shell: bash
+      env:
+        DOCKER_REPO: ${{ inputs.docker-repo }}
+        DOCKER_TAG: ${{ inputs.tag }}
+        IMAGE: ${{ inputs.image }}
+        FLOATING_TAGS: ${{ inputs.floating-tags }}
+        LATEST: ${{ inputs.latest }}
+        LATEST_SLIM: ${{ inputs.latest-slim }}
+      run: |
+        set -euo pipefail
+        args=(retag --repo "$DOCKER_REPO")
+        if [[ -n $DOCKER_TAG ]]; then
+          args+=(--tag "$DOCKER_TAG")
+        fi
+        if [[ -n $IMAGE ]]; then
+          args+=(--image "$IMAGE")
+        fi
+        if [[ -n $FLOATING_TAGS ]]; then
+          args+=(--floating-tags "$FLOATING_TAGS")
+        fi
+        if [[ $LATEST == true ]]; then
+          args+=(--latest)
+        fi
+        if [[ $LATEST_SLIM == true ]]; then
+          args+=(--latest-slim)
+        fi
+        python3 "${{ github.action_path }}/recompute.py" "${args[@]}"
