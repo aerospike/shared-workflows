@@ -7,7 +7,7 @@
 | Input                              | Description                                                                                                                                                           | Required | Default                         |
 | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------------------------------- |
 | `gh-workflows-ref`                 | shared-workflows ref. Must match the ref in your `uses:` line, see [Why gh-workflows-ref is required](../docs/why-gh-workflows-ref.md)                                | Yes      | -                               |
-| `jf-build-names`                   | Comma-separated `build-name:version` pairs, e.g. `app-build:1.2.3,client-build:2.1.0`                                                                                 | Yes      | -                               |
+| `jf-build-names`                   | Comma-separated `build-name:build-number` pairs. See [Build names and numbers](#build-names-and-numbers)                                                              | Yes      | -                               |
 | `jf-bundle-name`                   | Release bundle name                                                                                                                                                   | Yes      | -                               |
 | `jf-project`                       | JFrog project key                                                                                                                                                     | Yes      | -                               |
 | `version`                          | Release version                                                                                                                                                       | Yes      | -                               |
@@ -30,22 +30,47 @@
 ## Example
 
 ```yaml
-name: Create Release Bundle
+name: Release
 on:
-  workflow_dispatch:
   push:
     tags: ["v*"]
 
 jobs:
-  create-release-bundle:
-    uses: aerospike/shared-workflows/.github/workflows/reusable_create-release-bundle.yaml@v3.2.0
+  artifacts:
+    uses: aerospike/shared-workflows/.github/workflows/reusable_artifacts-cicd.yaml@<sha> # vX.Y.Z
     with:
-      gh-workflows-ref: v3.2.0
       jf-project: database
-      jf-build-names: "database-build:1.2.3,client-build:2.1.0"
+      jf-build-name: database-packages
+      # ...
+
+  image:
+    uses: aerospike/shared-workflows/.github/workflows/reusable_docker-build-deploy.yaml@<sha> # vX.Y.Z
+    with:
+      jf-project: database
+      jf-build-name: database-image
+      # ...
+
+  create-release-bundle:
+    needs: [artifacts, image]
+    uses: aerospike/shared-workflows/.github/workflows/reusable_create-release-bundle.yaml@<sha> # vX.Y.Z
+    with:
+      gh-workflows-ref: <sha>
+      jf-project: database
+      jf-build-names: >-
+        ${{ needs.artifacts.outputs.jf-build-name }}:${{ needs.artifacts.outputs.jf-build-id }},${{ needs.image.outputs.jf-build-name }}:${{ needs.image.outputs.jf-build-id }}
       jf-bundle-name: database-release
       version: ${{ github.ref_name }}
 ```
+
+## Build names and numbers
+
+Each pair in `jf-build-names` is a build name and the build number the deploy job published it under. Passing the release version instead gets `Build not found`. Take both from the deploy job's outputs:
+
+| Deploy workflow                     | Build number             | Outputs                        |
+| ----------------------------------- | ------------------------ | ------------------------------ |
+| `reusable_artifacts-cicd.yaml`      | `{run_id}-{run_attempt}` | `jf-build-name`, `jf-build-id` |
+| `reusable_deploy-artifacts.yaml`    | the `jf-build-id` input  | `jf-build-id`                  |
+| `reusable_docker-build-deploy.yaml` | `github.run_number`      | `jf-build-name`, `jf-build-id` |
 
 ## Permissions
 
