@@ -87,6 +87,15 @@ fetch_fixtures() {
         return 0
     fi
 
+    local existing=""
+    if [[ -d $dest ]]; then
+        existing=$(find "$dest" -mindepth 1 -maxdepth 1 -print -quit)
+    fi
+
+    if [[ -n $existing ]]; then
+        error "destination is not empty: $dest"
+    fi
+
     if ! command -v jf >/dev/null 2>&1; then
         error "jf is not on PATH; the Set up JFrog CLI step did not run"
     fi
@@ -104,11 +113,29 @@ fetch_fixtures() {
         error "fixture zip was not downloaded: $artifact"
     fi
 
-    python3 "$SCRIPT_DIR/extract_fixtures.py" \
-        --zip "$zip_path" \
-        --dest "$dest" \
-        --package "$package" \
-        --version "$version"
+    # unzip already drops ../ from entry names, but it extracts symlinks as-is.
+    local listing
+    listing=$(unzip -Z "$zip_path")
+    if grep -q '^l' <<<"$listing"; then
+        error "release zip contains a symlink: $artifact"
+    fi
+
+    local staging="$workdir/extract"
+    unzip -q "$zip_path" -d "$staging"
+
+    local release_root="$staging/${package}-${version}"
+    if [[ ! -f $release_root/VERSION ]]; then
+        error "release zip has no ${package}-${version}/VERSION"
+    fi
+
+    local found_version
+    found_version=$(tr -d '[:space:]' <"$release_root/VERSION")
+    if [[ $found_version != "$version" ]]; then
+        error "VERSION is ${found_version}, expected ${version}"
+    fi
+
+    mkdir -p "$dest"
+    cp -R "$release_root/." "$dest/"
 
     write_output fixtures-directory "$dest"
     write_output fixture-set-version "$version"

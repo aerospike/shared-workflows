@@ -16,6 +16,8 @@ database-generic-dev-local/aerospike-client-conformance/0.1.0/aerospike-client-c
 
 The zip has a single top-level directory. This action strips it, so `fixtures-directory` has `VERSION` at its root, the same shape as a checkout of that release. Point a client runner at that directory. The Java runner checks `VERSION` before it reads any row.
 
+Extraction uses `unzip`, which GitHub-hosted runners include. The action rejects a release that contains a symlink or whose `VERSION` does not match `version`, and it refuses a destination that is not empty.
+
 The caller workflow needs `id-token: write` so the JFrog CLI can authenticate with OIDC. `dry-run` prints the artifact path and does not download.
 
 ## Inputs
