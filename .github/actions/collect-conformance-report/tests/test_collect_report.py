@@ -155,11 +155,18 @@ class CollectReportTests(unittest.TestCase):
         self.assertEqual(result.findings[0].kind, "undeclared-unsupported")
 
     def test_pass_to_fail_fails_and_declared_fail_does_not(self) -> None:
-        write_fixtures(self.fixtures, [(FILE, "now-broken"), (TLS_FILE, "cn-only-no-san")])
-        rows = [
-            {"file": FILE, "case": "now-broken", "result": "fail", "reason": "expected host, got other"},
-            {"file": TLS_FILE, "case": "cn-only-no-san", "result": "fail", "reason": LEGACY_CN},
+        declared_fail_cases = [
+            "cn-only-no-san",
+            "cn-equal-dns-name-differs",
+            "ip-id-only-as-dns-name",
+            "ci-server-certificate-shape",
         ]
+        fixture_cases = [(FILE, "now-broken")]
+        rows = [{"file": FILE, "case": "now-broken", "result": "fail", "reason": "expected host, got other"}]
+        for case_name in declared_fail_cases:
+            fixture_cases.append((TLS_FILE, case_name))
+            rows.append({"file": TLS_FILE, "case": case_name, "result": "fail", "reason": LEGACY_CN})
+        write_fixtures(self.fixtures, fixture_cases)
         write_report(self.reports, report(rows))
         declared = self.declarations / "java-declared.yaml"
         declared.write_text(JAVA_DECLARED, encoding="utf-8")
@@ -214,6 +221,30 @@ class CollectReportTests(unittest.TestCase):
         self.assertTrue(result.failed)
         self.assertEqual(result.findings[0].kind, "unknown-case")
         self.assertEqual(result.findings[0].case, "renamed-case")
+
+    def test_a_declaration_for_an_unknown_case_or_file_fails(self) -> None:
+        write_fixtures(self.fixtures, [(FILE, CASE)])
+        row = {"file": FILE, "case": CASE, "result": "pass"}
+        write_report(self.reports, report([row]))
+        declared = self.declarations / "java-declared.yaml"
+
+        declared.write_text(
+            "discovery/translate/port-map.yaml:\n"
+            '  endpoint-port-map-strict-miss-fails: { result: unsupported, reason: "removed case" }\n',
+            encoding="utf-8",
+        )
+        with self.assertRaises(cr.CollectError) as unknown_case:
+            cr.collect(self.reports, self.fixtures, self.declarations)
+        self.assertIn("endpoint-port-map-strict-miss-fails: unknown case", str(unknown_case.exception))
+
+        declared.write_text(
+            "discovery/translate/endpoint-port-map.yaml:\n"
+            '  host-port-key-hit: { result: unsupported, reason: "removed file" }\n',
+            encoding="utf-8",
+        )
+        with self.assertRaises(cr.CollectError) as unknown_file:
+            cr.collect(self.reports, self.fixtures, self.declarations)
+        self.assertIn("unknown fixture file discovery/translate/endpoint-port-map.yaml", str(unknown_file.exception))
 
     def test_fixture_loader_skips_files_that_are_not_fixtures(self) -> None:
         write_fixtures(self.fixtures, [(FILE, CASE)])

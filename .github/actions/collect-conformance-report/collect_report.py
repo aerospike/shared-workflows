@@ -477,6 +477,21 @@ def find_declarations(directory: Path) -> dict[str, Path]:
     return found
 
 
+def _check_declarations(declarations: Declarations, fixtures: FixtureSet) -> None:
+    """Reject a declaration for a fixture file or case the fixture set does not have."""
+    fixture_files = set()
+    for file_name, _ in fixtures.cases:
+        fixture_files.add(file_name)
+
+    for file_name, file_cases in declarations.files.items():
+        if file_name not in fixture_files:
+            raise CollectError(f"unknown fixture file {file_name}")
+
+        for case_name in file_cases:
+            if (file_name, case_name) not in fixtures.cases:
+                raise CollectError(f"{file_name}:{case_name}: unknown case")
+
+
 def _compare_report(report: Report, declarations: Declarations, fixtures: FixtureSet) -> list[ComparedRow]:
     """Compare every row and every fixture case. A gate failure has a non-empty kind."""
     compared = []
@@ -556,9 +571,12 @@ def collect(
     for runtime, path in declaration_paths.items():
         text = path.read_text(encoding="utf-8")
         try:
-            parsed_declarations[runtime] = parse_declarations(text)
+            declarations = parse_declarations(text)
+            _check_declarations(declarations, fixtures)
         except CollectError as exc:
             raise CollectError(f"{path}: {exc}") from exc
+
+        parsed_declarations[runtime] = declarations
 
     reports = []
     for path in report_paths:
