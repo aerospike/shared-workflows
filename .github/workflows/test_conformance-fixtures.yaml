@@ -77,10 +77,17 @@ jobs:
           [[ "${{ steps.fetch.outputs.artifact-path }}" == "$expected" ]]
           [[ -z "${{ steps.fetch.outputs.fixtures-directory }}" ]]
 
-      - name: Write a declared-unsupported report
+      - name: Write a one-case fixture set and a declared-unsupported report
         run: |
-          mkdir -p reports declarations
+          mkdir -p reports declarations fixtures/discovery/translate
           version="${{ steps.fixture-version.outputs.version }}"
+          echo "$version" > fixtures/VERSION
+          cat > fixtures/discovery/translate/port-map.yaml << 'EOF'
+          kind: translate
+          rows:
+            - case: host-port-key-hit
+              because: smoke test row
+          EOF
           cat > reports/conformance-report.json << EOF
           {
             "runtime": "java",
@@ -105,8 +112,8 @@ jobs:
         uses: ./.github/actions/collect-conformance-report
         with:
           reports-directory: reports
+          fixtures-directory: fixtures
           declarations-directory: declarations
-          fixture-set-version: "${{ steps.fixture-version.outputs.version }}"
 
       - name: Check the gate
         run: |

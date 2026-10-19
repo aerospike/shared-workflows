@@ -4,13 +4,14 @@
 Gate, from CLIENT-5546:
 
 - fail when a row declared pass (or omitted, which means pass) actually failed
-- fail when a row is unsupported and that unsupported result is not declared
+- fail when a row is unsupported or blocked and that result is not declared
+- fail when a fixture case has no row, or a row names a case the fixture set does not have
 - do not fail when unsupported was declared, or when a declared fail still fails
 
-A row with no declaration is pass, except an actual blocked result: blocked is
-copied from the fixture, and the Java runner treats an omitted blocked row as
-declared blocked. See aerospike-client-conformance schema/report.schema.json
-and <runtime>-declared.yaml (client repos, for example java-declared.yaml).
+A case with no declaration is pass, except a case the fixture marks blocked, which
+is declared blocked. That is the Java runner's rule. See aerospike-client-conformance
+schema/report.schema.json and schema/fixture.schema.json, and <runtime>-declared.yaml
+(client repos, for example java-declared.yaml). The README gate table lists the same rules.
 """
 
 from __future__ import annotations
@@ -29,6 +30,7 @@ REPORT_KEYS = {"runtime", "clientVersion", "fixtureSetVersion", "counts", "rows"
 ROW_KEYS = {"file", "case", "result", "reason", "detail"}
 COUNT_KEYS = {"pass", "fail", "unsupported", "blocked"}
 FILE_PATTERN_PART = "abcdefghijklmnopqrstuvwxyz0123456789-"
+FIXTURE_KINDS = ("translate", "merge", "tls")
 
 
 class CollectError(Exception):
@@ -47,15 +49,26 @@ class Declarations:
 
     files: dict[str, dict[str, Declaration]] = field(default_factory=dict)
 
-    def declared_result(self, file_name: str, case_name: str, actual: str) -> str:
+    def declared_result(self, file_name: str, case_name: str, fixture_blocked: bool) -> str:
         file_cases = self.files.get(file_name)
         if file_cases is None or case_name not in file_cases:
-            if actual == "blocked":
+            if fixture_blocked:
                 return "blocked"
 
             return "pass"
 
         return file_cases[case_name].result
+
+
+@dataclass
+class FixtureSet:
+    """Cases in one fixture set release, keyed by (fixture file, case name).
+
+    The value is True when the fixture marks the case blocked.
+    """
+
+    version: str
+    cases: dict[tuple[str, str], bool]
 
 
 @dataclass
@@ -95,7 +108,6 @@ class Collection:
     differences: list[ComparedRow]
     unsupported: list[ComparedRow]
     failures: list[ComparedRow]
-    fixture_set_version: str
     failed: bool
 
 
@@ -360,12 +372,63 @@ def _load_row(row: Any, source: str, index: int) -> ReportRow:
     )
 
 
+def load_fixtures(directory: Path) -> FixtureSet:
+    """Read VERSION and every fixture case from a fetched fixture set."""
+    if not directory.is_dir():
+        raise CollectError(f"fixtures directory not found: {directory}")
+
+    version_path = directory / "VERSION"
+    if not version_path.is_file():
+        raise CollectError(f"fixtures directory has no VERSION: {directory}")
+
+    version_text = version_path.read_text(encoding="utf-8")
+    version = version_text.strip()
+
+    cases: dict[tuple[str, str], bool] = {}
+    for path in sorted(directory.rglob("*.yaml")):
+        relative_path = path.relative_to(directory)
+        file_name = relative_path.as_posix()
+        if not _valid_file_name(file_name):
+            continue
+
+        text = path.read_text(encoding="utf-8")
+        try:
+            loaded = yaml.load(text, Loader=UniqueKeyLoader)
+        except (yaml.YAMLError, CollectError) as exc:
+            raise CollectError(f"{path}: invalid fixture YAML: {exc}") from exc
+
+        if not isinstance(loaded, dict) or loaded.get("kind") not in FIXTURE_KINDS:
+            continue
+
+        rows = loaded.get("rows")
+        if not isinstance(rows, list):
+            raise CollectError(f"{file_name}: rows must be a list")
+
+        for index, row in enumerate(rows):
+            if not isinstance(row, dict) or not isinstance(row.get("case"), str):
+                raise CollectError(f"{file_name}: rows[{index}] has no case")
+
+            identity = (file_name, row["case"])
+            if identity in cases:
+                raise CollectError(f"{file_name}: duplicate case {row['case']}")
+
+            cases[identity] = row.get("state") == "blocked"
+
+    if not cases:
+        raise CollectError(f"no fixture cases under {directory}")
+
+    return FixtureSet(version=version, cases=cases)
+
+
 def gate_kind(actual: str, declared: str) -> str | None:
     if actual == "fail" and declared == "pass":
         return "pass-to-fail"
 
     if actual == "unsupported" and declared != "unsupported":
         return "undeclared-unsupported"
+
+    if actual == "blocked" and declared != "blocked":
+        return "undeclared-blocked"
 
     return None
 
@@ -414,11 +477,73 @@ def find_declarations(directory: Path) -> dict[str, Path]:
     return found
 
 
+def _compare_report(report: Report, declarations: Declarations, fixtures: FixtureSet) -> list[ComparedRow]:
+    """Compare every row and every fixture case. A gate failure has a non-empty kind."""
+    compared = []
+    reported: set[tuple[str, str]] = set()
+    for row in report.rows:
+        identity = (row.file, row.case)
+        reported.add(identity)
+        if identity not in fixtures.cases:
+            compared.append(
+                ComparedRow(
+                    runtime=report.runtime,
+                    file=row.file,
+                    case=row.case,
+                    declared="-",
+                    actual=row.result,
+                    reason=f"not a case in fixture set {fixtures.version}",
+                    kind="unknown-case",
+                )
+            )
+            continue
+
+        fixture_blocked = fixtures.cases[identity]
+        declared = declarations.declared_result(row.file, row.case, fixture_blocked)
+        kind = gate_kind(row.result, declared)
+        if kind is None:
+            kind = ""
+
+        compared.append(
+            ComparedRow(
+                runtime=report.runtime,
+                file=row.file,
+                case=row.case,
+                declared=declared,
+                actual=row.result,
+                reason=row.reason,
+                kind=kind,
+            )
+        )
+
+    for identity, fixture_blocked in fixtures.cases.items():
+        if identity in reported:
+            continue
+
+        file_name, case_name = identity
+        declared = declarations.declared_result(file_name, case_name, fixture_blocked)
+        compared.append(
+            ComparedRow(
+                runtime=report.runtime,
+                file=file_name,
+                case=case_name,
+                declared=declared,
+                actual="missing",
+                reason="the report has no row for this fixture case",
+                kind="missing-row",
+            )
+        )
+
+    return compared
+
+
 def collect(
     reports_dir: Path,
+    fixtures_dir: Path,
     declarations_dir: Path | None = None,
-    fixture_set_version: str = "",
 ) -> Collection:
+    fixtures = load_fixtures(fixtures_dir)
+
     report_paths = find_reports(reports_dir)
     if not report_paths:
         raise CollectError(f"no conformance-report.json under {reports_dir}")
@@ -456,20 +581,12 @@ def collect(
         joined_runtimes = ", ".join(runtimes)
         raise CollectError(f"duplicate runtime in reports: {joined_runtimes}")
 
-    versions = {report.fixture_set_version for report in reports}
-    if len(versions) != 1:
-        version_list = list(versions)
-        joined = _listed(version_list)
-        raise CollectError(f"reports disagree on fixtureSetVersion: {joined}")
-
-    found_version = ""
-    for version in versions:
-        found_version = version
-
-    if fixture_set_version and found_version != fixture_set_version:
-        raise CollectError(
-            f"fixture set {found_version} does not match requested {fixture_set_version}"
-        )
+    for report in reports:
+        if report.fixture_set_version != fixtures.version:
+            raise CollectError(
+                f"{report.source}: fixtureSetVersion {report.fixture_set_version} "
+                f"does not match fixtures VERSION {fixtures.version}"
+            )
 
     findings = []
     differences = []
@@ -480,32 +597,17 @@ def collect(
         if declarations is None:
             declarations = Declarations()
 
-        for row in report.rows:
-            declared = declarations.declared_result(row.file, row.case, row.result)
-            kind = gate_kind(row.result, declared)
-            if kind is None:
-                kind_name = ""
-            else:
-                kind_name = kind
-
-            record = ComparedRow(
-                runtime=report.runtime,
-                file=row.file,
-                case=row.case,
-                declared=declared,
-                actual=row.result,
-                reason=row.reason,
-                kind=kind_name,
-            )
-            if kind is not None:
+        compared = _compare_report(report, declarations, fixtures)
+        for record in compared:
+            if record.kind:
                 findings.append(record)
-            elif declared != row.result:
+            elif record.declared != record.actual:
                 differences.append(record)
 
-            if row.result == "unsupported":
+            if record.actual == "unsupported":
                 unsupported_rows.append(record)
 
-            if row.result == "fail":
+            if record.actual == "fail":
                 fail_rows.append(record)
 
     return Collection(
@@ -514,7 +616,6 @@ def collect(
         differences=differences,
         unsupported=unsupported_rows,
         failures=fail_rows,
-        fixture_set_version=found_version,
         failed=bool(findings),
     )
 
@@ -567,7 +668,8 @@ def render_markdown(result: Collection) -> str:
             [
                 "### Gate failures",
                 "",
-                "A pass that is now fail, or an unsupported result that was not declared.",
+                "A pass that is now fail, an unsupported or blocked result that was not declared, "
+                "a fixture case with no row, or a row that is not a fixture case.",
                 "",
                 _table(
                     ["Runtime", "Kind", "File", "Case", "Declared", "Actual", "Reason"],
@@ -577,7 +679,7 @@ def render_markdown(result: Collection) -> str:
             ]
         )
     else:
-        rendered_lines.extend(["No pass-to-fail regression and no undeclared unsupported result.", ""])
+        rendered_lines.extend(["Every fixture case has a row, and no row trips the gate.", ""])
 
     if result.unsupported:
         rows = []
@@ -661,15 +763,20 @@ def main() -> int:
         print("Error: reports-directory is required", file=sys.stderr)
         return 1
 
+    fixtures_raw = os.environ.get("FIXTURES_DIRECTORY", "")
+    if fixtures_raw == "":
+        print("Error: fixtures-directory is required", file=sys.stderr)
+        return 1
+
     declarations_raw = os.environ.get("DECLARATIONS_DIRECTORY", "")
     declarations_dir = None
     if declarations_raw:
         declarations_dir = Path(declarations_raw)
 
-    fixture_set_version = os.environ.get("FIXTURE_SET_VERSION", "")
     reports_dir = Path(reports_raw)
+    fixtures_dir = Path(fixtures_raw)
     try:
-        result = collect(reports_dir, declarations_dir, fixture_set_version)
+        result = collect(reports_dir, fixtures_dir, declarations_dir)
     except CollectError as exc:
         print(f"Error: {exc}", file=sys.stderr)
         _write_output("gate", "failure")

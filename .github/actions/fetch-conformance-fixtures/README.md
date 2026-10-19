@@ -8,10 +8,10 @@ The release zip is published to JFrog generic by that repository's tag workflow:
 <jf-project>-generic-dev-local/<package-name>/<version>/<package-name>-<version>.zip
 ```
 
-The tests in this repository read that version from `fixture-set-version`. With the default project and package name, fixture set `0.1.0` is:
+The tests in this repository read that version from `fixture-set-version`. With the default project and package name, fixture set `1.0.0` is:
 
 ```text
-database-generic-dev-local/aerospike-client-conformance/0.1.0/aerospike-client-conformance-0.1.0.zip
+database-generic-dev-local/aerospike-client-conformance/1.0.0/aerospike-client-conformance-1.0.0.zip
 ```
 
 The zip has a single top-level directory. This action strips it, so `fixtures-directory` has `VERSION` at its root, the same shape as a checkout of that release. Point a client runner at that directory. The Java runner checks `VERSION` before it reads any row.
@@ -57,7 +57,7 @@ jobs:
       - id: fixtures
         uses: aerospike/shared-workflows/.github/actions/fetch-conformance-fixtures@<sha> # vX.Y.Z
         with:
-          version: 0.1.0 # same value as fixture-set-version
+          version: 1.0.0 # same value as fixture-set-version
           oidc-provider-name: gh-aerospike
           oidc-audience: aerospike
 
@@ -67,4 +67,4 @@ jobs:
           -Dconformance.dir=${{ steps.fixtures.outputs.fixtures-directory }}
 ```
 
-Pair this with [collect-conformance-report](../collect-conformance-report/README.md) after the runner writes `conformance-report.json`.
+Pair this with [collect-conformance-report](../collect-conformance-report/README.md) after the runner writes `conformance-report.json`, and pass it the same `fixtures-directory`.

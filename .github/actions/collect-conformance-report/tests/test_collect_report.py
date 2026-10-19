@@ -14,31 +14,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "collect_report.py"
 
-# Same shape as aerospike-client-java java-declared.yaml. Kept inline so the
-# formatter does not rewrite the flow mappings the parser accepts.
+# Same content as aerospike-client-java java-declared.yaml for fixture set 1.0.0.
+# Kept inline so the repository formatters do not rewrite its quoting.
 JAVA_DECLARED = """\
 # Expected Java result per conformance row. A row not listed here is declared pass (blocked when the
 # fixture row is blocked). The conformance test fails when any row's actual result differs.
-discovery/translate/port-map.yaml:
-  host-port-key-hit: { result: unsupported, reason: "CLIENT-5641 not implemented" }
-  host-port-key-null-tls-name: { result: unsupported, reason: "CLIENT-5641 not implemented" }
-  host-port-key-other-port-misses: { result: unsupported, reason: "CLIENT-5641 not implemented" }
-  node-name-key-hit: { result: unsupported, reason: "CLIENT-5641 not implemented" }
-  node-name-key-any-advertised-address: { result: unsupported, reason: "CLIENT-5641 not implemented" }
-  node-name-key-misses-other-node: { result: unsupported, reason: "CLIENT-5641 not implemented" }
-  ipv6-host-port-key-hit: { result: unsupported, reason: "CLIENT-5641 not implemented" }
-  standard-map-alternate-endpoint-first-node: { result: unsupported, reason: "CLIENT-5641 not implemented" }
-  standard-map-alternate-endpoint-second-node: { result: unsupported, reason: "CLIENT-5641 not implemented" }
-  standard-map-alternate-endpoint-strict: { result: unsupported, reason: "CLIENT-5641 not implemented" }
-
-discovery/translate/on-miss.yaml:
-  static-map-explicit-pass-through: { result: unsupported, reason: "CLIENT-5640 not implemented" }
-  static-map-strict-hit-translates: { result: unsupported, reason: "CLIENT-5640 not implemented" }
-  static-map-strict-miss-fails: { result: unsupported, reason: "CLIENT-5640 not implemented" }
-  static-map-strict-empty-map-fails: { result: unsupported, reason: "CLIENT-5640 not implemented" }
-  port-map-default-pass-through: { result: unsupported, reason: "CLIENT-5641 not implemented" }
-  port-map-strict-miss-fails: { result: unsupported, reason: "CLIENT-5641 not implemented" }
-
 tls/name-matching.yaml:
   cn-only-no-san:
     result: fail
@@ -69,6 +49,8 @@ cr = load()
 
 FILE = "discovery/translate/port-map.yaml"
 CASE = "host-port-key-hit"
+TLS_FILE = "tls/name-matching.yaml"
+LEGACY_CN = "legacy CN fallback kept until the next major (decided 2026-10-06)"
 version_file = ROOT.parent / "fetch-conformance-fixtures" / "fixture-set-version"
 version_text = version_file.read_text(encoding="utf-8")
 FIXTURE_VERSION = version_text.strip()
@@ -96,41 +78,68 @@ def write_report(directory: Path, body: dict, name="conformance-report.json") ->
     path.write_text(json.dumps(body), encoding="utf-8")
 
 
+def write_fixtures(
+    directory: Path,
+    cases: list[tuple[str, str]],
+    blocked: list[tuple[str, str]] | None = None,
+) -> None:
+    """Write a fixture set with VERSION and one fixture file per distinct file name."""
+    if blocked is None:
+        blocked = []
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / "VERSION").write_text(f"{FIXTURE_VERSION}\n", encoding="utf-8")
+    by_file: dict[str, list[str]] = {}
+    for file_name, case_name in cases:
+        by_file.setdefault(file_name, []).append(case_name)
+
+    for file_name, case_names in by_file.items():
+        if file_name.startswith("tls/"):
+            kind = "tls"
+        else:
+            kind = "translate"
+
+        lines = [f"kind: {kind}", "rows:"]
+        for case_name in case_names:
+            lines.append(f"  - case: {case_name}")
+            lines.append("    because: test row")
+            if (file_name, case_name) in blocked:
+                lines.append("    state: blocked")
+                lines.append("    blockedBy: TG-16")
+
+        path = directory / file_name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
 class CollectReportTests(unittest.TestCase):
     def setUp(self) -> None:
         self.work = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, self.work)
+        self.reports = self.work / "reports"
+        self.reports.mkdir()
+        self.fixtures = self.work / "fixtures"
+        self.declarations = self.work / "declarations"
+        self.declarations.mkdir()
 
     def test_parses_the_java_declaration_file(self) -> None:
         parsed = cr.parse_declarations(JAVA_DECLARED)
-        port_map = parsed.files["discovery/translate/port-map.yaml"]
-        hit = port_map["host-port-key-hit"]
-        self.assertEqual(hit.result, "unsupported")
-        self.assertEqual(hit.reason, "CLIENT-5641 not implemented")
-        tls_row = parsed.files["tls/name-matching.yaml"]["cn-only-no-san"]
-        self.assertEqual(tls_row.result, "fail")
-        self.assertIn("legacy CN fallback", tls_row.reason)
-        self.assertNotIn("some-other-case", port_map)
+        tls_cases = parsed.files[TLS_FILE]
+        self.assertEqual(len(tls_cases), 4)
+        self.assertEqual(tls_cases["cn-only-no-san"].result, "fail")
+        self.assertIn("legacy CN fallback", tls_cases["cn-only-no-san"].reason)
+        self.assertNotIn(FILE, parsed.files)
 
     def test_declared_unsupported_does_not_fail(self) -> None:
-        reports = self.work / "reports"
-        declarations = self.work / "declarations"
-        reports.mkdir()
-        declarations.mkdir()
-        row = {
-            "file": FILE,
-            "case": CASE,
-            "result": "unsupported",
-            "reason": "CLIENT-5641 not implemented",
-        }
-        write_report(reports, report([row]))
-        declared = declarations / "java-declared.yaml"
+        write_fixtures(self.fixtures, [(FILE, CASE)])
+        row = {"file": FILE, "case": CASE, "result": "unsupported", "reason": "CLIENT-5641 not implemented"}
+        write_report(self.reports, report([row]))
+        declared = self.declarations / "java-declared.yaml"
         declared.write_text(
-            'discovery/translate/port-map.yaml:\n'
+            "discovery/translate/port-map.yaml:\n"
             '  host-port-key-hit: { result: unsupported, reason: "CLIENT-5641 not implemented" }\n',
             encoding="utf-8",
         )
-        result = cr.collect(reports, declarations)
+        result = cr.collect(self.reports, self.fixtures, self.declarations)
         self.assertFalse(result.failed)
         self.assertEqual(result.unsupported[0].reason, "CLIENT-5641 not implemented")
         markdown = cr.render_markdown(result)
@@ -138,110 +147,137 @@ class CollectReportTests(unittest.TestCase):
         self.assertIn("| java |", markdown)
 
     def test_undeclared_unsupported_fails(self) -> None:
-        reports = self.work / "reports"
-        reports.mkdir()
-        row = {
-            "file": FILE,
-            "case": CASE,
-            "result": "unsupported",
-            "reason": "no translator API",
-        }
-        write_report(reports, report([row]))
-        result = cr.collect(reports, None)
+        write_fixtures(self.fixtures, [(FILE, CASE)])
+        row = {"file": FILE, "case": CASE, "result": "unsupported", "reason": "no translator API"}
+        write_report(self.reports, report([row]))
+        result = cr.collect(self.reports, self.fixtures)
         self.assertTrue(result.failed)
         self.assertEqual(result.findings[0].kind, "undeclared-unsupported")
 
     def test_pass_to_fail_fails_and_declared_fail_does_not(self) -> None:
-        reports = self.work / "reports"
-        declarations = self.work / "declarations"
-        reports.mkdir()
-        declarations.mkdir()
+        write_fixtures(self.fixtures, [(FILE, "now-broken"), (TLS_FILE, "cn-only-no-san")])
         rows = [
             {"file": FILE, "case": "now-broken", "result": "fail", "reason": "expected host, got other"},
-            {
-                "file": "tls/name-matching.yaml",
-                "case": "cn-only-no-san",
-                "result": "fail",
-                "reason": "legacy CN fallback kept until the next major (decided 2026-10-06)",
-            },
+            {"file": TLS_FILE, "case": "cn-only-no-san", "result": "fail", "reason": LEGACY_CN},
         ]
-        write_report(reports, report(rows))
-        declared = declarations / "java-declared.yaml"
-        declared.write_text(
-            "tls/name-matching.yaml:\n"
-            "  cn-only-no-san:\n"
-            "    result: fail\n"
-            '    reason: "legacy CN fallback kept until the next major (decided 2026-10-06)"\n',
-            encoding="utf-8",
-        )
-        result = cr.collect(reports, declarations)
+        write_report(self.reports, report(rows))
+        declared = self.declarations / "java-declared.yaml"
+        declared.write_text(JAVA_DECLARED, encoding="utf-8")
+        result = cr.collect(self.reports, self.fixtures, self.declarations)
         self.assertTrue(result.failed)
         kinds = [item.kind for item in result.findings]
         self.assertEqual(kinds, ["pass-to-fail"])
         self.assertEqual(result.findings[0].case, "now-broken")
 
-    def test_blocked_without_a_declaration_does_not_fail(self) -> None:
-        reports = self.work / "reports"
-        reports.mkdir()
+    def test_blocked_fixture_case_without_a_declaration_does_not_fail(self) -> None:
+        write_fixtures(self.fixtures, [(FILE, "fr-22")], blocked=[(FILE, "fr-22")])
         row = {"file": FILE, "case": "fr-22", "result": "blocked", "reason": "TG-16"}
-        write_report(reports, report([row]))
-        result = cr.collect(reports, None)
+        write_report(self.reports, report([row]))
+        result = cr.collect(self.reports, self.fixtures)
         self.assertFalse(result.failed)
         self.assertEqual(result.differences, [])
 
+    def test_blocked_result_on_a_case_the_fixture_does_not_block_fails(self) -> None:
+        write_fixtures(self.fixtures, [(FILE, CASE)])
+        row = {"file": FILE, "case": CASE, "result": "blocked", "reason": "skipped"}
+        write_report(self.reports, report([row]))
+        result = cr.collect(self.reports, self.fixtures)
+        self.assertTrue(result.failed)
+        self.assertEqual(result.findings[0].kind, "undeclared-blocked")
+
+    def test_an_empty_report_fails_for_every_fixture_case(self) -> None:
+        write_fixtures(self.fixtures, [(FILE, CASE), (TLS_FILE, "cn-only-no-san")])
+        write_report(self.reports, report([]))
+        result = cr.collect(self.reports, self.fixtures)
+        self.assertTrue(result.failed)
+        kinds = [item.kind for item in result.findings]
+        self.assertEqual(kinds, ["missing-row", "missing-row"])
+
+    def test_a_partial_report_fails_for_the_missing_case(self) -> None:
+        write_fixtures(self.fixtures, [(FILE, CASE), (FILE, "node-name-key-hit")])
+        row = {"file": FILE, "case": CASE, "result": "pass"}
+        write_report(self.reports, report([row]))
+        result = cr.collect(self.reports, self.fixtures)
+        self.assertTrue(result.failed)
+        self.assertEqual(len(result.findings), 1)
+        self.assertEqual(result.findings[0].kind, "missing-row")
+        self.assertEqual(result.findings[0].case, "node-name-key-hit")
+
+    def test_a_row_that_is_not_a_fixture_case_fails(self) -> None:
+        write_fixtures(self.fixtures, [(FILE, CASE)])
+        rows = [
+            {"file": FILE, "case": CASE, "result": "pass"},
+            {"file": FILE, "case": "renamed-case", "result": "pass"},
+        ]
+        write_report(self.reports, report(rows))
+        result = cr.collect(self.reports, self.fixtures)
+        self.assertTrue(result.failed)
+        self.assertEqual(result.findings[0].kind, "unknown-case")
+        self.assertEqual(result.findings[0].case, "renamed-case")
+
+    def test_fixture_loader_skips_files_that_are_not_fixtures(self) -> None:
+        write_fixtures(self.fixtures, [(FILE, CASE)])
+        trunk = self.fixtures / ".trunk" / "trunk.yaml"
+        trunk.parent.mkdir()
+        trunk.write_text("version: 0.1\n", encoding="utf-8")
+        notes = self.fixtures / "docs" / "notes.yaml"
+        notes.parent.mkdir()
+        notes.write_text("title: not a fixture\n", encoding="utf-8")
+        fixtures = cr.load_fixtures(self.fixtures)
+        self.assertEqual(fixtures.version, FIXTURE_VERSION)
+        self.assertEqual(list(fixtures.cases), [(FILE, CASE)])
+
     def test_count_mismatch_and_missing_reports_fail(self) -> None:
-        reports = self.work / "reports"
-        reports.mkdir()
+        write_fixtures(self.fixtures, [(FILE, CASE)])
         body = report(
             [{"file": FILE, "case": CASE, "result": "pass"}],
             counts={"pass": 2, "fail": 0, "unsupported": 0, "blocked": 0},
         )
-        write_report(reports, body)
+        write_report(self.reports, body)
         with self.assertRaises(cr.CollectError) as caught:
-            cr.collect(reports, None)
+            cr.collect(self.reports, self.fixtures)
         self.assertIn("counts", str(caught.exception))
 
         empty = self.work / "empty"
         empty.mkdir()
         with self.assertRaises(cr.CollectError) as missing:
-            cr.collect(empty, None)
+            cr.collect(empty, self.fixtures)
         self.assertIn("no conformance-report.json", str(missing.exception))
 
-    def test_fixture_versions_must_agree(self) -> None:
-        reports = self.work / "reports"
-        java = reports / "java"
-        go = reports / "go"
-        java.mkdir(parents=True)
-        go.mkdir()
+    def test_report_version_must_match_the_fixtures(self) -> None:
+        write_fixtures(self.fixtures, [(FILE, CASE)])
         row = {"file": FILE, "case": CASE, "result": "pass"}
-        write_report(java, report([row], runtime="java"))
-        write_report(go, report([row], runtime="go", version=OTHER_FIXTURE_VERSION))
+        write_report(self.reports, report([row], version=OTHER_FIXTURE_VERSION))
         with self.assertRaises(cr.CollectError) as caught:
-            cr.collect(reports, None, FIXTURE_VERSION)
-        self.assertIn("disagree", str(caught.exception))
+            cr.collect(self.reports, self.fixtures)
+        self.assertIn(f"does not match fixtures VERSION {FIXTURE_VERSION}", str(caught.exception))
 
     def test_main_writes_summary_and_returns_the_gate(self) -> None:
-        reports = self.work / "reports"
-        reports.mkdir()
+        write_fixtures(self.fixtures, [(FILE, CASE)])
         row = {"file": FILE, "case": CASE, "result": "pass"}
-        write_report(reports, report([row]))
+        write_report(self.reports, report([row]))
         summary = self.work / "summary.md"
         output = self.work / "output.txt"
-        previous = os.environ.get("GITHUB_STEP_SUMMARY")
-        previous_output = os.environ.get("GITHUB_OUTPUT")
-        previous_reports = os.environ.get("REPORTS_DIRECTORY")
-        previous_declarations = os.environ.get("DECLARATIONS_DIRECTORY")
-        os.environ["REPORTS_DIRECTORY"] = str(reports)
+        names = [
+            "GITHUB_STEP_SUMMARY",
+            "GITHUB_OUTPUT",
+            "REPORTS_DIRECTORY",
+            "FIXTURES_DIRECTORY",
+            "DECLARATIONS_DIRECTORY",
+        ]
+        previous = {}
+        for name in names:
+            previous[name] = os.environ.get(name)
+        os.environ["REPORTS_DIRECTORY"] = str(self.reports)
+        os.environ["FIXTURES_DIRECTORY"] = str(self.fixtures)
         os.environ["DECLARATIONS_DIRECTORY"] = ""
         os.environ["GITHUB_STEP_SUMMARY"] = str(summary)
         os.environ["GITHUB_OUTPUT"] = str(output)
         try:
             code = cr.main()
         finally:
-            self._restore("GITHUB_STEP_SUMMARY", previous)
-            self._restore("GITHUB_OUTPUT", previous_output)
-            self._restore("REPORTS_DIRECTORY", previous_reports)
-            self._restore("DECLARATIONS_DIRECTORY", previous_declarations)
+            for name in names:
+                self._restore(name, previous[name])
         self.assertEqual(code, 0)
         text = summary.read_text(encoding="utf-8")
         self.assertIn("## Conformance", text)
