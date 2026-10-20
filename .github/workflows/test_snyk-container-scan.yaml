@@ -21,3 +21,72 @@ jobs:
 
       - name: Run unit tests
         run: python3 -m unittest discover .github/actions/snyk-container-scan/tests -v
+
+  # Real end-to-end scan through the action (which runs the official snyk/actions/docker) over
+  # public images: one deliberately old image that reliably carries high/critical CVEs (must FAIL
+  # at `high`) and one minimal image checked at `critical`, where a clean result is reliable (must
+  # PASS). Gated on the SNYK_TOKEN secret, so a fork or an unconfigured repo skips it cleanly.
+  live-scan:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check for a Snyk token
+        id: gate
+        run: echo "have_token=${{ secrets.SNYK_TOKEN != '' }}" >>"$GITHUB_OUTPUT"
+
+      - name: Harden the runner (Audit all outbound calls)
+        if: steps.gate.outputs.have_token == 'true'
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        if: steps.gate.outputs.have_token == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Scan a known-vulnerable image (expect FAIL)
+        if: steps.gate.outputs.have_token == 'true'
+        id: vuln
+        continue-on-error: true # assert on the verdict output, not the step exit
+        uses: ./.github/actions/snyk-container-scan
+        with:
+          image: node:14.0.0
+          severity-threshold: high
+          fail-on-issues: "true"
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
+      - name: Assert the vulnerable image was blocked with real findings
+        if: steps.gate.outputs.have_token == 'true'
+        env:
+          VERDICT: ${{ steps.vuln.outputs.verdict }}
+          CRITICAL: ${{ steps.vuln.outputs.critical }}
+          HIGH: ${{ steps.vuln.outputs.high }}
+        run: |
+          set -euo pipefail
+          echo "verdict=$VERDICT critical=$CRITICAL high=$HIGH"
+          [[ "$VERDICT" == "FAIL" ]] || { echo "::error::expected FAIL, got '${VERDICT:-<empty>}'"; exit 1; }
+          [[ $(( ${CRITICAL:-0} + ${HIGH:-0} )) -gt 0 ]] || { echo "::error::FAIL but no high/critical counts"; exit 1; }
+
+      - name: Scan a minimal image (expect PASS)
+        if: steps.gate.outputs.have_token == 'true'
+        id: clean
+        uses: ./.github/actions/snyk-container-scan
+        with:
+          image: alpine:3.20
+          severity-threshold: critical
+          fail-on-issues: "true"
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
+      - name: Assert the minimal image passed
+        if: steps.gate.outputs.have_token == 'true'
+        env:
+          VERDICT: ${{ steps.clean.outputs.verdict }}
+        run: |
+          set -euo pipefail
+          echo "verdict=$VERDICT"
+          [[ "$VERDICT" == "PASS" ]] || { echo "::error::expected PASS at critical, got '${VERDICT:-<empty>}'"; exit 1; }
+
+      - name: Note when the live scan was skipped
+        if: steps.gate.outputs.have_token != 'true'
+        run: echo "::notice::SNYK_TOKEN not set — ran unit tests only, skipped the real scan."
