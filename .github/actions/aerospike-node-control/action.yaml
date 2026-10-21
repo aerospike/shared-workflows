@@ -1,0 +1,90 @@
+name: Aerospike Node Control
+description: >
+  Starts or stops one node of a cluster created by setup-aerospike-server
+  and waits until the running nodes form a stable cluster without or with it.
+
+inputs:
+  container-name-prefix:
+    description: Container name prefix passed to setup-aerospike-server
+    required: false
+    default: aerospike
+  node-index:
+    description: 1-based index of the node to start or stop (container prefix-N)
+    required: true
+  operation:
+    description: start or stop
+    required: true
+  network-name:
+    description: Docker network name passed to setup-aerospike-server
+    required: false
+    default: aerospike-net
+  service-port:
+    description: Aerospike service port inside the container
+    required: false
+    default: "3000"
+  timeout:
+    description: Seconds to wait for each running node to report a stable cluster
+    required: false
+    default: "30"
+  enable-security:
+    description: Set to the enable-security value passed to setup-aerospike-server
+    required: false
+    default: "false"
+  enable-strong-consistency:
+    description: >
+      Set to the enable-strong-consistency value passed to
+      setup-aerospike-server. Migrations are then ignored while waiting.
+    required: false
+    default: "false"
+  container-repo-url:
+    description: Docker registry hostname for the tools image
+    required: false
+    default: aerospike.jfrog.io
+  tools-tag:
+    description: Aerospike tools Docker image tag
+    required: false
+    default: 12.1.1_2
+  enable-bash-trace-mode:
+    description: Show commands being executed in shell scripts for debugging
+    required: false
+    default: "false"
+
+outputs:
+  cluster-size:
+    description: Number of running nodes, which the cluster size was waited for
+    value: ${{ steps.node-control.outputs.cluster-size }}
+  running-nodes:
+    description: Comma-separated names of the running nodes
+    value: ${{ steps.node-control.outputs.running-nodes }}
+  node-address:
+    description: IP of the node on network-name (may be empty after stop)
+    value: ${{ steps.node-control.outputs.node-address }}
+
+runs:
+  using: composite
+  steps:
+    - name: Start or stop Aerospike node
+      id: node-control
+      shell: bash
+      env:
+        ENABLE_BASH_TRACE_MODE: ${{ inputs.enable-bash-trace-mode }}
+        CONTAINER_NAME_PREFIX: ${{ inputs.container-name-prefix }}
+        NODE_INDEX: ${{ inputs.node-index }}
+        OPERATION: ${{ inputs.operation }}
+        NETWORK_NAME: ${{ inputs.network-name }}
+        SERVICE_PORT: ${{ inputs.service-port }}
+        WAIT_TIMEOUT: ${{ inputs.timeout }}
+        ENABLE_SECURITY: ${{ inputs.enable-security }}
+        ENABLE_SC: ${{ inputs.enable-strong-consistency }}
+        TOOLS_IMAGE: ${{ inputs.container-repo-url }}/database-docker-virtual/aerospike-tools:${{ inputs.tools-tag }}
+      run: |
+        "${{ github.action_path }}/node-control.sh" \
+          --container-name-prefix "$CONTAINER_NAME_PREFIX" \
+          --node-index "$NODE_INDEX" \
+          --operation "$OPERATION" \
+          --network "$NETWORK_NAME" \
+          --service-port "$SERVICE_PORT" \
+          --timeout "$WAIT_TIMEOUT" \
+          --security "$ENABLE_SECURITY" \
+          --enable-sc "$ENABLE_SC" \
+          --tools-image "$TOOLS_IMAGE"

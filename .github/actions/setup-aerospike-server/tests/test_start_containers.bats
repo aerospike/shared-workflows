@@ -33,6 +33,12 @@ run)
     echo "$count" >"$DOCKER_STUB_DIR/run-count"
     printf '%s\n' "$@" >"$DOCKER_STUB_DIR/run-$count.args"
     ;;
+create)
+    shift
+    count=$(($(cat "$DOCKER_STUB_DIR/create-count" 2>/dev/null || echo 0) + 1))
+    echo "$count" >"$DOCKER_STUB_DIR/create-count"
+    printf '%s\n' "$@" >"$DOCKER_STUB_DIR/create-$count.args"
+    ;;
 esac
 EOF
     chmod +x "$TEST_TMPDIR/bin/docker"
@@ -72,6 +78,14 @@ start_containers() {
         --tls-volume-dest-dir /etc/aerospike/tls \
         --loader-container container_to_load_volume_1_1 \
         "$@"
+}
+
+normalized_args() {
+    awk 'prev == "--config-file" { print "<config-file>"; prev = ""; next } { print; prev = $0 }' "$1"
+}
+
+with_ip() {
+    awk -v ip="$1" '{ print } $0 == "aerospike-net" { print "--ip"; print ip }'
 }
 
 config_file_arg() {
@@ -257,4 +271,76 @@ assert_matches_baseline() {
     render_node_config "$TEST_TMPDIR/in.conf" "$TEST_TMPDIR/out.conf" 2 aerospike-2
 
     cmp <(printf 'a 2\n\n\n') "$TEST_TMPDIR/out.conf"
+}
+
+@test "empty start-nodes and network-subnet match the baseline" {
+    run start_containers 3 enterprise "$FIXTURES/features.conf" "" --start-nodes "" --network-subnet ""
+    [ "$status" -eq 0 ]
+
+    assert_matches_baseline multi-node 3
+    [ ! -e "$DOCKER_STUB_DIR/create-count" ]
+}
+
+@test "start-nodes equal to num-nodes matches the baseline" {
+    run start_containers 3 enterprise "$FIXTURES/features.conf" "" --start-nodes 3
+    [ "$status" -eq 0 ]
+
+    assert_matches_baseline multi-node 3
+    [ ! -e "$DOCKER_STUB_DIR/create-count" ]
+}
+
+@test "start-nodes runs the first nodes and creates the rest without --detach" {
+    run start_containers 3 enterprise "$FIXTURES/features.conf" "" --start-nodes 1
+    [ "$status" -eq 0 ]
+
+    [ "$(cat "$DOCKER_STUB_DIR/run-count")" -eq 1 ]
+    [ "$(cat "$DOCKER_STUB_DIR/create-count")" -eq 2 ]
+    diff -u "$FIXTURES/baseline/multi-node/docker-run-1.args" <(normalized_args "$DOCKER_STUB_DIR/run-1.args")
+    for i in 2 3; do
+        diff -u <(grep -vx -- --detach "$FIXTURES/baseline/multi-node/docker-run-$i.args") \
+            <(normalized_args "$DOCKER_STUB_DIR/create-$((i - 1)).args")
+        cmp "$FIXTURES/baseline/multi-node/aerospike.conf" "$(node_config "$i")"
+    done
+    [[ $output == *"Creating (not started) container: aerospike-3 (host port: 3002)"* ]]
+    diff -u "$FIXTURES/baseline/multi-node/github-output" "$GITHUB_OUTPUT"
+}
+
+@test "start-nodes keeps every node in the mesh seed list" {
+    run start_containers 3 community "" "" --start-nodes 1
+    [ "$status" -eq 0 ]
+
+    for i in 1 2 3; do
+        for j in 1 2 3; do
+            grep -qx "        mesh-seed-address-port aerospike-$j 3002" "$(node_config "$i")"
+        done
+    done
+}
+
+@test "invalid start-nodes fails before starting containers" {
+    for start_nodes in 0 4 abc -1; do
+        run --separate-stderr start_containers 3 community "" "" --start-nodes "$start_nodes"
+        [ "$status" -ne 0 ]
+        [[ $stderr == *"start-nodes must be between 1 and num-nodes (3)"* ]]
+        [ ! -e "$DOCKER_STUB_DIR/run-count" ]
+        [ ! -e "$DOCKER_STUB_DIR/create-count" ]
+    done
+}
+
+@test "network-subnet adds a fixed --ip after --network for every node" {
+    run start_containers 3 enterprise "$FIXTURES/features.conf" "" --network-subnet 172.30.0.0/24 --start-nodes 2
+    [ "$status" -eq 0 ]
+
+    for i in 1 2; do
+        diff -u <(with_ip "172.30.0.$((i + 1))" <"$FIXTURES/baseline/multi-node/docker-run-$i.args") \
+            <(normalized_args "$DOCKER_STUB_DIR/run-$i.args")
+    done
+    diff -u <(grep -vx -- --detach "$FIXTURES/baseline/multi-node/docker-run-3.args" | with_ip 172.30.0.4) \
+        <(normalized_args "$DOCKER_STUB_DIR/create-1.args")
+}
+
+@test "invalid network-subnet fails before starting containers" {
+    run --separate-stderr start_containers 3 community "" "" --network-subnet 172.30.0.1/24
+    [ "$status" -ne 0 ]
+    [[ $stderr == *"has host bits set"* ]]
+    [ ! -e "$DOCKER_STUB_DIR/run-count" ]
 }
