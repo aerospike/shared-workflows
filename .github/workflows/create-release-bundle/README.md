@@ -107,6 +107,14 @@ revision's bundle version.
 Unset, the bundle version is `version` and the run logs a warning: a future release will default to
 `auto`.
 
+## Mutable tags
+
+The `entrypoint.sh` script annotates the JFrog release bundle with a `mutable_tags` property that contains
+the bundle version. An example mutable bundle version might be `7.8.12` instead of `7.8.12_20261014T230027Z`.
+This property can then be read and distributed later on for automatic tagging using, for example,
+<https://github.com/citrusleaf/artifact-publisher>. The `mutable_tags` property can also be manually edited
+in JFrog to allow optionally additionally tagging with `latest` or other custom tags.
+
 ## Testing
 
 ```bash
