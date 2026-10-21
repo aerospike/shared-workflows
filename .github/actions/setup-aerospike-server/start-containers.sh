@@ -87,7 +87,7 @@ if [[ -n ${ENV_VARS-} ]]; then
             escape="false"
             continue
         fi
-        if [[ $char == "\\" ]]; then
+        if [[ $char == $'\\' ]]; then
             escape="true"
             continue
         fi
