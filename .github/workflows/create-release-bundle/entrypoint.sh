@@ -226,6 +226,10 @@ EOF
         --project="$PROJECT" \
         --properties="mutable_tags=$BUNDLE_VERSION;"
 
+    run jf release-bundle-annotate "$BUNDLE_NAME" "$BUNDLE_VERSION" \
+        --project="$PROJECT" \
+        --properties="other_tags_just_testing=$BUNDLE_VERSION";
+
     if [[ -n ${GITHUB_OUTPUT-} ]]; then
         echo "bundle-version=$BUNDLE_VERSION" >>"$GITHUB_OUTPUT"
     fi
