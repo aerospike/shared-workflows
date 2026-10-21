@@ -76,11 +76,13 @@ Required inputs first.
 | ------------------------ | -------- | ---------------------------------- | --------------------------------------------------------------------- |
 | `aerospike-network-name` | Yes      |                                    | Docker network created by `setup-aerospike-server`                    |
 | `container-names`        | Yes      |                                    | Comma-separated Aerospike container names                             |
+| `client-network-mtu`     | No       |                                    | Client network MTU (positive integer); empty uses the Docker default  |
 | `client-network-name`    | No       | `discovery-client-net`             | Client-side Docker network name                                       |
 | `enable-bash-trace-mode` | No       | `false`                            | Print shell commands as they run                                      |
 | `endpoint-hostname`      | No       | `as-endpoint.test`                 | Single endpoint hostname (Docker network alias on the client network) |
 | `listen-port-base`       | No       | `30001`                            | First proxy listen port; node N uses `listen-port-base + N - 1`       |
 | `proxy-container-name`   | No       | `toxiproxy`                        | Toxiproxy container name and control-API hostname                     |
+| `proxy-sysctls`          | No       |                                    | Comma-separated `key=value` sysctls, each passed as `--sysctl`        |
 | `startup-timeout`        | No       | `30`                               | Seconds to wait for the Toxiproxy control API                         |
 | `tls-listen-port-base`   | No       |                                    | First TLS proxy listen port; empty skips TLS proxies                  |
 | `tls-upstream-port`      | No       | `4333`                             | Aerospike TLS port inside each server container                       |
@@ -94,13 +96,24 @@ Required inputs first.
 | -------------------------- | ------------------------------------------------------------------------------ |
 | `client-network-name`      | Client-side Docker network name                                                |
 | `endpoint-hostname`        | Endpoint hostname the client should connect to                                 |
-| `endpoint-port-base`       | First proxy listen port                                                        |
+| `endpoint-port-base`       | Deprecated alias of `listen-port-base`, same value                             |
 | `endpoint-ports`           | Comma-separated proxy listen ports                                             |
+| `listen-port-base`         | First proxy listen port                                                        |
 | `proxy-map-json`           | Toxiproxy `/populate` payload                                                  |
 | `proxy-name-port-map`      | Comma-separated `node:listen-port` map                                         |
 | `tls-endpoint-ports`       | Comma-separated TLS proxy listen ports (empty when TLS proxies are skipped)    |
 | `toxiproxy-container-name` | Toxiproxy container name                                                       |
 | `toxiproxy-url`            | Control API URL as reachable from the client network (`http://toxiproxy:8474`) |
+
+## Deprecations
+
+- `endpoint-port-base` is a deprecated alias of `listen-port-base`, which matches the input of the same name. Both outputs carry the same value. New callers should read `listen-port-base`; the alias will be removed in a future major release.
+
+## Fault-injection knobs
+
+`client-network-mtu` creates the client network with `--opt com.docker.network.driver.mtu=<n>`, for example `1280` to exercise small-MTU paths (F-2). It has no effect when the client network already exists.
+
+`proxy-sysctls` passes each entry to the Toxiproxy `docker run` as `--sysctl`. For example, `net.ipv4.ip_local_port_range=40000 40010` narrows the proxy's ephemeral port range to force upstream port exhaustion (F-3). Values may contain spaces but not commas.
 
 ## TLS pass-through
 
