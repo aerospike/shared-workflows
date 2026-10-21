@@ -210,5 +210,3 @@ jobs:
         run: |
           [[ "${{ steps.topology.outputs.listen-port-base }}" == "30001" ]] \
             || { echo "Unexpected listen-port-base"; exit 1; }
-          [[ "${{ steps.topology.outputs.endpoint-port-base }}" == "${{ steps.topology.outputs.listen-port-base }}" ]] \
-            || { echo "endpoint-port-base does not match listen-port-base"; exit 1; }

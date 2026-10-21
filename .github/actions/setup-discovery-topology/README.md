@@ -39,7 +39,7 @@ Toxiproxy is used instead of nginx-stream so tests can inject `reset_peer` (TCP 
       -v ${{ github.workspace }}:${{ github.workspace }} \
       -w ${{ github.workspace }} \
       maven:3-eclipse-temurin-21 \
-      mvn -pl test test -Dargs="--endpoint-hostname ${{ steps.topology.outputs.endpoint-hostname }} --endpoint-port-base ${{ steps.topology.outputs.endpoint-port-base }}"
+      mvn -pl test test -Dargs="--endpoint-hostname ${{ steps.topology.outputs.endpoint-hostname }} --endpoint-port-base ${{ steps.topology.outputs.listen-port-base }}"
 ```
 
 ## Topology
@@ -96,7 +96,6 @@ Required inputs first.
 | -------------------------- | ------------------------------------------------------------------------------ |
 | `client-network-name`      | Client-side Docker network name                                                |
 | `endpoint-hostname`        | Endpoint hostname the client should connect to                                 |
-| `endpoint-port-base`       | Deprecated alias of `listen-port-base`, same value                             |
 | `endpoint-ports`           | Comma-separated proxy listen ports                                             |
 | `listen-port-base`         | First proxy listen port                                                        |
 | `proxy-map-json`           | Toxiproxy `/populate` payload                                                  |
@@ -104,10 +103,6 @@ Required inputs first.
 | `tls-endpoint-ports`       | Comma-separated TLS proxy listen ports (empty when TLS proxies are skipped)    |
 | `toxiproxy-container-name` | Toxiproxy container name                                                       |
 | `toxiproxy-url`            | Control API URL as reachable from the client network (`http://toxiproxy:8474`) |
-
-## Deprecations
-
-- `endpoint-port-base` is a deprecated alias of `listen-port-base`, which matches the input of the same name. Both outputs carry the same value. New callers should read `listen-port-base`; the alias will be removed in a future major release.
 
 ## Fault-injection knobs
 
