@@ -16,7 +16,7 @@ handle_error() {
 }
 
 DEFAULT_COREDNS_IMAGE="docker.io/coredns/coredns@sha256:9caabbf6238b189a65d0d6e6ac138de60d6a1c419e5a341fbbb7c78382559c6e" # 1.11.3
-PROBE_IMAGE="docker.io/library/busybox@sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e" # 1.37.0
+PROBE_IMAGE="docker.io/library/busybox@sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e"           # 1.37.0
 COREDNS_DIR=/etc/coredns
 STARTED_CONTAINER=""
 
