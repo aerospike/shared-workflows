@@ -1,0 +1,10 @@
+--name
+aerospike-1
+--detach
+--network
+aerospike-net
+-p
+3000:3000
+--ulimit
+nofile=15000
+aerospike.jfrog.io/database-docker-virtual/aerospike-server-enterprise:latest
