@@ -217,22 +217,6 @@ for ((i = 1; i <= num_nodes; i++)); do
         run_args+=("-v" "$tls_volume_name:$tls_volume_dest_dir")
     fi
 
-    # Decide whether to bypass the entrypoint. The Aerospike Docker entrypoint
-    # regenerates aerospike.conf, overwriting any mounted config. Bypass it
-    # whenever we need a custom config that must not be overwritten.
-    bypass_entrypoint="false"
-    if ((num_nodes > 1)); then
-        bypass_entrypoint="true"
-    elif [[ $enable_sc == "true" ]]; then
-        bypass_entrypoint="true"
-    elif [[ $enable_tls == "true" ]]; then
-        bypass_entrypoint="true"
-    elif [[ $effective_security == "true" ]]; then
-        bypass_entrypoint="true"
-    elif [[ -n $config_path ]]; then
-        bypass_entrypoint="true"
-    fi
-
     # User-supplied env vars and host entries
     run_args+=("${env_flags[@]}")
     run_args+=("${host_flags[@]}")
@@ -243,23 +227,14 @@ for ((i = 1; i <= num_nodes; i++)); do
 
     run_args+=("--ulimit" "nofile=15000")
 
-    # Bypass entrypoint to prevent config overwrite
-    if [[ $bypass_entrypoint == "true" ]]; then
-        run_args+=("--entrypoint" "asd")
-    fi
-
-    run_args+=("$image")
-
-    # Pass --foreground since we bypassed the entrypoint
-    if [[ $bypass_entrypoint == "true" ]]; then
-        run_args+=("--foreground")
-    fi
-
+    # The image entrypoint regenerates aerospike.conf, so run asd directly on the node's config
     if [[ -n $config_path ]]; then
         node_config="$node_config_dir/$name.conf"
         render_node_config "$config_path" "$node_config" "$i" "$name"
         docker cp "$node_config" "$loader_container:$conf_volume_dest_dir"
-        run_args+=("--config-file" "$conf_volume_dest_dir/$name.conf")
+        run_args+=("--entrypoint" "asd" "$image" "--foreground" "--config-file" "$conf_volume_dest_dir/$name.conf")
+    else
+        run_args+=("$image")
     fi
 
     docker_command=run
