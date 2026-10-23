@@ -1,0 +1,3 @@
+container-names=aerospike-1
+service-ports=3000
+tls-service-ports=
