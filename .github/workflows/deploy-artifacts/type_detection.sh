@@ -14,7 +14,8 @@
 #
 # PyPI ambiguous archives use the artifact-publisher style detector (wheel METADATA + sdist
 # PKG-INFO / .dist-info METADATA with non-empty Name/Version). Additional passes mirror
-# jfrog-fetch-style passes: wheels, Maven POMs, docker-images.json, NuGet packages
+# jfrog-fetch-style passes: wheels, Maven POMs, Docker/OCI images from the Lifecycle
+# release-bundle record (or a pre-written docker-images.json), NuGet packages
 # (.nupkg / .snupkg by extension, validated with is_nuget_package from artifact-publisher),
 # and Rust .crate files (extension + is_crate_package validation).
 #
@@ -456,10 +457,58 @@ _detect_structure_maven_poms() {
     done < <(find "$artifacts_root" -name "*.pom" -type f -print0 2>/dev/null)
 }
 
-# Detect Docker: jfrog-fetch writes docker-images.json from the Lifecycle API; stage copies for downstream.
+# Stage docker-images.json for downstream publish.
+# A Lifecycle release-bundle-record.json under the artifacts root is the source of truth:
+# keep package_type docker and oci, drop digest versions (sha256__ / sha256:), and emit
+# one compact {package_name, package_version, source_repository_key} object per kept row.
+# Image identity comes from those fields. list.manifest.json, manifest.json, and sha256__
+# blobs are not images, and source_repository_key is not derived from the path.
+# With no record, copy a pre-written docker-images.json. When both exist, do not copy it.
 _detect_structure_docker_bundle_metadata() {
     local artifacts_root="$1"
     local dest="./structured_build_artifacts/generic/docker"
+    local -a records=()
+    local file lines
+
+    while IFS= read -r -d '' file; do
+        [[ -f $file ]] || continue
+        records+=("$file")
+    done < <(find "$artifacts_root" -name "release-bundle-record.json" -type f -print0 2>/dev/null)
+
+    if ((${#records[@]} > 0)); then
+        if ! command -v jq >/dev/null 2>&1; then
+            echo "Error: jq is required to read release-bundle-record.json" >&2
+            return 1
+        fi
+        for file in "${records[@]}"; do
+            echo "Processing DOCKER (release bundle record): $file" >&2
+        done
+        # nonempty rejects missing, null, and empty-string fields before startswith.
+        if ! lines=$(jq -c -s '
+            def nonempty: type == "string" and . != "";
+            .[]
+            | .artifacts[]?
+            | select(.package_type == "docker" or .package_type == "oci")
+            | select(.package_version | nonempty)
+            | select(.package_version | (startswith("sha256__") or startswith("sha256:")) | not)
+            | select(.package_name | nonempty)
+            | select(.source_repository_key | nonempty)
+            | {package_name, package_version, source_repository_key}
+        ' "${records[@]}"); then
+            echo "Error: failed to read release bundle record" >&2
+            return 1
+        fi
+        if [[ -z $lines ]]; then
+            echo "Notice: release bundle record has no docker or oci image tags; not writing docker-images.json" >&2
+            return 0
+        fi
+        mkdir -p "$dest"
+        printf '%s\n' "$lines" >"$dest/docker-images.json"
+        manifest_add "$dest/docker-images.json" "generic"
+        echo "Wrote Docker bundle metadata: $dest/docker-images.json" >&2
+        return 0
+    fi
+
     while IFS= read -r -d '' file; do
         [[ -f $file ]] || continue
         echo "Processing DOCKER (bundle metadata): $file" >&2

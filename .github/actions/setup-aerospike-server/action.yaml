@@ -71,6 +71,12 @@ inputs:
     description: Aerospike service port inside the container (must match aerospike.conf)
     required: false
     default: "3000"
+  publish-ports:
+    description: >
+      Publish container ports to the runner host. Set false for L2 discovery
+      topologies so tests cannot accidentally connect via localhost mappings.
+    required: false
+    default: "true"
   startup-timeout:
     description: Seconds to wait for each node and cluster formation
     required: false
@@ -83,6 +89,21 @@ inputs:
     description: Base host port for TLS (node N maps to tls-base-port + N - 1)
     required: false
     default: "4333"
+  tls-cert-cn:
+    description: >
+      Common Name on the generated server certificate. Defaults to the
+      config tls-name (aerospike-tls). Set a different DNS name when a
+      test needs that tls-name only as a SAN.
+    required: false
+    default: aerospike-tls
+  include-tls-name-san:
+    description: >
+      Include the config tls-name (aerospike-tls) as a DNS SAN on the
+      server certificate. Set false when a test needs that name only in
+      the CN. Other SANs (container names, localhost, docker, 127.0.0.1)
+      are always included.
+    required: false
+    default: "true"
   enable-security:
     description: Enable Aerospike security (authentication with default admin/admin credentials)
     required: false
@@ -148,10 +169,16 @@ runs:
           || error "startup-timeout must be a positive integer (got: '${{ inputs.startup-timeout }}')"
         [[ "${{ inputs.service-port }}" =~ ^[1-9][0-9]*$ ]] \
           || error "service-port must be a positive integer (got: '${{ inputs.service-port }}')"
+        [[ "${{ inputs.publish-ports }}" == "true" || "${{ inputs.publish-ports }}" == "false" ]] \
+          || error "publish-ports must be 'true' or 'false' (got: '${{ inputs.publish-ports }}')"
 
         if [[ "${{ inputs.enable-tls }}" == "true" ]]; then
           [[ "${{ inputs.tls-base-port }}" =~ ^[1-9][0-9]*$ ]] \
             || error "tls-base-port must be a positive integer (got: '${{ inputs.tls-base-port }}')"
+          [[ "${{ inputs.include-tls-name-san }}" == "true" || "${{ inputs.include-tls-name-san }}" == "false" ]] \
+            || error "include-tls-name-san must be 'true' or 'false' (got: '${{ inputs.include-tls-name-san }}')"
+          [[ "${{ inputs.tls-cert-cn }}" =~ ^[A-Za-z0-9]([A-Za-z0-9.-]{0,251}[A-Za-z0-9])?$ ]] \
+            || error "tls-cert-cn must be a DNS name (got: '${{ inputs.tls-cert-cn }}')"
         fi
 
         effective_security="${{ inputs.enable-security }}"
@@ -230,57 +257,26 @@ runs:
       env:
         # Prevents subject name from being treated like a path while running openssl commands
         MSYS_NO_PATHCONV: 1
+        TLS_CERT_CN: ${{ inputs.tls-cert-cn }}
+        INCLUDE_TLS_NAME_SAN: ${{ inputs.include-tls-name-san }}
+        TLS_NUM_NODES: ${{ inputs.num-nodes }}
+        TLS_NAME_PREFIX: ${{ inputs.container-name-prefix }}
       run: |
         if [[ "$ENABLE_BASH_TRACE_MODE" == "true" ]]; then
           set -x
         fi
 
         cert_dir="$(mktemp -d)"
-        cd "$cert_dir"
 
-        num_nodes=${{ inputs.num-nodes }}
-        prefix="${{ inputs.container-name-prefix }}"
-
-        # Generate CA key and self-signed cert
-        openssl req -x509 -newkey rsa:4096 -nodes \
-          -keyout ca.key -out ca.crt -days 365 \
-          -subj "/CN=Aerospike-Server-Test-CA"
-
-        # Build SAN extension file covering all container names
-        {
-          echo "[v3_req]"
-          echo "subjectAltName = @alt_names"
-          echo "[alt_names]"
-          dns_idx=1
-          for (( i=1; i<=num_nodes; i++ )); do
-            echo "DNS.${dns_idx} = ${prefix}-${i}"
-            dns_idx=$(( dns_idx + 1 ))
-          done
-          echo "DNS.${dns_idx} = localhost"
-          dns_idx=$(( dns_idx + 1 ))
-          echo "DNS.${dns_idx} = docker"
-          echo "IP.1 = 127.0.0.1"
-        } > san.ext
-
-        # Generate server key, CSR, and CA-signed cert with SANs
-        openssl req -newkey rsa:4096 -nodes \
-          -keyout server.key -out server.csr \
-          -subj "/CN=aerospike-tls"
-        openssl x509 -req -in server.csr \
-          -CA ca.crt -CAkey ca.key -CAcreateserial \
-          -out server.crt -days 365 \
-          -extensions v3_req -extfile san.ext
-
-        # Generate client key and CA-signed cert
-        openssl req -newkey rsa:4096 -nodes \
-          -keyout client.key -out client.csr \
-          -subj "/CN=Aerospike-Server-Test-Client"
-        openssl x509 -req -in client.csr \
-          -CA ca.crt -CAkey ca.key -CAcreateserial \
-          -out client.crt -days 365
-
-        # Clean up CSR and serial files
-        rm -f *.csr *.srl san.ext
+        # tls-name is fixed in templates/tls-service.conf and tls-network.conf.
+        # tls-cert-cn and include-tls-name-san change only the certificate shape.
+        "${{ github.action_path }}/generate-tls-certs.sh" \
+          --out-dir "$cert_dir" \
+          --num-nodes "$TLS_NUM_NODES" \
+          --name-prefix "$TLS_NAME_PREFIX" \
+          --cn "$TLS_CERT_CN" \
+          --tls-name aerospike-tls \
+          --include-tls-name-san "$INCLUDE_TLS_NAME_SAN"
 
         echo "Generated TLS certificates in $cert_dir"
         ls -la "$cert_dir"
@@ -387,19 +383,21 @@ runs:
           fi
         fi
 
-        # Generate default TLS-enabled config if TLS is on and no custom config
-        if [[ "${{ inputs.enable-tls }}" == "true" && -z "$config_path" ]]; then
-          config_path="$(mktemp)"
-          "$render_tpl" "$tpl_dir/tls.conf" "$config_path"
-          echo "Generated default TLS-enabled aerospike.conf at $config_path"
-        fi
-
-        # Generate default config when security or SC is enabled but no TLS and no custom config
-        if [[ "${{ inputs.enable-tls }}" != "true" && -z "$config_path" \
-              && ( "$effective_security" == "true" || "$enable_sc" == "true" ) ]]; then
-          config_path="$(mktemp)"
-          "$render_tpl" "$tpl_dir/default.conf" "$config_path"
-          echo "Generated default security/SC-enabled aerospike.conf at $config_path"
+        # config_path is still empty when neither config-file nor config-content
+        # was set. Render the single-node default here. Leave multi-node empty
+        # so start-containers takes its generated-config branch and renders
+        # multi-node.conf, including the TLS listener when enable-tls is set.
+        if [[ "$num_nodes" -eq 1 && -z "$config_path" ]]; then
+          if [[ "${{ inputs.enable-tls }}" == "true" ]]; then
+            export_tls_template_vars "$tpl_dir" "true"
+            config_path="$(mktemp)"
+            "$render_tpl" "$tpl_dir/tls.conf" "$config_path"
+            echo "Generated default TLS-enabled aerospike.conf at $config_path"
+          elif [[ "$effective_security" == "true" || "$enable_sc" == "true" ]]; then
+            config_path="$(mktemp)"
+            "$render_tpl" "$tpl_dir/default.conf" "$config_path"
+            echo "Generated default security/SC-enabled aerospike.conf at $config_path"
+          fi
         fi
 
         echo "features-path=$features_path" >> "$GITHUB_OUTPUT"
@@ -448,6 +446,7 @@ runs:
         network="${{ inputs.network-name }}"
         features_path="${{ steps.prepare-config.outputs.features-path }}"
         config_path="${{ steps.prepare-config.outputs.config-path }}"
+        publish_ports="${{ inputs.publish-ports }}"
         enable_tls="${{ inputs.enable-tls }}"
         tls_base_port=${{ inputs.tls-base-port }}
         effective_security="${{ steps.validate.outputs.effective-security }}"
@@ -534,8 +533,10 @@ runs:
             fi
 
             export MESH_SEEDS="$mesh_seeds"
+            export_tls_template_vars "$tpl_dir" "$enable_tls"
 
-            # Render multi-node template
+            # No config-file or config-content. Render multi-node.conf, with
+            # the TLS listener included when enable-tls is set.
             config_path="$(mktemp)"
             "$render_tpl" "$tpl_dir/multi-node.conf" "$config_path"
           else
@@ -557,12 +558,17 @@ runs:
             "--name" "$name"
             "--detach"
             "--network" "$network"
-            "-p" "${host_port}:${service_port}"
           )
+
+          if [[ "$publish_ports" == "true" ]]; then
+            run_args+=("-p" "${host_port}:${service_port}")
+          fi
 
           # TLS port mapping and cert mounting
           if [[ "$enable_tls" == "true" ]]; then
-            run_args+=("-p" "${tls_host_port}:4333")
+            if [[ "$publish_ports" == "true" ]]; then
+              run_args+=("-p" "${tls_host_port}:4333")
+            fi
             run_args+=("-v" "${{ steps.server-volume.outputs.tls_volume_name }}:${{ steps.server-volume.outputs.tls_volume_dest_dir }}")
           fi
 
@@ -608,7 +614,11 @@ runs:
             run_args+=("--config-file" "${{ steps.server-volume.outputs.conf_volume_dest_dir }}/$aerospike_conf_filename")
           fi
 
-          echo "Starting container: $name (host port: $host_port)"
+          if [[ "$publish_ports" == "true" ]]; then
+            echo "Starting container: $name (host port: $host_port)"
+          else
+            echo "Starting container: $name (host ports unpublished)"
+          fi
 
           # Prevent UNIX to windows path conversions here to prevent the aerospike.conf path from being wrongly converted
           MSYS_NO_PATHCONV=1 docker run "${run_args[@]}"

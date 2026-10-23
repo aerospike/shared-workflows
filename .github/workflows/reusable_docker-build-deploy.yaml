@@ -130,6 +130,15 @@ on:
       immutable-tag:
         description: Immutable tag (registry/image:version_timestamp)
         value: ${{ jobs.merge.outputs.immutable-tag }}
+      jf-build-name:
+        description: JFrog build-info name
+        value: ${{ jobs.merge.outputs.jf-build-name }}
+      jf-build-id:
+        description: |
+          JFrog build-info build number. Pass `<jf-build-name>:<jf-build-id>` in
+          reusable_create-release-bundle.yaml `jf-build-names`. Set on a dry run too,
+          but the build-info record is only published when `push` is true.
+        value: ${{ jobs.merge.outputs.jf-build-id }}
 
 jobs:
   # `platforms` is a comma-separated string and GHA expressions cannot split
@@ -139,9 +148,10 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       matrix: ${{ steps.parse.outputs.matrix }}
+      invocation-key: ${{ steps.parse.outputs.invocation-key }}
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
         with:
           egress-policy: audit
 
@@ -150,13 +160,42 @@ jobs:
         shell: bash
         env:
           PLATFORMS: ${{ inputs.platforms }}
+          IMAGE_NAME: ${{ inputs.image-name }}
+          # Empty jf-build-name falls back to the workflow name, same as
+          # JFROG_CLI_BUILD_NAME on the build and merge jobs.
+          BUILD_NAME: ${{ inputs.jf-build-name || github.workflow }}
+          APP_VERSION: ${{ inputs.app-version }}
         run: |
           set -euo pipefail
+
+          # Artifact names and the Actions cache scope share one key:
+          # <image>--<build>--<app-version>--<platform>. `--` is only the
+          # separator, so a value cannot match another that merely starts
+          # with the same text (test-image vs test-image-ctx, 3.3.2 vs
+          # 3.3.2-slim). Characters outside the artifact-name / cache-scope
+          # set collapse to a single `-`.
+          sanitize_part() {
+            local s="$1"
+            s="$(printf '%s' "$s" | LC_ALL=C tr -c 'A-Za-z0-9._-' '-')"
+            while [[ "$s" == *"--"* ]]; do
+              s="${s//--/-}"
+            done
+            printf '%s' "$s"
+          }
+
+          require_part() {
+            local label="$1" value="$2"
+            if [[ -z "$value" ]]; then
+              echo "::error::${label} is empty after sanitizing; it cannot form an artifact name"
+              exit 1
+            fi
+          }
+
           # `unique` guards against repeated platform inputs.
           matrix="$(jq -nc --arg p "$PLATFORMS" '
             [ $p | split(",")[] | gsub("^\\s+|\\s+$"; "") | select(. != "") ]
             | unique
-            | map({platform: ., sanitized: gsub("/"; "-")}
+            | map({platform: .}
                   + (if   . == "linux/amd64" then {runner: "ubuntu-24.04",     qemu: false}
                      elif . == "linux/arm64" then {runner: "ubuntu-24.04-arm", qemu: false}
                      else                         {runner: "ubuntu-24.04",     qemu: true}
@@ -165,8 +204,38 @@ jobs:
             echo "::error::no platforms parsed from input '$PLATFORMS'"
             exit 1
           fi
-          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
+          map_json='{}'
+          while IFS= read -r platform; do
+            san="$(sanitize_part "$platform")"
+            require_part "platform ${platform}" "$san"
+            map_json="$(jq -c --arg p "$platform" --arg s "$san" '.[$p] = $s' <<<"$map_json")"
+          done < <(jq -r '.[].platform' <<<"$matrix")
+          matrix="$(jq -c --argjson san "$map_json" 'map(.sanitized = $san[.platform])' <<<"$matrix")"
+
+          dups="$(jq -r '[group_by(.sanitized)[] | select(length > 1) | .[0].sanitized] | join(", ")' <<<"$matrix")"
+          if [[ -n "$dups" ]]; then
+            echo "::error::distinct platforms sanitize to the same name segment: ${dups}"
+            exit 1
+          fi
+
+          image_name="$(sanitize_part "$IMAGE_NAME")"
+          build_name="$(sanitize_part "$BUILD_NAME")"
+          # Same tag form as the merge job: one leading v, `+` becomes `-`.
+          app_version="${APP_VERSION#v}"
+          app_version="${app_version//+/-}"
+          app_version="$(sanitize_part "$app_version")"
+          require_part "image-name" "$image_name"
+          require_part "jf-build-name" "$build_name"
+          require_part "app-version" "$app_version"
+          invocation_key="${image_name}--${build_name}--${app_version}"
+
+          {
+            echo "matrix=${matrix}"
+            echo "invocation-key=${invocation_key}"
+          } >> "$GITHUB_OUTPUT"
           echo "Parsed platform matrix: $matrix"
+          echo "Invocation key: ${invocation_key}"
 
   build:
     needs: parse-platforms
@@ -185,7 +254,7 @@ jobs:
       id-token: write
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
         with:
           egress-policy: audit
 
@@ -286,7 +355,7 @@ jobs:
 
       - name: Download build-context artifacts
         if: ${{ steps.ctx_artifacts.outputs.place == 'true' }}
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           path: ${{ runner.temp }}/context-artifacts
           pattern: ${{ steps.ctx_artifacts.outputs.pattern }}
@@ -383,7 +452,7 @@ jobs:
 
       - name: Install JFrog CLI
         id: jf
-        uses: step-security/setup-jfrog-cli@53aeacb709fce45d0baf69a13ec3342f7e2d71a9 # v5.1.0
+        uses: step-security/setup-jfrog-cli@f67dd6dcfe5fab8d1ebd695c456631275009a39d # v5.2.0
         env:
           JF_URL: ${{ inputs.jf-url }}
           JF_PROJECT: ${{ inputs.jf-project }}
@@ -406,8 +475,12 @@ jobs:
 
       - name: Set up QEMU
         if: ${{ matrix.qemu }}
-        uses: docker/setup-qemu-action@1f40c72289eff860ee54a304f1438e3cff362e0a # v4.3.0
-      - uses: step-security/setup-buildx-action@a4709e2865773e1792246433e8eb922f9743a875 # v4.2.0
+        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+      # docker-container pulls moby/buildkit while creating the builder. Take
+      # that image from the project virtual, which the login above can read.
+      - uses: step-security/setup-buildx-action@e50058a0fcd8d1a7d626c905502d010a468bf238 # v4.4.1
+        with:
+          driver-opts: image=${{ inputs.jf-registry-base }}/${{ inputs.jf-project }}-docker-virtual/moby/buildkit:buildx-stable-1
 
       - name: Prepare build args/labels
         shell: bash
@@ -504,7 +577,7 @@ jobs:
 
       - name: Build and push by digest
         id: build
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: ${{ inputs.context }}
           file: ${{ inputs.file }}
@@ -514,10 +587,11 @@ jobs:
           build-args: ${{ env.BUILD_ARGS }}
           labels: ${{ env.LABELS }}
           secret-files: ${{ env.BUILD_SECRET_FILES }}
-          # Scoped per platform; a shared scope would have legs overwrite each
-          # other's cache.
-          cache-from: type=gha,scope=${{ matrix.sanitized }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.sanitized }}
+          # Scope is the invocation key plus the platform. Legs must not
+          # overwrite each other's cache, and two Dockerfiles that share
+          # image-name must not fill the cache the other reads.
+          cache-from: type=gha,scope=${{ needs.parse-platforms.outputs.invocation-key }}--${{ matrix.sanitized }}
+          cache-to: type=gha,mode=max,scope=${{ needs.parse-platforms.outputs.invocation-key }}--${{ matrix.sanitized }}
           outputs: type=image,name=${{ env.REGISTRY }}/${{ inputs.image-name }},push-by-digest=true,name-canonical=true,push=${{ inputs.push }}
 
       - name: Record push time
@@ -554,23 +628,29 @@ jobs:
             '{platform:$platform, digest:$digest, runner_arch:$runner_arch, token_fetched_at:($fetched_at|tonumber), push_completed_at:($pushed_at|tonumber)}' \
             > "${RUNNER_TEMP}/legmeta/${SANITIZED}.json"
 
-      # image-name namespaces the artifact so two invocations in one run do not
-      # collide, and `--` keeps the merge job's glob from matching an image-name
-      # that another one is a prefix of. image-name must not itself contain `--`.
+      # digests-<image>--<build>--<app-version>--<platform> (legmeta- uses the
+      # same suffix). image-name alone does not separate two calls that publish
+      # the same repository: the build name and the tag form of app-version do.
+      # Each part is sanitized so `--` appears only as the separator, which
+      # keeps a name from matching another that merely starts with the same
+      # text. overwrite is false so a second job that uploads this name fails
+      # instead of leaving two artifacts for the merge to choose between.
       - name: Upload digest
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: digests-${{ inputs.image-name }}--${{ matrix.sanitized }}
+          name: digests-${{ needs.parse-platforms.outputs.invocation-key }}--${{ matrix.sanitized }}
           path: ${{ runner.temp }}/digests/*
           if-no-files-found: error
+          overwrite: false
           retention-days: 1
 
       - name: Upload leg metadata
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: legmeta-${{ inputs.image-name }}--${{ matrix.sanitized }}
+          name: legmeta-${{ needs.parse-platforms.outputs.invocation-key }}--${{ matrix.sanitized }}
           path: ${{ runner.temp }}/legmeta/*
           if-no-files-found: error
+          overwrite: false
           retention-days: 1
 
   merge:
@@ -590,9 +670,11 @@ jobs:
       image-ref: ${{ steps.manifest.outputs.image-ref }}
       tags: ${{ steps.tags.outputs.tags }}
       immutable-tag: ${{ steps.tags.outputs.immutable-tag }}
+      jf-build-name: ${{ steps.buildinfo.outputs.jf-build-name }}
+      jf-build-id: ${{ steps.buildinfo.outputs.jf-build-id }}
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
         with:
           egress-policy: audit
 
@@ -600,7 +682,7 @@ jobs:
 
       - name: Install JFrog CLI
         id: jf
-        uses: step-security/setup-jfrog-cli@53aeacb709fce45d0baf69a13ec3342f7e2d71a9 # v5.1.0
+        uses: step-security/setup-jfrog-cli@f67dd6dcfe5fab8d1ebd695c456631275009a39d # v5.2.0
         env:
           JF_URL: ${{ inputs.jf-url }}
           JF_PROJECT: ${{ inputs.jf-project }}
@@ -609,6 +691,14 @@ jobs:
           oidc-provider-name: ${{ inputs.oidc-provider-name }}
           oidc-audience: ${{ inputs.oidc-audience }}
 
+      - name: Record build-info name and number
+        id: buildinfo
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "jf-build-name=${JFROG_CLI_BUILD_NAME}" >> "$GITHUB_OUTPUT"
+          echo "jf-build-id=${JFROG_CLI_BUILD_NUMBER}" >> "$GITHUB_OUTPUT"
+
       - name: Docker login to Artifactory
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
@@ -616,7 +706,10 @@ jobs:
           username: ${{ steps.jf.outputs.oidc-user }}
           password: ${{ steps.jf.outputs.oidc-token }}
 
-      - uses: step-security/setup-buildx-action@a4709e2865773e1792246433e8eb922f9743a875 # v4.2.0
+      # imagetools still bootstraps the container driver, which pulls BuildKit.
+      - uses: step-security/setup-buildx-action@e50058a0fcd8d1a7d626c905502d010a468bf238 # v4.4.1
+        with:
+          driver-opts: image=${{ inputs.jf-registry-base }}/${{ inputs.jf-project }}-docker-virtual/moby/buildkit:buildx-stable-1
 
       - name: Compute tags
         id: tags
@@ -652,11 +745,14 @@ jobs:
           echo "tags=${tags_array[*]}" >> "$GITHUB_OUTPUT"
           echo "immutable-tag=${immutable}" >> "$GITHUB_OUTPUT"
 
+      # `*` is only the platform. The invocation key in front of it stops this
+      # call from downloading another call's legs, including one whose
+      # image-name, build name, or app-version has this call's value as a prefix.
       - name: Download per-leg digests
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           path: ${{ runner.temp }}/digests
-          pattern: digests-${{ inputs.image-name }}--*
+          pattern: digests-${{ needs.parse-platforms.outputs.invocation-key }}--*
           merge-multiple: true
 
       - name: Create multi-platform manifest
@@ -667,6 +763,7 @@ jobs:
           TAGS: ${{ steps.tags.outputs.tags }}
           IMMUTABLE_TAG: ${{ steps.tags.outputs.immutable-tag }}
           PUSH: ${{ inputs.push }}
+          PLATFORM_MATRIX: ${{ needs.parse-platforms.outputs.matrix }}
         run: |
           set -euo pipefail
           if [ "$PUSH" != "true" ]; then
@@ -682,15 +779,26 @@ jobs:
             tag_args+=("-t" "$t")
           done
 
-          src_args=()
-          shopt -s nullglob
-          for f in "${RUNNER_TEMP}/digests"/*; do
-            src_args+=("${REGISTRY}/${IMAGE}@sha256:$(basename "$f")")
-          done
-          if [ "${#src_args[@]}" -eq 0 ]; then
-            echo "::error::no per-leg digests found to assemble"
+          # One file per platform of this invocation. The artifact name is what
+          # keeps another image out of the download; this rejects a partial
+          # download, or a glob that also returned extra files.
+          expected="$(jq 'length' <<<"$PLATFORM_MATRIX")"
+          files=()
+          while IFS= read -r -d '' digest_file; do
+            files+=("$digest_file")
+          done < <(find "${RUNNER_TEMP}/digests" -type f -print0)
+          if [ "${#files[@]}" -ne "$expected" ]; then
+            echo "::error::expected ${expected} per-leg digests for this invocation, found ${#files[@]}"
+            if [ "${#files[@]}" -gt 0 ]; then
+              printf 'digest file: %s\n' "${files[@]}"
+            fi
             exit 1
           fi
+
+          src_args=()
+          for digest_file in "${files[@]}"; do
+            src_args+=("${REGISTRY}/${IMAGE}@sha256:$(basename "$digest_file")")
+          done
 
           docker buildx imagetools create "${tag_args[@]}" "${src_args[@]}"
 

@@ -23,11 +23,29 @@ jobs:
       oidc-audience: aerospike
       dry-run: true
 
+  # dry-run must stay true: this runs against real JFrog.
+  test-promote-release-bundle-workflow:
+    uses: ./.github/workflows/reusable_promote-release-bundle.yaml
+    permissions:
+      attestations: write
+      contents: read
+      id-token: write
+    with:
+      gh-workflows-ref: ${{ github.sha }}
+      gh-checkout-path: .
+      jf-project: test
+      jf-bundle-name: test-promote-guard-probe
+      version: v1.0.0
+      target-stage: DEV
+      dry-run: true
+
   run-tests:
     runs-on: ubuntu-22.04
+    permissions:
+      contents: read
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
         with:
           egress-policy: audit
 
@@ -36,6 +54,20 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update && sudo apt-get install jq -y
+      - name: Setup bats
+        uses: bats-core/bats-action@77d6fb60505b4d0d1d73e48bd035b55074bbfb43 # 4.0.0
+        with:
+          bats-version: 1.12.0
+          support-install: false
+          assert-install: false
+          detik-install: false
+          file-install: false
       - name: Test Entrypoint
         run: |
           .github/workflows/create-release-bundle/test-entrypoint.sh
+      - name: Revision plumbing tests
+        run: bats .github/workflows/create-release-bundle/tests/bats/
+      - name: Delete guard tests
+        run: bats .github/actions/delete-release-bundle/tests/bats/
+      - name: Promotion tests
+        run: bats .github/workflows/promote-release-bundle/tests/bats/

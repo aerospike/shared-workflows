@@ -25,6 +25,7 @@ error() {
 # Default values
 DRY_RUN="false"
 BUNDLE_METADATA_PATH=""
+REVISION=""
 
 show_help() {
     echo "Usage: $0 --project <project> --build-names <builds> --bundle-name <name> --version <version> [OPTIONS]" >&2
@@ -33,7 +34,7 @@ show_help() {
     echo "" >&2
     echo "Required Arguments:" >&2
     echo "  --project <project>        JFrog Artifactory project name" >&2
-    echo "  --build-names <builds>     Comma-separated list of build name:version pairs to include" >&2
+    echo "  --build-names <builds>     Comma-separated list of build-name:build-number pairs to include" >&2
     echo "  --bundle-name <name>       Name for the release bundle" >&2
     echo "  --version <version>        Version of the release bundle" >&2
     echo "" >&2
@@ -42,6 +43,8 @@ show_help() {
     echo "  --bundle-metadata <path>  Optional JSON (e.g. .maven-bundle-metadata.json from detect-artifacts)." >&2
     echo "                            When the file exists, key=value pairs are applied to the bundle via" >&2
     echo "                            jf release-bundle-annotate after create." >&2
+    echo "  --revision <revision>      Appended to the version to form the bundle version." >&2
+    echo "                            'auto' uses <run_id>-<run_attempt>." >&2
     echo "  --help, -h                 Show this help message" >&2
     echo "" >&2
     echo "Examples:" >&2
@@ -67,6 +70,10 @@ while [[ $# -gt 0 ]]; do
         ;;
     --version)
         VERSION="$2"
+        shift 2
+        ;;
+    --revision)
+        REVISION="$2"
         shift 2
         ;;
     --dry-run)
@@ -148,7 +155,7 @@ generate_files_json() {
                 echo "    }"
             fi
         else
-            echo "Error: Build pair '$build_pair' must be in format 'name:version'" >&2
+            echo "Error: Build pair '$build_pair' must be in format 'build-name:build-number'" >&2
             exit 1
         fi
     done
@@ -170,12 +177,24 @@ main() {
     echo "Build names: $BUILD_NAMES" >&2
     echo "Bundle name: $BUNDLE_NAME" >&2
     echo "Version: $VERSION" >&2
+
+    case $REVISION in
+    "")
+        echo "::warning title=Bundle revision::No bundle revision is set, so the bundle version is ${VERSION}. A future release will default to auto (${VERSION}-<run_id>-<run_attempt>); set it to auto to adopt that now."
+        ;;
+    auto)
+        REVISION="${GITHUB_RUN_ID:?}-${GITHUB_RUN_ATTEMPT:?}"
+        ;;
+    esac
+
+    # Artifacts keep $VERSION; only the bundle version gets the revision.
+    BUNDLE_VERSION="${VERSION}${REVISION:+-$REVISION}"
+    echo "Bundle version: $BUNDLE_VERSION" >&2
     echo "Dry run: $DRY_RUN" >&2
     if [[ -n ${BUNDLE_METADATA_PATH-} ]]; then
         echo "Bundle metadata: $BUNDLE_METADATA_PATH" >&2
     fi
 
-    # Convert comma-separated build name:version pairs to array
     IFS=',' read -ra BUILD_ARRAY <<<"$BUILD_NAMES"
     mkdir -p build-artifacts
 
@@ -186,7 +205,7 @@ main() {
     cat >build-artifacts/release-bundle-spec.json <<EOF
 {
   "name": "$BUNDLE_NAME",
-  "version": "$VERSION",
+  "version": "$BUNDLE_VERSION",
   "description": "Release for build version $VERSION",
   "files": $FILES_JSON
 }
@@ -196,10 +215,14 @@ EOF
     cat build-artifacts/release-bundle-spec.json >&2
 
     # Create the release bundle
-    run jf release-bundle-create "$BUNDLE_NAME" "$VERSION" \
+    run jf release-bundle-create "$BUNDLE_NAME" "$BUNDLE_VERSION" \
         --spec build-artifacts/release-bundle-spec.json \
         --project="$PROJECT" \
         --signing-key="aerospike"
+
+    if [[ -n ${GITHUB_OUTPUT-} ]]; then
+        echo "bundle-version=$BUNDLE_VERSION" >>"$GITHUB_OUTPUT"
+    fi
 
     if [[ -n ${BUNDLE_METADATA_PATH-} ]]; then
         if [[ ! -f $BUNDLE_METADATA_PATH ]]; then
@@ -215,7 +238,7 @@ EOF
                 error "failed to build properties string from $BUNDLE_METADATA_PATH"
             if [[ -n $rb_props ]]; then
                 echo "Applying release bundle properties from bundle metadata (${#rb_props} chars)" >&2
-                run jf release-bundle-annotate "$BUNDLE_NAME" "$VERSION" \
+                run jf release-bundle-annotate "$BUNDLE_NAME" "$BUNDLE_VERSION" \
                     --project="$PROJECT" \
                     --properties="$rb_props"
             else

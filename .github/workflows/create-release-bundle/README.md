@@ -1,57 +1,76 @@
 # Create Release Bundle Workflow
 
-Create JFrog release bundles from a configurable list of build names.
-
-## Overview
-
-This workflow creates JFrog release bundles by bundling one or more builds into a single distributable package.
+`reusable_create-release-bundle.yaml` creates a JFrog release bundle from one or more builds.
 
 ## Inputs
 
-| Input                              | Description                                                                                                                                                                                                                  | Required | Default                         |
-| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------------------------------- |
-| `jf-project`                       | JFrog Artifactory project name                                                                                                                                                                                               | Yes      | -                               |
-| `jf-build-names`                   | Comma-separated list of `build-name:version` pairs to include (e.g. `"app-build:1.2.3,client-build:2.1.0"`)                                                                                                                  | Yes      | -                               |
-| `jf-bundle-name`                   | Name for the release bundle                                                                                                                                                                                                  | Yes      | -                               |
-| `version`                          | Version of the release bundle                                                                                                                                                                                                | Yes      | -                               |
-| `jf-url`                           | JFrog Artifactory URL                                                                                                                                                                                                        | No       | `https://artifact.aerospike.io` |
-| `oidc-provider-name`               | OIDC provider name for authentication                                                                                                                                                                                        | No       | `gh-aerospike`                  |
-| `oidc-audience`                    | OIDC audience for authentication                                                                                                                                                                                             | No       | `aerospike`                     |
-| `runs-on`                          | The runner to use for the build                                                                                                                                                                                              | No       | `ubuntu-22.04`                  |
-| `gh-checkout-path`                 | Directory to checkout the shared-workflows repository into                                                                                                                                                                   | No       | `shared-workflows`              |
-| `gh-workflows-ref`                 | Git ref for shared-workflows (**should match `uses:`**)                                                                                                                                                                      | Yes      | -                               |
-| `dry-run`                          | Whether to run in dry-run mode                                                                                                                                                                                               | No       | `false`                         |
-| `bundle-metadata-path`             | Optional path to `.maven-bundle-metadata.json` (e.g. detect-artifacts `bundle-metadata-path`). Applied as bundle properties after create.                                                                                    | No       | _(empty)_                       |
-| `gh-bundle-metadata-artifact-name` | When set, downloads this GitHub artifact and uses the contained `.maven-bundle-metadata.json` (e.g. `reusable_deploy-artifacts` output `bundle-metadata-artifact-name`). Overrides `bundle-metadata-path` when both are set. | No       | _(empty)_                       |
+| Input                              | Description                                                                                                                                                           | Required | Default                         |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------------------------------- |
+| `gh-workflows-ref`                 | shared-workflows ref. Must match the ref in your `uses:` line, see [Why gh-workflows-ref is required](../docs/why-gh-workflows-ref.md)                                | Yes      | -                               |
+| `jf-build-names`                   | Comma-separated `build-name:build-number` pairs. See [Build names and numbers](#build-names-and-numbers)                                                              | Yes      | -                               |
+| `jf-bundle-name`                   | Release bundle name                                                                                                                                                   | Yes      | -                               |
+| `jf-project`                       | JFrog project key                                                                                                                                                     | Yes      | -                               |
+| `version`                          | Release version                                                                                                                                                       | Yes      | -                               |
+| `bundle-metadata-path`             | Path to `.maven-bundle-metadata.json` (e.g. the detect-artifacts output `bundle-metadata-path`). Applied as bundle properties after create                            | No       | _(empty)_                       |
+| `dry-run`                          | Print the JFrog commands without running them                                                                                                                         | No       | `false`                         |
+| `gh-bundle-metadata-artifact-name` | GitHub artifact holding `.maven-bundle-metadata.json` (e.g. the `reusable_deploy-artifacts` output `bundle-metadata-artifact-name`). Overrides `bundle-metadata-path` | No       | _(empty)_                       |
+| `gh-checkout-path`                 | Directory to check out shared-workflows into                                                                                                                          | No       | `shared-workflows`              |
+| `jf-bundle-revision`               | Appended to `version` to form the bundle version. See [Bundle revisions](#bundle-revisions)                                                                           | No       | _(empty)_                       |
+| `jf-url`                           | JFrog URL                                                                                                                                                             | No       | `https://artifact.aerospike.io` |
+| `oidc-audience`                    | OIDC audience                                                                                                                                                         | No       | `aerospike`                     |
+| `oidc-provider-name`               | OIDC provider name                                                                                                                                                    | No       | `gh-aerospike`                  |
+| `runs-on`                          | Runner label for the job                                                                                                                                              | No       | `ubuntu-22.04`                  |
 
-## Example Usage
+## Outputs
 
-**Note**: The example below shows the pattern for external consumers using tagged versions. Internal workflows in this repository use relative paths (e.g., `uses: ./.github/workflows/reusable_create-release-bundle.yaml`) for development and testing.
+| Output           | Description                                                                                         |
+| ---------------- | --------------------------------------------------------------------------------------------------- |
+| `bundle-version` | The bundle version created (in dry-run, the one that would be created). Promote this, not `version` |
 
-### Basic release bundle creation
+## Example
 
 ```yaml
-name: Create Release Bundle
+name: Release
 on:
-  workflow_dispatch:
   push:
     tags: ["v*"]
 
 jobs:
-  create-release-bundle:
-    uses: aerospike/shared-workflows/.github/workflows/reusable_create-release-bundle.yaml@v3.2.0
+  artifacts:
+    uses: aerospike/shared-workflows/.github/workflows/reusable_artifacts-cicd.yaml@<sha> # vX.Y.Z
     with:
       jf-project: database
-      jf-build-names: "database-build:1.2.3,client-build:2.1.0"
+      jf-build-name: database-packages
+      # ...
+
+  image:
+    uses: aerospike/shared-workflows/.github/workflows/reusable_docker-build-deploy.yaml@<sha> # vX.Y.Z
+    with:
+      jf-project: database
+      jf-build-name: database-image
+      # ...
+
+  create-release-bundle:
+    needs: [artifacts, image]
+    uses: aerospike/shared-workflows/.github/workflows/reusable_create-release-bundle.yaml@<sha> # vX.Y.Z
+    with:
+      gh-workflows-ref: <sha>
+      jf-project: database
+      jf-build-names: >-
+        ${{ needs.artifacts.outputs.jf-build-name }}:${{ needs.artifacts.outputs.jf-build-id }},${{ needs.image.outputs.jf-build-name }}:${{ needs.image.outputs.jf-build-id }}
       jf-bundle-name: database-release
       version: ${{ github.ref_name }}
-      gh-workflows-ref: v3.2.0 # Should match the version in your 'uses:' line
-      dry-run: false
 ```
 
-## Required: gh-workflows-ref
+## Build names and numbers
 
-The `gh-workflows-ref` input is **required** and must match the version in your `uses:` line. See [Why gh-workflows-ref is required](../docs/why-gh-workflows-ref.md) for details.
+Each pair in `jf-build-names` is a build name and the build number the deploy job published it under. Passing the release version instead gets `Build not found`. Take both from the deploy job's outputs:
+
+| Deploy workflow                     | Build number             | Outputs                        |
+| ----------------------------------- | ------------------------ | ------------------------------ |
+| `reusable_artifacts-cicd.yaml`      | `{run_id}-{run_attempt}` | `jf-build-name`, `jf-build-id` |
+| `reusable_deploy-artifacts.yaml`    | the `jf-build-id` input  | `jf-build-id`                  |
+| `reusable_docker-build-deploy.yaml` | `github.run_number`      | `jf-build-name`, `jf-build-id` |
 
 ## Permissions
 
@@ -65,14 +84,32 @@ permissions:
 
 ## Prerequisites
 
-- JFrog Artifactory instance with OIDC authentication configured
-- GitHub Actions with OIDC token access to Artifactory
-- Existing builds in JFrog Artifactory that will be included in the bundle
+- An OIDC mapping that lets the calling repository create release bundles in the JFrog project.
+- The builds in `jf-build-names` exist in JFrog.
+
+## Bundle revisions
+
+A release version is not unique per build, so a second bundle for the same release collides with the
+first. `jf-bundle-revision` gives each build its own bundle version, and the artifacts keep `version`:
+
+```yaml
+with:
+  version: 1.2.3
+  jf-bundle-revision: auto # bundle version 1.2.3-<run_id>-<run_attempt>
+```
+
+Promote the `bundle-version` output, not `version`.
+
+The revision does not change artifact paths. Once an earlier revision is promoted to DEV, its paths are
+locked and a rebuild's deploy fails on them. To clear them with `delete-release-bundle`, pass that
+revision's bundle version.
+
+Unset, the bundle version is `version` and the run logs a warning: a future release will default to
+`auto`.
 
 ## Testing
 
-Run the basic test suite:
-
 ```bash
 .github/workflows/create-release-bundle/test-entrypoint.sh
+bats .github/workflows/create-release-bundle/tests/bats/
 ```

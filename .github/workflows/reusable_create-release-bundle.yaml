@@ -6,9 +6,12 @@ on:
       # Required inputs
       jf-build-names:
         description: |
-          Comma-separated list of build name:version pairs to include in the release bundle.
-          Format: "build-name1:version1,build-name2:version2"
-          Example: "database-build:v1.2.3,app-build:v2.1.0"
+          Comma-separated list of build-name:build-number pairs to include in the release bundle.
+          The build number is the JFrog build-info number the deploy job published, not the
+          release version. Take it from the deploy job's `jf-build-id` output
+          (reusable_artifacts-cicd.yaml, reusable_docker-build-deploy.yaml, reusable_deploy-artifacts.yaml).
+          Format: "build-name1:build-number1,build-name2:build-number2"
+          Example: "my-app:24873310921-1,my-container:412"
         required: true
         type: string
       jf-bundle-name:
@@ -58,6 +61,13 @@ on:
         required: false
         type: string
         default: shared-workflows
+      jf-bundle-revision:
+        description: |
+          Appended to `version` to form the bundle version, so each build of a release gets its own
+          bundle. The artifacts keep `version`. `auto` uses `<run_id>-<run_attempt>`.
+        required: false
+        type: string
+        default: ""
       jf-url:
         required: false
         description: JFrog Artifactory URL
@@ -79,6 +89,11 @@ on:
         type: string
         default: ubuntu-22.04
 
+    outputs:
+      bundle-version:
+        description: The bundle version created, `version` plus any revision
+        value: ${{ jobs.create-release-bundle.outputs.bundle-version }}
+
 permissions:
   contents: read
   id-token: write
@@ -86,12 +101,14 @@ permissions:
 jobs:
   create-release-bundle:
     runs-on: ${{ inputs.runs-on }}
+    outputs:
+      bundle-version: ${{ steps.create.outputs.bundle-version }}
     permissions:
       contents: read
       id-token: write
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
         with:
           egress-policy: audit
 
@@ -104,7 +121,7 @@ jobs:
           fetch-depth: 1
 
       - name: Setup JFrog CLI
-        uses: step-security/setup-jfrog-cli@53aeacb709fce45d0baf69a13ec3342f7e2d71a9 # v5.1.0
+        uses: step-security/setup-jfrog-cli@f67dd6dcfe5fab8d1ebd695c456631275009a39d # v5.2.0
         env:
           JF_URL: ${{ inputs.jf-url }}
           JF_PROJECT: ${{ inputs.jf-project }}
@@ -120,7 +137,7 @@ jobs:
       - name: Download Maven bundle metadata artifact
         id: download-bundle-metadata
         if: inputs.gh-bundle-metadata-artifact-name != ''
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: ${{ inputs.gh-bundle-metadata-artifact-name }}
           path: .bundle-metadata-dl
@@ -168,7 +185,10 @@ jobs:
           fi
 
       - name: Create Release Bundle
+        id: create
         shell: bash
+        env:
+          BUNDLE_REVISION: ${{ inputs.jf-bundle-revision }}
         run: |
           entrypoint="${{ inputs.gh-checkout-path }}/.github/workflows/create-release-bundle/entrypoint.sh"
           if [[ ! -f "$entrypoint" ]]; then
@@ -185,10 +205,15 @@ jobs:
           if [[ -n "$bm" ]]; then
             meta_arg=(--bundle-metadata "$bm")
           fi
+          revision_arg=()
+          if [[ -n "$BUNDLE_REVISION" ]]; then
+            revision_arg=(--revision "$BUNDLE_REVISION")
+          fi
           "$entrypoint" \
             --project "${{ inputs.jf-project }}" \
             --build-names "${{ inputs.jf-build-names }}" \
             --bundle-name "${{ inputs.jf-bundle-name }}" \
             --version "${{ inputs.version }}" \
             "${meta_arg[@]}" \
+            "${revision_arg[@]}" \
             $dry_run_arg

@@ -49,6 +49,22 @@ config_declares_feature_key_file() {
     grep -Eq '^[[:space:]]*feature-key-file[[:space:]]+' "$config_path"
 }
 
+# TLS_CONFIG and TLS_SERVICE are expanded by render-template.sh.
+# Empty values omit those lines, so the same templates cover TLS and non-TLS.
+export_tls_template_vars() {
+    local tpl_dir=$1
+    local enable_tls=$2
+
+    TLS_CONFIG=""
+    TLS_SERVICE=""
+    if [[ $enable_tls == "true" ]]; then
+        TLS_CONFIG=$(cat "$tpl_dir/tls-network.conf")
+        TLS_SERVICE=$(cat "$tpl_dir/tls-service.conf")
+    fi
+    export TLS_CONFIG
+    export TLS_SERVICE
+}
+
 strip_feature_key_file_directive() {
     local source_config=$1
     local target_config=$2

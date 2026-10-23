@@ -15,7 +15,7 @@ jobs:
           #- ubuntu-24.04
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
         with:
           egress-policy: audit
 
@@ -32,7 +32,7 @@ jobs:
         run: |
           sudo apt-get update && sudo apt-get install dpkg-sig dpkg-dev -y
       - name: setup GPG
-        uses: aerospike/shared-workflows/.github/actions/setup-gpg@42eecc2539913f12871c7b24a8aef0c64dc55bfb # v3.8.2
+        uses: aerospike/shared-workflows/.github/actions/setup-gpg@f7d1ce30b376733a51ea05b99f20646d0e248afc # v5.0.0
         with:
           gpg-private-key: ${{ secrets.GPG_SECRET_KEY }}
           gpg-public-key: ${{ secrets.GPG_PUBLIC_KEY }}

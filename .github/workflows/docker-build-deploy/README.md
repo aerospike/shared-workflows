@@ -58,12 +58,44 @@ jobs:
 - `image-ref`: Primary tag with `@digest`
 - `tags`: Comma separated list of tags used
 - `immutable-tag`: Immutable tag (registry/image:version_timestamp)
+- `jf-build-name`: JFrog build-info name (`jf-build-name` input, or the workflow name)
+- `jf-build-id`: JFrog build-info build number (`github.run_number`)
 
-On a dry run (`push: false`), `digest` and `image-ref` are empty; `tags` and `immutable-tag` are still computed.
+On a dry run (`push: false`), `digest` and `image-ref` are empty; `tags`, `immutable-tag`, `jf-build-name` and `jf-build-id` are still computed, but no build-info record is published.
+
+To put the image in a release bundle, pass the build-info outputs to `reusable_create-release-bundle.yaml`. The part after `:` is the build number, not the image version:
+
+```yaml
+bundle:
+  needs: [build-docker-deploy]
+  uses: aerospike/shared-workflows/.github/workflows/reusable_create-release-bundle.yaml@<sha>
+  with:
+    jf-build-names: ${{ needs.build-docker-deploy.outputs.jf-build-name }}:${{ needs.build-docker-deploy.outputs.jf-build-id }}
+    version: ${{ needs.extract-version.outputs.version }}
+    # ...
+```
 
 ## Multi-arch build and caching
 
-The workflow builds each requested platform **natively**: a setup step parses `platforms` into a matrix, each platform builds on its own runner (`linux/amd64` on `ubuntu-24.04`, `linux/arm64` on `ubuntu-24.04-arm`), and QEMU emulation is used only for a platform that has no native runner. Each leg pushes its image **by digest**; a final merge step assembles one multi-platform manifest index (`docker buildx imagetools create`) and applies the tags. A single-platform build still produces a manifest index. The four outputs (digest, image-ref, tags, immutable-tag) and the single build-info record are produced by the merge step; the build-info build number is `github.run_number`, unchanged, so release-bundle references of the form `<build-name>:${{ github.run_number }}` keep resolving. Each leg and the merge step mint their own short-lived OIDC token immediately before pushing, so total build time no longer has to fit inside one token's lifetime.
+The workflow builds each requested platform **natively**: a setup step parses `platforms` into a matrix, and each platform builds on its own runner:
+
+- `linux/amd64` on `ubuntu-24.04`
+- `linux/arm64` on `ubuntu-24.04-arm`
+
+QEMU emulation is used only for a platform that has no native runner.
+
+Each leg pushes its image **by digest**; a final merge step assembles one multi-platform manifest index (`docker buildx imagetools create`) and applies the tags.
+
+Per-leg digest artifacts are named from the image name, the JFrog `build name`, and the `app version`, then the `platform`.
+So two calls in one run that share an image name **do not tag each other's manifests**.
+
+The merge step fails when the number of downloaded digest files is not the number of platforms for that call.
+
+The Actions cache scope uses the same key, so those calls do not share a layer cache either. A single-platform build still produces a manifest index.
+
+The outputs and the single build-info record are produced by the merge step.
+
+Each leg and the merge step mint their own short-lived OIDC token immediately before pushing, so total build time no longer has to fit inside one token's lifetime.
 
 Two independent caching levers reduce repeat work:
 
@@ -76,6 +108,8 @@ Two independent caching levers reduce repeat work:
    ```
 
    Keep the `@sha256:` digest pins. The virtuals (Docker Hub, RedHat, Quay, ghcr.io, gcr.io, registry.k8s.io, public.ecr.aws, mcr.microsoft.com) are provided per project; your repo's OIDC grant must include read + cache-deploy on the public-mirror remotes for the first uncached pull to succeed (this is granted by the standard per-repo OIDC mapping; see OIDC below).
+
+   The workflow pulls the BuildKit builder image from `<jf-registry-base>/<jf-project>-docker-virtual/moby/buildkit:buildx-stable-1` after the Artifactory login, so creating the builder uses the same cache. Artifactory serves those images under the virtual's repository path (`<project>-docker-virtual/library/ubuntu`, `<project>-docker-virtual/rockylinux`).
 
 2. **Build-step cache (secondary).** The workflow uses the GitHub Actions cache (`type=gha`, `mode=max`) so unchanged builder-stage layers are reused on warm runs. Nothing is written to JFrog. It is best-effort: the per-repo GHA cache quota is finite, so on large matrices a miss simply rebuilds.
 
