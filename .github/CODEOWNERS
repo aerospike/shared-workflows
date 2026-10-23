@@ -1,2 +1,19 @@
 # Default - dev-infra owns all files
 *   @aerospike/dev-infra
+
+# Client test actions - an approval from any one listed owner is enough
+/.github/actions/aerospike-node-control/                @aerospike/dev-infra @mirzakaracic @juliannguyen4
+/.github/actions/collect-conformance-report/            @aerospike/dev-infra @mirzakaracic @juliannguyen4
+/.github/actions/fetch-conformance-fixtures/            @aerospike/dev-infra @mirzakaracic @juliannguyen4
+/.github/actions/report-skipped-layers/                 @aerospike/dev-infra @mirzakaracic @juliannguyen4
+/.github/actions/setup-aerospike-server/                @aerospike/dev-infra @mirzakaracic @juliannguyen4
+/.github/actions/setup-discovery-topology/              @aerospike/dev-infra @mirzakaracic @juliannguyen4
+/.github/actions/setup-dns-server/                      @aerospike/dev-infra @mirzakaracic @juliannguyen4
+/.github/actions/setup-kind-ako/                        @aerospike/dev-infra @mirzakaracic @juliannguyen4
+/.github/workflows/example_setup-kind-ako.yaml          @aerospike/dev-infra @mirzakaracic @juliannguyen4
+/.github/workflows/test_conformance-fixtures.yaml       @aerospike/dev-infra @mirzakaracic @juliannguyen4
+/.github/workflows/test_report-skipped-layers.yaml      @aerospike/dev-infra @mirzakaracic @juliannguyen4
+/.github/workflows/test_setup-aerospike-server.yaml     @aerospike/dev-infra @mirzakaracic @juliannguyen4
+/.github/workflows/test_setup-discovery-topology.yaml   @aerospike/dev-infra @mirzakaracic @juliannguyen4
+/.github/workflows/test_setup-dns-server.yaml           @aerospike/dev-infra @mirzakaracic @juliannguyen4
+/.github/workflows/test_setup-kind-ako.yaml             @aerospike/dev-infra @mirzakaracic @juliannguyen4
