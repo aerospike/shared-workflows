@@ -106,8 +106,7 @@ if [[ -n ${ENV_VARS-} ]]; then
             escape="false"
             continue
         fi
-        # shellcheck disable=SC1003 # '\' is a literal backslash; trunk shfmt prefers single quotes here
-        if [[ $char == '\' ]]; then
+        if [[ $char == $'\\' ]]; then
             escape="true"
             continue
         fi
