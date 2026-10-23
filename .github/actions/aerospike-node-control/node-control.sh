@@ -68,7 +68,7 @@ while IFS= read -r container; do
         running_nodes+="${running_nodes:+,}$container"
         cluster_size=$((cluster_size + 1))
     fi
-done < <(docker ps --format '{{.Names}}')
+done < <(docker ps --format '{{.Names}}' | sort -V)
 
 if ((cluster_size > 0)); then
     bash "$setup_dir/wait-for-aerospike-server.sh" \

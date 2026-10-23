@@ -32,7 +32,8 @@ start | stop)
     echo "$2"
     ;;
 ps)
-    for state_file in "$DOCKER_STUB_DIR"/state-*; do
+    # docker ps lists the newest container first
+    for state_file in $(printf '%s\n' "$DOCKER_STUB_DIR"/state-* | sort -r); do
         [[ $(cat "$state_file") == "running" ]] && echo "${state_file##*/state-}"
     done
     echo aerospike-tools
