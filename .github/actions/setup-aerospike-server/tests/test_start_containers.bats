@@ -39,6 +39,9 @@ create)
     echo "$count" >"$DOCKER_STUB_DIR/create-count"
     printf '%s\n' "$@" >"$DOCKER_STUB_DIR/create-$count.args"
     ;;
+inspect)
+    cat "$DOCKER_STUB_DIR/address-${!#}" 2>/dev/null || true
+    ;;
 esac
 EOF
     chmod +x "$TEST_TMPDIR/bin/docker"
@@ -123,7 +126,7 @@ assert_matches_baseline() {
     if [[ ! -f "$baseline/aerospike.conf" ]]; then
         [ -z "$(ls -A "$DOCKER_STUB_DIR/cp")" ]
     fi
-    diff -u "$baseline/github-output" "$GITHUB_OUTPUT"
+    diff -u "$baseline/github-output" <(grep -v '^node-addresses=' "$GITHUB_OUTPUT")
 }
 
 @test "default single node matches the baseline" {
@@ -302,7 +305,7 @@ assert_matches_baseline() {
         cmp "$FIXTURES/baseline/multi-node/aerospike.conf" "$(node_config "$i")"
     done
     [[ $output == *"Creating (not started) container: aerospike-3 (host port: 3002)"* ]]
-    diff -u "$FIXTURES/baseline/multi-node/github-output" "$GITHUB_OUTPUT"
+    diff -u "$FIXTURES/baseline/multi-node/github-output" <(grep -v '^node-addresses=' "$GITHUB_OUTPUT")
 }
 
 @test "start-nodes keeps every node in the mesh seed list" {
@@ -336,6 +339,18 @@ assert_matches_baseline() {
     done
     diff -u <(grep -vx -- --detach "$FIXTURES/baseline/multi-node/docker-run-3.args" | with_ip 172.30.0.4) \
         <(normalized_args "$DOCKER_STUB_DIR/create-1.args")
+    grep -qx node-addresses=172.30.0.2,172.30.0.3,172.30.0.4 "$GITHUB_OUTPUT"
+}
+
+@test "node-addresses lists inspected IPs in node order, empty for unstarted nodes" {
+    echo 10.89.0.3 >"$DOCKER_STUB_DIR/address-aerospike-1"
+    echo 10.89.0.2 >"$DOCKER_STUB_DIR/address-aerospike-2"
+    echo "invalid IP" >"$DOCKER_STUB_DIR/address-aerospike-3"
+
+    run start_containers 3 community "" "" --start-nodes 2
+    [ "$status" -eq 0 ]
+
+    grep -qx node-addresses=10.89.0.3,10.89.0.2, "$GITHUB_OUTPUT"
 }
 
 @test "invalid network-subnet fails before starting containers" {

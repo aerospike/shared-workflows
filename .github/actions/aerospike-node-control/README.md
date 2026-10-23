@@ -13,6 +13,7 @@ After `docker start` or `docker stop` on `<container-name-prefix>-<node-index>`,
 
 ```yaml
 - uses: aerospike/shared-workflows/.github/actions/setup-aerospike-server@v3
+  id: aerospike
   with:
     num-nodes: "3"
     start-nodes: "2"
@@ -23,6 +24,7 @@ After `docker start` or `docker stop` on `<container-name-prefix>-<node-index>`,
 - uses: aerospike/shared-workflows/.github/actions/aerospike-node-control@v3
   id: start-node-3
   with:
+    cluster-settings: ${{ steps.aerospike.outputs.cluster-settings }}
     node-index: "3"
     operation: start
 
@@ -30,27 +32,22 @@ After `docker start` or `docker stop` on `<container-name-prefix>-<node-index>`,
 
 - uses: aerospike/shared-workflows/.github/actions/aerospike-node-control@v3
   with:
+    cluster-settings: ${{ steps.aerospike.outputs.cluster-settings }}
     node-index: "2"
     operation: stop
 ```
 
-Pass the same `container-name-prefix`, `network-name`, `service-port`, `enable-security` and `enable-strong-consistency` values that were passed to `setup-aerospike-server` when they are not the defaults.
+`cluster-settings` carries the container name prefix, network, service port, security, strong consistency and tools image that `setup-aerospike-server` used, so they are never passed twice.
 
 ## Inputs
 
-| Input                       | Required | Default              | Description                                                                  |
-| --------------------------- | -------- | -------------------- | ---------------------------------------------------------------------------- |
-| `node-index`                | Yes      |                      | 1-based index of the node (container `<container-name-prefix>-<node-index>`) |
-| `operation`                 | Yes      |                      | `start` or `stop`                                                            |
-| `container-name-prefix`     | No       | `aerospike`          | Container name prefix passed to `setup-aerospike-server`                     |
-| `network-name`              | No       | `aerospike-net`      | Docker network name passed to `setup-aerospike-server`                       |
-| `service-port`              | No       | `3000`               | Aerospike service port inside the container                                  |
-| `timeout`                   | No       | `30`                 | Seconds to wait for each running node to report a stable cluster             |
-| `enable-security`           | No       | `false`              | Authenticate the wait with admin/admin                                       |
-| `enable-strong-consistency` | No       | `false`              | Ignore migrations while waiting                                              |
-| `container-repo-url`        | No       | `aerospike.jfrog.io` | Docker registry hostname for the tools image                                 |
-| `tools-tag`                 | No       | `12.1.1_2`           | Aerospike tools Docker image tag                                             |
-| `enable-bash-trace-mode`    | No       | `false`              | Show commands being executed in shell scripts for debugging                  |
+| Input                    | Required | Default | Description                                                                  |
+| ------------------------ | -------- | ------- | ---------------------------------------------------------------------------- |
+| `cluster-settings`       | Yes      |         | The `cluster-settings` output of `setup-aerospike-server`                    |
+| `node-index`             | Yes      |         | 1-based index of the node (container `<container-name-prefix>-<node-index>`) |
+| `operation`              | Yes      |         | `start` or `stop`                                                            |
+| `timeout`                | No       | `30`    | Seconds to wait for each running node to report a stable cluster             |
+| `enable-bash-trace-mode` | No       | `false` | Show commands being executed in shell scripts for debugging                  |
 
 ## Outputs
 

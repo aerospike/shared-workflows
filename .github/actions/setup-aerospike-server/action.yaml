@@ -161,7 +161,7 @@ outputs:
     description: >
       Comma-separated node IPs on network-name, in node order. Without
       network-subnet, the entry for a node that was not started is empty.
-    value: ${{ steps.node-addresses.outputs.node-addresses }}
+    value: ${{ steps.start-containers.outputs.node-addresses }}
   service-ports:
     description: Comma-separated host ports
     value: ${{ steps.start-containers.outputs.service-ports }}
@@ -171,6 +171,9 @@ outputs:
   tls-cert-dir:
     description: Directory containing generated TLS certs (empty if TLS disabled)
     value: ${{ steps.generate-tls-certs.outputs.tls-cert-dir }}
+  cluster-settings:
+    description: Cluster settings as JSON, passed to aerospike-node-control
+    value: ${{ steps.cluster-settings.outputs.cluster-settings }}
 
 runs:
   using: composite
@@ -181,7 +184,6 @@ runs:
       env:
         ENABLE_BASH_TRACE_MODE: ${{ inputs.enable-bash-trace-mode }}
         EXTRA_HOSTS: ${{ inputs.extra-hosts }}
-        START_NODES: ${{ inputs.start-nodes }}
         NETWORK_SUBNET: ${{ inputs.network-subnet }}
       run: |
         echo "ENABLE_BASH_TRACE_MODE=$ENABLE_BASH_TRACE_MODE" >> "$GITHUB_ENV"
@@ -217,11 +219,6 @@ runs:
         parse_extra_hosts "$EXTRA_HOSTS" >/dev/null \
           || error "extra-hosts must be comma-separated name:ip entries (got: '$EXTRA_HOSTS')"
 
-        if [[ -n "$START_NODES" ]]; then
-          [[ "$START_NODES" =~ ^[1-9][0-9]*$ && "$START_NODES" -le "${{ inputs.num-nodes }}" ]] \
-            || error "start-nodes must be between 1 and num-nodes (${{ inputs.num-nodes }}) (got: '$START_NODES')"
-        fi
-
         if [[ -n "$NETWORK_SUBNET" ]]; then
           subnet_node_addresses "$NETWORK_SUBNET" "${{ inputs.num-nodes }}" >/dev/null || exit 1
         fi
@@ -244,6 +241,22 @@ runs:
 
         echo "effective-security=$effective_security" >> "$GITHUB_OUTPUT"
         echo "server-edition=$server_edition" >> "$GITHUB_OUTPUT"
+
+    - name: Record cluster settings
+      id: cluster-settings
+      shell: bash
+      env:
+        PREFIX: ${{ inputs.container-name-prefix }}
+        NETWORK_NAME: ${{ inputs.network-name }}
+        SERVICE_PORT: ${{ inputs.service-port }}
+        SECURITY: ${{ steps.validate.outputs.effective-security }}
+        ENABLE_SC: ${{ inputs.enable-strong-consistency }}
+        TOOLS_IMAGE: ${{ inputs.container-repo-url }}/database-docker-virtual/aerospike-tools:${{ inputs.tools-tag }}
+      run: |
+        settings=$(jq -nc --arg prefix "$PREFIX" --arg network "$NETWORK_NAME" --arg service_port "$SERVICE_PORT" \
+          --arg security "$SECURITY" --arg strong_consistency "$ENABLE_SC" --arg tools_image "$TOOLS_IMAGE" \
+          '$ARGS.named')
+        echo "cluster-settings=$settings" >> "$GITHUB_OUTPUT"
 
     - name: Set up JFrog CLI
       id: jf
@@ -494,17 +507,6 @@ runs:
           --tls-volume-name "${{ steps.server-volume.outputs.tls_volume_name }}" \
           --tls-volume-dest-dir "${{ steps.server-volume.outputs.tls_volume_dest_dir }}" \
           --loader-container "${{ steps.server-volume.outputs.container_name_to_load_volume }}"
-
-    - name: Get node addresses
-      id: node-addresses
-      shell: bash
-      env:
-        NETWORK_SUBNET: ${{ inputs.network-subnet }}
-      run: |
-        "${{ github.action_path }}/node-addresses.sh" \
-          --container-names "${{ steps.start-containers.outputs.container-names }}" \
-          --network "${{ inputs.network-name }}" \
-          --subnet "$NETWORK_SUBNET"
 
     - name: Wait for Aerospike Server readiness
       shell: bash

@@ -91,6 +91,7 @@ fi
 
 container_names=""
 service_ports=""
+node_addresses=""
 tls_service_ports=""
 
 # Parse env-vars using escape-aware semicolon delimiter
@@ -257,9 +258,15 @@ for ((i = 1; i <= num_nodes; i++)); do
     if [[ -n $container_names ]]; then
         container_names+=","
         service_ports+=","
+        node_addresses+=","
     fi
     container_names+="$name"
     service_ports+="$host_port"
+    if [[ -n $network_subnet ]]; then
+        node_addresses+="${node_ips[i - 1]}"
+    else
+        node_addresses+="$(container_address "$name" "$network")"
+    fi
     if [[ $enable_tls == "true" ]]; then
         if [[ -n $tls_service_ports ]]; then
             tls_service_ports+=","
@@ -272,4 +279,5 @@ done
     echo "container-names=$container_names"
     echo "service-ports=$service_ports"
     echo "tls-service-ports=$tls_service_ports"
+    echo "node-addresses=$node_addresses"
 } >>"${GITHUB_OUTPUT:-/dev/stdout}"

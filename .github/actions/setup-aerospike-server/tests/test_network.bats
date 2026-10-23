@@ -1,12 +1,11 @@
 #!/usr/bin/env bats
-# Tests for create-network.sh, node-addresses.sh and subnet_node_addresses.
+# Tests for create-network.sh and subnet_node_addresses.
 
 bats_require_minimum_version 1.5.0
 
 GIT_ROOT="$(git rev-parse --show-toplevel)"
 ACTION_DIR="$GIT_ROOT/.github/actions/setup-aerospike-server"
 CREATE_NETWORK="$ACTION_DIR/create-network.sh"
-NODE_ADDRESSES="$ACTION_DIR/node-addresses.sh"
 
 # shellcheck source=/dev/null
 source "$ACTION_DIR/config-helpers.sh"
@@ -26,9 +25,6 @@ case "$1 $2" in
     ;;
 "network create")
     printf '%s\n' "$@" >"$DOCKER_STUB_DIR/network-create.args"
-    ;;
-inspect*)
-    cat "$DOCKER_STUB_DIR/address-${!#}"
     ;;
 esac
 STUB
@@ -84,24 +80,6 @@ teardown() {
 
     [ "$stderr" = "Error: Docker network aerospike-net already exists with subnet(s) '10.89.0.0/24', not network-subnet 172.30.0.0/24" ]
     [ ! -e "$GITHUB_OUTPUT" ]
-}
-
-@test "node-addresses lists inspected IPs in node order, empty for unstarted nodes" {
-    echo 10.89.0.3 >"$DOCKER_STUB_DIR/address-aerospike-1"
-    echo 10.89.0.2 >"$DOCKER_STUB_DIR/address-aerospike-2"
-    echo "invalid IP" >"$DOCKER_STUB_DIR/address-aerospike-3"
-
-    run "$NODE_ADDRESSES" --container-names aerospike-1,aerospike-2,aerospike-3 --network aerospike-net --subnet ""
-    [ "$status" -eq 0 ]
-
-    [ "$(cat "$GITHUB_OUTPUT")" = "node-addresses=10.89.0.3,10.89.0.2," ]
-}
-
-@test "node-addresses uses the fixed IPs with network-subnet" {
-    run "$NODE_ADDRESSES" --container-names aerospike-1,aerospike-2,aerospike-3 --network aerospike-net --subnet 172.30.0.0/24
-    [ "$status" -eq 0 ]
-
-    [ "$(cat "$GITHUB_OUTPUT")" = "node-addresses=172.30.0.2,172.30.0.3,172.30.0.4" ]
 }
 
 @test "subnet_node_addresses skips the network and gateway addresses" {

@@ -903,6 +903,7 @@ jobs:
         id: start-node-3
         uses: ./.github/actions/aerospike-node-control
         with:
+          cluster-settings: ${{ steps.setup-aerospike-server.outputs.cluster-settings }}
           node-index: "3"
           operation: start
           timeout: "60"
@@ -930,6 +931,7 @@ jobs:
         id: stop-node-2
         uses: ./.github/actions/aerospike-node-control
         with:
+          cluster-settings: ${{ steps.setup-aerospike-server.outputs.cluster-settings }}
           node-index: "2"
           operation: stop
           timeout: "60"

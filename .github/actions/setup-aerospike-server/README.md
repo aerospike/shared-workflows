@@ -136,6 +136,7 @@ With `server-edition: auto`, the action infers `enterprise` from repositories na
 | `service-ports`     | Comma-separated host ports (e.g., `3000,3001,3002`)                           |
 | `tls-service-ports` | Comma-separated TLS host ports (empty if TLS disabled)                        |
 | `tls-cert-dir`      | Directory containing generated TLS certs (empty if TLS disabled)              |
+| `cluster-settings`  | Cluster settings as JSON, for `aerospike-node-control`                        |
 
 When `publish-ports` is `false`, the action still reports `service-ports` / `tls-service-ports` as the calculated host-port numbers, but it does not bind them. Use this for L2 discovery tests so a client running on the runner cannot connect through localhost mappings. Isolation from node IPs still requires running the client in a container that is not on the Aerospike network.
 
@@ -162,6 +163,7 @@ Start or stop a node by index from a later step with [`aerospike-node-control`](
 
 ```yaml
 - uses: aerospike/shared-workflows/.github/actions/setup-aerospike-server@v3
+  id: aerospike
   with:
     num-nodes: "3"
     start-nodes: "2"
@@ -173,6 +175,7 @@ Start or stop a node by index from a later step with [`aerospike-node-control`](
 
 - uses: aerospike/shared-workflows/.github/actions/aerospike-node-control@v3
   with:
+    cluster-settings: ${{ steps.aerospike.outputs.cluster-settings }}
     node-index: "3"
     operation: start
 
@@ -180,6 +183,7 @@ Start or stop a node by index from a later step with [`aerospike-node-control`](
 
 - uses: aerospike/shared-workflows/.github/actions/aerospike-node-control@v3
   with:
+    cluster-settings: ${{ steps.aerospike.outputs.cluster-settings }}
     node-index: "2"
     operation: stop
 ```
