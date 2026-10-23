@@ -71,6 +71,9 @@ outputs:
   endpoint-hostname:
     description: Endpoint hostname the client should connect to
     value: ${{ steps.setup.outputs.endpoint-hostname }}
+  endpoint-port-base:
+    description: Deprecated alias of listen-port-base, kept for existing callers
+    value: ${{ steps.setup.outputs.listen-port-base }}
   endpoint-ports:
     description: Comma-separated proxy listen ports
     value: ${{ steps.setup.outputs.endpoint-ports }}

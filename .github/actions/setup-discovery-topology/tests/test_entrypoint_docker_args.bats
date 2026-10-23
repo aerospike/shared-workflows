@@ -84,3 +84,10 @@ STUB
     grep -qxF "listen-port-base=31001" "$GITHUB_OUTPUT_FILE"
     [ "$(grep -c "port-base=" "$GITHUB_OUTPUT_FILE")" -eq 1 ]
 }
+
+@test "endpoint-port-base output is an alias of listen-port-base" {
+    run grep -A2 -E '^  endpoint-port-base:$' "$BATS_TEST_DIRNAME/../action.yaml"
+
+    [ "$status" -eq 0 ]
+    grep -qF "value: \${{ steps.setup.outputs.listen-port-base }}" <<<"$output"
+}
