@@ -19,45 +19,18 @@ from __future__ import annotations
 import json
 import os
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import yaml
 
 RESULTS = ("pass", "fail", "unsupported", "blocked")
-REPORT_KEYS = {"runtime", "clientVersion", "fixtureSetVersion", "counts", "rows"}
-ROW_KEYS = {"file", "case", "result", "reason", "detail"}
-COUNT_KEYS = {"pass", "fail", "unsupported", "blocked"}
-FILE_PATTERN_PART = "abcdefghijklmnopqrstuvwxyz0123456789-"
 FIXTURE_KINDS = ("translate", "merge", "tls")
 
 
 class CollectError(Exception):
     """A report or declaration cannot be aggregated."""
-
-
-@dataclass
-class Declaration:
-    result: str
-    reason: str | None = None
-
-
-@dataclass
-class Declarations:
-    """Cases declared by one runtime, keyed by fixture file then case name."""
-
-    files: dict[str, dict[str, Declaration]] = field(default_factory=dict)
-
-    def declared_result(self, file_name: str, case_name: str, fixture_blocked: bool) -> str:
-        file_cases = self.files.get(file_name)
-        if file_cases is None or case_name not in file_cases:
-            if fixture_blocked:
-                return "blocked"
-
-            return "pass"
-
-        return file_cases[case_name].result
 
 
 @dataclass
@@ -72,21 +45,12 @@ class FixtureSet:
 
 
 @dataclass
-class ReportRow:
-    file: str
-    case: str
-    result: str
-    reason: str = ""
-    detail: str = ""
-
-
-@dataclass
 class Report:
     runtime: str
     client_version: str
     fixture_set_version: str
     counts: dict[str, int]
-    rows: list[ReportRow]
+    rows: list[dict[str, str]]
     source: str
 
 
@@ -111,265 +75,65 @@ class Collection:
     failed: bool
 
 
-def _listed(values: list[str]) -> str:
-    ordered = sorted(values)
-    return ", ".join(ordered)
-
-
-def _construct_unique_map(loader: yaml.SafeLoader, node: yaml.nodes.MappingNode) -> dict[Any, Any]:
-    mapping: dict[Any, Any] = {}
-    for key_node, value_node in node.value:
-        key = loader.construct_object(key_node, deep=False)
-        if key in mapping:
-            raise CollectError(f"duplicate key {key}")
-
-        value = loader.construct_object(value_node, deep=False)
-        mapping[key] = value
-    return mapping
-
-
-class UniqueKeyLoader(yaml.SafeLoader):
-    """SafeLoader that rejects duplicate keys."""
-
-
-UniqueKeyLoader.add_constructor(
-    yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG,
-    _construct_unique_map,
-)
-
-
-def _valid_file_name(file_name: str) -> bool:
-    if not file_name.endswith(".yaml"):
-        return False
-
-    segments = file_name[: -len(".yaml")].split("/")
-    if len(segments) < 2:
-        return False
-
-    for segment in segments:
-        if not segment:
-            return False
-
-        for char in segment:
-            if char not in FILE_PATTERN_PART:
-                return False
-
-    return True
-
-
-def _valid_case_name(case_name: str) -> bool:
-    if not case_name:
-        return False
-    for char in case_name:
-        if char not in FILE_PATTERN_PART and char not in "ABCDEFGHIJKLMNOPQRSTUVWXYZ_":
-            return False
-    return True
-
-
-def _declaration_from_body(file_name: str, case_name: str, body: dict[str, str]) -> Declaration:
-    unknown = [key for key in body if key not in ("result", "reason")]
-    if unknown:
-        names = _listed(unknown)
-        raise CollectError(f"{file_name}:{case_name}: unknown key {names}")
-
-    if "result" not in body:
-        raise CollectError(f"{file_name}:{case_name}: missing result")
-
-    result = body["result"]
-    if result not in RESULTS:
-        raise CollectError(f"{file_name}:{case_name}: invalid result {result}")
-
-    reason = body.get("reason")
-    if result != "pass" and not reason:
-        raise CollectError(f"{file_name}:{case_name}: a {result} declaration needs a reason")
-
-    return Declaration(result, reason)
+Declarations = dict[str, dict[str, dict[str, str]]]
 
 
 def parse_declarations(text: str) -> Declarations:
-    """Parse a <runtime>-declared.yaml document.
-
-    The file is the subset the Java runner writes: a fixture path, then either
-    ``case: { result: ..., reason: "..." }`` or a block ``result`` / ``reason``.
-    """
+    """Parse a <runtime>-declared.yaml document into fixture file -> case -> body."""
     try:
-        loaded = yaml.load(text, Loader=UniqueKeyLoader)
+        loaded = yaml.safe_load(text)
     except yaml.YAMLError as exc:
         raise CollectError(f"invalid declaration YAML: {exc}") from exc
 
     if loaded is None:
-        return Declarations()
+        return {}
 
-    if not isinstance(loaded, dict):
-        raise CollectError("declaration file must be a map of fixture files")
+    if not isinstance(loaded, dict) or not all(isinstance(cases, dict) for cases in loaded.values()):
+        raise CollectError("declaration file must be a map of fixture files to cases")
 
-    files: dict[str, dict[str, Declaration]] = {}
     for file_name, cases in loaded.items():
-        if not isinstance(file_name, str) or not _valid_file_name(file_name):
-            raise CollectError(f"invalid fixture file {file_name}")
-
-        if not isinstance(cases, dict):
-            raise CollectError(f"{file_name} must be a map of cases")
-
-        file_cases: dict[str, Declaration] = {}
         for case_name, body in cases.items():
-            if not isinstance(case_name, str) or not _valid_case_name(case_name):
-                raise CollectError(f"{file_name}: invalid case {case_name}")
+            if not isinstance(body, dict) or body.get("result") not in RESULTS:
+                raise CollectError(f"{file_name}:{case_name}: result must be one of {', '.join(RESULTS)}")
 
-            if not isinstance(body, dict):
-                raise CollectError(f"{file_name}:{case_name} must be a map")
-
-            normalized: dict[str, str] = {}
-            for key, value in body.items():
-                if not isinstance(key, str):
-                    raise CollectError(f"{file_name}:{case_name}: invalid key {key}")
-
-                if not isinstance(value, str):
-                    raise CollectError(f"{file_name}:{case_name}: {key} must be a string")
-
-                normalized[key] = value
-
-            if case_name in file_cases:
-                raise CollectError(f"{file_name}:{case_name}: duplicate case")
-
-            file_cases[case_name] = _declaration_from_body(file_name, case_name, normalized)
-
-        files[file_name] = file_cases
-
-    return Declarations(files)
+    return loaded
 
 
-def _require_text(value: Any, label: str) -> str:
-    if not isinstance(value, str) or value == "":
-        raise CollectError(f"{label} must be a non-empty string")
-    return value
+def declared_result(declarations: Declarations, file_name: str, case_name: str, fixture_blocked: bool) -> str:
+    body = declarations.get(file_name, {}).get(case_name)
+    if body is not None:
+        return body["result"]
 
+    if fixture_blocked:
+        return "blocked"
 
-def _require_count(value: Any, label: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-        raise CollectError(f"{label} must be a non-negative integer")
-    return value
+    return "pass"
 
 
 def load_report(data: Any, source: str) -> Report:
-    if not isinstance(data, dict):
-        raise CollectError(f"{source}: report must be a JSON object")
+    """Read the fields the gate uses. The report schema is owned by aerospike-client-conformance."""
+    try:
+        rows = list(data["rows"])
+        report = Report(
+            runtime=str(data["runtime"]),
+            client_version=str(data["clientVersion"]),
+            fixture_set_version=str(data["fixtureSetVersion"]),
+            counts={name: 0 for name in RESULTS},
+            rows=rows,
+            source=source,
+        )
+        for row in rows:
+            if not all(isinstance(row[key], str) for key in ("file", "case", "result")):
+                raise CollectError(f"{source}: a row needs string file, case and result: {row}")
 
-    extra = [key for key in data if key not in REPORT_KEYS]
-    if extra:
-        names = _listed(extra)
-        raise CollectError(f"{source}: unknown report field {names}")
+            if row["result"] not in RESULTS:
+                raise CollectError(f"{source}: invalid result {row['result']} for {row['file']}:{row['case']}")
 
-    missing = [key for key in REPORT_KEYS if key not in data]
-    if missing:
-        names = _listed(missing)
-        raise CollectError(f"{source}: missing report field {names}")
+            report.counts[row["result"]] += 1
+    except (KeyError, TypeError) as exc:
+        raise CollectError(f"{source}: not a conformance report: {exc!r}") from exc
 
-    runtime = _require_text(data["runtime"], f"{source}: runtime")
-    client_version = _require_text(data["clientVersion"], f"{source}: clientVersion")
-    fixture_version = _require_text(data["fixtureSetVersion"], f"{source}: fixtureSetVersion")
-    if not _semver(fixture_version):
-        raise CollectError(f"{source}: fixtureSetVersion must be MAJOR.MINOR.PATCH")
-
-    counts_raw = data["counts"]
-    if not isinstance(counts_raw, dict):
-        raise CollectError(f"{source}: counts must be an object")
-
-    count_extra = [key for key in counts_raw if key not in COUNT_KEYS]
-    if count_extra:
-        names = _listed(count_extra)
-        raise CollectError(f"{source}: unknown count {names}")
-
-    counts = {}
-    for name in RESULTS:
-        counts[name] = _require_count(counts_raw.get(name), f"{source}: counts.{name}")
-
-    rows_raw = data["rows"]
-    if not isinstance(rows_raw, list):
-        raise CollectError(f"{source}: rows must be an array")
-
-    rows = []
-    for index, row in enumerate(rows_raw):
-        rows.append(_load_row(row, source, index))
-
-    seen: set[tuple[str, str]] = set()
-    for row in rows:
-        identity = (row.file, row.case)
-        if identity in seen:
-            raise CollectError(f"{source}: duplicate row {row.file}:{row.case}")
-
-        seen.add(identity)
-
-    actual_counts = {name: 0 for name in RESULTS}
-    for row in rows:
-        actual_counts[row.result] += 1
-
-    if actual_counts != counts:
-        raise CollectError(f"{source}: counts {counts} do not match rows {actual_counts}")
-
-    return Report(
-        runtime=runtime,
-        client_version=client_version,
-        fixture_set_version=fixture_version,
-        counts=counts,
-        rows=rows,
-        source=source,
-    )
-
-
-def _semver(value: str) -> bool:
-    parts = value.split(".")
-    if len(parts) != 3:
-        return False
-    for part in parts:
-        if part == "" or not part.isdigit():
-            return False
-    return True
-
-
-def _load_row(row: Any, source: str, index: int) -> ReportRow:
-    label = f"{source}: rows[{index}]"
-    if not isinstance(row, dict):
-        raise CollectError(f"{label} must be an object")
-
-    extra = [key for key in row if key not in ROW_KEYS]
-    if extra:
-        names = _listed(extra)
-        raise CollectError(f"{label}: unknown field {names}")
-
-    for key in ("file", "case", "result"):
-        if key not in row:
-            raise CollectError(f"{label}: missing {key}")
-
-    file_name = _require_text(row["file"], f"{label}.file")
-    if not _valid_file_name(file_name):
-        raise CollectError(f"{label}: invalid file {file_name}")
-
-    case_name = _require_text(row["case"], f"{label}.case")
-    result = _require_text(row["result"], f"{label}.result")
-    if result not in RESULTS:
-        raise CollectError(f"{label}: invalid result {result}")
-
-    reason = ""
-    detail = ""
-    if result in ("fail", "unsupported", "blocked") and "reason" not in row:
-        raise CollectError(f"{label}: a {result} row needs a reason")
-
-    if "reason" in row:
-        reason = _require_text(row["reason"], f"{label}.reason")
-
-    if "detail" in row:
-        if not isinstance(row["detail"], str):
-            raise CollectError(f"{label}: detail must be a string")
-
-        detail = row["detail"]
-    return ReportRow(
-        file=file_name,
-        case=case_name,
-        result=result,
-        reason=reason,
-        detail=detail,
-    )
+    return report
 
 
 def load_fixtures(directory: Path) -> FixtureSet:
@@ -387,14 +151,15 @@ def load_fixtures(directory: Path) -> FixtureSet:
     cases: dict[tuple[str, str], bool] = {}
     for path in sorted(directory.rglob("*.yaml")):
         relative_path = path.relative_to(directory)
-        file_name = relative_path.as_posix()
-        if not _valid_file_name(file_name):
+        if len(relative_path.parts) < 2 or any(part.startswith(".") for part in relative_path.parts):
             continue
+
+        file_name = relative_path.as_posix()
 
         text = path.read_text(encoding="utf-8")
         try:
-            loaded = yaml.load(text, Loader=UniqueKeyLoader)
-        except (yaml.YAMLError, CollectError) as exc:
+            loaded = yaml.safe_load(text)
+        except yaml.YAMLError as exc:
             raise CollectError(f"{path}: invalid fixture YAML: {exc}") from exc
 
         if not isinstance(loaded, dict) or loaded.get("kind") not in FIXTURE_KINDS:
@@ -483,7 +248,7 @@ def _check_declarations(declarations: Declarations, fixtures: FixtureSet) -> Non
     for file_name, _ in fixtures.cases:
         fixture_files.add(file_name)
 
-    for file_name, file_cases in declarations.files.items():
+    for file_name, file_cases in declarations.items():
         if file_name not in fixture_files:
             raise CollectError(f"unknown fixture file {file_name}")
 
@@ -497,16 +262,16 @@ def _compare_report(report: Report, declarations: Declarations, fixtures: Fixtur
     compared = []
     reported: set[tuple[str, str]] = set()
     for row in report.rows:
-        identity = (row.file, row.case)
+        identity = (row["file"], row["case"])
         reported.add(identity)
         if identity not in fixtures.cases:
             compared.append(
                 ComparedRow(
                     runtime=report.runtime,
-                    file=row.file,
-                    case=row.case,
+                    file=row["file"],
+                    case=row["case"],
                     declared="-",
-                    actual=row.result,
+                    actual=row["result"],
                     reason=f"not a case in fixture set {fixtures.version}",
                     kind="unknown-case",
                 )
@@ -514,19 +279,19 @@ def _compare_report(report: Report, declarations: Declarations, fixtures: Fixtur
             continue
 
         fixture_blocked = fixtures.cases[identity]
-        declared = declarations.declared_result(row.file, row.case, fixture_blocked)
-        kind = gate_kind(row.result, declared)
+        declared = declared_result(declarations, row["file"], row["case"], fixture_blocked)
+        kind = gate_kind(row["result"], declared)
         if kind is None:
             kind = ""
 
         compared.append(
             ComparedRow(
                 runtime=report.runtime,
-                file=row.file,
-                case=row.case,
+                file=row["file"],
+                case=row["case"],
                 declared=declared,
-                actual=row.result,
-                reason=row.reason,
+                actual=row["result"],
+                reason=str(row.get("reason", "")),
                 kind=kind,
             )
         )
@@ -536,7 +301,7 @@ def _compare_report(report: Report, declarations: Declarations, fixtures: Fixtur
             continue
 
         file_name, case_name = identity
-        declared = declarations.declared_result(file_name, case_name, fixture_blocked)
+        declared = declared_result(declarations, file_name, case_name, fixture_blocked)
         compared.append(
             ComparedRow(
                 runtime=report.runtime,
@@ -585,13 +350,7 @@ def collect(
             data = json.loads(text)
         except json.JSONDecodeError as exc:
             raise CollectError(f"{path}: invalid JSON: {exc}") from exc
-        source = str(path)
-        try:
-            report = load_report(data, source)
-        except CollectError as exc:
-            message = str(exc)
-            raise CollectError(message) from exc
-        reports.append(report)
+        reports.append(load_report(data, str(path)))
 
     runtimes = [report.runtime for report in reports]
     unique_runtimes = set(runtimes)
@@ -611,10 +370,7 @@ def collect(
     unsupported_rows = []
     fail_rows = []
     for report in reports:
-        declarations = parsed_declarations.get(report.runtime)
-        if declarations is None:
-            declarations = Declarations()
-
+        declarations = parsed_declarations.get(report.runtime, {})
         compared = _compare_report(report, declarations, fixtures)
         for record in compared:
             if record.kind:
@@ -638,27 +394,29 @@ def collect(
     )
 
 
+def _section(title: str, note: str, items: list[ComparedRow], fields: list[str]) -> list[str]:
+    if not items:
+        return []
+
+    lines = [f"### {title}", ""]
+    if note:
+        lines.extend([note, ""])
+
+    headers = [name.capitalize() for name in fields]
+    rows = [[getattr(item, name) for name in fields] for item in items]
+    return [*lines, _table(headers, rows), ""]
+
+
 def render_markdown(result: Collection) -> str:
     count_rows = []
     for report in result.reports:
         gate = "ok"
-        for item in result.findings:
-            if item.runtime == report.runtime:
-                gate = "fail"
-        counts = report.counts
+        if any(item.runtime == report.runtime for item in result.findings):
+            gate = "fail"
 
-        count_rows.append(
-            [
-                report.runtime,
-                report.client_version,
-                report.fixture_set_version,
-                str(counts["pass"]),
-                str(counts["fail"]),
-                str(counts["unsupported"]),
-                str(counts["blocked"]),
-                gate,
-            ]
-        )
+        counts = [str(report.counts[name]) for name in RESULTS]
+        count_rows.append([report.runtime, report.client_version, report.fixture_set_version, *counts, gate])
+
     rendered_lines = [
         "## Conformance",
         "",
@@ -668,102 +426,35 @@ def render_markdown(result: Collection) -> str:
         ),
         "",
     ]
-    if result.findings:
-        finding_rows = []
-        for item in result.findings:
-            finding_rows.append(
-                [
-                    item.runtime,
-                    item.kind,
-                    item.file,
-                    item.case,
-                    item.declared,
-                    item.actual,
-                    item.reason,
-                ]
-            )
-        rendered_lines.extend(
-            [
-                "### Gate failures",
-                "",
-                "A pass that is now fail, an unsupported or blocked result that was not declared, "
-                "a fixture case with no row, or a row that is not a fixture case.",
-                "",
-                _table(
-                    ["Runtime", "Kind", "File", "Case", "Declared", "Actual", "Reason"],
-                    finding_rows,
-                ),
-                "",
-            ]
-        )
-    else:
+    if not result.findings:
         rendered_lines.extend(["Every fixture case has a row, and no row trips the gate.", ""])
 
-    if result.unsupported:
-        rows = []
-        for item in result.unsupported:
-            rows.append(
-                [
-                    item.runtime,
-                    item.file,
-                    item.case,
-                    item.declared,
-                    item.reason,
-                ]
-            )
-        rendered_lines.extend(
-            [
-                "### Unsupported",
-                "",
-                "Declared unsupported is a result, not a skipped test. It does not fail this job.",
-                "",
-                _table(["Runtime", "File", "Case", "Declared", "Reason"], rows),
-                "",
-            ]
+    rendered_lines.extend(
+        _section(
+            "Gate failures",
+            "A pass that is now fail, an unsupported or blocked result that was not declared, "
+            "a fixture case with no row, or a row that is not a fixture case.",
+            result.findings,
+            ["runtime", "kind", "file", "case", "declared", "actual", "reason"],
         )
-    if result.failures:
-        rows = []
-        for item in result.failures:
-            rows.append(
-                [
-                    item.runtime,
-                    item.file,
-                    item.case,
-                    item.declared,
-                    item.reason,
-                ]
-            )
-        rendered_lines.extend(
-            [
-                "### Fail",
-                "",
-                _table(["Runtime", "File", "Case", "Declared", "Reason"], rows),
-                "",
-            ]
+    )
+    rendered_lines.extend(
+        _section(
+            "Unsupported",
+            "Declared unsupported is a result, not a skipped test. It does not fail this job.",
+            result.unsupported,
+            ["runtime", "file", "case", "declared", "reason"],
         )
-    if result.differences:
-        rows = []
-        for item in result.differences:
-            rows.append(
-                [
-                    item.runtime,
-                    item.file,
-                    item.case,
-                    item.declared,
-                    item.actual,
-                    item.reason,
-                ]
-            )
-        rendered_lines.extend(
-            [
-                "### Other declaration differences",
-                "",
-                "These do not fail this job. The runtime test compares every row with its declaration.",
-                "",
-                _table(["Runtime", "File", "Case", "Declared", "Actual", "Reason"], rows),
-                "",
-            ]
+    )
+    rendered_lines.extend(_section("Fail", "", result.failures, ["runtime", "file", "case", "declared", "reason"]))
+    rendered_lines.extend(
+        _section(
+            "Other declaration differences",
+            "These do not fail this job. The runtime test compares every row with its declaration.",
+            result.differences,
+            ["runtime", "file", "case", "declared", "actual", "reason"],
         )
+    )
     return "\n".join(rendered_lines).rstrip() + "\n"
 
 

@@ -123,11 +123,11 @@ class CollectReportTests(unittest.TestCase):
 
     def test_parses_the_java_declaration_file(self) -> None:
         parsed = cr.parse_declarations(JAVA_DECLARED)
-        tls_cases = parsed.files[TLS_FILE]
+        tls_cases = parsed[TLS_FILE]
         self.assertEqual(len(tls_cases), 4)
-        self.assertEqual(tls_cases["cn-only-no-san"].result, "fail")
-        self.assertIn("legacy CN fallback", tls_cases["cn-only-no-san"].reason)
-        self.assertNotIn(FILE, parsed.files)
+        self.assertEqual(tls_cases["cn-only-no-san"]["result"], "fail")
+        self.assertIn("legacy CN fallback", tls_cases["cn-only-no-san"]["reason"])
+        self.assertNotIn(FILE, parsed)
 
     def test_declared_unsupported_does_not_fail(self) -> None:
         write_fixtures(self.fixtures, [(FILE, CASE)])
@@ -258,16 +258,13 @@ class CollectReportTests(unittest.TestCase):
         self.assertEqual(fixtures.version, FIXTURE_VERSION)
         self.assertEqual(list(fixtures.cases), [(FILE, CASE)])
 
-    def test_count_mismatch_and_missing_reports_fail(self) -> None:
+    def test_invalid_result_and_missing_reports_fail(self) -> None:
         write_fixtures(self.fixtures, [(FILE, CASE)])
-        body = report(
-            [{"file": FILE, "case": CASE, "result": "pass"}],
-            counts={"pass": 2, "fail": 0, "unsupported": 0, "blocked": 0},
-        )
-        write_report(self.reports, body)
+        row = {"file": FILE, "case": CASE, "result": "skip"}
+        write_report(self.reports, report([row], counts={}))
         with self.assertRaises(cr.CollectError) as caught:
             cr.collect(self.reports, self.fixtures)
-        self.assertIn("counts", str(caught.exception))
+        self.assertIn("invalid result skip", str(caught.exception))
 
         empty = self.work / "empty"
         empty.mkdir()

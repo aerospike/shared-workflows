@@ -149,7 +149,6 @@ main() {
         validate_inputs
         ;;
     fetch)
-        validate_inputs
         fetch_fixtures
         ;;
     -h | --help | help)
