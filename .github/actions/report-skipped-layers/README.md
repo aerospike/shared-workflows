@@ -6,11 +6,11 @@ A fork PR gets no Enterprise feature key, no AKO image pull, and no JFrog OIDC. 
 
 ## Behavior
 
-| `layers` input                                        | Job                                                                       |
-| ----------------------------------------------------- | ------------------------------------------------------------------------- |
-| `[]`                                                  | Stays green. The summary says no secret-gated layer was skipped.          |
-| One or more valid rows                                | Stays green. One table row and one `::notice::` per skipped layer.        |
-| Invalid JSON, not an array, or a row with a bad field | Fails. A skipped-layer report that cannot be read must not pass silently. |
+| `layers` input                                       | Job                                                                       |
+| ---------------------------------------------------- | ------------------------------------------------------------------------- |
+| `[]`                                                 | Stays green. The summary says no secret-gated layer was skipped.          |
+| One or more valid rows                               | Stays green. One table row and one `::notice::` per skipped layer.        |
+| Invalid JSON, not an array, or a row missing a field | Fails. A skipped-layer report that cannot be read must not pass silently. |
 
 A skip is expected on a fork PR, so the action emits `::notice::`, never `::warning::` or `::error::`. The markdown goes to `$GITHUB_STEP_SUMMARY` and to stdout, so it also appears in the step log.
 
@@ -24,15 +24,13 @@ GitHub does not allow `secrets.*` in a job or step `if:`. Expose presence as a j
 | -------- | -------- | ------- | ------------------------------------------------------------------------------------------------------ |
 | `layers` | Yes      | —       | JSON array, one object per skipped layer. Pass `[]` when nothing was skipped, so the step always runs. |
 
-Each object has exactly these string fields, all required and non-empty:
+Each object has these string fields, all required:
 
 | Field    | Example                                   |
 | -------- | ----------------------------------------- |
 | `layer`  | `L2 EE`                                   |
 | `tests`  | `N-6, N-14, multi-node cluster`           |
 | `reason` | `Enterprise feature key secret is absent` |
-
-An unknown field fails the step, so a typo such as `reasons` cannot drop the reason.
 
 ## Outputs
 

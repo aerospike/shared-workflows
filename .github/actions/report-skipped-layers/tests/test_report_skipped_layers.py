@@ -62,97 +62,31 @@ def run_main(layers_text: str) -> tuple[int, str, str, str, str]:
     return code, stdout.getvalue(), stderr.getvalue(), summary, output
 
 
-class ParseLayersTest(unittest.TestCase):
-    def test_one_row(self):
-        text = json.dumps([L2_EE])
-        layers = rsl.parse_layers(text)
-        expected = rsl.SkippedLayer("L2 EE", L2_EE["tests"], L2_EE["reason"])
-        self.assertEqual(layers, [expected])
-
-    def test_several_rows_keep_order(self):
-        text = json.dumps([L2_EE, L3])
-        layers = rsl.parse_layers(text)
-        names = [item.layer for item in layers]
-        self.assertEqual(names, ["L2 EE", "L3"])
-
-    def test_empty_array(self):
-        layers = rsl.parse_layers("[]")
-        self.assertEqual(layers, [])
-
-    def test_tests_and_reason_preserved_exactly(self):
-        row = {"layer": " L3 ", "tests": "K-1,K-2 (kind)  ", "reason": "  AKO: image pull 100% denied"}
-        text = json.dumps([row])
-        layers = rsl.parse_layers(text)
-        self.assertEqual(layers[0].layer, " L3 ")
-        self.assertEqual(layers[0].tests, "K-1,K-2 (kind)  ")
-        self.assertEqual(layers[0].reason, "  AKO: image pull 100% denied")
-
-    def test_missing_field(self):
-        for field in rsl.FIELDS:
-            row = dict(L2_EE)
-            del row[field]
-            text = json.dumps([row])
-            with self.subTest(field=field):
-                with self.assertRaisesRegex(rsl.ReportError, rf"layers\[0\]: missing {field}"):
-                    rsl.parse_layers(text)
-
-    def test_empty_field(self):
-        row = dict(L2_EE, reason="   ")
-        text = json.dumps([row])
-        with self.assertRaisesRegex(rsl.ReportError, r"layers\[0\]\.reason must be a non-empty string"):
-            rsl.parse_layers(text)
-
-    def test_non_string_field(self):
-        row = dict(L2_EE, tests=["N-6", "N-14"])
-        text = json.dumps([row])
-        with self.assertRaisesRegex(rsl.ReportError, r"layers\[0\]\.tests must be a non-empty string"):
-            rsl.parse_layers(text)
-
-    def test_unknown_field(self):
-        row = dict(L2_EE, reasons="typo")
-        text = json.dumps([row])
-        with self.assertRaisesRegex(rsl.ReportError, r"layers\[0\]: unknown field reasons"):
-            rsl.parse_layers(text)
-
-    def test_row_not_an_object(self):
-        with self.assertRaisesRegex(rsl.ReportError, r"layers\[1\] must be an object"):
-            rsl.parse_layers('[{"layer": "L3", "tests": "K", "reason": "r"}, "L3"]')
-
-    def test_invalid_json(self):
-        with self.assertRaisesRegex(rsl.ReportError, "layers is not valid JSON"):
-            rsl.parse_layers('[{"layer": "L3",')
-
-    def test_non_array(self):
-        text = json.dumps(L2_EE)
-        with self.assertRaisesRegex(rsl.ReportError, "layers must be a JSON array"):
-            rsl.parse_layers(text)
-
-    def test_empty_input(self):
-        with self.assertRaisesRegex(rsl.ReportError, r"layers is required; pass \[\]"):
-            rsl.parse_layers("  \n")
-
-
 class RenderTest(unittest.TestCase):
     def test_table_names_layer_tests_and_reason(self):
-        layers = [rsl.SkippedLayer(**L2_EE), rsl.SkippedLayer(**L3)]
-        markdown = rsl.render_markdown(layers)
-        self.assertIn("## Skipped layers", markdown)
-        self.assertIn("| Layer | Tests not run | Reason |", markdown)
-        self.assertIn(f"| L2 EE | {L2_EE['tests']} | {L2_EE['reason']} |", markdown)
-        self.assertIn(f"| L3 | {L3['tests']} | {L3['reason']} |", markdown)
+        _, _, _, summary, _ = run_main(json.dumps([L2_EE, L3]))
+        self.assertIn("## Skipped layers", summary)
+        self.assertIn("| Layer | Tests not run | Reason |", summary)
+        self.assertIn(f"| L2 EE | {L2_EE['tests']} | {L2_EE['reason']} |", summary)
+        self.assertIn(f"| L3 | {L3['tests']} | {L3['reason']} |", summary)
 
     def test_empty_says_nothing_skipped(self):
-        markdown = rsl.render_markdown([])
-        self.assertEqual(markdown, "## Skipped layers\n\nNo secret-gated layers skipped.\n")
+        _, _, _, summary, _ = run_main("[]")
+        self.assertEqual(summary, "## Skipped layers\n\nNo secret-gated layers skipped.\n")
+
+    def test_tests_and_reason_preserved_exactly(self):
+        row = {"layer": " L3 ", "tests": "K-1,K-2 (kind)  ", "reason": "  AKO image pull denied"}
+        _, _, _, summary, _ = run_main(json.dumps([row]))
+        self.assertIn("|  L3  | K-1,K-2 (kind)   |   AKO image pull denied |", summary)
 
     def test_cell_escapes_pipe_and_newline(self):
-        layers = [rsl.SkippedLayer("L3", "K-1 | K-2", "no AKO image\nno OIDC")]
-        markdown = rsl.render_markdown(layers)
-        self.assertIn("| L3 | K-1 \\| K-2 | no AKO image no OIDC |", markdown)
+        row = {"layer": "L3", "tests": "K-1 | K-2", "reason": "no AKO image\nno OIDC"}
+        _, _, _, summary, _ = run_main(json.dumps([row]))
+        self.assertIn("| L3 | K-1 \\| K-2 | no AKO image no OIDC |", summary)
 
     def test_notice_per_row(self):
-        layers = [rsl.SkippedLayer(**L2_EE), rsl.SkippedLayer(**L3)]
-        notices = rsl.render_notices(layers)
+        _, stdout, _, _, _ = run_main(json.dumps([L2_EE, L3]))
+        notices = [line for line in stdout.splitlines() if line.startswith("::")]
         self.assertEqual(
             notices,
             [
@@ -162,13 +96,9 @@ class RenderTest(unittest.TestCase):
         )
 
     def test_notice_escapes_workflow_command_characters(self):
-        layers = [rsl.SkippedLayer("L2: EE, N", "N-6", "100% absent\nsee docs")]
-        notices = rsl.render_notices(layers)
-        self.assertEqual(notices, ["::notice title=Skipped layer L2%3A EE%2C N::N-6 did not run: 100%25 absent%0Asee docs"])
-
-    def test_no_notice_when_nothing_skipped(self):
-        notices = rsl.render_notices([])
-        self.assertEqual(notices, [])
+        row = {"layer": "L2: EE, N", "tests": "N-6", "reason": "100% absent\nsee docs"}
+        _, stdout, _, _, _ = run_main(json.dumps([row]))
+        self.assertTrue(stdout.endswith("::notice title=Skipped layer L2%3A EE%2C N::N-6 did not run: 100%25 absent%0Asee docs\n"))
 
 
 class MainTest(unittest.TestCase):
@@ -202,7 +132,7 @@ class MainTest(unittest.TestCase):
         self.assertEqual(output, "skipped-count=0\n")
 
     def test_invalid_input_fails_without_summary_or_count(self):
-        for text in ('{"layer": "L3"}', "not json", '[{"layer": "L3", "tests": "K"}]', ""):
+        for text in ('{"layer": "L3"}', "{}", "not json", '[{"layer": "L3", "tests": "K"}]', '["L3"]', ""):
             with self.subTest(text=text):
                 code, stdout, stderr, summary, output = run_main(text)
                 self.assertEqual(code, 1)
@@ -210,6 +140,15 @@ class MainTest(unittest.TestCase):
                 self.assertEqual(stdout, "")
                 self.assertEqual(summary, "")
                 self.assertEqual(output, "")
+
+    def test_missing_field_is_named(self):
+        for field in ("layer", "tests", "reason"):
+            row = dict(L2_EE)
+            del row[field]
+            with self.subTest(field=field):
+                code, _, stderr, _, _ = run_main(json.dumps([row]))
+                self.assertEqual(code, 1)
+                self.assertIn(f"KeyError('{field}')", stderr)
 
     def test_without_step_summary_prints_only(self):
         text = json.dumps([L3])
