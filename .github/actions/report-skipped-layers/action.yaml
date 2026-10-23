@@ -1,0 +1,27 @@
+name: Report skipped layers
+description: >
+  Write a job summary row and a notice for each secret-gated test layer that
+  did not run, naming the tests and the reason. A skip does not fail the job;
+  a layers input that cannot be read does.
+
+inputs:
+  layers:
+    description: >
+      JSON array with one object per skipped layer, each with string fields
+      layer, tests, and reason. Pass [] when no layer was skipped.
+    required: true
+
+outputs:
+  skipped-count:
+    description: Number of skipped layers reported
+    value: ${{ steps.report.outputs.skipped-count }}
+
+runs:
+  using: composite
+  steps:
+    - name: Report skipped layers
+      id: report
+      shell: bash
+      env:
+        SKIPPED_LAYERS: ${{ inputs.layers }}
+      run: python3 "${{ github.action_path }}/report_skipped_layers.py"

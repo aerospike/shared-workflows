@@ -1,0 +1,66 @@
+name: Test report-skipped-layers action
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/actions/report-skipped-layers/**
+      - .github/workflows/test_report-skipped-layers.yaml
+
+permissions:
+  contents: read
+
+jobs:
+  unit-tests:
+    name: Unit tests
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Run report-skipped-layers unit tests
+        run: python3 -W error -m unittest discover .github/actions/report-skipped-layers/tests -v
+
+  action-smoke:
+    name: Action smoke
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Report one skipped layer
+        id: one
+        uses: ./.github/actions/report-skipped-layers
+        with:
+          layers: >-
+            [{"layer": "L2 EE", "tests": "N-6, N-14, multi-node cluster", "reason": "Enterprise feature key secret is absent"}]
+
+      - name: Report no skipped layer
+        id: none
+        uses: ./.github/actions/report-skipped-layers
+        with:
+          layers: "[]"
+
+      - name: Report an invalid row
+        id: invalid
+        continue-on-error: true
+        uses: ./.github/actions/report-skipped-layers
+        with:
+          layers: '[{"layer": "L3", "tests": "K suite"}]'
+
+      - name: Check the outcomes
+        run: |
+          [[ "${{ steps.one.outputs.skipped-count }}" == "1" ]]
+          [[ "${{ steps.none.outputs.skipped-count }}" == "0" ]]
+          [[ "${{ steps.invalid.outcome }}" == "failure" ]]
+          [[ -z "${{ steps.invalid.outputs.skipped-count }}" ]]
