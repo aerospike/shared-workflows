@@ -10,6 +10,11 @@ These rules apply to every change in this repo, whichever tool writes it. Repo l
 - Before writing install, retry, or validation logic, check for a maintained action or a flag of the underlying tool that already does it.
 - Add a reusable workflow only when a composite action cannot do the job (job environment, signer identity, `job_workflow_sha`).
 
+## Scripts
+
+- Do not embed Python or any other language in a shell script, a bats test, or a workflow `run:` block (`python3 -c`, `python3 - <<EOF`). Use the CLI built for the format, such as `jq` for JSON and `yq` for YAML, or write a standalone script in one language.
+- Use Python only when the logic exceeds what the CLI can do: stateful iteration, library calls, or a real parser. Reading or validating a field never qualifies. `jq empty` validates JSON.
+
 ## Tests
 
 - Test behavior that can regress and paths that must fail closed. Skip tests for failures that are unlikely to happen and tests whose path another test already covers.
