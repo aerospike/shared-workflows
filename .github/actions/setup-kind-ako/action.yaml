@@ -57,17 +57,21 @@ runs:
         SERVER_IMAGE: ${{ inputs.server-image }}
       run: bash "${{ github.action_path }}/entrypoint.sh" prepare
 
-    - name: Create kind cluster
+    # install_only, because kind-action's post step deletes the cluster it created, which took 10 minutes
+    - name: Install kind and kubectl
       uses: helm/kind-action@1544676c07bb3570fcb70166beaa07c4528fd4aa # v1.15.1
       with:
         version: v0.33.0
         kubectl_version: v1.35.0
-        # AKO 4.5.0 supports Kubernetes through 1.35.
-        node_image: kindest/node:v1.35.0
-        cluster_name: kind-ako
-        config: ${{ steps.prepare.outputs.kind-config }}
-        wait: 180s
+        install_only: true
         ignore_failed_clean: true
+
+    - name: Create kind cluster
+      shell: bash
+      env:
+        KIND_CONFIG: ${{ steps.prepare.outputs.kind-config }}
+      # AKO 4.5.0 supports Kubernetes through 1.35.
+      run: kind create cluster --name kind-ako --image kindest/node:v1.35.0 --config "$KIND_CONFIG" --wait 180s
 
     - name: Install helm
       uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1

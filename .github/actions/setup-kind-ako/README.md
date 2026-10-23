@@ -49,7 +49,7 @@ The kind cluster is one control-plane node with the control-plane taint removed,
 | `cluster-size`     | `1`                                             | Initial Aerospike servers. Maximum 8 |
 | `server-image`     | `aerospike/aerospike-server-enterprise:8.1.2.5` | Server image on the AerospikeCluster |
 
-Everything else is pinned in the action: kind `v0.33.0` with `kindest/node:v1.35.0` through `helm/kind-action`, kubectl `v1.35.0`, helm `v3.18.4` through `azure/setup-helm`, and the chart versions, repositories, names, and namespaces at the top of `lib.sh`. The kind cluster is `kind-ako`, the AerospikeCluster is `aerospike/aerocluster`, and the action waits up to 600 seconds for it to reach `Completed`. `helm/kind-action` deletes the cluster in its post step.
+Everything else is pinned in the action: kind `v0.33.0` and kubectl `v1.35.0` through `helm/kind-action`, the node image `kindest/node:v1.35.0`, helm `v3.18.4` through `azure/setup-helm`, and the chart versions, repositories, names, and namespaces at the top of `lib.sh`. The kind cluster is `kind-ako`, the AerospikeCluster is `aerospike/aerocluster`, and the action waits up to 600 seconds for it to reach `Completed`. The cluster is not deleted when the job ends.
 
 ## Outputs
 
