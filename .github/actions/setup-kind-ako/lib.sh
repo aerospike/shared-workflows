@@ -1,222 +1,73 @@
 #!/usr/bin/env bash
 # Pure helpers for setup-kind-ako. No kubectl, helm, or kind side effects.
+# shellcheck disable=SC2034
+
+# K-7 is meaningless unless this is the Kubernetes default.
+NODEPORT_START=30000
+NODEPORT_END=32767
+NODEPORT_RANGE="${NODEPORT_START}-${NODEPORT_END}"
+
+INGRESS_PORT_BASE=9000
+SERVICE_PORT=3000
+ENDPOINT_HOSTNAME="as-endpoint.test"
+CLUSTER_NAME="aerocluster"
+CLUSTER_NAMESPACE="aerospike"
+AKO_NAMESPACE="ako"
+INGRESS_NAMESPACE="ingress-nginx"
+STARTUP_TIMEOUT=600
+AKO_CHART_VERSION="4.5.0"
+AKO_HELM_REPO="https://aerospike.github.io/aerospike-kubernetes-enterprise"
+CERT_MANAGER_CHART_VERSION="v1.17.0"
+CERT_MANAGER_HELM_REPO="https://charts.jetstack.io"
+INGRESS_NGINX_CHART_VERSION="4.15.1"
+INGRESS_NGINX_HELM_REPO="https://kubernetes.github.io/ingress-nginx"
+ALTERNATE_ACCESS_LABEL="aerospike.com/configured-alternate-access-address"
+CORE_DNS_MARKER="# setup-kind-ako endpoint"
 
 error() {
-    local reason="${1-}"
-    if [[ -n $reason ]]; then
-        echo "Error: $reason" >&2
-    else
-        echo "Error" >&2
-    fi
+    echo "Error: ${1-}" >&2
     exit 1
 }
 
-# K-7 is meaningless unless this is the Kubernetes default. Callers cannot
-# override it. assert-nodeport-range fails the job when the API server
-# serves anything else.
-pinned_nodeport_range() {
-    printf '30000-32767\n'
-}
-
-pinned_nodeport_start() {
-    local range
-    range=$(pinned_nodeport_range)
-    printf '%s\n' "${range%%-*}"
-}
-
-pinned_nodeport_end() {
-    local range
-    range=$(pinned_nodeport_range)
-    printf '%s\n' "${range##*-}"
-}
-
-state_dir() {
-    printf '%s\n' "${SETUP_KIND_AKO_STATE:-${RUNNER_TEMP:-/tmp}/setup-kind-ako}"
-}
-
-validate_port() {
-    local value=$1
-    local label=$2
-    [[ $value =~ ^[1-9][0-9]*$ ]] || error "$label must be a positive integer (got: '$value')"
-    ((value <= 65535)) || error "$label must be <= 65535 (got: $value)"
-}
-
-validate_positive_int() {
-    local value=$1
-    local label=$2
-    [[ $value =~ ^[1-9][0-9]*$ ]] || error "$label must be a positive integer (got: '$value')"
-}
-
-validate_dns_label() {
-    local value=$1
-    local label=$2
-    [[ $value =~ ^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$ ]] ||
-        error "$label is not a DNS label (got: '$value')"
-}
-
-validate_hostname() {
-    local value=$1
-    local label=$2
-    [[ $value =~ ^[A-Za-z0-9]([A-Za-z0-9.-]{0,251}[A-Za-z0-9])?$ ]] ||
-        error "$label is not a valid hostname (got: '$value')"
-    ((${#value} <= 63)) || error "$label must be <= 63 characters so it can be a node label (got: '$value')"
-}
-
-validate_semver_tag() {
-    local value=$1
-    local label=$2
-    [[ $value =~ ^v?[0-9]+\.[0-9]+\.[0-9]+$ ]] ||
-        error "$label must look like 1.2.3 or v1.2.3 (got: '$value')"
-}
-
-validate_https_url() {
-    local value=$1
-    local label=$2
-    [[ $value =~ ^https://[A-Za-z0-9._/-]+$ ]] ||
-        error "$label must be an https URL without query or userinfo (got: '$value')"
+validate_cluster_size() {
+    [[ $1 =~ ^[1-8]$ ]] || error "cluster-size must be 1-8 (got: '$1')"
 }
 
 validate_image_ref() {
-    local value=$1
-    local label=$2
-    [[ $value =~ ^[A-Za-z0-9._:/@-]+$ ]] ||
-        error "$label contains characters that are not valid in an image reference (got: '$value')"
-}
-
-# Prints one port per line. Spec is comma-separated N or N-M tokens.
-expand_port_spec() {
-    local spec=${1-}
-    local token start end port span
-    local -a tokens
-
-    [[ -n $spec ]] || error "port spec is empty"
-    IFS=',' read -ra tokens <<<"$spec"
-    for token in "${tokens[@]}"; do
-        token="${token//[[:space:]]/}"
-        [[ -n $token ]] || error "port spec contains an empty entry"
-        if [[ $token =~ ^([0-9]+)-([0-9]+)$ ]]; then
-            start=${BASH_REMATCH[1]}
-            end=${BASH_REMATCH[2]}
-            validate_port "$start" "port range start"
-            validate_port "$end" "port range end"
-            ((10#$start <= 10#$end)) || error "port range start $start is greater than end $end"
-            span=$((10#$end - 10#$start))
-            ((span <= 10000)) || error "port range $token is larger than 10000 ports"
-            for ((port = 10#$start; port <= 10#$end; port++)); do
-                printf '%s\n' "$port"
-            done
-        elif [[ $token =~ ^[0-9]+$ ]]; then
-            validate_port "$token" "port"
-            printf '%s\n' "$((10#$token))"
-        else
-            error "invalid port token '$token' (want N or N-M)"
-        fi
-    done
-}
-
-# Prints deduplicated ports, first-seen order, one per line.
-# Arguments are newline-separated port streams passed as a single string.
-dedupe_ports() {
-    local port
-    local -A seen
-    while IFS= read -r port; do
-        [[ -n $port ]] || continue
-        [[ -v seen[$port] ]] && continue
-        seen[$port]=1
-        printf '%s\n' "$port"
-    done
+    [[ $1 =~ ^[A-Za-z0-9._:/@-]+$ ]] ||
+        error "server-image contains characters that are not valid in an image reference (got: '$1')"
 }
 
 ingress_ports() {
-    local base=$1
-    local size=$2
-    local i port
-    validate_port "$base" "ingress-port-base"
-    validate_positive_int "$size" "cluster-size"
-    ((size <= 8)) || error "cluster-size must be <= 8 (got: $size)"
-    local start end
-    start=$(pinned_nodeport_start)
-    end=$(pinned_nodeport_end)
+    local size=$1
+    local i
+    validate_cluster_size "$size"
     for ((i = 0; i < size; i++)); do
-        port=$((base + i))
-        validate_port "$port" "ingress port"
-        if ((port >= start && port <= end)); then
-            error "ingress port $port falls inside the pinned NodePort range ${start}-${end}; choose a different ingress-port-base"
-        fi
-        printf '%s\n' "$port"
+        printf '%s\n' "$((INGRESS_PORT_BASE + i))"
     done
 }
 
 pod_service_name() {
-    local cluster_name=$1
-    local index=$2
-    printf '%s-0-%s\n' "$cluster_name" "$index"
-}
-
-configured_alternate_access_label() {
-    printf 'aerospike.com/configured-alternate-access-address\n'
+    printf '%s-0-%s\n' "$CLUSTER_NAME" "$1"
 }
 
 nodeport_probe_expectation() {
-    local port=$1
-    local start end
-    validate_port "$port" "nodePort"
-    start=$(pinned_nodeport_start)
-    end=$(pinned_nodeport_end)
-    if ((port < start || port > end)); then
+    if (($1 < NODEPORT_START || $1 > NODEPORT_END)); then
         printf 'reject\n'
     else
         printf 'accept\n'
     fi
 }
 
-# Prints the service-node-port-range values found in an API server command line.
-extract_nodeport_ranges() {
-    local text=$1
-    local line
-    while IFS= read -r line; do
-        if [[ $line =~ --service-node-port-range=([0-9]+-[0-9]+) ]]; then
-            printf '%s\n' "${BASH_REMATCH[1]}"
-        elif [[ $line =~ --service-node-port-range[[:space:]]+([0-9]+-[0-9]+) ]]; then
-            printf '%s\n' "${BASH_REMATCH[1]}"
-        fi
-    done <<<"$text"
-}
-
-assert_pinned_nodeport_flag() {
-    local text=$1
-    local want found count
-    want=$(pinned_nodeport_range)
-    found=$(extract_nodeport_ranges "$text")
-    if [[ -z $found ]]; then
-        error "API server command line does not set --service-node-port-range. K-7 requires an explicit pin of ${want}."
-    fi
-    count=$(printf '%s\n' "$found" | wc -l | tr -d ' ')
-    if [[ $count != 1 || $found != "$want" ]]; then
-        error "API server NodePort range is '${found//$'\n'/,}', want exactly ${want}. Do not widen service-node-port-range; K-7 depends on KEP-3668's default static band."
-    fi
-}
-
 render_kind_config() {
-    local client_ports_spec=$1
-    local ingress_base=$2
-    local cluster_size=$3
-    local port client_blob ingress_blob combined
-    local -a ports=()
-
-    client_blob=$(expand_port_spec "$client_ports_spec")
-    ingress_blob=$(ingress_ports "$ingress_base" "$cluster_size")
-    combined=$(printf '%s\n%s\n' "$client_blob" "$ingress_blob" | dedupe_ports)
-    while IFS= read -r port; do
-        [[ -n $port ]] || continue
-        ports+=("$port")
-    done <<<"$combined"
-    ((${#ports[@]} > 0)) || error "no ports to publish"
+    local size=$1
+    local port ingress
+    ingress=$(ingress_ports "$size")
 
     # kind v0.33 emits kubeadm v1beta3, with extraArgs as a map, for every
     # Kubernetes version below 1.36. A v1beta4 list does not match that
     # document, so kubeadm never receives the flag. Keep this patch on
-    # v1beta3 while KIND_NODE_IMAGE stays below v1.36.
+    # v1beta3 while the kind node image stays below v1.36.
     cat <<EOF
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
@@ -230,10 +81,10 @@ nodes:
         kind: ClusterConfiguration
         apiServer:
           extraArgs:
-            service-node-port-range: "$(pinned_nodeport_range)"
+            service-node-port-range: "${NODEPORT_RANGE}"
     extraPortMappings:
 EOF
-    for port in "${ports[@]}"; do
+    for port in $(seq "$NODEPORT_START" "$NODEPORT_END") $ingress; do
         cat <<EOF
       - containerPort: ${port}
         hostPort: ${port}
@@ -243,25 +94,21 @@ EOF
     done
 }
 
-CORE_DNS_MARKER="# setup-kind-ako endpoint"
-
 render_corefile_with_endpoint() {
     local corefile=$1
     local ip=$2
-    local hostname=$3
     local hosts_block line
     local -a kept=()
     local skipping=0
     local inserted=0
 
     [[ $ip =~ ^[0-9a-fA-F:.]+$ ]] || error "CoreDNS address is not an IP (got: '$ip')"
-    validate_hostname "$hostname" "endpoint-hostname"
 
     hosts_block=$(
         cat <<EOF
     ${CORE_DNS_MARKER}
     hosts {
-        ${ip} ${hostname}
+        ${ip} ${ENDPOINT_HOSTNAME}
         fallthrough
     }
 EOF
@@ -289,98 +136,59 @@ EOF
     printf '%s\n' "${kept[@]}"
 }
 
-runner_hosts_line() {
-    local ip=$1
-    local hostname=$2
-    validate_hostname "$hostname" "endpoint-hostname"
-    [[ $ip =~ ^[0-9.]+$ ]] || error "runner hosts address is not an IPv4 address (got: '$ip')"
-    printf '%s %s %s\n' "$ip" "$hostname" "$CORE_DNS_MARKER"
-}
-
 # Rewrites a hosts file so the endpoint has one marker line.
 render_hosts_file() {
     local existing=$1
-    local ip=$2
-    local hostname=$3
     local line
     local rewritten=""
-    local new_line
-    new_line=$(runner_hosts_line "$ip" "$hostname")
 
     while IFS= read -r line || [[ -n $line ]]; do
-        if [[ $line == *"$CORE_DNS_MARKER"* || $line == *" ${hostname}" || $line == *" ${hostname} "* ]]; then
+        if [[ $line == *"$CORE_DNS_MARKER"* || $line == *" ${ENDPOINT_HOSTNAME}" || $line == *" ${ENDPOINT_HOSTNAME} "* ]]; then
             continue
         fi
         rewritten+="${line}"$'\n'
     done <<<"$existing"
-    printf '%s%s\n' "$rewritten" "$new_line"
+    printf '%s127.0.0.1 %s %s\n' "$rewritten" "$ENDPOINT_HOSTNAME" "$CORE_DNS_MARKER"
 }
 
 render_tcp_services_configmap() {
-    local namespace=$1
-    local ingress_base=$2
-    local cluster_namespace=$3
-    local cluster_name=$4
-    local cluster_size=$5
-    local service_port=$6
-    local i port svc
-
-    validate_dns_label "$namespace" "ingress namespace"
-    validate_dns_label "$cluster_namespace" "cluster namespace"
-    validate_dns_label "$cluster_name" "cluster name"
-    validate_port "$service_port" "service port"
-
-    local ports_blob
-    ports_blob=$(ingress_ports "$ingress_base" "$cluster_size")
+    local size=$1
+    local i=0 port
     cat <<EOF
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: tcp-services
-  namespace: ${namespace}
+  namespace: ${INGRESS_NAMESPACE}
 data:
 EOF
-    i=0
-    while IFS= read -r port; do
-        [[ -n $port ]] || continue
-        svc=$(pod_service_name "$cluster_name" "$i")
-        printf '  "%s": "%s/%s:%s"\n' "$port" "$cluster_namespace" "$svc" "$service_port"
+    for port in $(ingress_ports "$size"); do
+        printf '  "%s": "%s/%s:%s"\n' "$port" "$CLUSTER_NAMESPACE" "$(pod_service_name "$i")" "$SERVICE_PORT"
         i=$((i + 1))
-    done <<<"$ports_blob"
+    done
 }
 
 render_ingress_container_patch() {
-    local namespace=$1
-    local ingress_base=$2
-    local cluster_size=$3
-    local port ports_blob count=0
-
-    validate_dns_label "$namespace" "ingress namespace"
-    ports_blob=$(ingress_ports "$ingress_base" "$cluster_size")
+    local size=$1
+    local port
     printf '[\n'
     printf '  {"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--tcp-services-configmap=%s/tcp-services"}' \
-        "$namespace"
-    while IFS= read -r port; do
-        [[ -n $port ]] || continue
+        "$INGRESS_NAMESPACE"
+    for port in $(ingress_ports "$size"); do
         printf ',\n  {"op":"add","path":"/spec/template/spec/containers/0/ports/-","value":{"name":"as-%s","containerPort":%s,"hostPort":%s,"protocol":"TCP"}}' \
             "$port" "$port" "$port"
-        count=$((count + 1))
-    done <<<"$ports_blob"
-    ((count > 0)) || error "ingress patch has no ports"
+    done
     printf '\n]\n'
 }
 
 render_probe_service() {
-    local namespace=$1
-    local node_port=$2
-    validate_dns_label "$namespace" "probe namespace"
-    validate_port "$node_port" "nodePort"
+    local node_port=$1
     cat <<EOF
 apiVersion: v1
 kind: Service
 metadata:
   name: nodeport-probe-${node_port}
-  namespace: ${namespace}
+  namespace: nodeport-range-probe
 spec:
   type: NodePort
   selector:
@@ -394,29 +202,22 @@ EOF
 }
 
 render_cluster_manifest() {
-    local namespace=$1
-    local cluster_name=$2
-    local image=$3
-    local size=$4
-    local rf
+    local image=$1
+    local size=$2
+    local rf=1
 
-    validate_dns_label "$namespace" "cluster namespace"
-    validate_dns_label "$cluster_name" "cluster name"
-    validate_image_ref "$image" "server-image"
-    validate_positive_int "$size" "cluster-size"
-    ((size <= 8)) || error "cluster-size must be <= 8 (got: $size)"
+    validate_image_ref "$image"
+    validate_cluster_size "$size"
     if ((size >= 2)); then
         rf=2
-    else
-        rf=1
     fi
 
     cat <<EOF
 apiVersion: asdb.aerospike.com/v1
 kind: AerospikeCluster
 metadata:
-  name: ${cluster_name}
-  namespace: ${namespace}
+  name: ${CLUSTER_NAME}
+  namespace: ${CLUSTER_NAMESPACE}
 spec:
   size: ${size}
   image: ${image}
@@ -463,7 +264,7 @@ spec:
     security: {}
     network:
       service:
-        port: 3000
+        port: ${SERVICE_PORT}
       fabric:
         port: 3001
       heartbeat:
@@ -479,19 +280,17 @@ EOF
 }
 
 render_rbac_manifest() {
-    local namespace=$1
-    validate_dns_label "$namespace" "cluster namespace"
     cat <<EOF
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: aerospike-operator-controller-manager
-  namespace: ${namespace}
+  namespace: ${CLUSTER_NAMESPACE}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: aerospike-cluster-${namespace}
+  name: aerospike-cluster-${CLUSTER_NAMESPACE}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
@@ -499,7 +298,7 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: aerospike-operator-controller-manager
-    namespace: ${namespace}
+    namespace: ${CLUSTER_NAMESPACE}
 EOF
 }
 

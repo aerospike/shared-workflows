@@ -29,8 +29,8 @@ jobs:
       - name: Verify the pinned NodePort range
         run: |
           [[ "${{ steps.kind-ako.outputs.node-port-range }}" == "30000-32767" ]]
-          [[ -n "${{ steps.kind-ako.outputs.ingress-endpoints }}" ]]
+          [[ -n "${{ steps.kind-ako.outputs.ingress-ports }}" ]]
           [[ -n "${{ steps.kind-ako.outputs.service-node-ports }}" ]]
           echo "endpoint ${{ steps.kind-ako.outputs.endpoint-hostname }}"
-          echo "ingress ${{ steps.kind-ako.outputs.ingress-endpoints }}"
+          echo "ingress ${{ steps.kind-ako.outputs.ingress-ports }}"
           echo "node ports ${{ steps.kind-ako.outputs.service-node-ports }}"

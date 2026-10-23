@@ -9,8 +9,12 @@ source "$ACTION_DIR/lib.sh"
 
 setup() {
     TEST_TMPDIR="$(mktemp -d)"
-    export TEST_TMPDIR
-    export SETUP_KIND_AKO_STATE="$TEST_TMPDIR/state"
+    export RUNNER_TEMP="$TEST_TMPDIR"
+    export GITHUB_OUTPUT="$TEST_TMPDIR/output"
+    export CLUSTER_SIZE=1
+    export SERVER_IMAGE=aerospike/aerospike-server-enterprise:8.1.2.5
+    export FEATURES_CONTENT=feature-key
+    export ADMIN_PASSWORD=testpassword
 }
 
 teardown() {
@@ -20,37 +24,22 @@ teardown() {
 }
 
 @test "pinned NodePort range is the Kubernetes default 30000-32767" {
-    [ "$(pinned_nodeport_range)" = "30000-32767" ]
-    [ "$(pinned_nodeport_start)" = "30000" ]
-    [ "$(pinned_nodeport_end)" = "32767" ]
+    [ "$NODEPORT_RANGE" = "30000-32767" ]
 }
 
-@test "expands ranges and single ports" {
-    run expand_port_spec "30000-30002, 30100"
-
-    [ "$status" -eq 0 ]
-    [ "$output" = $'30000\n30001\n30002\n30100' ]
+@test "ingress ports start at 9000, one per pod" {
+    [ "$(ingress_ports 3)" = $'9000\n9001\n9002' ]
 }
 
-@test "rejects a reversed port range" {
-    run expand_port_spec "30-10"
+@test "cluster-size outside 1-8 is rejected" {
+    run ingress_ports 9
 
     [ "$status" -ne 0 ]
-    [[ "$output" == *"greater than"* ]]
-}
+    [[ "$output" == *"cluster-size must be 1-8"* ]]
 
-@test "rejects an enormous port range" {
-    run expand_port_spec "1-65535"
+    run ingress_ports 0
 
     [ "$status" -ne 0 ]
-    [[ "$output" == *"larger than 10000"* ]]
-}
-
-@test "ingress ports must sit outside the NodePort range" {
-    run ingress_ports 31000 1
-
-    [ "$status" -ne 0 ]
-    [[ "$output" == *"inside the pinned NodePort range"* ]]
 }
 
 @test "nodePort probe expectations follow the pinned range" {
@@ -60,82 +49,45 @@ teardown() {
     [ "$(nodeport_probe_expectation 32768)" = "reject" ]
 }
 
-@test "API server flag must be exactly the pinned range" {
-    run assert_pinned_nodeport_flag $'kube-apiserver\n--service-node-port-range=30000-32767\n--allow-privileged=true'
+@test "kind config pins the NodePort range and publishes it with the ingress ports" {
+    config=$(render_kind_config 2)
 
-    [ "$status" -eq 0 ]
-}
-
-@test "API server flag with a space is accepted" {
-    run assert_pinned_nodeport_flag $'kube-apiserver\n--service-node-port-range 30000-32767'
-
-    [ "$status" -eq 0 ]
-}
-
-@test "missing NodePort flag fails" {
-    run assert_pinned_nodeport_flag $'kube-apiserver\n--allow-privileged=true'
-
-    [ "$status" -ne 0 ]
-    [[ "$output" == *"does not set --service-node-port-range"* ]]
-}
-
-@test "widened NodePort flag fails" {
-    run assert_pinned_nodeport_flag "--service-node-port-range=30000-40000"
-
-    [ "$status" -ne 0 ]
-    [[ "$output" == *"30000-40000"* ]]
-    [[ "$output" == *"30000-32767"* ]]
-}
-
-@test "kind config pins the NodePort range even when client ports are narrow" {
-    run render_kind_config "4000" 9000 1
-
-    [ "$status" -eq 0 ]
-    [[ "$output" == *"apiVersion: kubeadm.k8s.io/v1beta3"* ]]
-    [[ "$output" == *"service-node-port-range: \"30000-32767\""* ]]
-    [[ "$output" != *"- name: service-node-port-range"* ]]
-    [[ "$output" != *"30000-32768"* ]]
-    [[ "$output" != *"30000-40000"* ]]
-    [[ "$output" == *"containerPort: 4000"* ]]
-    [[ "$output" == *"hostPort: 4000"* ]]
-    [[ "$output" == *"containerPort: 9000"* ]]
-    [[ "$output" == *'listenAddress: "127.0.0.1"'* ]]
-    [ "$(printf '%s\n' "$output" | grep -c 'containerPort:')" -eq 2 ]
-}
-
-@test "default client ports publish both ends of the NodePort range" {
-    config=$(render_kind_config "30000-32767" 9000 2)
-
+    [[ "$config" == *"apiVersion: kubeadm.k8s.io/v1beta3"* ]]
+    [[ "$config" == *"service-node-port-range: \"30000-32767\""* ]]
+    [[ "$config" != *"- name: service-node-port-range"* ]]
+    [[ "$config" == *'listenAddress: "127.0.0.1"'* ]]
     [[ "$config" == *"containerPort: 30000"* ]]
     [[ "$config" == *"containerPort: 32767"* ]]
+    [[ "$config" != *"containerPort: 32768"* ]]
     [[ "$config" == *"containerPort: 9000"* ]]
     [[ "$config" == *"containerPort: 9001"* ]]
     # 32767-30000+1 NodePorts, plus two ingress ports.
     [ "$(printf '%s\n' "$config" | grep -c 'containerPort:')" -eq 2770 ]
 }
 
-@test "duplicate client and ingress ports are published once" {
-    config=$(render_kind_config "9000" 9000 1)
-
-    [ "$(printf '%s\n' "$config" | grep -c 'containerPort: 9000')" -eq 1 ]
-}
-
 @test "CoreDNS hosts entry is inserted and replaced" {
     corefile=$'.:53 {\n    errors\n    kubernetes cluster.local {\n    }\n}\n'
-    updated=$(render_corefile_with_endpoint "$corefile" "10.0.0.2" "as-endpoint.test")
+    updated=$(render_corefile_with_endpoint "$corefile" "10.0.0.2")
     [[ "$updated" == *"10.0.0.2 as-endpoint.test"* ]]
     [[ "$updated" == *"fallthrough"* ]]
     [[ "$updated" == *"# setup-kind-ako endpoint"* ]]
 
-    again=$(render_corefile_with_endpoint "$updated" "10.0.0.3" "as-endpoint.test")
+    again=$(render_corefile_with_endpoint "$updated" "10.0.0.3")
     [[ "$again" == *"10.0.0.3 as-endpoint.test"* ]]
     [[ "$again" != *"10.0.0.2 as-endpoint.test"* ]]
     [ "$(printf '%s\n' "$again" | grep -c 'setup-kind-ako endpoint')" -eq 1 ]
 }
 
+@test "CoreDNS entry needs a node IP" {
+    run render_corefile_with_endpoint $'.:53 {\n}\n' ""
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"not an IP"* ]]
+}
+
 @test "runner hosts file keeps one endpoint line" {
     existing=$'127.0.0.1 localhost\n10.1.2.3 as-endpoint.test\n'
-    updated=$(render_hosts_file "$existing" "127.0.0.1" "as-endpoint.test")
+    updated=$(render_hosts_file "$existing")
 
     [[ "$updated" == *"127.0.0.1 localhost"* ]]
     [[ "$updated" == *"127.0.0.1 as-endpoint.test # setup-kind-ako endpoint"* ]]
@@ -144,9 +96,10 @@ teardown() {
 }
 
 @test "tcp-services ConfigMap maps one external port per pod" {
-    manifest=$(render_tcp_services_configmap ingress-nginx 9000 aerospike aerocluster 2 3000)
+    manifest=$(render_tcp_services_configmap 2)
 
     [[ "$manifest" == *"name: tcp-services"* ]]
+    [[ "$manifest" == *"namespace: ingress-nginx"* ]]
     [[ "$manifest" == *'"9000": "aerospike/aerocluster-0-0:3000"'* ]]
     [[ "$manifest" == *'"9001": "aerospike/aerocluster-0-1:3000"'* ]]
 }
@@ -159,7 +112,7 @@ teardown() {
 }
 
 @test "ingress patch points the controller at tcp-services and host ports" {
-    patch=$(render_ingress_container_patch ingress-nginx 9000 2)
+    patch=$(render_ingress_container_patch 2)
 
     python3 -m json.tool <<<"$patch" >/dev/null
     [[ "$patch" == *"--tcp-services-configmap=ingress-nginx/tcp-services"* ]]
@@ -168,67 +121,71 @@ teardown() {
 }
 
 @test "AerospikeCluster uses configuredIP and a single shared hostname is not a port map" {
-    manifest=$(render_cluster_manifest aerospike aerocluster aerospike/aerospike-server-enterprise:8.1.2.5 2)
+    manifest=$(render_cluster_manifest aerospike/aerospike-server-enterprise:8.1.2.5 2)
 
+    [[ "$manifest" == *"name: aerocluster"* ]]
+    [[ "$manifest" == *"namespace: aerospike"* ]]
     [[ "$manifest" == *"skipWorkDirValidate: true"* ]]
     [[ "$manifest" == *"work-directory: /opt/aerospike"* ]]
     [[ "$manifest" == *"path: /opt/aerospike"* ]]
     [[ "$manifest" == *"alternateAccess: configuredIP"* ]]
     [[ "$manifest" == *"multiPodPerHost: true"* ]]
     [[ "$manifest" == *"feature-key-file: /etc/aerospike/secret/features.conf"* ]]
+    [[ "$manifest" == *"port: 3000"* ]]
     [[ "$manifest" == *"replication-factor: 2"* ]]
     [[ "$manifest" == *"size: 2"* ]]
     [[ "$manifest" == *"data-size: 536870912"* ]]
 }
 
 @test "single-node cluster uses replication factor 1" {
-    manifest=$(render_cluster_manifest aerospike aerocluster aerospike/aerospike-server:1.0.0 1)
+    manifest=$(render_cluster_manifest aerospike/aerospike-server:1.0.0 1)
 
     [[ "$manifest" == *"size: 1"* ]]
     [[ "$manifest" == *"replication-factor: 1"* ]]
 }
 
+@test "server-image with YAML characters is rejected" {
+    run render_cluster_manifest 'aerospike/server:1 # x' 1
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"server-image"* ]]
+}
+
 @test "RBAC binds the watched namespace to the aerospike-cluster role" {
-    manifest=$(render_rbac_manifest aerospike)
+    manifest=$(render_rbac_manifest)
 
     [[ "$manifest" == *"name: aerospike-cluster-aerospike"* ]]
     [[ "$manifest" == *"name: aerospike-cluster"* ]]
     [[ "$manifest" == *"namespace: aerospike"* ]]
 }
 
-@test "record-inputs stores a feature key and rejects a missing one" {
-    printf 'feature-key\n' >"$TEST_TMPDIR/features.conf"
-    export FEATURES_FILE="$TEST_TMPDIR/features.conf"
-    export FEATURES_CONTENT=""
-    export ADMIN_PASSWORD="testpassword"
-    export CLIENT_PORTS="4000"
-    unset CLUSTER_SIZE
-
-    run "$ACTION_DIR/entrypoint.sh" record-inputs
+@test "prepare writes the kind config and the given password" {
+    run "$ACTION_DIR/entrypoint.sh" prepare
 
     [ "$status" -eq 0 ]
-    [ -s "$SETUP_KIND_AKO_STATE/features.conf" ]
-    # shellcheck disable=SC1090
-    source "$SETUP_KIND_AKO_STATE/env.sh"
-    [ "$CLIENT_PORTS" = "4000" ]
-    [ "$CLUSTER_SIZE" = "1" ]
-
-    unset FEATURES_FILE
-    export FEATURES_CONTENT=""
-    run "$ACTION_DIR/entrypoint.sh" record-inputs
-
-    [ "$status" -ne 0 ]
-    [[ "$output" == *"features-file or features-content is required"* ]]
+    [[ "$output" == *"::add-mask::testpassword"* ]]
+    grep -qx 'admin-password=testpassword' "$GITHUB_OUTPUT"
+    grep -qx "kind-config=$TEST_TMPDIR/setup-kind-ako/kind-config.yaml" "$GITHUB_OUTPUT"
+    grep -q 'containerPort: 9000' "$TEST_TMPDIR/setup-kind-ako/kind-config.yaml"
 }
 
-@test "record-inputs rejects an ingress port inside the NodePort range" {
-    printf 'feature-key\n' >"$TEST_TMPDIR/features.conf"
-    export FEATURES_FILE="$TEST_TMPDIR/features.conf"
-    export ADMIN_PASSWORD="testpassword"
-    export INGRESS_PORT_BASE="32000"
+@test "prepare generates a password when none is given" {
+    ADMIN_PASSWORD="" run "$ACTION_DIR/entrypoint.sh" prepare
 
-    run "$ACTION_DIR/entrypoint.sh" record-inputs
+    [ "$status" -eq 0 ]
+    grep -Eqx 'admin-password=[0-9a-f]{32}' "$GITHUB_OUTPUT"
+}
+
+@test "prepare rejects a missing feature key" {
+    FEATURES_CONTENT="" run "$ACTION_DIR/entrypoint.sh" prepare
 
     [ "$status" -ne 0 ]
-    [[ "$output" == *"inside the pinned NodePort range"* ]]
+    [[ "$output" == *"features-content is required"* ]]
+}
+
+@test "prepare rejects a password with symbols" {
+    ADMIN_PASSWORD='bad pass;word' run "$ACTION_DIR/entrypoint.sh" prepare
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"admin-password must be 8-128 letters or digits"* ]]
 }
