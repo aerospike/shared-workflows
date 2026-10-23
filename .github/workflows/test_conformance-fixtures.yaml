@@ -1,0 +1,120 @@
+name: Test conformance fixture actions
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/actions/fetch-conformance-fixtures/**
+      - .github/actions/collect-conformance-report/**
+      - .github/workflows/test_conformance-fixtures.yaml
+
+permissions:
+  contents: read
+
+jobs:
+  unit-tests:
+    name: Unit tests
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed # v2.22.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install bats
+        run: |
+          git init bats-core
+          cd bats-core
+          git remote add origin https://github.com/bats-core/bats-core.git
+          git fetch --depth 1 origin cf931b7b7c79998ded0f364126dbc9d46739a76f # v1.12.0
+          git checkout --detach FETCH_HEAD
+          sudo ./install.sh /usr/local
+          cd ..
+          rm -rf bats-core
+
+      - name: Run fetch-conformance-fixtures bats tests
+        run: bats .github/actions/fetch-conformance-fixtures/tests/
+
+      - name: Install collect-conformance-report dependencies
+        run: python3 -m pip install -r .github/actions/collect-conformance-report/requirements.txt
+
+      - name: Run collect-conformance-report unit tests
+        run: python3 -m unittest discover .github/actions/collect-conformance-report/tests -v
+
+  action-smoke:
+    name: Action smoke
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed # v2.22.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Read the fixture set version
+        id: fixture-version
+        run: |
+          version_file=".github/actions/fetch-conformance-fixtures/fixture-set-version"
+          version="$(tr -d '[:space:]' < "$version_file")"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+      - name: Dry-run fetch
+        id: fetch
+        uses: ./.github/actions/fetch-conformance-fixtures
+        with:
+          version: "${{ steps.fixture-version.outputs.version }}"
+          dry-run: "true"
+
+      - name: Check the artifact path
+        run: |
+          version="${{ steps.fixture-version.outputs.version }}"
+          expected="database-generic-dev-local/aerospike-client-conformance/${version}/aerospike-client-conformance-${version}.zip"
+          [[ "${{ steps.fetch.outputs.artifact-path }}" == "$expected" ]]
+          [[ -z "${{ steps.fetch.outputs.fixtures-directory }}" ]]
+
+      - name: Write a one-case fixture set and a declared-unsupported report
+        run: |
+          mkdir -p reports declarations fixtures/discovery/translate
+          version="${{ steps.fixture-version.outputs.version }}"
+          echo "$version" > fixtures/VERSION
+          cat > fixtures/discovery/translate/port-map.yaml << 'EOF'
+          kind: translate
+          rows:
+            - case: host-port-key-hit
+              because: smoke test row
+          EOF
+          cat > reports/conformance-report.json << EOF
+          {
+            "runtime": "java",
+            "clientVersion": "9.1.0",
+            "fixtureSetVersion": "${version}",
+            "counts": {"pass": 0, "fail": 0, "unsupported": 1, "blocked": 0},
+            "rows": [{
+              "file": "discovery/translate/port-map.yaml",
+              "case": "host-port-key-hit",
+              "result": "unsupported",
+              "reason": "CLIENT-5641 not implemented"
+            }]
+          }
+          EOF
+          cat > declarations/java-declared.yaml << 'EOF'
+          discovery/translate/port-map.yaml:
+            host-port-key-hit: { result: unsupported, reason: "CLIENT-5641 not implemented" }
+          EOF
+
+      - name: Collect the report
+        id: collect
+        uses: ./.github/actions/collect-conformance-report
+        with:
+          reports-directory: reports
+          fixtures-directory: fixtures
+          declarations-directory: declarations
+
+      - name: Check the gate
+        run: |
+          [[ "${{ steps.collect.outputs.gate }}" == "success" ]]

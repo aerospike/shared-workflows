@@ -1,0 +1,44 @@
+name: Collect conformance report
+description: >
+  Read each runtime's conformance-report.json, compare it with the fixture
+  set, write a step summary of pass / fail / unsupported / blocked, and fail
+  on a pass-to-fail regression, an undeclared unsupported or blocked result,
+  or a fixture case with no row.
+
+inputs:
+  reports-directory:
+    description: Directory to search for conformance-report.json files
+    required: true
+  fixtures-directory:
+    description: >
+      Fixture set the reports ran against, with VERSION at its root. Use the
+      fixtures-directory output of fetch-conformance-fixtures.
+    required: true
+  declarations-directory:
+    description: >
+      Directory to search for <runtime>-declared.yaml. A case with no
+      declaration is treated as pass, or blocked when the fixture marks it
+      blocked. Omitted declarations make every unsupported row undeclared.
+    required: false
+    default: ""
+
+outputs:
+  gate:
+    description: success, or failure when the gate trips or a report is invalid
+    value: ${{ steps.collect.outputs.gate }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install PyYAML
+      shell: bash
+      run: python3 -m pip install -r "${{ github.action_path }}/requirements.txt"
+
+    - name: Collect conformance reports
+      id: collect
+      shell: bash
+      env:
+        REPORTS_DIRECTORY: ${{ inputs.reports-directory }}
+        FIXTURES_DIRECTORY: ${{ inputs.fixtures-directory }}
+        DECLARATIONS_DIRECTORY: ${{ inputs.declarations-directory }}
+      run: python3 "${{ github.action_path }}/collect_report.py"
