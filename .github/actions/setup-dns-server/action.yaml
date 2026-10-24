@@ -1,0 +1,56 @@
+name: Setup DNS Server
+description: >
+  Starts CoreDNS on an existing Docker network, serving one zone from zone file
+  text, and waits until it answers the zone's SOA query. Records can be changed
+  later in the job by copying a zone file with a higher SOA serial into the container.
+
+inputs:
+  network-name:
+    description: Existing Docker network to attach the DNS server to
+    required: true
+  zone-content:
+    description: Zone file text (RFC 1035 master file format, must include an SOA record)
+    required: true
+  zone-name:
+    description: Zone origin served by the DNS server (e.g. dns.test)
+    required: true
+  container-name:
+    description: CoreDNS container name
+    required: false
+    default: coredns
+  coredns-image:
+    description: CoreDNS container image
+    required: false
+    default: docker.io/coredns/coredns@sha256:9caabbf6238b189a65d0d6e6ac138de60d6a1c419e5a341fbbb7c78382559c6e # 1.11.3
+  enable-bash-trace-mode:
+    description: Show commands being executed in shell scripts for debugging
+    required: false
+    default: "false"
+  startup-timeout:
+    description: Seconds to wait for the DNS server to answer the zone's SOA query
+    required: false
+    default: "30"
+
+outputs:
+  container-name:
+    description: CoreDNS container name
+    value: ${{ steps.setup.outputs.container-name }}
+  server-address:
+    description: IP address of the DNS server on network-name (port 53, UDP and TCP)
+    value: ${{ steps.setup.outputs.server-address }}
+
+runs:
+  using: composite
+  steps:
+    - name: Setup DNS server
+      id: setup
+      shell: bash
+      env:
+        CONTAINER_NAME: ${{ inputs.container-name }}
+        COREDNS_IMAGE: ${{ inputs.coredns-image }}
+        ENABLE_BASH_TRACE_MODE: ${{ inputs.enable-bash-trace-mode }}
+        NETWORK_NAME: ${{ inputs.network-name }}
+        STARTUP_TIMEOUT: ${{ inputs.startup-timeout }}
+        ZONE_CONTENT: ${{ inputs.zone-content }}
+        ZONE_NAME: ${{ inputs.zone-name }}
+      run: bash "${{ github.action_path }}/entrypoint.sh"
