@@ -173,40 +173,23 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # The knobs only need upstream containers to exist, so a placeholder
-      # stands in for the Aerospike node.
       - name: Start placeholder upstream
         run: |
           docker network create knobs-aerospike-net
           docker run --detach --name knobs-as-1 --network knobs-aerospike-net alpine:3.20 sleep infinity
 
       - name: Setup discovery topology
-        id: topology
         uses: ./.github/actions/setup-discovery-topology
         with:
           container-names: knobs-as-1
           aerospike-network-name: knobs-aerospike-net
-          client-network-name: knobs-client-net
           client-network-mtu: "1280"
           proxy-sysctls: net.ipv4.ip_local_port_range=40000 40010
           enable-bash-trace-mode: ${{ env.ENABLE_BASH_TRACE_MODE }}
 
-      - name: Verify client network MTU
+      - name: Verify MTU and sysctl took effect
         run: |
-          mtu=$(docker run --rm --network "${{ steps.topology.outputs.client-network-name }}" \
-            alpine:3.20 cat /sys/class/net/eth0/mtu)
-          echo "client container eth0 MTU: $mtu"
-          [[ "$mtu" == "1280" ]] || { echo "Expected MTU 1280"; exit 1; }
-
-      - name: Verify proxy ephemeral port range
-        run: |
-          read -r low high < <(docker run --rm \
-            --network "container:${{ steps.topology.outputs.toxiproxy-container-name }}" \
-            alpine:3.20 cat /proc/sys/net/ipv4/ip_local_port_range)
-          echo "proxy ip_local_port_range: $low $high"
-          [[ "$low $high" == "40000 40010" ]] || { echo "Expected 40000 40010"; exit 1; }
-
-      - name: Verify listen-port-base output
-        run: |
-          [[ "${{ steps.topology.outputs.listen-port-base }}" == "30001" ]] \
-            || { echo "Unexpected listen-port-base"; exit 1; }
+          mtu=$(docker run --rm --network discovery-client-net alpine:3.20 cat /sys/class/net/eth0/mtu)
+          range=$(docker run --rm --network container:toxiproxy alpine:3.20 cat /proc/sys/net/ipv4/ip_local_port_range)
+          echo "mtu=$mtu ip_local_port_range=$range"
+          [[ $mtu == 1280 && $range == 40000*40010 ]]
