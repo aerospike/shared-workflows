@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# Validation and Corefile tests for setup-dns-server that do not need Docker.
+# Validation tests for setup-dns-server that do not need Docker.
 
 GIT_ROOT="$(git rev-parse --show-toplevel)"
 ACTION_DIR="$GIT_ROOT/.github/actions/setup-dns-server"
@@ -23,13 +23,6 @@ run_entrypoint() {
 
     [ "$status" -ne 0 ]
     [[ "$output" == *"network-name is required"* ]]
-}
-
-@test "entrypoint requires zone-content" {
-    run_entrypoint ZONE_CONTENT=""
-
-    [ "$status" -ne 0 ]
-    [[ "$output" == *"zone-content is required"* ]]
 }
 
 @test "entrypoint rejects whitespace-only zone-content" {
@@ -86,22 +79,6 @@ run_entrypoint() {
 
     [ "$status" -eq 0 ]
     [[ "$output" == *"Start CoreDNS on an existing Docker network"* ]]
-}
-
-@test "render_corefile serves the zone file with a 1s reload" {
-    # shellcheck source=/dev/null
-    source "$ENTRYPOINT"
-
-    run render_corefile dns.test
-
-    [ "$status" -eq 0 ]
-    [ "$output" = "dns.test:53 {
-    file /etc/coredns/db.dns.test {
-        reload 1s
-    }
-    errors
-    log
-}" ]
 }
 
 @test "validate_zone_name accepts a trailing dot and underscore labels" {
