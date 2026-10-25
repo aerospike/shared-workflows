@@ -202,3 +202,35 @@ EOF
 @test "enterprise mounts features file" {
     should_use_features_file enterprise "$TEST_TMPDIR/features.conf"
 }
+
+@test "render_node_config replaces node tokens and writes everything else literally" {
+    # shellcheck disable=SC2016
+    printf 'port 50{{NODE_INDEX}}0\naddress {{NODE_NAME}}\nname $(id) ${HOME} `id`\n\n' >"$TEST_TMPDIR/in.conf"
+
+    render_node_config "$TEST_TMPDIR/in.conf" "$TEST_TMPDIR/out.conf" 2 aerospike-2
+
+    # shellcheck disable=SC2016
+    cmp <(printf 'port 5020\naddress aerospike-2\nname $(id) ${HOME} `id`\n\n') "$TEST_TMPDIR/out.conf"
+}
+
+@test "parse_env_vars splits on unescaped semicolons" {
+    parse_env_vars 'A=1;B=x\;y;C=a\\b;'
+
+    [ "${ENV_FLAGS[*]}" = '-e A=1 -e B=x;y -e C=a\b' ]
+}
+
+@test "parse_extra_hosts accepts IPv4, IPv6 and host-gateway" {
+    run parse_extra_hosts " a.example:10.0.0.1, b:::1 ,c:host-gateway,"
+
+    [ "$status" -eq 0 ]
+    [ "$output" = $'a.example:10.0.0.1\nb:::1\nc:host-gateway' ]
+}
+
+@test "parse_extra_hosts rejects malformed entries" {
+    # shellcheck disable=SC2016
+    for entry in "nohost" "a:" ":10.0.0.1" "a:10.0.0" "a:not-an-ip" "-a:10.0.0.1" 'a:$(id)'; do
+        run --separate-stderr parse_extra_hosts "ok:10.0.0.1,$entry"
+        [ "$status" -ne 0 ]
+        [[ $stderr == *"extra-hosts entries must be name:ip"* ]]
+    done
+}
