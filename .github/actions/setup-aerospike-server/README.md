@@ -223,7 +223,7 @@ config-content: |
 
 ## Extra hosts
 
-`extra-hosts` takes comma-separated `name:ip` entries and passes each one to `docker run --add-host` on every node, so the names resolve inside the containers. The IP can be IPv4, IPv6, or `host-gateway`. The action fails on an entry that is not `name:ip`.
+`extra-hosts` takes comma-separated `name:ip` entries and passes each one to `docker run --add-host` on every node, so the names resolve inside the containers. The IP can be IPv4, IPv6, or `host-gateway`. `docker run` rejects an entry with an invalid IP.
 
 ```yaml
 - uses: ./.github/actions/setup-aerospike-server
