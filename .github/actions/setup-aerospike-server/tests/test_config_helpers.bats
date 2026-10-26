@@ -205,12 +205,12 @@ EOF
 
 @test "render_node_config replaces node tokens and writes everything else literally" {
     # shellcheck disable=SC2016
-    printf 'port 50{{NODE_INDEX}}0\naddress {{NODE_NAME}}\nname $(id) ${HOME} `id`\n\n' >"$TEST_TMPDIR/in.conf"
+    printf 'port 50{{NODE_INDEX}}0\naddress {{NODE_NAME}}\n# {{NODE_NAME}} is node {{NODE_INDEX}}\nname $(id) ${HOME} `id`\n\n' >"$TEST_TMPDIR/in.conf"
 
     render_node_config "$TEST_TMPDIR/in.conf" "$TEST_TMPDIR/out.conf" 2 aerospike-2
 
     # shellcheck disable=SC2016
-    cmp <(printf 'port 5020\naddress aerospike-2\nname $(id) ${HOME} `id`\n\n') "$TEST_TMPDIR/out.conf"
+    cmp <(printf 'port 5020\naddress aerospike-2\n# aerospike-2 is node 2\nname $(id) ${HOME} `id`\n\n') "$TEST_TMPDIR/out.conf"
 }
 
 @test "parse_env_vars splits on unescaped semicolons" {
