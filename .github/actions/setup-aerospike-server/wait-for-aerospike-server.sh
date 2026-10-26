@@ -20,7 +20,6 @@ SECURITY="false"
 ENABLE_SC="false"
 TOOLS_IMAGE=""
 NETWORK=""
-CLUSTER_SIZE=""
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -53,10 +52,6 @@ while [[ $# -gt 0 ]]; do
         NETWORK="$2"
         shift 2
         ;;
-    --cluster-size)
-        CLUSTER_SIZE="$2"
-        shift 2
-        ;;
     *)
         echo "Unknown option: $1" >&2
         exit 1
@@ -75,10 +70,6 @@ IFS=',' read -ra containers <<<"$CONTAINER_NAMES"
 echo "Waiting for cluster stability..."
 
 ignore_migrations="$ENABLE_SC"
-stable_command="cluster-stable:ignore-migrations=${ignore_migrations}"
-if [[ -n $CLUSTER_SIZE ]]; then
-    stable_command="cluster-stable:size=${CLUSTER_SIZE};ignore-migrations=${ignore_migrations}"
-fi
 
 # SC mode: use tools container with asinfo to check cluster-stable
 # SC partitions won't complete migrations until roster is set up,
@@ -104,7 +95,7 @@ for container in "${containers[@]}"; do
         rc=0
         result=$(docker run --rm --network "$NETWORK" "$TOOLS_IMAGE" \
             asinfo -h "$container" -p "$SERVICE_PORT" $auth_flags \
-            -v "$stable_command" 2>&1) || rc=$?
+            -v "cluster-stable:ignore-migrations=${ignore_migrations}" 2>&1) || rc=$?
         echo "    [${elapsed}s] Exit code: $rc, Output: $result"
         # A non-ERROR response containing a cluster key means stable
         if [[ $rc -eq 0 && -n $result && $result != *"ERROR"* ]]; then

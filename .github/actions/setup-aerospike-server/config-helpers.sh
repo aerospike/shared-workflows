@@ -107,52 +107,6 @@ parse_extra_hosts() {
     done
 }
 
-# Print one IPv4 address per line for nodes 1..num_nodes in subnet. Node i
-# gets the network address + 1 + i; network address + 1 is left for the
-# gateway.
-subnet_node_addresses() {
-    local subnet=$1
-    local num_nodes=$2
-    local a b c d prefix_len='' network size i ip
-
-    if [[ $subnet =~ ^([0-9]{1,3})[.]([0-9]{1,3})[.]([0-9]{1,3})[.]([0-9]{1,3})/([0-9]{1,2})$ ]]; then
-        a=$((10#${BASH_REMATCH[1]})) b=$((10#${BASH_REMATCH[2]})) c=$((10#${BASH_REMATCH[3]})) d=$((10#${BASH_REMATCH[4]}))
-        prefix_len=$((10#${BASH_REMATCH[5]}))
-    fi
-    if [[ -z $prefix_len ]] || ((a > 255 || b > 255 || c > 255 || d > 255 || prefix_len > 30)); then
-        printf 'Error: network-subnet must be an IPv4 CIDR with a prefix length of 30 or less, such as 172.30.0.0/24 (got: %q)\n' "$subnet" >&2
-        return 1
-    fi
-    size=$((1 << (32 - prefix_len)))
-    network=$(((a << 24) | (b << 16) | (c << 8) | d))
-    if ((network & (size - 1))); then
-        printf 'Error: network-subnet %s has host bits set; use its network address\n' "$subnet" >&2
-        return 1
-    fi
-    if ((num_nodes + 2 >= size)); then
-        printf 'Error: network-subnet %s has no room for %s nodes after the gateway\n' "$subnet" "$num_nodes" >&2
-        return 1
-    fi
-    for ((i = 1; i <= num_nodes; i++)); do
-        ip=$((network + 1 + i))
-        printf '%s\n' "$((ip >> 24)).$(((ip >> 16) & 255)).$(((ip >> 8) & 255)).$((ip & 255))"
-    done
-}
-
-# Print the container's IP on network. A created container that has not
-# started only has an IP if it was given a fixed one with --ip; otherwise
-# print nothing.
-container_address() {
-    local container=$1
-    local network=$2
-    local address
-
-    address=$(docker inspect --format '{{with index .NetworkSettings.Networks "'"$network"'"}}{{if .IPAddress}}{{.IPAddress}}{{else if .IPAMConfig}}{{.IPAMConfig.IPv4Address}}{{end}}{{end}}' "$container")
-    if [[ $address =~ ^([0-9]{1,3}[.]){3}[0-9]{1,3}$ ]]; then
-        printf '%s\n' "$address"
-    fi
-}
-
 # Set ENV_FLAGS to -e flags from semicolon-delimited env-vars, where \; is a
 # literal semicolon and \\ a literal backslash.
 parse_env_vars() {
