@@ -219,6 +219,14 @@ EOF
     [ "${ENV_FLAGS[*]}" = '-e A=1 -e B=x;y -e C=a\b' ]
 }
 
+@test "parse_env_vars rejects entries that are not KEY=VALUE with a valid name" {
+    for entry in "NOVALUE" "=x" "1BAD=x" "BAD-NAME=x"; do
+        run --separate-stderr parse_env_vars "A=1;$entry"
+        [ "$status" -ne 0 ]
+        [[ $stderr == *"env-vars"* ]]
+    done
+}
+
 @test "parse_extra_hosts accepts IPv4, IPv6 and host-gateway" {
     run parse_extra_hosts " a.example:10.0.0.1, b:::1 ,c:host-gateway,"
 
