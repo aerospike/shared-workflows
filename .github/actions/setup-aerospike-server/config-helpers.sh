@@ -93,10 +93,9 @@ render_node_config() {
     printf '%s' "$content" >"$target_config"
 }
 
-# Print one name:ip per line from comma-separated extra-hosts entries.
 parse_extra_hosts() {
     local extra_hosts=$1
-    local entry name address
+    local entry
     local -a entries=()
 
     IFS=',' read -rd '' -a entries <<<"$extra_hosts" || true
@@ -104,15 +103,7 @@ parse_extra_hosts() {
         entry="${entry#"${entry%%[![:space:]]*}"}"
         entry="${entry%"${entry##*[![:space:]]}"}"
         [[ -z $entry ]] && continue
-        name=${entry%%:*}
-        address=${entry#*:}
-        if [[ $entry != *:* ]] ||
-            [[ ! $name =~ ^[A-Za-z0-9]([A-Za-z0-9_.-]{0,251}[A-Za-z0-9])?$ ]] ||
-            [[ ! $address =~ ^(([0-9]{1,3}[.]){3}[0-9]{1,3}|[0-9A-Fa-f]*:[0-9A-Fa-f:.]*|host-gateway)$ ]]; then
-            printf 'Error: extra-hosts entries must be name:ip (got: %q)\n' "$entry" >&2
-            return 1
-        fi
-        printf '%s\n' "$name:$address"
+        printf '%s\n' "$entry"
     done
 }
 

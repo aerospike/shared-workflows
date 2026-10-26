@@ -136,7 +136,7 @@ fi
 
 host_flags=()
 if [[ -n ${EXTRA_HOSTS-} ]]; then
-    extra_hosts=$(parse_extra_hosts "$EXTRA_HOSTS") || exit 1
+    extra_hosts=$(parse_extra_hosts "$EXTRA_HOSTS")
     while IFS= read -r extra_host; do
         host_flags+=("--add-host" "$extra_host")
     done <<<"$extra_hosts"

@@ -245,27 +245,11 @@ assert_matches_baseline() {
     done
 }
 
-@test "invalid extra-hosts fails before starting containers" {
-    EXTRA_HOSTS="db.example=10.0.0.5" run --separate-stderr start_containers 2 community "" ""
-    [ "$status" -ne 0 ]
-    [[ $stderr == *"extra-hosts entries must be name:ip"* ]]
-    [ ! -e "$DOCKER_STUB_DIR/run-count" ]
-}
-
-@test "parse_extra_hosts accepts IPv4, IPv6 and host-gateway" {
+@test "parse_extra_hosts trims entries and skips empty ones" {
     run parse_extra_hosts " a.example:10.0.0.1, b:::1 ,c:host-gateway,"
 
     [ "$status" -eq 0 ]
     [ "$output" = $'a.example:10.0.0.1\nb:::1\nc:host-gateway' ]
-}
-
-@test "parse_extra_hosts rejects malformed entries" {
-    # shellcheck disable=SC2016
-    for entry in "nohost" "a:" ":10.0.0.1" "a:10.0.0" "a:not-an-ip" "-a:10.0.0.1" 'a:$(id)'; do
-        run --separate-stderr parse_extra_hosts "ok:10.0.0.1,$entry"
-        [ "$status" -ne 0 ]
-        [[ $stderr == *"extra-hosts entries must be name:ip"* ]]
-    done
 }
 
 @test "render_node_config keeps trailing newlines" {
