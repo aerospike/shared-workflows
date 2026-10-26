@@ -2,7 +2,7 @@
 # Pure helpers for setup-kind-ako. No kubectl, helm, or kind side effects.
 # shellcheck disable=SC2034
 
-# K-7 is meaningless unless this is the Kubernetes default.
+# The Kubernetes default, so NodePorts are allocated as on a managed cluster.
 NODEPORT_START=30000
 NODEPORT_END=32767
 NODEPORT_RANGE="${NODEPORT_START}-${NODEPORT_END}"
@@ -14,10 +14,10 @@ CLUSTER_NAME="aerocluster"
 CLUSTER_NAMESPACE="aerospike"
 AKO_NAMESPACE="ako"
 INGRESS_NAMESPACE="ingress-nginx"
-STARTUP_TIMEOUT=600
+STARTUP_TIMEOUT=300
 AKO_CHART_VERSION="4.5.0"
 AKO_HELM_REPO="https://aerospike.github.io/aerospike-kubernetes-enterprise"
-CERT_MANAGER_CHART_VERSION="v1.17.0"
+CERT_MANAGER_CHART_VERSION="v1.21.3"
 CERT_MANAGER_HELM_REPO="https://charts.jetstack.io"
 INGRESS_NGINX_CHART_VERSION="4.15.1"
 INGRESS_NGINX_HELM_REPO="https://kubernetes.github.io/ingress-nginx"
@@ -60,10 +60,6 @@ nodeport_probe_expectation() {
 }
 
 render_kind_config() {
-    local size=$1
-    local port ingress
-    ingress=$(ingress_ports "$size")
-
     # kind v0.33 emits kubeadm v1beta3, with extraArgs as a map, for every
     # Kubernetes version below 1.36. A v1beta4 list does not match that
     # document, so kubeadm never receives the flag. Keep this patch on
@@ -82,16 +78,7 @@ nodes:
         apiServer:
           extraArgs:
             service-node-port-range: "${NODEPORT_RANGE}"
-    extraPortMappings:
 EOF
-    for port in $(seq "$NODEPORT_START" "$NODEPORT_END") $ingress; do
-        cat <<EOF
-      - containerPort: ${port}
-        hostPort: ${port}
-        listenAddress: "127.0.0.1"
-        protocol: TCP
-EOF
-    done
 }
 
 render_corefile_with_endpoint() {
@@ -139,6 +126,7 @@ EOF
 # Rewrites a hosts file so the endpoint has one marker line.
 render_hosts_file() {
     local existing=$1
+    local ip=$2
     local line
     local rewritten=""
 
@@ -148,7 +136,7 @@ render_hosts_file() {
         fi
         rewritten+="${line}"$'\n'
     done <<<"$existing"
-    printf '%s127.0.0.1 %s %s\n' "$rewritten" "$ENDPOINT_HOSTNAME" "$CORE_DNS_MARKER"
+    printf '%s%s %s %s\n' "$rewritten" "$ip" "$ENDPOINT_HOSTNAME" "$CORE_DNS_MARKER"
 }
 
 render_tcp_services_configmap() {

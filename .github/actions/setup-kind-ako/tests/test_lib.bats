@@ -49,20 +49,14 @@ teardown() {
     [ "$(nodeport_probe_expectation 32768)" = "reject" ]
 }
 
-@test "kind config pins the NodePort range and publishes it with the ingress ports" {
-    config=$(render_kind_config 2)
+@test "kind config pins the NodePort range and publishes no ports" {
+    config=$(render_kind_config)
 
     [[ "$config" == *"apiVersion: kubeadm.k8s.io/v1beta3"* ]]
     [[ "$config" == *"service-node-port-range: \"30000-32767\""* ]]
     [[ "$config" != *"- name: service-node-port-range"* ]]
-    [[ "$config" == *'listenAddress: "127.0.0.1"'* ]]
-    [[ "$config" == *"containerPort: 30000"* ]]
-    [[ "$config" == *"containerPort: 32767"* ]]
-    [[ "$config" != *"containerPort: 32768"* ]]
-    [[ "$config" == *"containerPort: 9000"* ]]
-    [[ "$config" == *"containerPort: 9001"* ]]
-    # 32767-30000+1 NodePorts, plus two ingress ports.
-    [ "$(printf '%s\n' "$config" | grep -c 'containerPort:')" -eq 2770 ]
+    [[ "$config" != *"extraPortMappings"* ]]
+    [[ "$config" != *"containerPort"* ]]
 }
 
 @test "CoreDNS hosts entry is inserted and replaced" {
@@ -87,10 +81,10 @@ teardown() {
 
 @test "runner hosts file keeps one endpoint line" {
     existing=$'127.0.0.1 localhost\n10.1.2.3 as-endpoint.test\n'
-    updated=$(render_hosts_file "$existing")
+    updated=$(render_hosts_file "$existing" 172.18.0.2)
 
     [[ "$updated" == *"127.0.0.1 localhost"* ]]
-    [[ "$updated" == *"127.0.0.1 as-endpoint.test # setup-kind-ako endpoint"* ]]
+    [[ "$updated" == *"172.18.0.2 as-endpoint.test # setup-kind-ako endpoint"* ]]
     [[ "$updated" != *"10.1.2.3 as-endpoint.test"* ]]
     [ "$(printf '%s\n' "$updated" | grep -c 'as-endpoint.test')" -eq 1 ]
 }
@@ -166,7 +160,7 @@ teardown() {
     [[ "$output" == *"::add-mask::testpassword"* ]]
     grep -qx 'admin-password=testpassword' "$GITHUB_OUTPUT"
     grep -qx "kind-config=$TEST_TMPDIR/setup-kind-ako/kind-config.yaml" "$GITHUB_OUTPUT"
-    grep -q 'containerPort: 9000' "$TEST_TMPDIR/setup-kind-ako/kind-config.yaml"
+    grep -q 'service-node-port-range: "30000-32767"' "$TEST_TMPDIR/setup-kind-ako/kind-config.yaml"
 }
 
 @test "prepare generates a password when none is given" {

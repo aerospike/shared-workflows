@@ -34,3 +34,15 @@ jobs:
           echo "endpoint ${{ steps.kind-ako.outputs.endpoint-hostname }}"
           echo "ingress ${{ steps.kind-ako.outputs.ingress-ports }}"
           echo "node ports ${{ steps.kind-ako.outputs.service-node-ports }}"
+
+      - name: Reach the seed port and every NodePort from the runner
+        env:
+          ENDPOINT: ${{ steps.kind-ako.outputs.endpoint-hostname }}
+          PORTS: ${{ steps.kind-ako.outputs.ingress-ports }},${{ steps.kind-ako.outputs.service-node-ports }}
+        run: |
+          set -euo pipefail
+          IFS=, read -r -a ports <<<"$PORTS"
+          for port in "${ports[@]}"; do
+            timeout 10 bash -c "echo >/dev/tcp/${ENDPOINT}/${port}"
+            echo "reached ${ENDPOINT}:${port}"
+          done

@@ -41,7 +41,7 @@ cmd_prepare() {
     echo "::add-mask::${password}"
 
     mkdir -p "$WORK_DIR"
-    render_kind_config "$CLUSTER_SIZE" >"$WORK_DIR/kind-config.yaml"
+    render_kind_config >"$WORK_DIR/kind-config.yaml"
     write_output admin-password "$password"
     write_output kind-config "$WORK_DIR/kind-config.yaml"
 }
@@ -97,13 +97,13 @@ prepare_node() {
     kubectl -n kube-system rollout restart deploy/coredns
     kubectl -n kube-system rollout status deploy/coredns --timeout=180s
 
-    render_hosts_file "$(cat /etc/hosts)" >"$WORK_DIR/hosts"
+    render_hosts_file "$(cat /etc/hosts)" "$ip" >"$WORK_DIR/hosts"
     if [[ -w /etc/hosts ]]; then
         cp "$WORK_DIR/hosts" /etc/hosts
     else
         sudo cp "$WORK_DIR/hosts" /etc/hosts
     fi
-    echo "CoreDNS resolves ${ENDPOINT_HOSTNAME} to ${ip}; the runner resolves it to 127.0.0.1"
+    echo "CoreDNS and the runner resolve ${ENDPOINT_HOSTNAME} to ${ip}"
 }
 
 install_ako() {
@@ -134,6 +134,19 @@ dump_cluster_debug() {
     kubectl -n "$CLUSTER_NAMESPACE" describe "aerospikecluster/${CLUSTER_NAME}" >&2 || true
 }
 
+# helm --wait returns before the operator's webhook accepts connections.
+wait_for_webhook() {
+    local i
+    for ((i = 0; i < 60; i++)); do
+        if render_cluster_manifest "$SERVER_IMAGE" "$CLUSTER_SIZE" |
+            kubectl apply --dry-run=server -f - >"$WORK_DIR/webhook.err" 2>&1; then
+            return 0
+        fi
+        sleep 3
+    done
+    error "AKO webhook did not accept the AerospikeCluster within 180s: $(<"$WORK_DIR/webhook.err")"
+}
+
 deploy_cluster() {
     printf '%s' "$FEATURES_CONTENT" >"$WORK_DIR/features.conf"
     kubectl -n "$CLUSTER_NAMESPACE" create secret generic aerospike-secret \
@@ -143,6 +156,7 @@ deploy_cluster() {
     kubectl -n "$CLUSTER_NAMESPACE" create secret generic auth-secret \
         --from-literal="password=${ADMIN_PASSWORD}" \
         --dry-run=client -o yaml | kubectl apply -f -
+    wait_for_webhook
     render_cluster_manifest "$SERVER_IMAGE" "$CLUSTER_SIZE" | kubectl apply -f -
     if ! kubectl -n "$CLUSTER_NAMESPACE" wait "aerospikecluster/${CLUSTER_NAME}" \
         --for=jsonpath='{.status.phase}'=Completed \
