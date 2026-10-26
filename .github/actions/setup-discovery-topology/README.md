@@ -60,7 +60,7 @@ aerospike-net
 
 The client container is not attached to `aerospike-net`, so `aerospike-1` does not resolve and node IPs are unroutable. A translator bug is a connection failure, not a silently passing test.
 
-Fault injection (F-1 `reset_peer`, disable a node, and so on) is done from a container on the client network against `toxiproxy-url`. Example:
+Fault injection (`reset_peer`, disabling a node, and so on) is done from a container on the client network against `toxiproxy-url`. Example:
 
 ```sh
 wget -q -O- --post-data='{"name":"rst","type":"reset_peer","stream":"downstream","attributes":{"timeout":0}}' \
@@ -106,9 +106,9 @@ Required inputs first.
 
 ## Fault-injection knobs
 
-`client-network-mtu` creates the client network with `--opt com.docker.network.driver.mtu=<n>`, for example `1280` to exercise small-MTU paths (F-2). It has no effect when the client network already exists.
+`client-network-mtu` creates the client network with `--opt com.docker.network.driver.mtu=<n>`, for example `1280` to exercise small-MTU paths. It has no effect when the client network already exists.
 
-`proxy-sysctls` passes each entry to the Toxiproxy `docker run` as `--sysctl`. For example, `net.ipv4.ip_local_port_range=40000 40010` narrows the proxy's ephemeral port range to force upstream port exhaustion (F-3). Values may contain spaces but not commas.
+`proxy-sysctls` passes each entry to the Toxiproxy `docker run` as `--sysctl`. For example, `net.ipv4.ip_local_port_range=40000 40010` narrows the proxy's ephemeral port range to force upstream port exhaustion. Values may contain spaces but not commas.
 
 ## TLS pass-through
 
