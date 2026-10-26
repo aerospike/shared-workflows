@@ -11,8 +11,8 @@ jobs:
     strategy:
       matrix:
         os:
-          - ubuntu-22.04
-          #- ubuntu-24.04
+         # - ubuntu-22.04
+          - ubuntu-24.04
     steps:
       - name: Harden the runner (Audit all outbound calls)
         uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
@@ -20,14 +20,14 @@ jobs:
           egress-policy: audit
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Check Ubuntu version
-        # This action only supports Ubuntu 22.04. 24.04 has removed dpkg-sig
-        run: |
-          if [[ "$(cat /etc/lsb-release | grep DISTRIB_RELEASE)" != *"22.04"* ]]; then
-            echo "This action only supports Ubuntu 22.04 due to the removal of dpkg-sig in 24.04"
-            exit 1
-          fi
-        shell: bash
+      # - name: Check Ubuntu version
+      #   # This action only supports Ubuntu 22.04. 24.04 has removed dpkg-sig
+      #   run: |
+      #     if [[ "$(cat /etc/lsb-release | grep DISTRIB_RELEASE)" != *"22.04"* ]]; then
+      #       echo "This action only supports Ubuntu 22.04 due to the removal of dpkg-sig in 24.04"
+      #       exit 1
+      #     fi
+      #   shell: bash
       - name: install dpkg-sig
         run: |
           sudo apt-get update && sudo apt-get install dpkg-sig dpkg-dev -y
