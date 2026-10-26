@@ -44,17 +44,87 @@ write_gradle_module_metadata() {
 EOF
 }
 
+# JAR whose pom.properties live at caller-chosen zip entries.
+# Args: <out.jar> then repeated <zip-entry> <groupId> <artifactId> <version>
+# An empty version omits the version line. Entry order is the zip order.
+# No entries produces a manifest-only jar.
+make_jar_with_pom_props_at() {
+        local out="$1"
+        shift
+        local tmp out_dir entry group artifact version props_file
+        local -a rels=()
+        mkdir -p "$(dirname "$out")"
+        out_dir=$(cd "$(dirname "$out")" && pwd)
+        out="$out_dir/$(basename "$out")"
+        tmp=$(mktemp -d)
+        mkdir -p "$tmp/META-INF"
+        echo "Manifest-Version: 1.0" >"$tmp/META-INF/MANIFEST.MF"
+        while [[ $# -ge 4 ]]; do
+                entry="$1"
+                group="$2"
+                artifact="$3"
+                version="$4"
+                shift 4
+                props_file="$tmp/$entry"
+                mkdir -p "$(dirname "$props_file")"
+                {
+                        printf 'groupId=%s\n' "$group"
+                        printf 'artifactId=%s\n' "$artifact"
+                        if [[ -n $version ]]; then
+                                printf 'version=%s\n' "$version"
+                        fi
+                } >"$props_file"
+                rels+=("$entry")
+        done
+        if [[ ${#rels[@]} -eq 0 ]]; then
+                (cd "$tmp" && zip -q "$out" META-INF/MANIFEST.MF)
+        else
+                (cd "$tmp" && zip -q "$out" META-INF/MANIFEST.MF "${rels[@]}")
+        fi
+        rm -rf "$tmp"
+}
+
+# JAR with one pom.properties per group:artifact:version argument.
+# Args: <out.jar> [groupId:artifactId:version ...]
+# Argument order is the zip order. No arguments produces a manifest-only jar.
+make_jar_with_embedded_poms() {
+        local out="$1"
+        shift
+        local spec group rest artifact version entry
+        local -a args=()
+        for spec in "$@"; do
+                group=${spec%%:*}
+                rest=${spec#*:}
+                artifact=${rest%%:*}
+                version=${rest#*:}
+                entry="META-INF/maven/${group}/${artifact}/pom.properties"
+                args+=("$entry" "$group" "$artifact" "$version")
+        done
+        if [[ ${#args[@]} -eq 0 ]]; then
+                make_jar_with_pom_props_at "$out"
+        else
+                make_jar_with_pom_props_at "$out" "${args[@]}"
+        fi
+}
+
+# Sibling POM body wrapped in a Maven <project> element.
+# Args: <path> <inner xml>
+write_maven_pom() {
+        local path="$1" body="$2"
+        cat >"$path" <<POM
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+$body
+</project>
+POM
+}
+
 # Flat JAR without pom.properties plus a sibling POM (exercises get_jar_metadata sibling path).
 # Args: <dir> <pom_body> [stem without extension, default: test]
 make_flat_jar_with_pom() {
         local dir="$1" pom_body="$2" stem="${3:-test}"
         printf 'placeholder' >"$dir/payload.txt"
         (cd "$dir" && zip -q "${stem}.jar" payload.txt)
-        cat >"$dir/${stem}.pom" <<POM
-<project xmlns="http://maven.apache.org/POM/4.0.0">
-$pom_body
-</project>
-POM
+        write_maven_pom "$dir/${stem}.pom" "$pom_body"
 }
 
 # Populate <base>/build-artifacts with three Maven shapes in JFrog download layout:
