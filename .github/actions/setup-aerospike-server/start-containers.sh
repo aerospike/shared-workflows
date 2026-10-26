@@ -74,45 +74,7 @@ container_names=""
 service_ports=""
 tls_service_ports=""
 
-# Parse env-vars using escape-aware semicolon delimiter
-env_flags=()
-if [[ -n ${ENV_VARS-} ]]; then
-    current=""
-    escape="false"
-    pairs=()
-    for ((i = 0; i < ${#ENV_VARS}; i++)); do
-        char="${ENV_VARS:i:1}"
-        if [[ $escape == "true" ]]; then
-            current+="$char"
-            escape="false"
-            continue
-        fi
-        if [[ $char == $'\\' ]]; then
-            escape="true"
-            continue
-        fi
-        if [[ $char == ";" ]]; then
-            pairs+=("$current")
-            current=""
-            continue
-        fi
-        current+="$char"
-    done
-    pairs+=("$current")
-
-    for pair in "${pairs[@]}"; do
-        [[ -z $pair ]] && continue
-        if [[ $pair != *=* ]]; then
-            error "env-vars entries must be KEY=VALUE (got: $pair)"
-        fi
-        key="${pair%%=*}"
-        value="${pair#*=}"
-        if [[ -z $key || ! $key =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
-            error "invalid env var name '$key' in env-vars"
-        fi
-        env_flags+=("-e" "$key=$value")
-    done
-fi
+parse_env_vars "${ENV_VARS-}" || exit 1
 
 host_flags=()
 if [[ -n ${EXTRA_HOSTS-} ]]; then
@@ -196,7 +158,7 @@ for ((i = 1; i <= num_nodes; i++)); do
     fi
 
     # User-supplied env vars and host entries
-    run_args+=("${env_flags[@]}")
+    run_args+=("${ENV_FLAGS[@]}")
     run_args+=("${host_flags[@]}")
 
     if [[ -n $config_path || -n $features_path ]]; then
