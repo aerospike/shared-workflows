@@ -124,3 +124,6 @@ runs:
 
         # Reload gpg-agent configuration
         gpg-connect-agent reloadagent /bye
+
+        echo "here yeah?"
+        cat /etc/os-release
