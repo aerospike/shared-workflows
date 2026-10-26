@@ -42,6 +42,24 @@ jfrog_promotion_records() {
     printf '%s\n' "$records"
 }
 
+# Prints every version of a bundle with a completed promotion to a stage.
+jfrog_versions_at_stage() {
+    local name="$1" project="$2" stage="$3" path records versions
+    path="lifecycle/api/v2/promotion/records/$(jfrog_uri_encode "$name")"
+    path+="?project=$(jfrog_uri_encode "$project")&limit=1000"
+    records=$(jfrog_lifecycle_get "$path") || {
+        echo "Error: could not read promotion records for ${name}" >&2
+        return 1
+    }
+    versions=$(jq -r --arg stage "$stage" 'if (.promotions | type) == "array" and .total == (.promotions | length)
+        then .promotions[] | select(.status == "COMPLETED" and .environment == $stage) | .release_bundle_version
+        else error("unexpected records") end' <<<"$records") || {
+        echo "Error: unexpected or truncated promotion records for ${name}" >&2
+        return 1
+    }
+    [[ -z $versions ]] || LC_ALL=C sort -u <<<"$versions"
+}
+
 # Prints the artifact paths in the release bundle or promotion record at an API path.
 jfrog_record_artifact_paths() {
     local record paths
