@@ -43,10 +43,10 @@ jobs:
           # Create symlink for gpg2 (required for rpm signing)
           sudo ln -sf $(which gpg) /usr/bin/gpg2
           echo "this is a place"
-          env
+          pwd
+          echo "here: ${PWD}"
           ls -latr
           echo "hm"
-          sudo ls -latr
           ls -altr /home/runner/
           # Sign the package
           rpm --addsign tests/*.rpm
