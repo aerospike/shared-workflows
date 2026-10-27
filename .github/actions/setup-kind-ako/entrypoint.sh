@@ -39,41 +39,7 @@ cmd_prepare() {
     fi
     [[ $password =~ ^[A-Za-z0-9]{8,128}$ ]] || error "admin-password must be 8-128 letters or digits"
     echo "::add-mask::${password}"
-
-    mkdir -p "$WORK_DIR"
-    render_kind_config >"$WORK_DIR/kind-config.yaml"
     write_output admin-password "$password"
-    write_output kind-config "$WORK_DIR/kind-config.yaml"
-}
-
-probe_nodeport() {
-    local port=$1
-    local expect errfile
-    expect=$(nodeport_probe_expectation "$port")
-    errfile="$WORK_DIR/probe-${port}.err"
-    if render_probe_service "$port" | kubectl apply -f - >"$errfile" 2>&1; then
-        kubectl -n nodeport-range-probe delete "svc/nodeport-probe-${port}" --wait=true >/dev/null
-        if [[ $expect == reject ]]; then
-            error "API server accepted nodePort ${port}, which is outside ${NODEPORT_RANGE}"
-        fi
-    else
-        if [[ $expect == accept ]]; then
-            error "API server rejected nodePort ${port}, which is inside ${NODEPORT_RANGE}. $(<"$errfile")"
-        fi
-        if ! grep -q -F "$NODEPORT_RANGE" "$errfile"; then
-            error "nodePort ${port} was rejected, but the API server did not report range ${NODEPORT_RANGE}. $(<"$errfile")"
-        fi
-    fi
-}
-
-assert_nodeport_range() {
-    kubectl create namespace nodeport-range-probe --dry-run=client -o yaml | kubectl apply -f -
-    probe_nodeport $((NODEPORT_START - 1))
-    probe_nodeport "$NODEPORT_START"
-    probe_nodeport "$NODEPORT_END"
-    probe_nodeport $((NODEPORT_END + 1))
-    kubectl delete namespace nodeport-range-probe --wait=false
-    echo "API server NodePort range is ${NODEPORT_RANGE}"
 }
 
 prepare_node() {
@@ -167,25 +133,14 @@ deploy_cluster() {
 }
 
 install_ingress() {
-    local container
-    kubectl create namespace "$INGRESS_NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
-    render_tcp_services_configmap "$CLUSTER_SIZE" | kubectl apply -f -
-    render_ingress_values >"$WORK_DIR/ingress-values.yaml"
+    render_ingress_values "$CLUSTER_SIZE" >"$WORK_DIR/ingress-values.yaml"
     helm repo add ingress-nginx "$INGRESS_NGINX_HELM_REPO" --force-update
     helm repo update
     helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx \
-        --namespace "$INGRESS_NAMESPACE" \
+        --namespace "$INGRESS_NAMESPACE" --create-namespace \
         --version "$INGRESS_NGINX_CHART_VERSION" \
         -f "$WORK_DIR/ingress-values.yaml" \
         --wait --timeout 10m
-    container=$(kubectl -n "$INGRESS_NAMESPACE" get deploy ingress-nginx-controller \
-        -o jsonpath='{.spec.template.spec.containers[0].name}')
-    [[ $container == controller ]] ||
-        error "ingress-nginx container[0] is '${container}', want controller"
-    render_ingress_container_patch "$CLUSTER_SIZE" >"$WORK_DIR/ingress-patch.json"
-    kubectl -n "$INGRESS_NAMESPACE" patch deploy ingress-nginx-controller --type=json \
-        --patch-file="$WORK_DIR/ingress-patch.json"
-    kubectl -n "$INGRESS_NAMESPACE" rollout status deploy/ingress-nginx-controller --timeout=180s
 }
 
 publish_outputs() {
@@ -202,7 +157,6 @@ publish_outputs() {
     write_output endpoint-hostname "$ENDPOINT_HOSTNAME"
     write_output ingress-ports "$(ingress_ports "$CLUSTER_SIZE" | paste -sd, -)"
     write_output kubeconfig "${KUBECONFIG:-${HOME}/.kube/config}"
-    write_output node-port-range "$NODEPORT_RANGE"
     write_output service-node-ports "$(
         IFS=,
         printf '%s' "${node_ports[*]}"
@@ -218,7 +172,6 @@ run_group() {
 cmd_setup() {
     mkdir -p "$WORK_DIR"
     echo "::add-mask::${ADMIN_PASSWORD}"
-    run_group "Assert NodePort range is ${NODEPORT_RANGE}" assert_nodeport_range
     run_group "Label the node and add the CoreDNS entry" prepare_node
     run_group "Install cert-manager and AKO" install_ako
     run_group "Apply AerospikeCluster" deploy_cluster

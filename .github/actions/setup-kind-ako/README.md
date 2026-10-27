@@ -4,10 +4,6 @@ GitHub Action that builds the L3 discovery cluster: one kind node, the Aerospike
 
 The client process runs on the runner and dials the kind node's IP directly. The action points the endpoint hostname at that IP in the runner's `/etc/hosts`.
 
-## What it guarantees
-
-The API server NodePort range is pinned to **30000-32767**, the Kubernetes default. That is the range KEP-3668 splits into an 86-port static band and a dynamic band, which is the same split a GKE cluster gets. kind will widen the range through `kubeadmConfigPatches`. Before anything is installed, the action creates NodePort Services on both edges of the range and one port past each edge, and fails unless the API server accepts exactly 30000-32767. A later edit that opens the range fails the job.
-
 Nothing is published to `127.0.0.1`. On a Linux runner the kind node's Docker network is reachable from the host, so a test can dial whatever NodePort the operator assigns at the node IP. Publishing every NodePort made `kind create` take about 7 minutes.
 
 ## Quick Start
@@ -59,7 +55,6 @@ Everything else is pinned in the action: kind `v0.33.0` and kubectl `v1.35.0` th
 | `endpoint-hostname`  | Shared alternate-access hostname, `as-endpoint.test`   |
 | `ingress-ports`      | tcp-services host ports, comma-separated               |
 | `kubeconfig`         | kubeconfig written by kind                             |
-| `node-port-range`    | `30000-32767` after the API server check               |
 | `service-node-ports` | NodePorts for the Aerospike service port, in pod order |
 
 Scaling the cluster after this action returns does not update the `tcp-services` ConfigMap.

@@ -2,11 +2,6 @@
 # Pure helpers for setup-kind-ako. No kubectl, helm, or kind side effects.
 # shellcheck disable=SC2034
 
-# The Kubernetes default, so NodePorts are allocated as on a managed cluster.
-NODEPORT_START=30000
-NODEPORT_END=32767
-NODEPORT_RANGE="${NODEPORT_START}-${NODEPORT_END}"
-
 INGRESS_PORT_BASE=9000
 SERVICE_PORT=3000
 ENDPOINT_HOSTNAME="as-endpoint.test"
@@ -49,36 +44,6 @@ ingress_ports() {
 
 pod_service_name() {
     printf '%s-0-%s\n' "$CLUSTER_NAME" "$1"
-}
-
-nodeport_probe_expectation() {
-    if (($1 < NODEPORT_START || $1 > NODEPORT_END)); then
-        printf 'reject\n'
-    else
-        printf 'accept\n'
-    fi
-}
-
-render_kind_config() {
-    # kind v0.33 emits kubeadm v1beta3, with extraArgs as a map, for every
-    # Kubernetes version below 1.36. A v1beta4 list does not match that
-    # document, so kubeadm never receives the flag. Keep this patch on
-    # v1beta3 while the kind node image stays below v1.36.
-    cat <<EOF
-kind: Cluster
-apiVersion: kind.x-k8s.io/v1alpha4
-networking:
-  apiServerPort: 6443
-nodes:
-  - role: control-plane
-    kubeadmConfigPatches:
-      - |
-        apiVersion: kubeadm.k8s.io/v1beta3
-        kind: ClusterConfiguration
-        apiServer:
-          extraArgs:
-            service-node-port-range: "${NODEPORT_RANGE}"
-EOF
 }
 
 render_corefile_with_endpoint() {
@@ -137,56 +102,6 @@ render_hosts_file() {
         rewritten+="${line}"$'\n'
     done <<<"$existing"
     printf '%s%s %s %s\n' "$rewritten" "$ip" "$ENDPOINT_HOSTNAME" "$CORE_DNS_MARKER"
-}
-
-render_tcp_services_configmap() {
-    local size=$1
-    local i=0 port
-    cat <<EOF
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: tcp-services
-  namespace: ${INGRESS_NAMESPACE}
-data:
-EOF
-    for port in $(ingress_ports "$size"); do
-        printf '  "%s": "%s/%s:%s"\n' "$port" "$CLUSTER_NAMESPACE" "$(pod_service_name "$i")" "$SERVICE_PORT"
-        i=$((i + 1))
-    done
-}
-
-render_ingress_container_patch() {
-    local size=$1
-    local port
-    printf '[\n'
-    printf '  {"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--tcp-services-configmap=%s/tcp-services"}' \
-        "$INGRESS_NAMESPACE"
-    for port in $(ingress_ports "$size"); do
-        printf ',\n  {"op":"add","path":"/spec/template/spec/containers/0/ports/-","value":{"name":"as-%s","containerPort":%s,"hostPort":%s,"protocol":"TCP"}}' \
-            "$port" "$port" "$port"
-    done
-    printf '\n]\n'
-}
-
-render_probe_service() {
-    local node_port=$1
-    cat <<EOF
-apiVersion: v1
-kind: Service
-metadata:
-  name: nodeport-probe-${node_port}
-  namespace: nodeport-range-probe
-spec:
-  type: NodePort
-  selector:
-    app: nodeport-range-probe
-  ports:
-    - name: probe
-      port: 80
-      targetPort: 80
-      nodePort: ${node_port}
-EOF
 }
 
 render_cluster_manifest() {
@@ -291,18 +206,24 @@ EOF
 }
 
 render_ingress_values() {
-    cat <<'EOF'
+    local size=$1
+    local i=0 port
+    cat <<EOF
 controller:
   replicaCount: 1
-  # 80 and 443 are unused. Enabling hostPort for them deadlocks a rolling
-  # update on the one kind node: the new pod cannot bind those ports while
-  # the previous controller still holds them. The tcp-services port is added
-  # later as hostPort 9000.
+  # hostPort also binds 80 and 443, which deadlocks a rolling update on the one kind node.
+  updateStrategy:
+    type: Recreate
   hostPort:
-    enabled: false
+    enabled: true
   admissionWebhooks:
     enabled: false
   service:
     type: NodePort
+tcp:
 EOF
+    for port in $(ingress_ports "$size"); do
+        printf '  "%s": "%s/%s:%s"\n' "$port" "$CLUSTER_NAMESPACE" "$(pod_service_name "$i")" "$SERVICE_PORT"
+        i=$((i + 1))
+    done
 }

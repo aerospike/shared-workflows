@@ -26,9 +26,8 @@ jobs:
         with:
           features-content: ${{ secrets.AES_FEATURES_CONF }}
 
-      - name: Verify the pinned NodePort range
+      - name: Verify the outputs
         run: |
-          [[ "${{ steps.kind-ako.outputs.node-port-range }}" == "30000-32767" ]]
           [[ -n "${{ steps.kind-ako.outputs.ingress-ports }}" ]]
           [[ -n "${{ steps.kind-ako.outputs.service-node-ports }}" ]]
           echo "endpoint ${{ steps.kind-ako.outputs.endpoint-hostname }}"

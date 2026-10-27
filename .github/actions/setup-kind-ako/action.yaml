@@ -2,8 +2,7 @@ name: Setup kind and AKO
 description: >
   Starts a kind cluster, installs the Aerospike Kubernetes Operator, applies an
   AerospikeCluster, installs ingress-nginx with a tcp-services ConfigMap, and
-  adds the CoreDNS entry K-10's T3 variant needs. The NodePort range is pinned
-  to 30000-32767 and checked against the API server.
+  adds the CoreDNS entry that lets the server resolve the endpoint hostname.
 
 inputs:
   admin-password:
@@ -37,9 +36,6 @@ outputs:
   kubeconfig:
     description: kubeconfig written by kind
     value: ${{ steps.setup.outputs.kubeconfig }}
-  node-port-range:
-    description: NodePort range the API server was asserted to be serving
-    value: ${{ steps.setup.outputs.node-port-range }}
   service-node-ports:
     description: Comma-separated NodePorts for the Aerospike service port, pod order
     value: ${{ steps.setup.outputs.service-node-ports }}
@@ -47,7 +43,7 @@ outputs:
 runs:
   using: composite
   steps:
-    - name: Validate inputs and render the kind config
+    - name: Validate inputs
       id: prepare
       shell: bash
       env:
@@ -68,10 +64,8 @@ runs:
 
     - name: Create kind cluster
       shell: bash
-      env:
-        KIND_CONFIG: ${{ steps.prepare.outputs.kind-config }}
       # AKO 4.5.0 supports Kubernetes through 1.35.
-      run: kind create cluster --name kind-ako --image kindest/node:v1.35.0 --config "$KIND_CONFIG" --wait 180s
+      run: kind create cluster --name kind-ako --image kindest/node:v1.35.0 --wait 180s
 
     - name: Install helm
       uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1

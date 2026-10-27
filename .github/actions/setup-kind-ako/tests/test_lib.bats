@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# Tests for setup-kind-ako rendering and the NodePort pin.
+# Tests for setup-kind-ako rendering and input validation.
 
 GIT_ROOT="$(git rev-parse --show-toplevel)"
 ACTION_DIR="$GIT_ROOT/.github/actions/setup-kind-ako"
@@ -23,10 +23,6 @@ teardown() {
     fi
 }
 
-@test "pinned NodePort range is the Kubernetes default 30000-32767" {
-    [ "$NODEPORT_RANGE" = "30000-32767" ]
-}
-
 @test "ingress ports start at 9000, one per pod" {
     [ "$(ingress_ports 3)" = $'9000\n9001\n9002' ]
 }
@@ -40,23 +36,6 @@ teardown() {
     run ingress_ports 0
 
     [ "$status" -ne 0 ]
-}
-
-@test "nodePort probe expectations follow the pinned range" {
-    [ "$(nodeport_probe_expectation 29999)" = "reject" ]
-    [ "$(nodeport_probe_expectation 30000)" = "accept" ]
-    [ "$(nodeport_probe_expectation 32767)" = "accept" ]
-    [ "$(nodeport_probe_expectation 32768)" = "reject" ]
-}
-
-@test "kind config pins the NodePort range and publishes no ports" {
-    config=$(render_kind_config)
-
-    [[ "$config" == *"apiVersion: kubeadm.k8s.io/v1beta3"* ]]
-    [[ "$config" == *"service-node-port-range: \"30000-32767\""* ]]
-    [[ "$config" != *"- name: service-node-port-range"* ]]
-    [[ "$config" != *"extraPortMappings"* ]]
-    [[ "$config" != *"containerPort"* ]]
 }
 
 @test "CoreDNS hosts entry is inserted and replaced" {
@@ -89,29 +68,12 @@ teardown() {
     [ "$(printf '%s\n' "$updated" | grep -c 'as-endpoint.test')" -eq 1 ]
 }
 
-@test "tcp-services ConfigMap maps one external port per pod" {
-    manifest=$(render_tcp_services_configmap 2)
+@test "ingress values map one tcp-services port per pod" {
+    values=$(render_ingress_values 2)
 
-    [[ "$manifest" == *"name: tcp-services"* ]]
-    [[ "$manifest" == *"namespace: ingress-nginx"* ]]
-    [[ "$manifest" == *'"9000": "aerospike/aerocluster-0-0:3000"'* ]]
-    [[ "$manifest" == *'"9001": "aerospike/aerocluster-0-1:3000"'* ]]
-}
-
-@test "ingress chart does not publish host ports 80 and 443" {
-    values=$(render_ingress_values)
-
-    [[ "$values" == *"enabled: false"* ]]
-    [[ "$values" != *"enabled: true"* ]]
-}
-
-@test "ingress patch points the controller at tcp-services and host ports" {
-    patch=$(render_ingress_container_patch 2)
-
-    python3 -m json.tool <<<"$patch" >/dev/null
-    [[ "$patch" == *"--tcp-services-configmap=ingress-nginx/tcp-services"* ]]
-    [[ "$patch" == *'"hostPort":9000'* ]]
-    [[ "$patch" == *'"hostPort":9001'* ]]
+    [[ "$values" == *'"9000": "aerospike/aerocluster-0-0:3000"'* ]]
+    [[ "$values" == *'"9001": "aerospike/aerocluster-0-1:3000"'* ]]
+    [[ "$values" == *"type: Recreate"* ]]
 }
 
 @test "AerospikeCluster uses configuredIP and a single shared hostname is not a port map" {
@@ -153,14 +115,12 @@ teardown() {
     [[ "$manifest" == *"namespace: aerospike"* ]]
 }
 
-@test "prepare writes the kind config and the given password" {
+@test "prepare writes the given password" {
     run "$ACTION_DIR/entrypoint.sh" prepare
 
     [ "$status" -eq 0 ]
     [[ "$output" == *"::add-mask::testpassword"* ]]
     grep -qx 'admin-password=testpassword' "$GITHUB_OUTPUT"
-    grep -qx "kind-config=$TEST_TMPDIR/setup-kind-ako/kind-config.yaml" "$GITHUB_OUTPUT"
-    grep -q 'service-node-port-range: "30000-32767"' "$TEST_TMPDIR/setup-kind-ako/kind-config.yaml"
 }
 
 @test "prepare generates a password when none is given" {
