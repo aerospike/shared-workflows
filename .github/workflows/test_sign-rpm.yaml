@@ -8,9 +8,6 @@ permissions: read-all
 jobs:
   sign-rpm:
     runs-on: ${{ matrix.os }}
-    defaults:
-      run:
-        working-directory: /home/runner
     strategy:
       matrix:
         os:
@@ -33,7 +30,6 @@ jobs:
           gpg-key-pass: ${{ secrets.GPG_PASS }}
 
       - name: Sign and check rpm # gpg sign and verify rpm packages
-       # working-directory: /home/runner
         env:
           GPG_TTY: /dev/null
           HOME: /home/runner
