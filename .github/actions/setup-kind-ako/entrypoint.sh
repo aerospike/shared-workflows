@@ -16,7 +16,7 @@ handle_error() {
 TEMPLATES="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/templates"
 WORK_DIR="${RUNNER_TEMP:-/tmp}/setup-kind-ako"
 
-# The templates hardcode these names and ports; change both together.
+# The files in templates/ hardcode these names and ports; change both together.
 CLUSTER_NAME="aerocluster"
 CLUSTER_NAMESPACE="aerospike"
 SERVICE_PORT=3000
@@ -52,8 +52,8 @@ cmd_prepare() {
     local password=${ADMIN_PASSWORD-}
     [[ -n ${FEATURES_CONTENT-} ]] || error "features-content is required"
     [[ $CLUSTER_SIZE =~ ^[1-8]$ ]] || error "cluster-size must be 1-8 (got: '$CLUSTER_SIZE')"
-    [[ $SERVER_IMAGE =~ ^[A-Za-z0-9._:/@-]+$ ]] ||
-        error "server-image contains characters that are not valid in an image reference (got: '$SERVER_IMAGE')"
+    [[ $SERVER_IMAGE =~ ^[A-Za-z0-9._:/-]+:[A-Za-z0-9._-]+$ ]] ||
+        error "server-image must be repository:tag (got: '$SERVER_IMAGE')"
     if [[ -z $password ]]; then
         password=$(openssl rand -hex 16)
     fi
@@ -70,7 +70,7 @@ prepare_node() {
     # copies it through without validating. KO-649 adds a CR hostname field,
     # and a later AKO release will reject a DNS name here. When bumping
     # AKO_CHART_VERSION to a release that includes KO-649, stop labeling the
-    # node and set that field in templates/aerospike-cluster.yaml. Label values
+    # node and set that field in templates/aerospike-cluster-values.yaml. Label values
     # are also limited to 63 characters, so this cannot hold a real PrivateLink name.
     kubectl label nodes --all "${ALTERNATE_ACCESS_LABEL}=${ENDPOINT_HOSTNAME}" --overwrite
 
@@ -114,8 +114,15 @@ render_cluster_manifest() {
     if ((CLUSTER_SIZE >= 2)); then
         rf=2
     fi
-    sed -e "s|\${SIZE}|${CLUSTER_SIZE}|" -e "s|\${IMAGE}|${SERVER_IMAGE}|" -e "s|\${RF}|${rf}|" \
-        "$TEMPLATES/aerospike-cluster.yaml"
+    helm template "$CLUSTER_NAME" aerospike/aerospike-cluster \
+        --namespace "$CLUSTER_NAMESPACE" \
+        --version "$AKO_CHART_VERSION" \
+        -f "$TEMPLATES/aerospike-cluster-values.yaml" \
+        --set "replicas=${CLUSTER_SIZE}" \
+        --set "image.repository=${SERVER_IMAGE%:*}" \
+        --set-string "image.tag=${SERVER_IMAGE##*:}" \
+        --set "aerospikeConfig.namespaces[0].replication-factor=${rf}" \
+        >"$WORK_DIR/aerospike-cluster.yaml"
 }
 
 dump_cluster_debug() {
@@ -130,7 +137,7 @@ dump_cluster_debug() {
 wait_for_webhook() {
     local i
     for ((i = 0; i < 60; i++)); do
-        if render_cluster_manifest | kubectl apply --dry-run=server -f - >"$WORK_DIR/webhook.err" 2>&1; then
+        if kubectl apply --dry-run=server -f "$WORK_DIR/aerospike-cluster.yaml" >"$WORK_DIR/webhook.err" 2>&1; then
             return 0
         fi
         sleep 3
@@ -147,8 +154,9 @@ deploy_cluster() {
     kubectl -n "$CLUSTER_NAMESPACE" create secret generic auth-secret \
         --from-literal="password=${ADMIN_PASSWORD}" \
         --dry-run=client -o yaml | kubectl apply -f -
+    render_cluster_manifest
     wait_for_webhook
-    render_cluster_manifest | kubectl apply -f -
+    kubectl apply -f "$WORK_DIR/aerospike-cluster.yaml"
     if ! kubectl -n "$CLUSTER_NAMESPACE" wait "aerospikecluster/${CLUSTER_NAME}" \
         --for=jsonpath='{.status.phase}'=Completed \
         --timeout="${STARTUP_TIMEOUT}s"; then
@@ -158,17 +166,12 @@ deploy_cluster() {
 }
 
 install_ingress() {
-    local i
-    local -a tcp=()
-    for ((i = 0; i < CLUSTER_SIZE; i++)); do
-        tcp+=(--set-string "tcp.$((INGRESS_PORT_BASE + i))=${CLUSTER_NAMESPACE}/${CLUSTER_NAME}-0-${i}:${SERVICE_PORT}")
-    done
     helm repo add ingress-nginx "$INGRESS_NGINX_HELM_REPO" --force-update
     helm repo update
     helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx \
         --namespace "$INGRESS_NAMESPACE" --create-namespace \
         --version "$INGRESS_NGINX_CHART_VERSION" \
-        -f "$TEMPLATES/ingress-values.yaml" "${tcp[@]}" \
+        -f "$TEMPLATES/ingress-values.yaml" \
         --wait --timeout 10m
 }
 

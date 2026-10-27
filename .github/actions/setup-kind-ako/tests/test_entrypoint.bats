@@ -66,3 +66,10 @@ teardown() {
     [ "$status" -ne 0 ]
     [[ "$output" == *"server-image"* ]]
 }
+
+@test "prepare rejects a server-image without a tag" {
+    SERVER_IMAGE=aerospike/aerospike-server-enterprise@sha256:0123abcd run "$ENTRYPOINT" prepare
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"server-image must be repository:tag"* ]]
+}

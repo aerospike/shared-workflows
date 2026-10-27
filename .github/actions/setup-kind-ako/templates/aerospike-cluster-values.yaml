@@ -1,0 +1,56 @@
+# replicas, image and replication-factor are set by entrypoint.sh.
+podSpec:
+  multiPodPerHost: true
+validationPolicy:
+  # AKO otherwise requires /opt/aerospike on a persistent volume. emptyDir is
+  # not one. Setting work-directory still checks that this path is mounted.
+  skipWorkDirValidate: true
+aerospikeNetworkPolicy:
+  access: pod
+  # KO-649: replace configuredIP and the node label with the CR hostname field.
+  alternateAccess: configuredIP
+storage:
+  filesystemVolumePolicy:
+    cascadeDelete: true
+    initMethod: deleteFiles
+  volumes:
+    - name: workdir
+      source:
+        emptyDir: {}
+      aerospike:
+        path: /opt/aerospike
+    - name: aerospike-config-secret
+      source:
+        secret:
+          secretName: aerospike-secret
+      aerospike:
+        path: /etc/aerospike/secret
+aerospikeAccessControl:
+  users:
+    - name: admin
+      secretName: auth-secret
+      roles:
+        - sys-admin
+        - user-admin
+        - data-admin
+        - read-write
+aerospikeConfig:
+  service:
+    feature-key-file: /etc/aerospike/secret/features.conf
+    work-directory: /opt/aerospike
+    cgroup-mem-tracking: true
+  security: {}
+  network:
+    service:
+      port: 3000
+    fabric:
+      port: 3001
+    heartbeat:
+      port: 3002
+  namespaces:
+    - name: test
+      replication-factor: 1
+      storage-engine:
+        type: memory
+        # Server 8.1.2 rejects a memory data-size below 512MiB.
+        data-size: 536870912

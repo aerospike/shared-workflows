@@ -9,3 +9,13 @@ controller:
     enabled: false
   service:
     type: NodePort
+# One port per pod up to the cluster-size maximum of 8. The controller skips entries whose Service does not exist yet.
+tcp:
+  "9000": aerospike/aerocluster-0-0:3000
+  "9001": aerospike/aerocluster-0-1:3000
+  "9002": aerospike/aerocluster-0-2:3000
+  "9003": aerospike/aerocluster-0-3:3000
+  "9004": aerospike/aerocluster-0-4:3000
+  "9005": aerospike/aerocluster-0-5:3000
+  "9006": aerospike/aerocluster-0-6:3000
+  "9007": aerospike/aerocluster-0-7:3000

@@ -19,7 +19,7 @@ inputs:
     description: Enterprise feature-key file contents
     required: true
   server-image:
-    description: Aerospike server image used by the AerospikeCluster
+    description: Aerospike server image used by the AerospikeCluster, as repository:tag
     required: false
     default: aerospike/aerospike-server-enterprise:8.1.2.5
 
