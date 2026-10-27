@@ -43,12 +43,6 @@ validate_docker_name() {
         error "$label is not a valid Docker name (got: '$value')"
 }
 
-validate_mtu() {
-    local value=$1
-    [[ $value =~ ^[1-9][0-9]*$ ]] ||
-        error "client-network-mtu must be a positive integer (got: '$value')"
-}
-
 parse_sysctls() {
     local value=$1
     local entry
@@ -58,8 +52,6 @@ parse_sysctls() {
     for entry in "${entries[@]}"; do
         entry="${entry#"${entry%%[![:space:]]*}"}"
         entry="${entry%"${entry##*[![:space:]]}"}"
-        [[ $entry =~ ^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z0-9_-]+)+=[^=[:space:]]([^=]*[^=[:space:]])?$ ]] ||
-            error "proxy-sysctls entries must be key=value (got: '$entry')"
         SYSCTL_ARGS+=(--sysctl "$entry")
     done
 }
@@ -141,7 +133,6 @@ main() {
 
     local network_create_args=()
     if [[ -n $client_network_mtu ]]; then
-        validate_mtu "$client_network_mtu"
         network_create_args+=(--opt "com.docker.network.driver.mtu=$client_network_mtu")
     fi
 
