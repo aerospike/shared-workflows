@@ -150,11 +150,12 @@ supersede() {
     fi
 }
 
-# Writes the supersede record to a file, and its store path to the step outputs.
+# Writes the supersede record to a file, its store path to the step outputs, and the run summary.
 write_record() {
-    local epoch file
+    local epoch file path reason
     epoch=$(date -u +%s)
     file="${RUNNER_TEMP:-/tmp}/${epoch}-${VERSION}.json"
+    path="release-evidence-local/evidence/supersede/${PROJECT}/${BUNDLE_NAME}/${TARGET_STAGE}/${epoch}-${VERSION}.json"
     jq -n \
         --arg project "$PROJECT" \
         --arg bundle "$BUNDLE_NAME" \
@@ -170,8 +171,23 @@ write_record() {
         --args "${INCUMBENTS[@]}" >"$file"
     {
         echo "record-file=${file}"
-        echo "record-path=release-evidence-local/evidence/supersede/${PROJECT}/${BUNDLE_NAME}/${TARGET_STAGE}/${epoch}-${VERSION}.json"
+        echo "record-path=${path}"
     } >>"${GITHUB_OUTPUT:-/dev/null}"
+
+    # A newline or | in the reason would break the table row.
+    reason="${SUPERSEDE_REASON//[$'\r\n']/ }"
+    {
+        echo "### Superseded at ${TARGET_STAGE}"
+        echo ""
+        echo "| Field | Value |"
+        echo "| --- | --- |"
+        echo "| Bundle | ${BUNDLE_NAME} |"
+        echo "| Replaced | ${INCUMBENTS[*]} |"
+        echo "| Replaced by | ${VERSION} |"
+        echo "| Actor | ${GITHUB_TRIGGERING_ACTOR-} |"
+        echo "| Reason | ${reason//|/\\|} |"
+        echo "| Record | \`${path}\` |"
+    } >>"${GITHUB_STEP_SUMMARY:-/dev/null}"
 }
 
 main() {

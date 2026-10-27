@@ -73,3 +73,20 @@ STUB
     [ "$status" -eq 0 ]
     [[ $(cat "${BATS_TEST_TMPDIR}/args") == *$'--supersede\nrebuilt'* ]]
 }
+
+@test "the store step uploads the attestation before the record" {
+    mkdir -p "${BATS_TEST_TMPDIR}/bin"
+    cat >"${BATS_TEST_TMPDIR}/bin/jf" <<STUB
+#!/usr/bin/env bash
+echo "\$4" >>"${BATS_TEST_TMPDIR}/uploads"
+STUB
+    chmod +x "${BATS_TEST_TMPDIR}/bin/jf"
+    yq -r "${JOB}.steps[] | select(.name == \"Store the supersede record and its attestation\") | .run" "$WORKFLOW" \
+        >"${BATS_TEST_TMPDIR}/store.sh"
+    PATH="${BATS_TEST_TMPDIR}/bin:$PATH" RECORD_FILE=record.json ATTESTATION=attestation.json \
+        RECORD_PATH=release-evidence-local/evidence/supersede/test/my-app/TEST/1-1.2.3.json \
+        run bash "${BATS_TEST_TMPDIR}/store.sh"
+    [ "$status" -eq 0 ]
+    [ "$(cat "${BATS_TEST_TMPDIR}/uploads")" = "release-evidence-local/evidence/supersede/test/my-app/TEST/1-1.2.3.sigstore.json
+release-evidence-local/evidence/supersede/test/my-app/TEST/1-1.2.3.json" ]
+}

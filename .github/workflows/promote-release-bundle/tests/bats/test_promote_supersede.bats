@@ -24,21 +24,24 @@ output_value() {
     sed -n "s/^$1=//p" "$GITHUB_OUTPUT"
 }
 
-@test "un-promotes the completed version sharing a path, promotes, then writes the record" {
+@test "un-promotes the completed version sharing a path, promotes, then writes the record and summary" {
     bundle_has 1.2.2 app.deb
     bundle_has 1.2.1 app.deb
     bundle_has 1.0.0 old.deb
     at_stage 1.2.2 TEST
     at_stage 1.2.1 TEST FAILED
     at_stage 1.0.0 TEST
-    supersede
+    promote TEST --supersede $'CVE fix | rebuilt\nwith patch'
     [ "$status" -eq 0 ]
     [ "$(cat "$JF_CALLS")" = "jf release-bundle-delete-local my-app 1.2.2 TEST --project=test --quiet --sync
 jf release-bundle-promote my-app 1.2.3 TEST --project=test" ]
     jq -e '.replaced == ["1.2.2"] and .replacedBy == "1.2.3" and .stage == "TEST" and .actor == "octocat"
-        and .reason == "rebuilt with the CVE fix"
+        and .reason == "CVE fix | rebuilt\nwith patch"
         and .run == "https://github.com/aerospike/app/actions/runs/42/attempts/2"' "$(output_value record-file)"
     [[ $(output_value record-path) == release-evidence-local/evidence/supersede/test/my-app/TEST/*-1.2.3.json ]]
+    grep -Fxq '### Superseded at TEST' "$GITHUB_STEP_SUMMARY"
+    grep -Fxq '| Replaced | 1.2.2 |' "$GITHUB_STEP_SUMMARY"
+    grep -Fxq '| Reason | CVE fix \| rebuilt with patch |' "$GITHUB_STEP_SUMMARY"
 }
 
 @test "a failed promote re-promotes the incumbent and writes no record" {
@@ -48,6 +51,7 @@ jf release-bundle-promote my-app 1.2.3 TEST --project=test" ]
     [ "$status" -eq 1 ]
     promoted_to TEST 1.2.2
     [ ! -s "$GITHUB_OUTPUT" ]
+    [ ! -s "$GITHUB_STEP_SUMMARY" ]
 }
 
 @test "a failed un-promote re-promotes the incumbents already un-promoted" {
@@ -104,4 +108,5 @@ jf release-bundle-promote my-app 1.2.3 TEST --project=test" ]
     [[ $output == *"Would promote my-app/1.2.3 to TEST in place of 1.2.2"* ]]
     [ ! -s "$JF_CALLS" ]
     [ ! -s "$GITHUB_OUTPUT" ]
+    [ ! -s "$GITHUB_STEP_SUMMARY" ]
 }
