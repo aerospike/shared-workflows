@@ -231,3 +231,35 @@ EOF
     grep -q "feature-key-file /etc/aerospike-custom/features.conf" "$injected_path"
     [ "$(grep -c 'feature-key-file' "$injected_path")" -eq 1 ]
 }
+
+@test "render_node_config replaces node tokens and writes everything else literally" {
+    # shellcheck disable=SC2016
+    printf 'port 50{{NODE_INDEX}}0\naddress {{NODE_NAME}}\n# {{NODE_NAME}} is node {{NODE_INDEX}}\nname $(id) ${HOME} `id`\n\n' >"$TEST_TMPDIR/in.conf"
+
+    render_node_config "$TEST_TMPDIR/in.conf" "$TEST_TMPDIR/out.conf" 2 aerospike-2
+
+    # shellcheck disable=SC2016
+    cmp <(printf 'port 5020\naddress aerospike-2\n# aerospike-2 is node 2\nname $(id) ${HOME} `id`\n\n') "$TEST_TMPDIR/out.conf"
+}
+
+@test "parse_env_vars splits on unescaped semicolons" {
+    parse_env_vars 'A=1;B=x\;y;C=a\\b;'
+
+    [ "${ENV_FLAGS[*]}" = '-e A=1 -e B=x;y -e C=a\b' ]
+}
+
+@test "parse_env_vars rejects entries that are not KEY=VALUE with a valid name" {
+    for entry in "NOVALUE" "=x" "1BAD=x" "BAD-NAME=x"; do
+        run --separate-stderr parse_env_vars "A=1;$entry"
+        [ "$status" -ne 0 ]
+        [[ $stderr == *"env-vars"* ]]
+    done
+}
+
+@test "parse_extra_hosts trims entries and skips empty ones" {
+    run parse_extra_hosts " a.example:10.0.0.1, b:::1 ,c:host-gateway,"
+
+    [ "$status" -eq 0 ]
+    [ "$output" = $'a.example:10.0.0.1\nb:::1\nc:host-gateway' ]
+}
+

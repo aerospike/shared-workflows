@@ -846,3 +846,133 @@ jobs:
           echo "Unauthenticated result: $result"
           [[ "$result" == *"ERROR"* || "$result" == *"not authenticated"* || "$result" == *"error"* ]] \
             || { echo "Expected unauthenticated access to be rejected"; exit 1; }
+
+  test-per-node-config:
+    name: Per-node config from NODE_INDEX and NODE_NAME (3 nodes)
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Aerospike Server Community with a per-node alternate-access-port
+        id: setup-aerospike-server
+        uses: ./.github/actions/setup-aerospike-server
+        with:
+          server-container-repo: database-docker-virtual/aerospike-server
+          num-nodes: "3"
+          startup-timeout: "60"
+          config-content: |
+            service {
+                cluster-name docker
+                proto-fd-max 15000
+            }
+
+            logging {
+                console {
+                    context any info
+                }
+            }
+
+            network {
+                service {
+                    address any
+                    port 3000
+                    alternate-access-address {{NODE_NAME}}
+                    alternate-access-port 3{{NODE_INDEX}}00
+                }
+                heartbeat {
+                    mode mesh
+                    address any
+                    port 3002
+                    interval 150
+                    timeout 10
+                }
+                fabric {
+                    address any
+                    port 3001
+                }
+            }
+
+            namespace test {
+                replication-factor 2
+                storage-engine memory {
+                    data-size 1G
+                }
+            }
+          oidc-provider: ${{ vars.JFROG_OIDC_PROVIDER }}
+          oidc-audience: ${{ vars.JFROG_OIDC_AUDIENCE }}
+          enable-bash-trace-mode: ${{ env.ENABLE_BASH_TRACE_MODE }}
+
+      - name: Verify each node advertises its own alternate-access-port
+        env:
+          CONTAINER_NAMES: ${{ steps.setup-aerospike-server.outputs.container-names }}
+          NETWORK: ${{ steps.setup-aerospike-server.outputs.network-name }}
+        run: |
+          tools_image="aerospike.jfrog.io/database-docker-virtual/aerospike-tools:12.1.1_2"
+          IFS=',' read -ra containers <<< "$CONTAINER_NAMES"
+          [[ ${#containers[@]} -eq 3 ]] || { echo "Expected 3 containers, got: $CONTAINER_NAMES"; exit 1; }
+          for i in "${!containers[@]}"; do
+            container="${containers[$i]}"
+            expected_port="3$((i + 1))00"
+            rc=0
+            result=$(docker run --rm --network "$NETWORK" "$tools_image" \
+              asinfo -h "$container" -p 3000 -v service-clear-alt 2>&1) || rc=$?
+            echo "$container service-clear-alt: $result (exit code: $rc)"
+            [[ $rc -eq 0 && "$result" =~ ^[^\;]+:${expected_port}$ ]] \
+              || { echo "Expected $container to advertise alternate-access-port $expected_port"; exit 1; }
+
+            rc=0
+            stats=$(docker run --rm --network "$NETWORK" "$tools_image" \
+              asinfo -h "$container" -p 3000 -v "statistics" 2>&1) || rc=$?
+            cluster_size=$(echo "$stats" | tr ';' '\n' | sed -n 's/^cluster_size=//p')
+            echo "$container cluster_size: ${cluster_size:-N/A} (exit code: $rc)"
+            [[ $rc -eq 0 && "$cluster_size" == "3" ]] \
+              || { echo "Expected cluster_size=3 on $container, got ${cluster_size:-N/A}"; exit 1; }
+          done
+
+  test-extra-hosts:
+    name: Extra hosts on every node (2 nodes)
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Aerospike Server Community with extra-hosts
+        id: setup-aerospike-server
+        uses: ./.github/actions/setup-aerospike-server
+        with:
+          server-container-repo: database-docker-virtual/aerospike-server
+          num-nodes: "2"
+          startup-timeout: "60"
+          extra-hosts: db.example:10.0.0.5,cache.example:10.0.0.6
+          oidc-provider: ${{ vars.JFROG_OIDC_PROVIDER }}
+          oidc-audience: ${{ vars.JFROG_OIDC_AUDIENCE }}
+          enable-bash-trace-mode: ${{ env.ENABLE_BASH_TRACE_MODE }}
+
+      - name: Verify extra hosts resolve inside every node
+        env:
+          CONTAINER_NAMES: ${{ steps.setup-aerospike-server.outputs.container-names }}
+        run: |
+          IFS=',' read -ra containers <<< "$CONTAINER_NAMES"
+          [[ ${#containers[@]} -eq 2 ]] || { echo "Expected 2 containers, got: $CONTAINER_NAMES"; exit 1; }
+          for container in "${containers[@]}"; do
+            for entry in db.example:10.0.0.5 cache.example:10.0.0.6; do
+              host="${entry%%:*}"
+              expected_ip="${entry#*:}"
+              rc=0
+              resolved=$(docker exec "$container" getent hosts "$host" 2>&1) || rc=$?
+              echo "$container getent hosts $host: $resolved (exit code: $rc)"
+              [[ $rc -eq 0 && "$(awk '{ print $1 }' <<< "$resolved")" == "$expected_ip" ]] \
+                || { echo "Expected $host to resolve to $expected_ip in $container"; exit 1; }
+            done
+          done

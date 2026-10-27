@@ -4,6 +4,8 @@
 
 This is `aerospike/shared-workflows`, a centralized collection of reusable GitHub Actions workflows and composite actions used across Aerospike repositories. It is public because many consuming repos are public.
 
+Rules for designing and reviewing changes: @AGENTS.md
+
 ## Repository Structure
 
 ```text
