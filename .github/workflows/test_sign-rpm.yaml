@@ -45,16 +45,9 @@ jobs:
           echo "this is a place"
           env
           ls -latr
-          ls tests/
-          pwd
-          echo "now here"
-          ls /usr/bin/
-          which rpm && type rpm
-          which gpg && type gpg
-          which gpg2 && type gpg2
-          echo "now down here"
+          ls -latr /root
           # Sign the package
-          rpm --addsign tests/*.rpm
+          sudo rpm --addsign tests/*.rpm
           echo "this is another place"
           # Verify the signature
-          rpm --checksig tests/*.rpm
+          sudo rpm --checksig tests/*.rpm
