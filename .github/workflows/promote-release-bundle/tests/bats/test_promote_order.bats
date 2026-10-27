@@ -98,6 +98,8 @@ promoted() {
     mv "${JF_DATA}/bundle-1.2.3.tmp" "${JF_DATA}/bundle-1.2.3.json"
     promote STAGE
     [ "$status" -eq 1 ]
+    [[ $output == *"unexpected record at"* ]]
+    [ ! -s "$JF_CALLS" ]
 }
 
 @test "passes include and exclude repos to jf only when set" {
