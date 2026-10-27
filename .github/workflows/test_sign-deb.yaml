@@ -23,7 +23,7 @@ jobs:
 
       - name: install dpkg-sig
         run: |
-          sudo apt-get update && sudo apt-get install dpkg-sig dpkg-dev -y
+          sudo apt-get update && sudo apt-get install dpkg-dev -y
       - name: setup GPG
         uses: aerospike/shared-workflows/.github/actions/setup-gpg@mcbridem/infra-730-just-testing
         with:
@@ -47,6 +47,6 @@ jobs:
                 --passphrase-file "$GNUPGHOME/passphrase" \
                 --armor --detach-sign "$deb"
           done
-#          dpkg-sig --sign builder --gpg-options "--batch --pinentry-mode loopback --passphrase-file $GNUPGHOME/passphrase" tests/*.deb
+          # dpkg-sig --sign builder --gpg-options "--batch --pinentry-mode loopback --passphrase-file $GNUPGHOME/passphrase" tests/*.deb
           # Verify the signature
           dpkg-sig --verify tests/*.deb
