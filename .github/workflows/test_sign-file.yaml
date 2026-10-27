@@ -43,4 +43,3 @@ jobs:
           gpg --detach-sign --no-tty --batch --yes --output README.md.asc --passphrase-file "$GNUPGHOME/passphrase" README.md
           # Verify the signature
           gpg --verify README.md.asc README.md
-          echo "some of us just love to echo"

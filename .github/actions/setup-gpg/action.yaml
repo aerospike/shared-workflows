@@ -119,13 +119,10 @@ runs:
         # Import public key for verification
         echo -e "$GPG_PUBLIC_KEY" > "$GNUPGHOME/public.key"
         chmod 600 "$GNUPGHOME/public.key"
+        gpg --import "$GNUPGHOME/public.key"
+        rpm --import "$GNUPGHOME/public.key"
         sudo gpg --import "$GNUPGHOME/public.key"
         sudo rpm --import "$GNUPGHOME/public.key"
-        ls -altr /home/runner
 
-        echo "here?"
         # Reload gpg-agent configuration
         gpg-connect-agent reloadagent /bye
-
-        echo "here yeah!"
-        cat /etc/os-release
