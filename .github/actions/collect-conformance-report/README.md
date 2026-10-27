@@ -23,7 +23,7 @@ A case that is not in the declaration file is declared `pass`, except a case the
 
 Every report's `fixtureSetVersion` must equal `VERSION` in `fixtures-directory`. A declaration for a fixture file or case that is not in the fixture set is an error, as it is in the Java runner.
 
-Other differences, such as a declared failure that now passes, are listed in the summary and do not fail this action. The runtime test is what forces the declaration to be updated.
+Other differences, such as a declared failure that now passes, do not fail this action. The runtime test is what forces the declaration to be updated.
 
 Run this step with `if: always()` so the summary is written when the runner itself failed. The runner still owns row-by-row equality. This action is the cross-runtime view that keeps a declared unsupported result from looking like a skipped test.
 
@@ -48,8 +48,8 @@ Run this step with `if: always()` so the summary is written when the runner itse
   uses: aerospike/shared-workflows/.github/actions/fetch-conformance-fixtures@<sha> # vX.Y.Z
   with:
     version: 1.0.0
-    oidc-provider-name: gh-aerospike
-    oidc-audience: aerospike
+    oidc-provider-name: ${{ vars.JFROG_OIDC_PROVIDER }}
+    oidc-audience: ${{ vars.JFROG_OIDC_AUDIENCE }}
 
 # ... run the client conformance test against steps.fixtures.outputs.fixtures-directory
 

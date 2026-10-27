@@ -11,62 +11,25 @@ inputs:
     description: Workspace-relative directory to extract into
     required: false
     default: conformance-fixtures
-  dry-run:
-    description: Print the artifact path and skip the download
-    required: false
-    default: "false"
-  jf-project:
-    description: JFrog Artifactory project that publishes the fixture set
-    required: false
-    default: database
-  jf-url:
-    description: JFrog platform URL
-    required: false
-    default: https://aerospike.jfrog.io
-  oidc-audience:
-    description: JFrog OIDC audience. Required unless dry-run is true
-    required: false
-    default: ""
   oidc-provider-name:
-    description: JFrog OIDC provider name. Required unless dry-run is true
-    required: false
-    default: ""
-  package-name:
-    description: Release artifact name
-    required: false
-    default: aerospike-client-conformance
+    description: JFrog OIDC provider name
+    required: true
+  oidc-audience:
+    description: JFrog OIDC audience
+    required: true
 
 outputs:
-  artifact-path:
-    description: Artifactory path of the release zip
-    value: ${{ steps.fetch.outputs.artifact-path }}
   fixtures-directory:
-    description: Absolute directory containing VERSION. Empty on dry-run
+    description: Absolute directory containing VERSION
     value: ${{ steps.fetch.outputs.fixtures-directory }}
-  fixture-set-version:
-    description: Version read from the release. Empty on dry-run
-    value: ${{ steps.fetch.outputs.fixture-set-version }}
 
 runs:
   using: composite
   steps:
-    - name: Validate inputs
-      shell: bash
-      env:
-        VERSION: ${{ inputs.version }}
-        PACKAGE_NAME: ${{ inputs.package-name }}
-        JF_PROJECT: ${{ inputs.jf-project }}
-        DESTINATION: ${{ inputs.destination }}
-        DRY_RUN: ${{ inputs.dry-run }}
-        OIDC_PROVIDER_NAME: ${{ inputs.oidc-provider-name }}
-        OIDC_AUDIENCE: ${{ inputs.oidc-audience }}
-      run: bash "${{ github.action_path }}/entrypoint.sh" validate
-
     - name: Set up JFrog CLI
-      if: inputs.dry-run != 'true'
       uses: step-security/setup-jfrog-cli@a6b41f8338bea0983ddff6bd4ede7d2dcd81e1fa # v4.8.1
       env:
-        JF_URL: ${{ inputs.jf-url }}
+        JF_URL: https://aerospike.jfrog.io
       with:
         oidc-provider-name: ${{ inputs.oidc-provider-name }}
         oidc-audience: ${{ inputs.oidc-audience }}
@@ -76,10 +39,29 @@ runs:
       shell: bash
       env:
         VERSION: ${{ inputs.version }}
-        PACKAGE_NAME: ${{ inputs.package-name }}
-        JF_PROJECT: ${{ inputs.jf-project }}
         DESTINATION: ${{ inputs.destination }}
-        DRY_RUN: ${{ inputs.dry-run }}
-        OIDC_PROVIDER_NAME: ${{ inputs.oidc-provider-name }}
-        OIDC_AUDIENCE: ${{ inputs.oidc-audience }}
-      run: bash "${{ github.action_path }}/entrypoint.sh" fetch
+      run: |
+        set -euo pipefail
+        [[ $VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::version must be MAJOR.MINOR.PATCH (got: '$VERSION')"; exit 1; }
+        [[ -n $DESTINATION && $DESTINATION != /* && $DESTINATION != *..* ]] ||
+          { echo "::error::destination must be a relative path inside the workspace (got: '$DESTINATION')"; exit 1; }
+        dest="$GITHUB_WORKSPACE/$DESTINATION"
+        [[ ! -e $dest ]] || { echo "::error::destination already exists: $dest"; exit 1; }
+
+        name="aerospike-client-conformance-${VERSION}"
+        work=$(mktemp -d)
+        jf rt download "database-generic-dev-local/aerospike-client-conformance/${VERSION}/${name}.zip" "$work/" \
+          --flat=true --fail-no-op --project=database
+        # unzip drops ../ from entry names but extracts symlinks as-is.
+        if unzip -Z "$work/${name}.zip" | grep -q '^l'; then
+          echo "::error::release zip contains a symlink"
+          exit 1
+        fi
+        unzip -q "$work/${name}.zip" -d "$work"
+        found=$(tr -d '[:space:]' <"$work/$name/VERSION")
+        [[ $found == "$VERSION" ]] || { echo "::error::VERSION is ${found}, expected ${VERSION}"; exit 1; }
+
+        mkdir -p "$(dirname "$dest")"
+        mv "$work/$name" "$dest"
+        echo "fixtures-directory=$dest" >>"$GITHUB_OUTPUT"
+        echo "Extracted fixture set ${VERSION} to ${dest}"

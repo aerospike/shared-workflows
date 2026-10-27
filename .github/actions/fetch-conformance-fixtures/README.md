@@ -1,45 +1,25 @@
 # Fetch conformance fixtures
 
-Download one pinned [aerospike-client-conformance](https://github.com/aerospike/aerospike-client-conformance) release into the workspace.
+Download one pinned [aerospike-client-conformance](https://github.com/aerospike/aerospike-client-conformance) release from JFrog and extract it so `fixtures-directory` has `VERSION` at its root, the same shape as a checkout of that release.
 
-The release zip is published to JFrog generic by that repository's tag workflow:
+The release is `database-generic-dev-local/aerospike-client-conformance/<version>/aerospike-client-conformance-<version>.zip`, published by that repository's tag workflow. Pin the version your client runner expects; the Java runner checks `VERSION` before it reads any row. The action fails if the release contains a symlink, if its `VERSION` does not match, or if `destination` already exists.
 
-```text
-<jf-project>-generic-dev-local/<package-name>/<version>/<package-name>-<version>.zip
-```
-
-The tests in this repository read that version from `fixture-set-version`. With the default project and package name, fixture set `1.0.0` is:
-
-```text
-database-generic-dev-local/aerospike-client-conformance/1.0.0/aerospike-client-conformance-1.0.0.zip
-```
-
-The zip has a single top-level directory. This action strips it, so `fixtures-directory` has `VERSION` at its root, the same shape as a checkout of that release. Point a client runner at that directory. The Java runner checks `VERSION` before it reads any row.
-
-Extraction uses `unzip`, which GitHub-hosted runners include. The action rejects a release that contains a symlink or whose `VERSION` does not match `version`, and it refuses a destination that is not empty.
-
-The caller workflow needs `id-token: write` so the JFrog CLI can authenticate with OIDC. `dry-run` prints the artifact path and does not download.
+The caller needs `id-token: write` for JFrog OIDC. Fork pull requests do not get OIDC tokens, so the download fails there rather than skipping.
 
 ## Inputs
 
-| Input                | Required | Default                        | Description                                                  |
-| -------------------- | -------- | ------------------------------ | ------------------------------------------------------------ |
-| `version`            | Yes      | —                              | Fixture set version, `MAJOR.MINOR.PATCH`, with no `v` prefix |
-| `destination`        | No       | `conformance-fixtures`         | Workspace-relative directory to extract into                 |
-| `dry-run`            | No       | `false`                        | Print the artifact path and skip the download                |
-| `jf-project`         | No       | `database`                     | Artifactory project that publishes the fixture set           |
-| `jf-url`             | No       | `https://aerospike.jfrog.io`   | JFrog platform URL                                           |
-| `oidc-audience`      | No       | `""`                           | JFrog OIDC audience. Required unless `dry-run` is true       |
-| `oidc-provider-name` | No       | `""`                           | JFrog OIDC provider name. Required unless `dry-run` is true  |
-| `package-name`       | No       | `aerospike-client-conformance` | Release artifact name                                        |
+| Input                | Required | Default                | Description                                                  |
+| -------------------- | -------- | ---------------------- | ------------------------------------------------------------ |
+| `version`            | Yes      | —                      | Fixture set version, `MAJOR.MINOR.PATCH`, with no `v` prefix |
+| `oidc-provider-name` | Yes      | —                      | JFrog OIDC provider name                                     |
+| `oidc-audience`      | Yes      | —                      | JFrog OIDC audience                                          |
+| `destination`        | No       | `conformance-fixtures` | Workspace-relative directory to extract into                 |
 
 ## Outputs
 
-| Output                | Description                                               |
-| --------------------- | --------------------------------------------------------- |
-| `artifact-path`       | Artifactory path of the release zip                       |
-| `fixtures-directory`  | Absolute directory containing `VERSION`. Empty on dry-run |
-| `fixture-set-version` | Version read from the release. Empty on dry-run           |
+| Output               | Description                             |
+| -------------------- | --------------------------------------- |
+| `fixtures-directory` | Absolute directory containing `VERSION` |
 
 ## Example
 
@@ -57,9 +37,9 @@ jobs:
       - id: fixtures
         uses: aerospike/shared-workflows/.github/actions/fetch-conformance-fixtures@<sha> # vX.Y.Z
         with:
-          version: 1.0.0 # same value as fixture-set-version
-          oidc-provider-name: gh-aerospike
-          oidc-audience: aerospike
+          version: 1.0.0
+          oidc-provider-name: ${{ vars.JFROG_OIDC_PROVIDER }}
+          oidc-audience: ${{ vars.JFROG_OIDC_AUDIENCE }}
 
       - name: Run the Java conformance driver
         run: >
@@ -67,4 +47,4 @@ jobs:
           -Dconformance.dir=${{ steps.fixtures.outputs.fixtures-directory }}
 ```
 
-Pair this with [collect-conformance-report](../collect-conformance-report/README.md) after the runner writes `conformance-report.json`, and pass it the same `fixtures-directory`.
+Pair it with [collect-conformance-report](../collect-conformance-report/README.md), passing the same `fixtures-directory`.
