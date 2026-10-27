@@ -101,7 +101,7 @@ find "$TARGET_DIR" -type f | while read -r file; do
 
     # Sign .deb files
     if [[ $ext == "deb" ]]; then
-        gpg --batch --pinentry-mode loopback \
+        gpg --batch --pinentry-mode loopback --yes \
             --passphrase-file "$GNUPGHOME/passphrase" \
             --armor --detach-sign --output "$file.asc" "$file"
     fi
