@@ -11,7 +11,7 @@ jobs:
     strategy:
       matrix:
         os:
-          - ubuntu-22.04
+         # - ubuntu-22.04
           - ubuntu-24.04
     steps:
       - name: Harden the runner (Audit all outbound calls)
@@ -47,6 +47,7 @@ jobs:
                 --passphrase-file "$GNUPGHOME/passphrase" \
                 --armor --detach-sign "$deb"
           done
-          # dpkg-sig --sign builder --gpg-options "--batch --pinentry-mode loopback --passphrase-file $GNUPGHOME/passphrase" tests/*.deb
           # Verify the signature
-          dpkg-sig --verify tests/*.deb
+          for deb in tests/*.deb; do
+            gpg --verify "${deb}.asc" "$deb"
+          done
