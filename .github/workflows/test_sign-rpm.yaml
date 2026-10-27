@@ -46,13 +46,13 @@ jobs:
           env
           ls -latr
           ls tests/
-          cwd
+          pwd
           echo "now here"
           ls /usr/bin/
           which rpm && type rpm
           which gpg && type gpg
           which gpg2 && type gpg2
-
+          echo "now down here"
           # Sign the package
           rpm --addsign tests/*.rpm
           echo "this is another place"
