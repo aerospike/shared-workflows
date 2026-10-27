@@ -1,0 +1,63 @@
+name: Aerospike Node Control
+description: >
+  Starts or stops one node of a cluster created by setup-aerospike-server
+  and waits until the running nodes form a stable cluster without or with it.
+
+inputs:
+  cluster-settings:
+    description: The cluster-settings output of setup-aerospike-server
+    required: true
+  node-index:
+    description: 1-based index of the node to start or stop (container prefix-N)
+    required: true
+  operation:
+    description: start or stop
+    required: true
+  timeout:
+    description: Seconds to wait for each running node to report a stable cluster
+    required: false
+    default: "30"
+  enable-bash-trace-mode:
+    description: Show commands being executed in shell scripts for debugging
+    required: false
+    default: "false"
+
+outputs:
+  cluster-size:
+    description: Number of running nodes, which the cluster size was waited for
+    value: ${{ steps.node-control.outputs.cluster-size }}
+  running-nodes:
+    description: Comma-separated names of the running nodes
+    value: ${{ steps.node-control.outputs.running-nodes }}
+  node-address:
+    description: IP of the node on network-name (may be empty after stop)
+    value: ${{ steps.node-control.outputs.node-address }}
+
+runs:
+  using: composite
+  steps:
+    - name: Start or stop Aerospike node
+      id: node-control
+      shell: bash
+      env:
+        ENABLE_BASH_TRACE_MODE: ${{ inputs.enable-bash-trace-mode }}
+        CONTAINER_NAME_PREFIX: ${{ fromJSON(inputs.cluster-settings).prefix }}
+        NODE_INDEX: ${{ inputs.node-index }}
+        OPERATION: ${{ inputs.operation }}
+        NETWORK_NAME: ${{ fromJSON(inputs.cluster-settings).network }}
+        SERVICE_PORT: ${{ fromJSON(inputs.cluster-settings).service_port }}
+        WAIT_TIMEOUT: ${{ inputs.timeout }}
+        ENABLE_SECURITY: ${{ fromJSON(inputs.cluster-settings).security }}
+        ENABLE_SC: ${{ fromJSON(inputs.cluster-settings).strong_consistency }}
+        TOOLS_IMAGE: ${{ fromJSON(inputs.cluster-settings).tools_image }}
+      run: |
+        "${{ github.action_path }}/node-control.sh" \
+          --container-name-prefix "$CONTAINER_NAME_PREFIX" \
+          --node-index "$NODE_INDEX" \
+          --operation "$OPERATION" \
+          --network "$NETWORK_NAME" \
+          --service-port "$SERVICE_PORT" \
+          --timeout "$WAIT_TIMEOUT" \
+          --security "$ENABLE_SECURITY" \
+          --enable-sc "$ENABLE_SC" \
+          --tools-image "$TOOLS_IMAGE"
