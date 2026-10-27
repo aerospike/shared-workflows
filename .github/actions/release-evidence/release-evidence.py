@@ -54,6 +54,7 @@ MAX_BUILD_DEPTH = 8
 # Reachability, not maturity: STAGE_ORDER would rank INTERNAL above STAGE.
 PUBLICITY = ["PROD", "PREVIEW", "INTERNAL", "STAGE", "TEST", "DEV"]
 CUSTOMER_STAGES = {"PROD", "PREVIEW", "INTERNAL"}
+SLSA_PREDICATE = "https://slsa.dev/provenance/v1"
 
 
 # ----------------------------------------------------------------- transport
@@ -652,7 +653,9 @@ def collect(target, about, as_of=None):
 
         attestation = None
         if repo:
-            found = gh(f"repos/{repo}/attestations/sha256:{sha}")
+            # Unfiltered, the first attestation can be an SBOM, which has no buildDefinition.
+            found = gh(f"repos/{repo}/attestations/sha256:{sha}"
+                       f"?predicate_type={urllib.parse.quote(SLSA_PREDICATE, safe='')}")
             stmt = None
             if found and found.get("attestations"):
                 stmt = statement(found["attestations"][0]["bundle"]["dsseEnvelope"])
@@ -900,7 +903,8 @@ def verify_commands(evidence):
 
     if art.get("attestation"):
         out += ["# The GitHub build provenance for these bytes.",
-                f'gh api repos/{source["repo"]}/attestations/sha256:$SHA \\',
+                f'gh api "repos/{source["repo"]}/attestations/sha256:$SHA'
+                f'?predicate_type={urllib.parse.quote(SLSA_PREDICATE, safe="")}" \\',
                 "  --jq '.attestations[0].bundle.dsseEnvelope.payload' | base64 -d |",
                 "  jq '{predicateType, builder: .predicate.runDetails.builder.id,",
                 "       buildType: .predicate.buildDefinition.buildType}'", ""]
