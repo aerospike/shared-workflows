@@ -112,7 +112,7 @@ runs:
           echo "%_gpg_name $KEY_FP"
           echo "%_gpgbin /usr/bin/gpg2"
           echo "%__gpg /usr/bin/gpg2"
-          echo '%__gpg_sign_cmd %{__gpg} --batch --pinentry-mode loopback --passphrase-file %{_gpg_path}/passphrase --no-armor --no-secmem-warning --no-tty -u "%{_gpg_name}" -sbo %{__signature_filename} %{__plaintext_filename}'
+          echo "%_gpg_sign_cmd_extra_args --batch --pinentry-mode loopback --passphrase-file /home/runner/.gnupg/passphrase --no-armor --no-secmem-warning --no-tty"
         } > "$HOME/.rpmmacros"
         chmod 600 "$HOME/.rpmmacros"
 
