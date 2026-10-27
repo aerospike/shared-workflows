@@ -101,20 +101,9 @@ find "$TARGET_DIR" -type f | while read -r file; do
 
     # Sign .deb files
     if [[ $ext == "deb" ]]; then
-        if command -v debsigs &>/dev/null; then
-            echo "Signing DEB with debsigs"
-
-            # Read the passphrase securely from your file to pass to gpg-agent/debsigs
-            PASSPHRASE=$(cat "$GNUPGHOME/passphrase")
-
-            # Sign using debsigs
-            debsigs --sign=origin \
-                    --gpg-options="--batch --pinentry-mode loopback --passphrase-file $GNUPGHOME/passphrase --quiet" \
-                    "$file"
-        else
-            echo "ERROR: debsigs not found"
-            exit 1
-        fi
+        gpg --batch --pinentry-mode loopback \
+            --passphrase-file "$GNUPGHOME/passphrase" \
+            --armor --detach-sign --output "$file.asc" "$file"
     fi
 
     # Sign .rpm files
