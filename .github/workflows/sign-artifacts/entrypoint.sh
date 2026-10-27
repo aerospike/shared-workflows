@@ -101,13 +101,9 @@ find "$TARGET_DIR" -type f | while read -r file; do
 
     # Sign .deb files
     if [[ $ext == "deb" ]]; then
-        if command -v dpkg-sig &>/dev/null; then
-            echo "Signing DEB with dpkg-sig"
-            dpkg-sig --sign builder --gpg-options "--batch --pinentry-mode loopback --passphrase-file $GNUPGHOME/passphrase --quiet" "$file"
-        else
-            echo "ERROR: dpkg-sig not found"
-            exit 1
-        fi
+        gpg --batch --pinentry-mode loopback \
+            --passphrase-file "$GNUPGHOME/passphrase" \
+            --armor --detach-sign "$file"
     fi
 
     # Sign .rpm files

@@ -102,9 +102,9 @@ jobs:
         with:
           name: test-fixtures
           path: test-fixtures
-      - name: Install dpkg-sig
+      - name: Install dpkg-dev
         run: |
-          sudo apt-get update && sudo apt-get install dpkg-sig dpkg-dev -y
+          sudo apt-get update && sudo apt-get install dpkg-dev -y
       - name: Test Entrypoint
         run: |
           .github/workflows/sign-artifacts/test-entrypoint.sh test-fixtures
