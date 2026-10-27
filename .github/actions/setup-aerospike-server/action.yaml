@@ -26,15 +26,25 @@ inputs:
     required: false
     default: ""
   config-file:
-    description: Path to an aerospike.conf on the runner
+    description: >
+      Path to an aerospike.conf on the runner. {{NODE_INDEX}} (1-based) and
+      {{NODE_NAME}} (container name) are replaced in each node's copy.
     required: false
     default: ""
   config-content:
-    description: Raw aerospike.conf content. Ignored if config-file is set.
+    description: >
+      Raw aerospike.conf content. Ignored if config-file is set.
+      {{NODE_INDEX}} and {{NODE_NAME}} are replaced as for config-file.
     required: false
     default: ""
   env-vars:
     description: Semicolon-delimited KEY=VALUE pairs passed as -e flags to each container. Use \\; for literal semicolons, \\\\ for literal backslashes.
+    required: false
+    default: ""
+  extra-hosts:
+    description: >
+      Comma-separated name:ip entries passed as --add-host flags to each
+      container (e.g. db.example:10.0.0.5,gateway:host-gateway).
     required: false
     default: ""
   container-repo-url:
@@ -403,10 +413,6 @@ runs:
         echo "features-path=$features_path" >> "$GITHUB_OUTPUT"
         echo "config-path=$config_path" >> "$GITHUB_OUTPUT"
 
-        if [[ -n "$config_path" ]]; then
-          docker cp "$config_path" "${{ steps.server-volume.outputs.container_name_to_load_volume }}:${{ steps.server-volume.outputs.conf_volume_dest_dir }}"
-        fi
-
         if [[ "$server_edition" == "enterprise" && -n "$features_path" ]]; then
           docker cp "$features_path" "${{ steps.server-volume.outputs.container_name_to_load_volume }}:${{ steps.server-volume.outputs.conf_volume_dest_dir }}"
         fi
@@ -433,214 +439,28 @@ runs:
       shell: bash
       env:
         ENV_VARS: ${{ inputs.env-vars }}
+        EXTRA_HOSTS: ${{ inputs.extra-hosts }}
       run: |
-        if [[ "$ENABLE_BASH_TRACE_MODE" == "true" ]]; then
-          set -x
-        fi
-
-        num_nodes=${{ inputs.num-nodes }}
-        base_port=${{ inputs.base-port }}
-        prefix="${{ inputs.container-name-prefix }}"
-        service_port=${{ inputs.service-port }}
-        image="${{ inputs.container-repo-url }}/${{ inputs.server-container-repo }}:${{ inputs.server-tag }}"
-        network="${{ inputs.network-name }}"
-        features_path="${{ steps.prepare-config.outputs.features-path }}"
-        config_path="${{ steps.prepare-config.outputs.config-path }}"
-        publish_ports="${{ inputs.publish-ports }}"
-        enable_tls="${{ inputs.enable-tls }}"
-        tls_base_port=${{ inputs.tls-base-port }}
-        effective_security="${{ steps.validate.outputs.effective-security }}"
-        enable_sc="${{ inputs.enable-strong-consistency }}"
-        server_edition="${{ steps.validate.outputs.server-edition }}"
-
-        container_names=""
-        service_ports=""
-        tls_service_ports=""
-
-        # Parse env-vars using escape-aware semicolon delimiter
-        env_flags=()
-        if [[ -n "${ENV_VARS:-}" ]]; then
-          current=""
-          escape="false"
-          pairs=()
-          for (( i=0; i<${#ENV_VARS}; i++ )); do
-            char="${ENV_VARS:i:1}"
-            if [[ "$escape" == "true" ]]; then
-              current+="$char"
-              escape="false"
-              continue
-            fi
-            if [[ "$char" == "\\" ]]; then
-              escape="true"
-              continue
-            fi
-            if [[ "$char" == ";" ]]; then
-              pairs+=("$current")
-              current=""
-              continue
-            fi
-            current+="$char"
-          done
-          pairs+=("$current")
-
-          for pair in "${pairs[@]}"; do
-            [[ -z "$pair" ]] && continue
-            if [[ "$pair" != *=* ]]; then
-              echo "Error: env-vars entries must be KEY=VALUE (got: $pair)" >&2
-              exit 1
-            fi
-            key="${pair%%=*}"
-            value="${pair#*=}"
-            if [[ -z "$key" || ! "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
-              echo "Error: invalid env var name '$key' in env-vars" >&2
-              exit 1
-            fi
-            env_flags+=("-e" "$key=$value")
-          done
-        fi
-
-        # For multi-node clusters, generate a config with mesh seed addresses
-        # The entrypoint overwrites mounted configs, so we bypass it and run asd directly
-        if (( num_nodes > 1 )); then
-          mesh_seeds=""
-          for (( j=1; j<=num_nodes; j++ )); do
-            mesh_seeds+="        mesh-seed-address-port ${prefix}-${j} 3002"$'\n'
-          done
-
-          if [[ -z "$config_path" ]]; then
-            tpl_dir="${{ github.action_path }}/templates"
-            render_tpl="${{ github.action_path }}/render-template.sh"
-            # shellcheck source=/dev/null
-            source "${{ github.action_path }}/config-helpers.sh"
-
-            features_conf_filename=$(basename "$features_path")
-            export FEATURE_KEY_FILE
-            FEATURE_KEY_FILE=$(build_feature_key_file_directive "$server_edition" "$features_path" "" "${{ steps.server-volume.outputs.conf_volume_dest_dir }}/$features_conf_filename")
-
-            # Build security stanza from template
-            export SECURITY=""
-            if [[ "$effective_security" == "true" ]]; then
-              SECURITY=$(cat "$tpl_dir/security.conf")
-            fi
-
-            # Build namespace block from template
-            if [[ "$enable_sc" == "true" ]]; then
-              export REPLICATION_FACTOR=$(( num_nodes < 2 ? num_nodes : 2 ))
-              export NAMESPACE=$("$render_tpl" "$tpl_dir/namespace-sc.conf")
-            else
-              export REPLICATION_FACTOR=2
-              export NAMESPACE=$("$render_tpl" "$tpl_dir/namespace-memory.conf")
-            fi
-
-            export MESH_SEEDS="$mesh_seeds"
-            export_tls_template_vars "$tpl_dir" "$enable_tls"
-
-            # No config-file or config-content. Render multi-node.conf, with
-            # the TLS listener included when enable-tls is set.
-            config_path="$(mktemp)"
-            "$render_tpl" "$tpl_dir/multi-node.conf" "$config_path"
-          else
-            # Inject mesh seeds into the user-provided config
-            cluster_config="$(mktemp)"
-            awk -v seeds="$mesh_seeds" '/mode mesh/{print; printf "%s", seeds; next}1' "$config_path" > "$cluster_config"
-            config_path="$cluster_config"
-          fi
-          docker cp "$config_path" "${{ steps.server-volume.outputs.container_name_to_load_volume }}:${{ steps.server-volume.outputs.conf_volume_dest_dir }}"
-        fi
-
-        for (( i=1; i<=num_nodes; i++ )); do
-          name="${prefix}-${i}"
-          host_port=$(( base_port + i - 1 ))
-
-          tls_host_port=$(( tls_base_port + i - 1 ))
-
-          run_args=(
-            "--name" "$name"
-            "--detach"
-            "--network" "$network"
-          )
-
-          if [[ "$publish_ports" == "true" ]]; then
-            run_args+=("-p" "${host_port}:${service_port}")
-          fi
-
-          # TLS port mapping and cert mounting
-          if [[ "$enable_tls" == "true" ]]; then
-            if [[ "$publish_ports" == "true" ]]; then
-              run_args+=("-p" "${tls_host_port}:4333")
-            fi
-            run_args+=("-v" "${{ steps.server-volume.outputs.tls_volume_name }}:${{ steps.server-volume.outputs.tls_volume_dest_dir }}")
-          fi
-
-          # Decide whether to bypass the entrypoint. The Aerospike Docker entrypoint
-          # regenerates aerospike.conf, overwriting any mounted config. Bypass it
-          # whenever we need a custom config that must not be overwritten.
-          bypass_entrypoint="false"
-          if (( num_nodes > 1 )); then
-            bypass_entrypoint="true"
-          elif [[ "$enable_sc" == "true" ]]; then
-            bypass_entrypoint="true"
-          elif [[ "$enable_tls" == "true" ]]; then
-            bypass_entrypoint="true"
-          elif [[ "$effective_security" == "true" ]]; then
-            bypass_entrypoint="true"
-          elif [[ -n "$config_path" ]]; then
-            bypass_entrypoint="true"
-          fi
-
-          # User-supplied env vars
-          run_args+=("${env_flags[@]}")
-
-          if [[ -n "$config_path" || -n "$features_path" ]]; then
-            run_args+=("-v" "${{ steps.server-volume.outputs.conf_volume_name }}:${{ steps.server-volume.outputs.conf_volume_dest_dir }}")
-          fi
-
-          run_args+=("--ulimit" "nofile=15000")
-
-          # Bypass entrypoint to prevent config overwrite
-          if [[ "$bypass_entrypoint" == "true" ]]; then
-            run_args+=("--entrypoint" "asd")
-          fi
-
-          run_args+=("$image")
-
-          # Pass --foreground since we bypassed the entrypoint
-          if [[ "$bypass_entrypoint" == "true" ]]; then
-            run_args+=("--foreground")
-          fi
-
-          if [[ -n "$config_path" ]]; then
-            aerospike_conf_filename=$(basename "$config_path")
-            run_args+=("--config-file" "${{ steps.server-volume.outputs.conf_volume_dest_dir }}/$aerospike_conf_filename")
-          fi
-
-          if [[ "$publish_ports" == "true" ]]; then
-            echo "Starting container: $name (host port: $host_port)"
-          else
-            echo "Starting container: $name (host ports unpublished)"
-          fi
-
-          # Prevent UNIX to windows path conversions here to prevent the aerospike.conf path from being wrongly converted
-          MSYS_NO_PATHCONV=1 docker run "${run_args[@]}"
-
-          # Build CSV outputs
-          if [[ -n "$container_names" ]]; then
-            container_names+=","
-            service_ports+=","
-          fi
-          container_names+="$name"
-          service_ports+="$host_port"
-          if [[ "$enable_tls" == "true" ]]; then
-            if [[ -n "$tls_service_ports" ]]; then
-              tls_service_ports+=","
-            fi
-            tls_service_ports+="$tls_host_port"
-          fi
-        done
-
-        echo "container-names=$container_names" >> "$GITHUB_OUTPUT"
-        echo "service-ports=$service_ports" >> "$GITHUB_OUTPUT"
-        echo "tls-service-ports=$tls_service_ports" >> "$GITHUB_OUTPUT"
+        "${{ github.action_path }}/start-containers.sh" \
+          --num-nodes "${{ inputs.num-nodes }}" \
+          --base-port "${{ inputs.base-port }}" \
+          --container-name-prefix "${{ inputs.container-name-prefix }}" \
+          --service-port "${{ inputs.service-port }}" \
+          --image "${{ inputs.container-repo-url }}/${{ inputs.server-container-repo }}:${{ inputs.server-tag }}" \
+          --network "${{ inputs.network-name }}" \
+          --features-path "${{ steps.prepare-config.outputs.features-path }}" \
+          --config-path "${{ steps.prepare-config.outputs.config-path }}" \
+          --publish-ports "${{ inputs.publish-ports }}" \
+          --enable-tls "${{ inputs.enable-tls }}" \
+          --tls-base-port "${{ inputs.tls-base-port }}" \
+          --security "${{ steps.validate.outputs.effective-security }}" \
+          --enable-sc "${{ inputs.enable-strong-consistency }}" \
+          --server-edition "${{ steps.validate.outputs.server-edition }}" \
+          --conf-volume-name "${{ steps.server-volume.outputs.conf_volume_name }}" \
+          --conf-volume-dest-dir "${{ steps.server-volume.outputs.conf_volume_dest_dir }}" \
+          --tls-volume-name "${{ steps.server-volume.outputs.tls_volume_name }}" \
+          --tls-volume-dest-dir "${{ steps.server-volume.outputs.tls_volume_dest_dir }}" \
+          --loader-container "${{ steps.server-volume.outputs.container_name_to_load_volume }}"
 
     - name: Wait for Aerospike Server readiness
       shell: bash
