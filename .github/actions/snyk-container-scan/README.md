@@ -22,24 +22,24 @@ The official action pulls the image via the Docker daemon, so for a **private** 
 
 ## Action Inputs
 
-| Input                | Required | Default  | Description                                                                 |
-| -------------------- | -------- | -------- | --------------------------------------------------------------------------- |
-| `image`              | Yes      | -        | Container image reference (e.g. `repo/name:tag`)                            |
-| `severity-threshold` | No       | `high`   | Lowest severity that counts against the verdict                             |
-| `fail-on-issues`     | No       | `true`   | Exit non-zero on a `FAIL` verdict. A caller that owns the gate sets `false`. |
-| `monitor`            | No       | `false`  | Also `snyk container monitor` to record the image in the Snyk portal        |
-| `platform`           | No       | -        | Platform to scan for a multi-arch tag (e.g. `linux/amd64`)                  |
-| `sarif-output-path`  | No       | -        | Write SARIF here for a later code-scanning upload                           |
-| `snyk-org`           | No       | -        | Snyk org id, required only when `monitor` is true                           |
-| `snyk-token`         | No       | -        | Overrides `SNYK_TOKEN`                                                      |
+| Input                | Required | Default | Description                                                                  |
+| -------------------- | -------- | ------- | ---------------------------------------------------------------------------- |
+| `image`              | Yes      | -       | Container image reference (e.g. `repo/name:tag`)                             |
+| `severity-threshold` | No       | `high`  | Lowest severity that counts against the verdict                              |
+| `fail-on-issues`     | No       | `true`  | Exit non-zero on a `FAIL` verdict. A caller that owns the gate sets `false`. |
+| `monitor`            | No       | `false` | Also `snyk container monitor` to record the image in the Snyk portal         |
+| `platform`           | No       | -       | Platform to scan for a multi-arch tag (e.g. `linux/amd64`)                   |
+| `sarif-output-path`  | No       | -       | Write SARIF here for a later code-scanning upload                            |
+| `snyk-org`           | No       | -       | Snyk org id, required only when `monitor` is true                            |
+| `snyk-token`         | No       | -       | Overrides `SNYK_TOKEN`                                                       |
 
-| Output     | Description                                                                     |
-| ---------- | ------------------------------------------------------------------------------- |
-| `verdict`  | `PASS` or `FAIL`. `FAIL` means a finding at or above the threshold. Gate on it. |
-| `critical` / `high` / `medium` / `low` | Count of unique findings at that severity                   |
-| `total`    | Count of unique findings across all severities                                  |
-| `report`   | Path to the raw Snyk JSON report                                                |
-| `sarif`    | Path to the written SARIF, empty when `sarif-output-path` was not set           |
+| Output                                 | Description                                                                     |
+| -------------------------------------- | ------------------------------------------------------------------------------- |
+| `verdict`                              | `PASS` or `FAIL`. `FAIL` means a finding at or above the threshold. Gate on it. |
+| `critical` / `high` / `medium` / `low` | Count of unique findings at that severity                                       |
+| `total`                                | Count of unique findings across all severities                                  |
+| `report`                               | Path to the raw Snyk JSON report                                                |
+| `sarif`                                | Path to the written SARIF, empty when `sarif-output-path` was not set           |
 
 ## Versioning the Snyk action
 
