@@ -48,6 +48,7 @@ jobs:
           ls -latr
           echo "hm"
           ls -altr /home/runner/
+          cat /home/runner/.rpmmacros
           # Sign the package
           rpm --addsign tests/*.rpm
           echo "this is another place"
