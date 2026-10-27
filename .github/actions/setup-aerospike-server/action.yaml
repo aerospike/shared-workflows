@@ -16,9 +16,8 @@ inputs:
   start-nodes:
     description: >
       Number of nodes to start (1 to num-nodes). Defaults to num-nodes.
-      Nodes after the first start-nodes are created and configured but not
-      started; start them later with the aerospike-node-control action.
-      When set, readiness also waits for a cluster of start-nodes nodes.
+      Nodes after the first start-nodes are created with docker create but
+      not started. Readiness waits for a cluster of start-nodes nodes.
     required: false
     default: ""
   container-name-prefix:
@@ -83,9 +82,8 @@ inputs:
     default: aerospike-net
   network-subnet:
     description: >
-      IPv4 subnet for the Docker network (e.g. 172.30.0.0/24). Node N gets
-      the fixed IP network address + N + 1 (172.30.0.2 for node 1). Fails if
-      network-name already exists with a different subnet.
+      IPv4 /24 subnet for the Docker network, such as 172.30.0.0/24. Node N
+      gets the fixed IP a.b.c.(N + 1), so 172.30.0.2 for node 1.
     required: false
     default: ""
   base-port:
@@ -157,11 +155,6 @@ outputs:
   network-name:
     description: Docker network name created
     value: ${{ steps.create-network.outputs.network-name }}
-  node-addresses:
-    description: >
-      Comma-separated node IPs on network-name, in node order. Without
-      network-subnet, the entry for a node that was not started is empty.
-    value: ${{ steps.start-containers.outputs.node-addresses }}
   service-ports:
     description: Comma-separated host ports
     value: ${{ steps.start-containers.outputs.service-ports }}
@@ -171,9 +164,6 @@ outputs:
   tls-cert-dir:
     description: Directory containing generated TLS certs (empty if TLS disabled)
     value: ${{ steps.generate-tls-certs.outputs.tls-cert-dir }}
-  cluster-settings:
-    description: Cluster settings as JSON, passed to aerospike-node-control
-    value: ${{ steps.cluster-settings.outputs.cluster-settings }}
 
 runs:
   using: composite
@@ -216,7 +206,7 @@ runs:
         fi
 
         if [[ -n "$NETWORK_SUBNET" ]]; then
-          subnet_node_addresses "$NETWORK_SUBNET" "${{ inputs.num-nodes }}" >/dev/null || exit 1
+          subnet_prefix "$NETWORK_SUBNET" >/dev/null || exit 1
         fi
 
         effective_security="${{ inputs.enable-security }}"
@@ -237,22 +227,6 @@ runs:
 
         echo "effective-security=$effective_security" >> "$GITHUB_OUTPUT"
         echo "server-edition=$server_edition" >> "$GITHUB_OUTPUT"
-
-    - name: Record cluster settings
-      id: cluster-settings
-      shell: bash
-      env:
-        PREFIX: ${{ inputs.container-name-prefix }}
-        NETWORK_NAME: ${{ inputs.network-name }}
-        SERVICE_PORT: ${{ inputs.service-port }}
-        SECURITY: ${{ steps.validate.outputs.effective-security }}
-        ENABLE_SC: ${{ inputs.enable-strong-consistency }}
-        TOOLS_IMAGE: ${{ inputs.container-repo-url }}/database-docker-virtual/aerospike-tools:${{ inputs.tools-tag }}
-      run: |
-        settings=$(jq -nc --arg prefix "$PREFIX" --arg network "$NETWORK_NAME" --arg service_port "$SERVICE_PORT" \
-          --arg security "$SECURITY" --arg strong_consistency "$ENABLE_SC" --arg tools_image "$TOOLS_IMAGE" \
-          '$ARGS.named')
-        echo "cluster-settings=$settings" >> "$GITHUB_OUTPUT"
 
     - name: Set up JFrog CLI
       id: jf
@@ -465,12 +439,20 @@ runs:
       id: create-network
       shell: bash
       env:
-        NETWORK_NAME: ${{ inputs.network-name }}
         NETWORK_SUBNET: ${{ inputs.network-subnet }}
       run: |
-        "${{ github.action_path }}/create-network.sh" \
-          --network "$NETWORK_NAME" \
-          --subnet "$NETWORK_SUBNET"
+        if [[ "$ENABLE_BASH_TRACE_MODE" == "true" ]]; then
+          set -x
+        fi
+
+        network="${{ inputs.network-name }}"
+        if ! docker network inspect "$network" >/dev/null 2>&1; then
+          docker network create ${NETWORK_SUBNET:+--subnet "$NETWORK_SUBNET"} "$network"
+          echo "Created Docker network: $network"
+        else
+          echo "Docker network already exists: $network"
+        fi
+        echo "network-name=$network" >> "$GITHUB_OUTPUT"
 
     - name: Start Aerospike Server containers
       id: start-containers

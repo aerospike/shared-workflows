@@ -108,7 +108,7 @@ With `server-edition: auto`, the action infers `enterprise` from repositories na
 | `env-vars`                     | No       |                                                       | Semicolon-delimited `KEY=VALUE` pairs passed as `-e` flags. Use `\;` for literal semicolons |
 | `extra-hosts`                  | No       |                                                       | Comma-separated `name:ip` entries passed as `--add-host` to every node                      |
 | `network-name`                 | No       | `aerospike-net`                                       | Docker network name                                                                         |
-| `network-subnet`               | No       |                                                       | IPv4 subnet for the network, a fixed IP per node. See [Node addresses](#node-addresses)     |
+| `network-subnet`               | No       |                                                       | IPv4 /24 subnet, a fixed IP per node. See [Starting nodes later](#starting-nodes-later)     |
 | `base-port`                    | No       | `3000`                                                | Base host port (node N maps to `base-port + N - 1`)                                         |
 | `service-port`                 | No       | `3000`                                                | Aerospike service port inside the container (must match `aerospike.conf`)                   |
 | `publish-ports`                | No       | `true`                                                | Publish container ports to the runner host. Set `false` for L2 discovery topologies         |
@@ -132,11 +132,9 @@ With `server-edition: auto`, the action infers `enterprise` from repositories na
 | ------------------- | ----------------------------------------------------------------------------- |
 | `container-names`   | Comma-separated container names (e.g., `aerospike-1,aerospike-2,aerospike-3`) |
 | `network-name`      | Docker network name                                                           |
-| `node-addresses`    | Comma-separated node IPs in node order. See [Node addresses](#node-addresses) |
 | `service-ports`     | Comma-separated host ports (e.g., `3000,3001,3002`)                           |
 | `tls-service-ports` | Comma-separated TLS host ports (empty if TLS disabled)                        |
 | `tls-cert-dir`      | Directory containing generated TLS certs (empty if TLS disabled)              |
-| `cluster-settings`  | Cluster settings as JSON, for `aerospike-node-control`                        |
 
 When `publish-ports` is `false`, the action still reports `service-ports` / `tls-service-ports` as the calculated host-port numbers, but it does not bind them. Use this for L2 discovery tests so a client running on the runner cannot connect through localhost mappings. Isolation from node IPs still requires running the client in a container that is not on the Aerospike network.
 
@@ -157,58 +155,22 @@ For `server-edition: enterprise`, the action requires `features-file` or `featur
 
 ## Starting nodes later
 
-`start-nodes: K` starts only nodes 1 to K. Nodes K+1 to `num-nodes` are created with `docker create` and the same arguments and per-node config, so they are ready to start. The readiness wait covers the started nodes only, and also waits for a cluster of exactly K nodes. With `enable-strong-consistency`, the roster is set from those K nodes.
+`start-nodes: K` starts only nodes 1 to K. Nodes K+1 to `num-nodes` are created with `docker create`, with the same arguments and per-node config, so a later step can `docker start` them or use them as a template. The readiness wait covers the started nodes and waits for a cluster of exactly K nodes. With `enable-strong-consistency`, the roster is set from those K nodes.
 
-Start or stop a node by index from a later step with [`aerospike-node-control`](../aerospike-node-control). It waits until every running node reports a stable cluster of the running nodes:
+The mesh seeds of a node that is not running do not resolve. The server logs `Error while converting address 'aerospike-3': Name or service not known`, keeps retrying, and forms a cluster from the seeds that answer. A node started later joins through its own seeds.
 
-```yaml
-- uses: aerospike/shared-workflows/.github/actions/setup-aerospike-server@v3
-  id: aerospike
-  with:
-    num-nodes: "3"
-    start-nodes: "2"
-    features-content: ${{ secrets.AEROSPIKE_SERVER_FEATURES_CONF }}
-    oidc-provider: ${{ vars.JFROG_OIDC_PROVIDER }}
-    oidc-audience: ${{ vars.JFROG_OIDC_AUDIENCE }}
-
-# Tests against a 2-node cluster
-
-- uses: aerospike/shared-workflows/.github/actions/aerospike-node-control@v3
-  with:
-    cluster-settings: ${{ steps.aerospike.outputs.cluster-settings }}
-    node-index: "3"
-    operation: start
-
-# Tests after node 3 joined; the cluster has 3 nodes
-
-- uses: aerospike/shared-workflows/.github/actions/aerospike-node-control@v3
-  with:
-    cluster-settings: ${{ steps.aerospike.outputs.cluster-settings }}
-    node-index: "2"
-    operation: stop
-```
-
-The mesh seeds of a node that is not running do not resolve on the Docker network. The server starts anyway: it logs `Error while converting address 'aerospike-3': Name or service not known`, keeps retrying, and forms a cluster from the seeds that answer. A node started later reaches the running nodes through its own seeds and joins, so no `tip` is needed.
-
-Without `network-subnet`, Docker assigns a node its IP when it starts, and a restarted node can get a different one. Use `network-subnet` when a test needs a node's IP before it starts or across restarts.
-
-## Node addresses
-
-The `node-addresses` output lists each node's IP on `network-name`, in node order, for example `172.18.0.2,172.18.0.3,172.18.0.4`. Without `network-subnet`, the action reads the IPs with `docker inspect`, and the entry for a node that is not started is empty (`172.18.0.2,172.18.0.3,`).
-
-`network-subnet` creates the network with that IPv4 subnet and runs node N with the fixed IP network address + N + 1, leaving network address + 1 for the gateway. `network-subnet: 172.30.0.0/24` gives `172.30.0.2,172.30.0.3,172.30.0.4` for three nodes, started or not. The subnet must be written with its network address (`172.30.0.0/24`, not `172.30.0.5/24`) and must have room for `num-nodes` nodes. If `network-name` already exists with a different subnet, the action fails.
+`network-subnet: a.b.c.0/24` creates the network with that subnet and gives node N the fixed IP `a.b.c.(N + 1)`, started or not, so `172.30.0.0/24` puts three nodes on `172.30.0.2` to `172.30.0.4`. Without it, Docker assigns an IP when a node starts, and a restarted node can get a different one.
 
 ```yaml
 - uses: aerospike/shared-workflows/.github/actions/setup-aerospike-server@v3
-  id: aerospike
   with:
-    num-nodes: "3"
+    num-nodes: "4"
+    start-nodes: "3"
     network-subnet: 172.30.0.0/24
     features-content: ${{ secrets.AEROSPIKE_SERVER_FEATURES_CONF }}
     oidc-provider: ${{ vars.JFROG_OIDC_PROVIDER }}
     oidc-audience: ${{ vars.JFROG_OIDC_AUDIENCE }}
-
-- run: echo "${{ steps.aerospike.outputs.node-addresses }}" # 172.30.0.2,172.30.0.3,172.30.0.4
+# Tests against 3 nodes, then: docker start aerospike-4
 ```
 
 ## Per-node config

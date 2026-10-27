@@ -6,7 +6,7 @@
 # copied into the config volume as <container-name>.conf.
 #
 # Nodes after --start-nodes are created with docker create but not started.
-# With --network-subnet, node i gets a fixed IP from subnet_node_addresses.
+# With --network-subnet a.b.c.0/24, node i gets the fixed IP a.b.c.(i + 1).
 #
 # ENV_VARS (semicolon-delimited KEY=VALUE pairs) and EXTRA_HOSTS
 # (comma-separated name:ip entries) are read from the environment.
@@ -83,15 +83,14 @@ elif [[ ! $start_nodes =~ ^[1-9][0-9]*$ ]] || ((start_nodes > num_nodes)); then
     error "start-nodes must be between 1 and num-nodes ($num_nodes) (got: '$start_nodes')"
 fi
 
-node_ips=()
+subnet=""
 if [[ -n $network_subnet ]]; then
-    node_ip_lines=$(subnet_node_addresses "$network_subnet" "$num_nodes") || exit 1
-    IFS=$'\n' read -rd '' -a node_ips <<<"$node_ip_lines" || true
+    subnet=$(subnet_prefix "$network_subnet") || exit 1
+    ((num_nodes <= 253)) || error "network-subnet has room for 253 nodes (got: num-nodes $num_nodes)"
 fi
 
 container_names=""
 service_ports=""
-node_addresses=""
 tls_service_ports=""
 
 parse_env_vars "${ENV_VARS-}" || exit 1
@@ -165,7 +164,7 @@ for ((i = 1; i <= num_nodes; i++)); do
     fi
     run_args+=("--network" "$network")
     if [[ -n $network_subnet ]]; then
-        run_args+=("--ip" "${node_ips[i - 1]}")
+        run_args+=("--ip" "$subnet.$((i + 1))")
     fi
 
     if [[ $publish_ports == "true" ]]; then
@@ -220,15 +219,9 @@ for ((i = 1; i <= num_nodes; i++)); do
     if [[ -n $container_names ]]; then
         container_names+=","
         service_ports+=","
-        node_addresses+=","
     fi
     container_names+="$name"
     service_ports+="$host_port"
-    if [[ -n $network_subnet ]]; then
-        node_addresses+="${node_ips[i - 1]}"
-    else
-        node_addresses+="$(container_address "$name" "$network")"
-    fi
     if [[ $enable_tls == "true" ]]; then
         if [[ -n $tls_service_ports ]]; then
             tls_service_ports+=","
@@ -241,5 +234,4 @@ done
     echo "container-names=$container_names"
     echo "service-ports=$service_ports"
     echo "tls-service-ports=$tls_service_ports"
-    echo "node-addresses=$node_addresses"
 } >>"${GITHUB_OUTPUT:-/dev/stdout}"
