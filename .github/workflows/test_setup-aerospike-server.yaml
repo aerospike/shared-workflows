@@ -11,6 +11,7 @@ on:
     branches: [main]
     paths:
       - .github/actions/setup-aerospike-server/**
+      - .github/actions/aerospike-node-control/**
       - .github/workflows/test_setup-aerospike-server.yaml
 
 permissions:
@@ -45,7 +46,7 @@ jobs:
           rm -rf bats-core
 
       - name: Run bats tests
-        run: bats .github/actions/setup-aerospike-server/tests/
+        run: bats .github/actions/setup-aerospike-server/tests/ .github/actions/aerospike-node-control/tests/
 
   test-single-node:
     name: Single node (defaults)
@@ -841,7 +842,7 @@ jobs:
           done
 
   test-start-nodes-subnet:
-    name: Start 2 of 3 nodes on a fixed subnet
+    name: Start 2 of 3 nodes on a fixed subnet, then start and stop by index
     runs-on: ubuntu-22.04
     steps:
       - name: Harden the runner (Audit all outbound calls)
@@ -865,29 +866,45 @@ jobs:
           oidc-audience: ${{ vars.JFROG_OIDC_AUDIENCE }}
           enable-bash-trace-mode: ${{ env.ENABLE_BASH_TRACE_MODE }}
 
-      - name: Verify node 3 is created, fixed IPs, cluster of 2, then 3 after docker start
+      - name: Verify node 3 is created, fixed IPs and a cluster of 2
         env:
           NETWORK: ${{ steps.setup-aerospike-server.outputs.network-name }}
         run: |
-          tools_image="aerospike.jfrog.io/database-docker-virtual/aerospike-tools:12.1.1_2"
-          cluster_size() {
-            docker run --rm --network "$NETWORK" "$tools_image" asinfo -h "$1" -p 3000 -v statistics \
-              | tr ';' '\n' | sed -n 's/^cluster_size=//p'
-          }
           state=$(docker inspect --format '{{.State.Status}}' aerospike-3)
           [[ "$state" == "created" ]] || { echo "Expected aerospike-3 created, got $state"; exit 1; }
           for i in 1 2; do
             ip=$(docker inspect --format "{{(index .NetworkSettings.Networks \"$NETWORK\").IPAddress}}" "aerospike-$i")
-            echo "aerospike-$i: $ip, cluster_size $(cluster_size "aerospike-$i")"
-            [[ "$ip" == "172.30.57.$((i + 1))" && "$(cluster_size "aerospike-$i")" == "2" ]] \
-              || { echo "Unexpected IP or cluster size on aerospike-$i"; exit 1; }
+            echo "aerospike-$i: $ip"
+            [[ "$ip" == "172.30.57.$((i + 1))" ]] || { echo "Unexpected IP on aerospike-$i"; exit 1; }
           done
-          docker start aerospike-3
-          for _ in $(seq 30); do
-            [[ "$(cluster_size aerospike-1)" == "3" ]] && break
-            sleep 2
-          done
-          ip=$(docker inspect --format "{{(index .NetworkSettings.Networks \"$NETWORK\").IPAddress}}" aerospike-3)
-          echo "aerospike-3: $ip, cluster_size $(cluster_size aerospike-1)"
-          [[ "$ip" == "172.30.57.4" && "$(cluster_size aerospike-1)" == "3" ]] \
-            || { echo "aerospike-3 did not join on 172.30.57.4"; exit 1; }
+
+      - name: Start node 3
+        id: start-node-3
+        uses: ./.github/actions/aerospike-node-control
+        with:
+          cluster-settings: ${{ steps.setup-aerospike-server.outputs.cluster-settings }}
+          node-index: "3"
+          operation: start
+          timeout: "60"
+          enable-bash-trace-mode: ${{ env.ENABLE_BASH_TRACE_MODE }}
+
+      - name: Stop node 2
+        id: stop-node-2
+        uses: ./.github/actions/aerospike-node-control
+        with:
+          cluster-settings: ${{ steps.setup-aerospike-server.outputs.cluster-settings }}
+          node-index: "2"
+          operation: stop
+          timeout: "60"
+          enable-bash-trace-mode: ${{ env.ENABLE_BASH_TRACE_MODE }}
+
+      - name: Verify node control outputs
+        env:
+          START_SIZE: ${{ steps.start-node-3.outputs.cluster-size }}
+          START_ADDRESS: ${{ steps.start-node-3.outputs.node-address }}
+          STOP_SIZE: ${{ steps.stop-node-2.outputs.cluster-size }}
+          STOP_RUNNING: ${{ steps.stop-node-2.outputs.running-nodes }}
+        run: |
+          echo "start node 3: size=$START_SIZE address=$START_ADDRESS; stop node 2: size=$STOP_SIZE running=$STOP_RUNNING"
+          [[ "$START_SIZE" == "3" && "$START_ADDRESS" == "172.30.57.4" ]] || { echo "Unexpected start outputs"; exit 1; }
+          [[ "$STOP_SIZE" == "2" && "$STOP_RUNNING" == "aerospike-1,aerospike-3" ]] || { echo "Unexpected stop outputs"; exit 1; }
