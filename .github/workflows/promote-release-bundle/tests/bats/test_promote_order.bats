@@ -88,6 +88,7 @@ promoted() {
 @test "unreadable promotion records stop the promotion" {
     CURL_FAILS=1 promote TEST
     [ "$status" -eq 1 ]
+    [[ $output == *"cannot promote without the promotion records"* ]]
     [ ! -s "$JF_CALLS" ]
 }
 

@@ -87,6 +87,7 @@ jf release-bundle-promote my-app 1.2.3 TEST --project=test" ]
 @test "refuses a supersede without a reason" {
     promote TEST --supersede ""
     [ "$status" -eq 1 ]
+    [[ $output == *"--supersede requires a reason"* ]]
     [ ! -s "$JF_CALLS" ]
 }
 
@@ -97,6 +98,7 @@ jf release-bundle-promote my-app 1.2.3 TEST --project=test" ]
     mv "${JF_DATA}/stage-records.tmp" "${JF_DATA}/stage-records.json"
     supersede
     [ "$status" -eq 1 ]
+    [[ $output == *"truncated promotion records"* ]]
     [ ! -s "$JF_CALLS" ]
 }
 
