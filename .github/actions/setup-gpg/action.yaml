@@ -119,9 +119,8 @@ runs:
         # Import public key for verification
         echo -e "$GPG_PUBLIC_KEY" > "$GNUPGHOME/public.key"
         chmod 600 "$GNUPGHOME/public.key"
-        gpg --import "$GNUPGHOME/public.key" 2> /dev/null
-        rpm --import "$GNUPGHOME/public.key" 2> /dev/null
-        sudo rpm --import "$GNUPGHOME/public.key"
+        gpg --import "$GNUPGHOME/public.key"
+        rpm --import "$GNUPGHOME/public.key"
 
         # Reload gpg-agent configuration
         gpg-connect-agent reloadagent /bye

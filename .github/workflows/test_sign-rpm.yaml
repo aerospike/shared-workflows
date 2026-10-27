@@ -34,22 +34,14 @@ jobs:
           HOME: /home/runner
           GNUPGHOME: /home/runner/.gnupg
         run: |
-          echo "yes hello"
           # Ensure environment variables are exported
           export HOME="${HOME}"
           export GNUPGHOME="${GNUPGHOME}"
 
           # Create symlink for gpg2 (required for rpm signing)
           sudo ln -sf $(which gpg) /usr/bin/gpg2
-          echo "this is a place"
-          pwd
-          echo "here: ${PWD}"
-          ls -latr
-          echo "hm"
-          ls -altr /home/runner/
-          cat /home/runner/.rpmmacros
+
           # Sign the package
           rpm --addsign tests/*.rpm
-          echo "this is another place"
           # Verify the signature
           rpm --checksig tests/*.rpm
