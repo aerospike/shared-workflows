@@ -1,0 +1,117 @@
+name: Test Setup DNS Server Action
+on:
+  workflow_dispatch:
+    inputs:
+      # checkov:skip=CKV_GHA_7:workflow_dispatch input used for debugging failing test cases in this repo
+      enable-bash-trace-mode:
+        type: boolean
+        required: false
+        default: false
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/actions/setup-dns-server/**
+      - .github/workflows/test_setup-dns-server.yaml
+
+permissions:
+  contents: read
+
+env:
+  ENABLE_BASH_TRACE_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.enable-bash-trace-mode || 'false' }}
+  PROBE_IMAGE: docker.io/library/busybox@sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e # 1.37.0
+
+jobs:
+  test-unit:
+    name: Entrypoint unit tests
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install bats
+        uses: bats-core/bats-action@77d6fb60505b4d0d1d73e48bd035b55074bbfb43 # 4.0.0
+        with:
+          bats-version: 1.12.0
+          support-install: false
+          assert-install: false
+          detik-install: false
+          file-install: false
+
+      - name: Run bats tests
+        run: bats .github/actions/setup-dns-server/tests/
+
+  test-coredns:
+    name: Resolve, reload and reject a zone with real CoreDNS
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Create Docker network
+        run: docker network create dns-test-net
+
+      - name: Setup DNS server
+        id: dns
+        uses: ./.github/actions/setup-dns-server
+        with:
+          network-name: dns-test-net
+          zone-name: dns.test
+          enable-bash-trace-mode: ${{ env.ENABLE_BASH_TRACE_MODE }}
+          zone-content: |
+            $ORIGIN dns.test.
+            @ 3600 IN SOA ns.dns.test. admin.dns.test. 1 60 60 60 1
+            seeds 1 IN A 192.0.2.10
+
+      - name: Resolve a record, change it and resolve the new value
+        env:
+          CONTAINER_NAME: ${{ steps.dns.outputs.container-name }}
+          SERVER_ADDRESS: ${{ steps.dns.outputs.server-address }}
+        run: |
+          lookup() {
+            docker run --rm --network dns-test-net "$PROBE_IMAGE" nslookup -type=a seeds.dns.test "$SERVER_ADDRESS" \
+              | awk 'NF == 0 { body = 1 } body && /^Address/ { print $2 }'
+          }
+          actual=$(lookup)
+          echo "seeds.dns.test -> $actual"
+          [[ "$actual" == "192.0.2.10" ]] || { echo "Expected 192.0.2.10"; exit 1; }
+
+          printf '%s\n' "\$ORIGIN dns.test." \
+            "@ 3600 IN SOA ns.dns.test. admin.dns.test. 2 60 60 60 1" \
+            "seeds 1 IN A 192.0.2.20" >"$RUNNER_TEMP/db.dns.test"
+          docker cp "$RUNNER_TEMP/db.dns.test" "$CONTAINER_NAME:/etc/coredns/db.dns.test"
+          for _ in $(seq 1 15); do
+            actual=$(lookup)
+            [[ "$actual" == "192.0.2.20" ]] && break
+            sleep 1
+          done
+          echo "seeds.dns.test -> $actual"
+          [[ "$actual" == "192.0.2.20" ]] || { echo "Expected reloaded 192.0.2.20"; exit 1; }
+
+      - name: Start a DNS server with an unparsable zone
+        id: bad-zone
+        continue-on-error: true
+        uses: ./.github/actions/setup-dns-server
+        with:
+          network-name: dns-test-net
+          zone-name: bad.test
+          container-name: dns-test-bad-zone
+          startup-timeout: "10"
+          enable-bash-trace-mode: ${{ env.ENABLE_BASH_TRACE_MODE }}
+          zone-content: |
+            $ORIGIN bad.test.
+            @ 3600 IN SOA ns.bad.test. admin.bad.test. 1 60 60 60 1
+            seeds 1 IN A not-an-address
+
+      - name: Fail if the unparsable zone was accepted
+        if: steps.bad-zone.outcome != 'failure'
+        run: exit 1

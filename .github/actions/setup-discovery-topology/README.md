@@ -39,7 +39,7 @@ Toxiproxy is used instead of nginx-stream so tests can inject `reset_peer` (TCP 
       -v ${{ github.workspace }}:${{ github.workspace }} \
       -w ${{ github.workspace }} \
       maven:3-eclipse-temurin-21 \
-      mvn -pl test test -Dargs="--endpoint-hostname ${{ steps.topology.outputs.endpoint-hostname }} --endpoint-port-base ${{ steps.topology.outputs.endpoint-port-base }}"
+      mvn -pl test test -Dargs="--endpoint-hostname ${{ steps.topology.outputs.endpoint-hostname }} --endpoint-port-base ${{ steps.topology.outputs.listen-port-base }}"
 ```
 
 ## Topology
@@ -60,7 +60,7 @@ aerospike-net
 
 The client container is not attached to `aerospike-net`, so `aerospike-1` does not resolve and node IPs are unroutable. A translator bug is a connection failure, not a silently passing test.
 
-Fault injection (F-1 `reset_peer`, disable a node, and so on) is done from a container on the client network against `toxiproxy-url`. Example:
+Fault injection (`reset_peer`, disabling a node, and so on) is done from a container on the client network against `toxiproxy-url`. Example:
 
 ```sh
 wget -q -O- --post-data='{"name":"rst","type":"reset_peer","stream":"downstream","attributes":{"timeout":0}}' \
@@ -76,11 +76,13 @@ Required inputs first.
 | ------------------------ | -------- | ---------------------------------- | --------------------------------------------------------------------- |
 | `aerospike-network-name` | Yes      |                                    | Docker network created by `setup-aerospike-server`                    |
 | `container-names`        | Yes      |                                    | Comma-separated Aerospike container names                             |
+| `client-network-mtu`     | No       |                                    | Client network MTU (positive integer); empty uses the Docker default  |
 | `client-network-name`    | No       | `discovery-client-net`             | Client-side Docker network name                                       |
 | `enable-bash-trace-mode` | No       | `false`                            | Print shell commands as they run                                      |
 | `endpoint-hostname`      | No       | `as-endpoint.test`                 | Single endpoint hostname (Docker network alias on the client network) |
 | `listen-port-base`       | No       | `30001`                            | First proxy listen port; node N uses `listen-port-base + N - 1`       |
 | `proxy-container-name`   | No       | `toxiproxy`                        | Toxiproxy container name and control-API hostname                     |
+| `proxy-sysctls`          | No       |                                    | Comma-separated `key=value` sysctls, each passed as `--sysctl`        |
 | `startup-timeout`        | No       | `30`                               | Seconds to wait for the Toxiproxy control API                         |
 | `tls-listen-port-base`   | No       |                                    | First TLS proxy listen port; empty skips TLS proxies                  |
 | `tls-upstream-port`      | No       | `4333`                             | Aerospike TLS port inside each server container                       |
@@ -94,13 +96,19 @@ Required inputs first.
 | -------------------------- | ------------------------------------------------------------------------------ |
 | `client-network-name`      | Client-side Docker network name                                                |
 | `endpoint-hostname`        | Endpoint hostname the client should connect to                                 |
-| `endpoint-port-base`       | First proxy listen port                                                        |
 | `endpoint-ports`           | Comma-separated proxy listen ports                                             |
+| `listen-port-base`         | First proxy listen port                                                        |
 | `proxy-map-json`           | Toxiproxy `/populate` payload                                                  |
 | `proxy-name-port-map`      | Comma-separated `node:listen-port` map                                         |
 | `tls-endpoint-ports`       | Comma-separated TLS proxy listen ports (empty when TLS proxies are skipped)    |
 | `toxiproxy-container-name` | Toxiproxy container name                                                       |
 | `toxiproxy-url`            | Control API URL as reachable from the client network (`http://toxiproxy:8474`) |
+
+## Fault-injection knobs
+
+`client-network-mtu` creates the client network with `--opt com.docker.network.driver.mtu=<n>`, for example `1280` to exercise small-MTU paths. It has no effect when the client network already exists.
+
+`proxy-sysctls` passes each entry to the Toxiproxy `docker run` as `--sysctl`. For example, `net.ipv4.ip_local_port_range=40000 40010` narrows the proxy's ephemeral port range to force upstream port exhaustion. Values may contain spaces but not commas.
 
 ## TLS pass-through
 

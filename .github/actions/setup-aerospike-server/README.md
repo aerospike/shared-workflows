@@ -102,9 +102,10 @@ With `server-edition: auto`, the action infers `enterprise` from repositories na
 | `container-name-prefix`        | No       | `aerospike`                                           | Container name prefix (nodes: `prefix-1`, `prefix-2`, ...)                                  |
 | `features-file`                | No       |                                                       | Path to `features.conf` on the runner                                                       |
 | `features-content`             | No       |                                                       | Raw `features.conf` content (e.g., from a secret). Ignored if `features-file` is set        |
-| `config-file`                  | No       |                                                       | Path to `aerospike.conf` on the runner                                                      |
+| `config-file`                  | No       |                                                       | Path to `aerospike.conf` on the runner. See [Per-node config](#per-node-config)             |
 | `config-content`               | No       |                                                       | Raw `aerospike.conf` content. Ignored if `config-file` is set                               |
 | `env-vars`                     | No       |                                                       | Semicolon-delimited `KEY=VALUE` pairs passed as `-e` flags. Use `\;` for literal semicolons |
+| `extra-hosts`                  | No       |                                                       | Comma-separated `name:ip` entries passed as `--add-host` to every node                      |
 | `network-name`                 | No       | `aerospike-net`                                       | Docker network name                                                                         |
 | `base-port`                    | No       | `3000`                                                | Base host port (node N maps to `base-port + N - 1`)                                         |
 | `service-port`                 | No       | `3000`                                                | Aerospike service port inside the container (must match `aerospike.conf`)                   |
@@ -147,6 +148,92 @@ For clusters (`num-nodes > 1`), the action:
 If you provide a custom config via `config-file` or `config-content`, it must include a `heartbeat` section with `mode mesh`. The action will inject `mesh-seed-address-port` entries automatically.
 
 For `server-edition: enterprise`, the action requires `features-file` or `features-content` for multi-node clusters. For `server-edition: community`, it does not render or mount a features file because `feature-key-file` is Enterprise-only.
+
+## Per-node config
+
+Each node gets its own copy of the config, mounted at `/etc/aerospike-custom/<container-name>.conf`. Before copying, the action replaces two tokens in the generated config and in `config-file` / `config-content`:
+
+- `{{NODE_INDEX}}` -- the 1-based node number, matching `<container-name-prefix>-N`
+- `{{NODE_NAME}}` -- the container name, e.g. `aerospike-2`
+
+This is plain string replacement. Nothing else in your config is expanded, so `$VAR`, `${VAR}`, and `$(...)` are written as-is. A config without tokens is copied unchanged to every node.
+
+Advertise a different `alternate-access-port` on each node (3100, 3200, 3300):
+
+```yaml
+- uses: ./.github/actions/setup-aerospike-server
+  with:
+    num-nodes: "3"
+    server-container-repo: database-docker-virtual/aerospike-server
+    config-content: |
+      service {
+          cluster-name docker
+          proto-fd-max 15000
+      }
+
+      logging {
+          console {
+              context any info
+          }
+      }
+
+      network {
+          service {
+              address any
+              port 3000
+              alternate-access-address {{NODE_NAME}}
+              alternate-access-port 3{{NODE_INDEX}}00
+          }
+          heartbeat {
+              mode mesh
+              address any
+              port 3002
+          }
+          fabric {
+              address any
+              port 3001
+          }
+      }
+
+      namespace test {
+          replication-factor 2
+          storage-engine memory {
+              data-size 1G
+          }
+      }
+    oidc-provider: ${{ vars.JFROG_OIDC_PROVIDER }}
+    oidc-audience: ${{ vars.JFROG_OIDC_AUDIENCE }}
+```
+
+`asinfo -v service-clear-alt` on `aerospike-2` then returns `<address>:3200`. The server only advertises alternate endpoints when `alternate-access-address` is set.
+
+Put each node in its own rack by setting `rack-id` in the namespace:
+
+```yaml
+config-content: |
+  # service, logging, and network stanzas as above
+  namespace test {
+      replication-factor 2
+      rack-id {{NODE_INDEX}}
+      storage-engine memory {
+          data-size 1G
+      }
+  }
+```
+
+## Extra hosts
+
+`extra-hosts` takes comma-separated `name:ip` entries and passes each one to `docker run --add-host` on every node, so the names resolve inside the containers. The IP can be IPv4, IPv6, or `host-gateway`. `docker run` rejects an entry with an invalid IP.
+
+```yaml
+- uses: ./.github/actions/setup-aerospike-server
+  with:
+    num-nodes: "2"
+    extra-hosts: db.example:10.0.0.5,cache.example:10.0.0.6
+    features-content: ${{ secrets.AEROSPIKE_SERVER_FEATURES_CONF }}
+    oidc-provider: ${{ vars.JFROG_OIDC_PROVIDER }}
+    oidc-audience: ${{ vars.JFROG_OIDC_AUDIENCE }}
+```
 
 ## TLS
 

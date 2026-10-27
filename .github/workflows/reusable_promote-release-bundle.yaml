@@ -76,6 +76,18 @@ on:
         required: false
         type: string
         default: ubuntu-22.04
+      supersede:
+        description: |
+          Replace the other versions of this bundle at the target stage that share an artifact path
+          with this version. DEV, TEST and STAGE only. Requires supersede-reason and gh-environment.
+        required: false
+        type: boolean
+        default: false
+      supersede-reason:
+        description: Why the versions at the target stage are replaced. Written to the supersede record.
+        required: false
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -137,6 +149,7 @@ jobs:
           oidc-audience: ${{ inputs.oidc-audience }}
 
       - name: Promote Release Bundle
+        id: promote
         shell: bash
         env:
           INPUT_CHECKOUT_PATH: ${{ inputs.gh-checkout-path }}
@@ -147,6 +160,9 @@ jobs:
           INPUT_INCLUDE_REPOS: ${{ inputs.include-repos }}
           INPUT_EXCLUDE_REPOS: ${{ inputs.exclude-repos }}
           INPUT_DRY_RUN: ${{ inputs.dry-run }}
+          INPUT_GH_ENVIRONMENT: ${{ inputs.gh-environment }}
+          INPUT_SUPERSEDE: ${{ inputs.supersede }}
+          INPUT_SUPERSEDE_REASON: ${{ inputs.supersede-reason }}
         run: |
           set -euo pipefail
           entrypoint="${INPUT_CHECKOUT_PATH}/.github/workflows/promote-release-bundle/entrypoint.sh"
@@ -163,8 +179,38 @@ jobs:
             --include-repos "$INPUT_INCLUDE_REPOS"
             --exclude-repos "$INPUT_EXCLUDE_REPOS"
           )
+          if [[ "$INPUT_SUPERSEDE" == "true" ]]; then
+            if [[ -z "$INPUT_GH_ENVIRONMENT" ]]; then
+              echo "::error::supersede requires gh-environment, so the environment's reviewers approve the replacement."
+              exit 1
+            fi
+            args+=(--supersede "$INPUT_SUPERSEDE_REASON")
+          fi
           if [[ "$INPUT_DRY_RUN" == "true" ]]; then
             args+=(--dry-run)
           fi
 
           "$entrypoint" "${args[@]}"
+
+      - name: Attest the supersede record
+        id: attest
+        if: steps.promote.outputs.record-file != ''
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: ${{ steps.promote.outputs.record-file }}
+          predicate-type: https://aerospike.com/schemas/supersede/v1
+          predicate-path: ${{ steps.promote.outputs.record-file }}
+
+      - name: Store the supersede record and its attestation
+        if: steps.promote.outputs.record-file != ''
+        shell: bash
+        env:
+          RECORD_FILE: ${{ steps.promote.outputs.record-file }}
+          RECORD_PATH: ${{ steps.promote.outputs.record-path }}
+          ATTESTATION: ${{ steps.attest.outputs.bundle-path }}
+        run: |
+          set -euo pipefail
+          # The attestation goes first so that a stored record always has one beside it.
+          # gh attestation verify --bundle accepts only a .json or .jsonl name.
+          jf rt upload "$ATTESTATION" "${RECORD_PATH%.json}.sigstore.json" --flat
+          jf rt upload "$RECORD_FILE" "$RECORD_PATH" --flat

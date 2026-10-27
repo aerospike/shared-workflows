@@ -160,3 +160,36 @@ jobs:
             ghcr.io/shopify/toxiproxy:2.12.0 \
             --host toxiproxy:8474 \
             toxic add -t reset_peer -a timeout=0 discovery-as-1
+
+  test-fault-knobs:
+    name: Client network MTU and proxy sysctls
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Start placeholder upstream
+        run: |
+          docker network create knobs-aerospike-net
+          docker run --detach --name knobs-as-1 --network knobs-aerospike-net alpine:3.20 sleep infinity
+
+      - name: Setup discovery topology
+        uses: ./.github/actions/setup-discovery-topology
+        with:
+          container-names: knobs-as-1
+          aerospike-network-name: knobs-aerospike-net
+          client-network-mtu: "1280"
+          proxy-sysctls: net.ipv4.ip_local_port_range=40000 40010
+          enable-bash-trace-mode: ${{ env.ENABLE_BASH_TRACE_MODE }}
+
+      - name: Verify MTU and sysctl took effect
+        run: |
+          mtu=$(docker run --rm --network discovery-client-net alpine:3.20 cat /sys/class/net/eth0/mtu)
+          range=$(docker run --rm --network container:toxiproxy alpine:3.20 cat /proc/sys/net/ipv4/ip_local_port_range)
+          echo "mtu=$mtu ip_local_port_range=$range"
+          [[ $mtu == 1280 && $range == 40000*40010 ]]

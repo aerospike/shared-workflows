@@ -71,3 +71,82 @@ strip_feature_key_file_directive() {
 
     sed '/^[[:space:]]*feature-key-file[[:space:]]/d' "$source_config" >"$target_config"
 }
+
+# Replace {{NODE_INDEX}} and {{NODE_NAME}} by plain string substitution, so
+# nothing else in the config is expanded or executed.
+render_node_config() {
+    local source_config=$1
+    local target_config=$2
+    local node_index=$3
+    local node_name=$4
+    local index_token='{{NODE_INDEX}}'
+    local name_token='{{NODE_NAME}}'
+    local content
+
+    content=$(
+        cat "$source_config"
+        printf x
+    )
+    content=${content%x}
+    content=${content//"$index_token"/$node_index}
+    content=${content//"$name_token"/$node_name}
+    printf '%s' "$content" >"$target_config"
+}
+
+parse_extra_hosts() {
+    local extra_hosts=$1
+    local entry
+    local -a entries=()
+
+    IFS=',' read -rd '' -a entries <<<"$extra_hosts" || true
+    for entry in "${entries[@]}"; do
+        entry="${entry#"${entry%%[![:space:]]*}"}"
+        entry="${entry%"${entry##*[![:space:]]}"}"
+        [[ -z $entry ]] && continue
+        printf '%s\n' "$entry"
+    done
+}
+
+# Set ENV_FLAGS to -e flags from semicolon-delimited env-vars, where \; is a
+# literal semicolon and \\ a literal backslash.
+parse_env_vars() {
+    local env_vars=$1
+    local current="" escape="false" char pair key i
+    local -a pairs=()
+
+    ENV_FLAGS=()
+    [[ -n $env_vars ]] || return 0
+    for ((i = 0; i < ${#env_vars}; i++)); do
+        char="${env_vars:i:1}"
+        if [[ $escape == "true" ]]; then
+            current+="$char"
+            escape="false"
+            continue
+        fi
+        if [[ $char == $'\\' ]]; then
+            escape="true"
+            continue
+        fi
+        if [[ $char == ";" ]]; then
+            pairs+=("$current")
+            current=""
+            continue
+        fi
+        current+="$char"
+    done
+    pairs+=("$current")
+
+    for pair in "${pairs[@]}"; do
+        [[ -z $pair ]] && continue
+        if [[ $pair != *=* ]]; then
+            printf 'Error: env-vars entries must be KEY=VALUE (got: %s)\n' "$pair" >&2
+            return 1
+        fi
+        key="${pair%%=*}"
+        if [[ -z $key || ! $key =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+            printf "Error: invalid env var name '%s' in env-vars\n" "$key" >&2
+            return 1
+        fi
+        ENV_FLAGS+=("-e" "$pair")
+    done
+}
