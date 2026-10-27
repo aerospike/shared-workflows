@@ -1,0 +1,11 @@
+controller:
+  replicaCount: 1
+  # hostPort also binds 80 and 443, which deadlocks a rolling update on the one kind node.
+  updateStrategy:
+    type: Recreate
+  hostPort:
+    enabled: true
+  admissionWebhooks:
+    enabled: false
+  service:
+    type: NodePort
