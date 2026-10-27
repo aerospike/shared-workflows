@@ -1,6 +1,6 @@
 # Setup kind and AKO
 
-GitHub Action that builds the L3 discovery cluster: one kind node, the Aerospike Kubernetes Operator, an `AerospikeCluster`, ingress-nginx TCP services, and the CoreDNS entry that lets the server resolve the shared endpoint hostname.
+GitHub Action that builds the L3 discovery cluster: one kind node, the Aerospike Kubernetes Operator, an `AerospikeCluster`, and ingress-nginx TCP services.
 
 The client process runs on the runner and dials the kind node's IP directly. The action points the endpoint hostname at that IP in the runner's `/etc/hosts`.
 
@@ -27,12 +27,11 @@ runner (client JVM)
   <node IP>:<nodePort> -> Service nodePort
 
 kind node
-  CoreDNS: as-endpoint.test -> node InternalIP
   node label aerospike.com/configured-alternate-access-address=as-endpoint.test
   AerospikeCluster size 1, alternateAccess: configuredIP, multiPodPerHost: true
 ```
 
-Inside the cluster the hostname resolves to the node IP, which is enough for the server to start. AKO writes a DNS name into `alternate-access-address` from that label; that path is unsupported and works because nothing rejects it yet. On the runner the same name resolves to the same node IP.
+AKO writes the hostname into `alternate-access-address` from that label; that path is unsupported and works because nothing rejects it yet. The server advertises the name without resolving it, so nothing inside the cluster resolves `as-endpoint.test`. This requires a server release that includes SERVER-1839. Only the runner resolves the name, to the node IP.
 
 The kind cluster is one control-plane node with the control-plane taint removed, so every pod lands on the one node the runner dials. The Aerospike cluster starts at one server. Testing Strategy §7 budgets L3 at 3–5 minutes including kind spin-up, and the scale tests grow the cluster after this action returns. Raise `cluster-size` when a caller needs the extra pods up front. Each added pod gets the next ingress port (`9001`, `9002`, …).
 

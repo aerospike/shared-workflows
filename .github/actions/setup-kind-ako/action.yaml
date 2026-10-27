@@ -1,8 +1,7 @@
 name: Setup kind and AKO
 description: >
   Starts a kind cluster, installs the Aerospike Kubernetes Operator, applies an
-  AerospikeCluster, installs ingress-nginx with a tcp-services ConfigMap, and
-  adds the CoreDNS entry that lets the server resolve the endpoint hostname.
+  AerospikeCluster, and installs ingress-nginx with a tcp-services ConfigMap.
 
 inputs:
   admin-password:
@@ -28,7 +27,7 @@ outputs:
     description: Aerospike admin password
     value: ${{ steps.prepare.outputs.admin-password }}
   endpoint-hostname:
-    description: Hostname the client and the server both resolve
+    description: Shared alternate-access hostname the server advertises
     value: ${{ steps.setup.outputs.endpoint-hostname }}
   ingress-ports:
     description: Comma-separated ingress-nginx tcp-services host ports

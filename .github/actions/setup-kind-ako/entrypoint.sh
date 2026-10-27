@@ -63,7 +63,7 @@ cmd_prepare() {
 }
 
 prepare_node() {
-    local ip corefile
+    local ip
     kubectl taint nodes --all node-role.kubernetes.io/control-plane:NoSchedule- || true
     kubectl taint nodes --all node-role.kubernetes.io/master:NoSchedule- || true
     # ENDPOINT_HOSTNAME is a DNS name. This label is an IP field; AKO 4.5.0
@@ -75,18 +75,8 @@ prepare_node() {
     kubectl label nodes --all "${ALTERNATE_ACCESS_LABEL}=${ENDPOINT_HOSTNAME}" --overwrite
 
     ip=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
-    corefile=$(kubectl -n kube-system get cm coredns -o jsonpath='{.data.Corefile}' |
-        awk -v entry="${ip} ${ENDPOINT_HOSTNAME}" \
-            '{ print } /^\.:53 \{/ { print "    hosts {\n        " entry "\n        fallthrough\n    }" }')
-    [[ $corefile == *"${ip} ${ENDPOINT_HOSTNAME}"* ]] || error "Corefile has no '.:53 {' server block"
-    printf '%s\n' "$corefile" >"$WORK_DIR/Corefile"
-    kubectl -n kube-system create configmap coredns --from-file="Corefile=$WORK_DIR/Corefile" \
-        --dry-run=client -o yaml | kubectl apply -f -
-    kubectl -n kube-system rollout restart deploy/coredns
-    kubectl -n kube-system rollout status deploy/coredns --timeout=180s
-
     echo "${ip} ${ENDPOINT_HOSTNAME}" | sudo tee -a /etc/hosts >/dev/null
-    echo "CoreDNS and the runner resolve ${ENDPOINT_HOSTNAME} to ${ip}"
+    echo "The runner resolves ${ENDPOINT_HOSTNAME} to ${ip}"
 }
 
 install_ako() {
@@ -201,7 +191,7 @@ run_group() {
 cmd_setup() {
     mkdir -p "$WORK_DIR"
     echo "::add-mask::${ADMIN_PASSWORD}"
-    run_group "Label the node and add the CoreDNS entry" prepare_node
+    run_group "Label the node and add the runner hosts entry" prepare_node
     run_group "Install cert-manager and AKO" install_ako
     run_group "Apply AerospikeCluster" deploy_cluster
     run_group "Install ingress-nginx and tcp-services" install_ingress
