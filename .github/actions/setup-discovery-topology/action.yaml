@@ -11,6 +11,10 @@ inputs:
   container-names:
     description: Comma-separated Aerospike container names from setup-aerospike-server
     required: true
+  client-network-mtu:
+    description: MTU of the client network (positive integer). Empty uses the Docker default.
+    required: false
+    default: ""
   client-network-name:
     description: Client-side Docker network name
     required: false
@@ -31,6 +35,10 @@ inputs:
     description: Toxiproxy container name (also the control-API hostname on the client network)
     required: false
     default: toxiproxy
+  proxy-sysctls:
+    description: Comma-separated key=value sysctls passed to the Toxiproxy container as --sysctl
+    required: false
+    default: ""
   startup-timeout:
     description: Seconds to wait for the Toxiproxy control API
     required: false
@@ -63,12 +71,12 @@ outputs:
   endpoint-hostname:
     description: Endpoint hostname the client should connect to
     value: ${{ steps.setup.outputs.endpoint-hostname }}
-  endpoint-port-base:
-    description: First proxy listen port
-    value: ${{ steps.setup.outputs.endpoint-port-base }}
   endpoint-ports:
     description: Comma-separated proxy listen ports
     value: ${{ steps.setup.outputs.endpoint-ports }}
+  listen-port-base:
+    description: First proxy listen port
+    value: ${{ steps.setup.outputs.listen-port-base }}
   proxy-map-json:
     description: Toxiproxy populate payload (JSON array)
     value: ${{ steps.setup.outputs.proxy-map-json }}
@@ -93,12 +101,14 @@ runs:
       shell: bash
       env:
         AEROSPIKE_NETWORK_NAME: ${{ inputs.aerospike-network-name }}
+        CLIENT_NETWORK_MTU: ${{ inputs.client-network-mtu }}
         CLIENT_NETWORK_NAME: ${{ inputs.client-network-name }}
         CONTAINER_NAMES: ${{ inputs.container-names }}
         ENABLE_BASH_TRACE_MODE: ${{ inputs.enable-bash-trace-mode }}
         ENDPOINT_HOSTNAME: ${{ inputs.endpoint-hostname }}
         LISTEN_PORT_BASE: ${{ inputs.listen-port-base }}
         PROXY_CONTAINER_NAME: ${{ inputs.proxy-container-name }}
+        PROXY_SYSCTLS: ${{ inputs.proxy-sysctls }}
         STARTUP_TIMEOUT: ${{ inputs.startup-timeout }}
         TLS_LISTEN_PORT_BASE: ${{ inputs.tls-listen-port-base }}
         TLS_UPSTREAM_PORT: ${{ inputs.tls-upstream-port }}

@@ -43,6 +43,19 @@ validate_docker_name() {
         error "$label is not a valid Docker name (got: '$value')"
 }
 
+parse_sysctls() {
+    local value=$1
+    local entry
+    local entries=()
+    SYSCTL_ARGS=()
+    IFS=',' read -r -a entries <<<"$value"
+    for entry in "${entries[@]}"; do
+        entry="${entry#"${entry%%[![:space:]]*}"}"
+        entry="${entry%"${entry##*[![:space:]]}"}"
+        SYSCTL_ARGS+=(--sysctl "$entry")
+    done
+}
+
 wait_for_toxiproxy() {
     local url=$1
     local timeout=$2
@@ -96,6 +109,8 @@ main() {
     local toxiproxy_image=${TOXIPROXY_IMAGE:-ghcr.io/shopify/toxiproxy:2.12.0}
     local toxiproxy_control_port=${TOXIPROXY_CONTROL_PORT:-8474}
     local startup_timeout=${STARTUP_TIMEOUT:-30}
+    local client_network_mtu=${CLIENT_NETWORK_MTU-}
+    local proxy_sysctls=${PROXY_SYSCTLS-}
     local output_file=${GITHUB_OUTPUT-}
 
     [[ -n $container_names ]] || error "container-names is required"
@@ -114,6 +129,16 @@ main() {
     if [[ -n $tls_listen_port_base ]]; then
         validate_port "$tls_listen_port_base" "tls-listen-port-base"
         validate_port "$tls_upstream_port" "tls-upstream-port"
+    fi
+
+    local network_create_args=()
+    if [[ -n $client_network_mtu ]]; then
+        network_create_args+=(--opt "com.docker.network.driver.mtu=$client_network_mtu")
+    fi
+
+    SYSCTL_ARGS=()
+    if [[ -n $proxy_sysctls ]]; then
+        parse_sysctls "$proxy_sysctls"
     fi
 
     docker network inspect "$aerospike_network" >/dev/null 2>&1 ||
@@ -151,10 +176,13 @@ main() {
     payload=$(merge_json_arrays "$clear_json" "$tls_json")
 
     if ! docker network inspect "$client_network" >/dev/null 2>&1; then
-        docker network create "$client_network"
+        docker network create "${network_create_args[@]}" "$client_network"
         echo "Created Docker network: $client_network"
     else
         echo "Docker network already exists: $client_network"
+        if [[ -n $client_network_mtu ]]; then
+            echo "Warning: client-network-mtu not applied to existing network $client_network" >&2
+        fi
     fi
 
     echo "Pulling Toxiproxy image: $toxiproxy_image"
@@ -165,6 +193,7 @@ main() {
         --name "$proxy_container" \
         --detach \
         --network "$aerospike_network" \
+        "${SYSCTL_ARGS[@]}" \
         "$toxiproxy_image" \
         -host=0.0.0.0 \
         -port="$toxiproxy_control_port"
@@ -190,7 +219,7 @@ main() {
         {
             echo "client-network-name=$client_network"
             echo "endpoint-hostname=$endpoint_hostname"
-            echo "endpoint-port-base=$listen_port_base"
+            echo "listen-port-base=$listen_port_base"
             echo "endpoint-ports=$endpoint_ports"
             echo "tls-endpoint-ports=$tls_endpoint_ports"
             echo "proxy-name-port-map=$name_port_map"
