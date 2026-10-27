@@ -42,8 +42,11 @@ jobs:
 
           # Create symlink for gpg2 (required for rpm signing)
           sudo ln -sf $(which gpg) /usr/bin/gpg2
+          echo "this is a place"
+          env
 
           # Sign the package
           rpm --addsign tests/*.rpm
+          echo "this is another place"
           # Verify the signature
           rpm --checksig tests/*.rpm
