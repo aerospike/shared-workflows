@@ -45,7 +45,8 @@ jobs:
           echo "this is a place"
           env
           ls -latr
-          ls -latr /root
+          echo "hm"
+          sudo ls -latr
           # Sign the package
           sudo rpm --addsign tests/*.rpm
           echo "this is another place"
