@@ -59,7 +59,7 @@ Set `jf-bundle-revision` to give each build of a release its own bundle version.
 
 ### Promoting a bundle
 
-Use `reusable_promote-release-bundle.yaml`. It enforces the stage order above, and `gh-environment` lets a gate owner approve each promotion. See [Promote Release Bundle](../promote-release-bundle/README.md).
+Use `reusable_promote-release-bundle.yaml`. It enforces the stage order above, and `gh-environment` lets a gate owner approve each promotion. At DEV, TEST and STAGE, `supersede` replaces an earlier revision of the same release and stores an attested record of the replacement. See [Promote Release Bundle](../promote-release-bundle/README.md).
 
 The [promote-release-bundle composite action](https://github.com/aerospike/shared-workflows/blob/main/.github/actions/promote-release-bundle/README.md) skips the order check. Both take `include-repos` and `exclude-repos` (semicolon-separated target repositories, e.g. `my-project-deb-test-local;my-project-rpm-test-local`) to limit which repositories are promoted. With neither set, all repositories in the bundle are promoted.
 

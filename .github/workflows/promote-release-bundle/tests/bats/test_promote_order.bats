@@ -1,44 +1,9 @@
 #!/usr/bin/env bats
 
+load helpers
+
 setup() {
-    ENTRYPOINT="${BATS_TEST_DIRNAME}/../../entrypoint.sh"
-    export JF_CALLS="${BATS_TEST_TMPDIR}/jf-calls.log"
-    export JF_DATA="${BATS_TEST_TMPDIR}/data"
-    : >"$JF_CALLS"
-    mkdir -p "$JF_DATA"
-    jq -n '{promotions: [], total: 0}' >"${JF_DATA}/records.json"
-    bundle_has app.deb app.rpm
-
-    mkdir -p "${BATS_TEST_TMPDIR}/bin"
-    cat >"${BATS_TEST_TMPDIR}/bin/jf" <<'STUB'
-#!/usr/bin/env bash
-if [[ $1 == "config" && $2 == "export" ]]; then
-    printf '%s' '{"url":"https://jfrog.test/","accessToken":"tkn"}' | base64 -w0
-    exit 0
-fi
-echo "jf $*" >>"$JF_CALLS"
-STUB
-    cat >"${BATS_TEST_TMPDIR}/bin/curl" <<'STUB'
-#!/usr/bin/env bash
-cat >/dev/null
-[[ -z ${CURL_FAILS-} ]] || exit 22
-path="${*: -1}"
-path="${path%%\?*}"
-case "${path#https://jfrog.test/lifecycle/api/v2/}" in
-promotion/records/my-app/1.2.3) cat "${JF_DATA}/records.json" ;;
-promotion/records/my-app/1.2.3/*) cat "${JF_DATA}/promotion-${path##*/}.json" ;;
-release_bundle/records/my-app/1.2.3) cat "${JF_DATA}/bundle.json" ;;
-*) exit 22 ;;
-esac
-STUB
-    chmod +x "${BATS_TEST_TMPDIR}/bin/jf" "${BATS_TEST_TMPDIR}/bin/curl"
-    export PATH="${BATS_TEST_TMPDIR}/bin:$PATH"
-    cd "$BATS_TEST_TMPDIR" || exit 1
-}
-
-bundle_has() {
-    jq -n '$ARGS.positional | {total_artifacts_count: length, artifacts: map({path: .})}' \
-        --args "$@" >"${JF_DATA}/bundle.json"
+    setup_stubs
 }
 
 # promoted STAGE [STATUS [PATH...]]. PATH defaults to every artifact in the bundle.
@@ -54,18 +19,10 @@ promoted() {
     if (($#)); then
         paths=("$@")
     else
-        mapfile -t paths < <(jq -r '.artifacts[].path' "${JF_DATA}/bundle.json")
+        mapfile -t paths < <(jq -r '.artifacts[].path' "${JF_DATA}/bundle-1.2.3.json")
     fi
     jq -n --arg repo "test-${stage,,}-local" '$ARGS.positional | {artifacts: map({path: ($repo + "/" + .)})}' \
         --args "${paths[@]}" >"${JF_DATA}/promotion-${id}.json"
-}
-
-promote() {
-    run bash "$ENTRYPOINT" --bundle-name my-app --version 1.2.3 --project test --target-stage "$@"
-}
-
-promoted_to() {
-    grep -Fq "jf release-bundle-promote my-app 1.2.3 $1 --project=test" "$JF_CALLS"
 }
 
 @test "promotes to DEV or TEST with no prior promotion" {
@@ -131,15 +88,18 @@ promoted_to() {
 @test "unreadable promotion records stop the promotion" {
     CURL_FAILS=1 promote TEST
     [ "$status" -eq 1 ]
+    [[ $output == *"cannot promote without the promotion records"* ]]
     [ ! -s "$JF_CALLS" ]
 }
 
 @test "a truncated artifact list stops the promotion" {
     promoted TEST
-    jq '.total_artifacts_count = 3' "${JF_DATA}/bundle.json" >"${JF_DATA}/bundle.tmp"
-    mv "${JF_DATA}/bundle.tmp" "${JF_DATA}/bundle.json"
+    jq '.total_artifacts_count = 3' "${JF_DATA}/bundle-1.2.3.json" >"${JF_DATA}/bundle-1.2.3.tmp"
+    mv "${JF_DATA}/bundle-1.2.3.tmp" "${JF_DATA}/bundle-1.2.3.json"
     promote STAGE
     [ "$status" -eq 1 ]
+    [[ $output == *"unexpected record at"* ]]
+    [ ! -s "$JF_CALLS" ]
 }
 
 @test "passes include and exclude repos to jf only when set" {

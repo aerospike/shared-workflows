@@ -40,7 +40,7 @@ The orchestrated path is lower-maintenance for new consumers; use the composable
 | `reusable_artifacts-cicd.yaml`         | Orchestrated build, sign, deploy                                |
 | `reusable_docker-build-deploy.yaml`    | Multi-arch OCI images with attestations                         |
 | `reusable_create-release-bundle.yaml`  | JFrog release bundles (combines artifact + docker outputs)      |
-| `reusable_promote-release-bundle.yaml` | Promote a bundle to a stage, enforcing stage order              |
+| `reusable_promote-release-bundle.yaml` | Promote or supersede a bundle at a stage, enforcing stage order |
 | `reusable_execute-build.yaml`          | Composable. Run arbitrary build script, upload artifacts        |
 | `reusable_sign-artifacts.yaml`         | Composable. GPG sign deb/rpm/generic/.tgz, SSL.com sign nupkg   |
 | `reusable_deploy-artifacts.yaml`       | Composable. Upload to JFrog Artifactory (auto-routes by type)   |
