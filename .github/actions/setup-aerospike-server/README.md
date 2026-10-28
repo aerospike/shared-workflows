@@ -135,7 +135,6 @@ With `server-edition: auto`, the action infers `enterprise` from repositories na
 | `service-ports`     | Comma-separated host ports (e.g., `3000,3001,3002`)                           |
 | `tls-service-ports` | Comma-separated TLS host ports (empty if TLS disabled)                        |
 | `tls-cert-dir`      | Directory containing generated TLS certs (empty if TLS disabled)              |
-| `cluster-settings`  | Cluster settings as JSON, for `aerospike-node-control`                        |
 
 When `publish-ports` is `false`, the action still reports `service-ports` / `tls-service-ports` as the calculated host-port numbers, but it does not bind them. Use this for L2 discovery tests so a client running on the runner cannot connect through localhost mappings. Isolation from node IPs still requires running the client in a container that is not on the Aerospike network.
 
@@ -156,7 +155,7 @@ For `server-edition: enterprise`, the action requires `features-file` or `featur
 
 ## Starting nodes later
 
-`start-nodes: K` starts only nodes 1 to K. Nodes K+1 to `num-nodes` are created with `docker create`, with the same arguments and per-node config, as templates for [`aerospike-node-control`](../aerospike-node-control), which starts copies of one while a test runs. The readiness wait covers the started nodes and waits for a cluster of exactly K nodes. With `enable-strong-consistency`, the roster is set from those K nodes.
+`start-nodes: K` starts only nodes 1 to K. Nodes K+1 to `num-nodes` are created with `docker create`, with the same arguments and per-node config, so a later step can `docker start` them or use them as a template. The readiness wait covers the started nodes and waits for a cluster of exactly K nodes. With `enable-strong-consistency`, the roster is set from those K nodes.
 
 The mesh seeds of a node that is not running do not resolve. The server logs `Error while converting address 'aerospike-3': Name or service not known`, keeps retrying, and forms a cluster from the seeds that answer. A node started later joins through its own seeds.
 
@@ -164,7 +163,6 @@ The mesh seeds of a node that is not running do not resolve. The server logs `Er
 
 ```yaml
 - uses: aerospike/shared-workflows/.github/actions/setup-aerospike-server@v3
-  id: aerospike
   with:
     num-nodes: "4"
     start-nodes: "3"
@@ -172,12 +170,7 @@ The mesh seeds of a node that is not running do not resolve. The server logs `Er
     features-content: ${{ secrets.AEROSPIKE_SERVER_FEATURES_CONF }}
     oidc-provider: ${{ vars.JFROG_OIDC_PROVIDER }}
     oidc-audience: ${{ vars.JFROG_OIDC_AUDIENCE }}
-# Tests start against 3 nodes and add copies of node 4 through node control
-
-- uses: aerospike/shared-workflows/.github/actions/aerospike-node-control@v3
-  with:
-    cluster-settings: ${{ steps.aerospike.outputs.cluster-settings }}
-    template-node-index: "4"
+# Tests against 3 nodes, then: docker start aerospike-4
 ```
 
 ## Per-node config

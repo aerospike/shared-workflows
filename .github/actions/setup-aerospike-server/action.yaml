@@ -17,8 +17,7 @@ inputs:
     description: >
       Number of nodes to start (1 to num-nodes). Defaults to num-nodes.
       Nodes after the first start-nodes are created with docker create but
-      not started, as templates for the aerospike-node-control action.
-      Readiness waits for a cluster of start-nodes nodes.
+      not started. Readiness waits for a cluster of start-nodes nodes.
     required: false
     default: ""
   container-name-prefix:
@@ -165,9 +164,6 @@ outputs:
   tls-cert-dir:
     description: Directory containing generated TLS certs (empty if TLS disabled)
     value: ${{ steps.generate-tls-certs.outputs.tls-cert-dir }}
-  cluster-settings:
-    description: Cluster settings as JSON, passed to aerospike-node-control
-    value: ${{ steps.cluster-settings.outputs.cluster-settings }}
 
 runs:
   using: composite
@@ -231,17 +227,6 @@ runs:
 
         echo "effective-security=$effective_security" >> "$GITHUB_OUTPUT"
         echo "server-edition=$server_edition" >> "$GITHUB_OUTPUT"
-
-    - name: Record cluster settings
-      id: cluster-settings
-      shell: bash
-      env:
-        PREFIX: ${{ inputs.container-name-prefix }}
-        NETWORK_NAME: ${{ inputs.network-name }}
-        SERVICE_PORT: ${{ inputs.service-port }}
-      run: |
-        settings=$(jq -nc --arg prefix "$PREFIX" --arg network "$NETWORK_NAME" --arg service_port "$SERVICE_PORT" '$ARGS.named')
-        echo "cluster-settings=$settings" >> "$GITHUB_OUTPUT"
 
     - name: Set up JFrog CLI
       id: jf
