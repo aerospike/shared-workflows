@@ -1,0 +1,83 @@
+name: Setup kind and AKO
+description: >
+  Starts a kind cluster, installs the Aerospike Kubernetes Operator, applies an
+  AerospikeCluster, installs ingress-nginx with a tcp-services ConfigMap, and
+  adds the CoreDNS entry that lets the server resolve the endpoint hostname.
+
+inputs:
+  admin-password:
+    description: Aerospike admin password. Generated when empty.
+    required: false
+    default: ""
+  cluster-size:
+    description: >
+      Initial AerospikeCluster size. One server keeps setup inside the L3
+      3-5 minute budget. One kind node runs every pod.
+    required: false
+    default: "1"
+  features-content:
+    description: Enterprise feature-key file contents
+    required: true
+  server-image:
+    description: Aerospike server image used by the AerospikeCluster, as repository:tag
+    required: false
+    default: aerospike/aerospike-server-enterprise:8.1.2.5
+
+outputs:
+  admin-password:
+    description: Aerospike admin password
+    value: ${{ steps.prepare.outputs.admin-password }}
+  endpoint-hostname:
+    description: Hostname the client and the server both resolve
+    value: ${{ steps.setup.outputs.endpoint-hostname }}
+  ingress-ports:
+    description: Comma-separated ingress-nginx tcp-services host ports
+    value: ${{ steps.setup.outputs.ingress-ports }}
+  kubeconfig:
+    description: kubeconfig written by kind
+    value: ${{ steps.setup.outputs.kubeconfig }}
+  service-node-ports:
+    description: Comma-separated NodePorts for the Aerospike service port, pod order
+    value: ${{ steps.setup.outputs.service-node-ports }}
+
+runs:
+  using: composite
+  steps:
+    - name: Validate inputs
+      id: prepare
+      shell: bash
+      env:
+        ADMIN_PASSWORD: ${{ inputs.admin-password }}
+        CLUSTER_SIZE: ${{ inputs.cluster-size }}
+        FEATURES_CONTENT: ${{ inputs.features-content }}
+        SERVER_IMAGE: ${{ inputs.server-image }}
+      run: bash "${{ github.action_path }}/entrypoint.sh" prepare
+
+    # install_only, because kind-action's post step deletes the cluster it created, which took 10 minutes
+    - name: Install kind and kubectl
+      uses: helm/kind-action@1544676c07bb3570fcb70166beaa07c4528fd4aa # v1.15.1
+      with:
+        version: v0.33.0
+        kubectl_version: v1.35.0
+        install_only: true
+        ignore_failed_clean: true
+
+    - name: Create kind cluster
+      shell: bash
+      # AKO 4.5.0 supports Kubernetes through 1.35.
+      run: kind create cluster --name kind-ako --image kindest/node:v1.35.0 --wait 180s
+
+    - name: Install helm
+      uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+      with:
+        version: v3.22.1
+
+    - name: Install AKO, the AerospikeCluster, and ingress-nginx
+      id: setup
+      shell: bash
+      env:
+        ADMIN_PASSWORD: ${{ steps.prepare.outputs.admin-password }}
+        CLUSTER_SIZE: ${{ inputs.cluster-size }}
+        FEATURES_CONTENT: ${{ inputs.features-content }}
+        SERVER_IMAGE: ${{ inputs.server-image }}
+      run: bash "${{ github.action_path }}/entrypoint.sh" setup
