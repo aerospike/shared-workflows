@@ -156,7 +156,7 @@ For `server-edition: enterprise`, the action requires `features-file` or `featur
 
 ## Starting nodes later
 
-`start-nodes: K` starts only nodes 1 to K. Nodes K+1 to `num-nodes` are created with `docker create`, with the same arguments and per-node config, so a later step can start them with [`aerospike-node-control`](../aerospike-node-control) or use them as a template. The readiness wait covers the started nodes and waits for a cluster of exactly K nodes. With `enable-strong-consistency`, the roster is set from those K nodes.
+`start-nodes: K` starts only nodes 1 to K. Nodes K+1 to `num-nodes` are created with `docker create`, with the same arguments and per-node config, as templates for [`aerospike-node-control`](../aerospike-node-control), which starts copies of one while a test runs. The readiness wait covers the started nodes and waits for a cluster of exactly K nodes. With `enable-strong-consistency`, the roster is set from those K nodes.
 
 The mesh seeds of a node that is not running do not resolve. The server logs `Error while converting address 'aerospike-3': Name or service not known`, keeps retrying, and forms a cluster from the seeds that answer. A node started later joins through its own seeds.
 
@@ -172,13 +172,12 @@ The mesh seeds of a node that is not running do not resolve. The server logs `Er
     features-content: ${{ secrets.AEROSPIKE_SERVER_FEATURES_CONF }}
     oidc-provider: ${{ vars.JFROG_OIDC_PROVIDER }}
     oidc-audience: ${{ vars.JFROG_OIDC_AUDIENCE }}
-# Tests against 3 nodes
+# Tests start against 3 nodes and add copies of node 4 through node control
 
 - uses: aerospike/shared-workflows/.github/actions/aerospike-node-control@v3
   with:
     cluster-settings: ${{ steps.aerospike.outputs.cluster-settings }}
-    node-index: "4"
-    operation: start
+    template-node-index: "4"
 ```
 
 ## Per-node config

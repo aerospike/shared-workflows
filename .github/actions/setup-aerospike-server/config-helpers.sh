@@ -116,20 +116,6 @@ subnet_prefix() {
     printf '%s\n' "${1%.0/24}"
 }
 
-# Print the container's IP on network. A created container that has not
-# started only has an IP if it was given a fixed one with --ip; otherwise
-# print nothing.
-container_address() {
-    local container=$1
-    local network=$2
-    local address
-
-    address=$(docker inspect --format '{{with index .NetworkSettings.Networks "'"$network"'"}}{{if .IPAddress}}{{.IPAddress}}{{else if .IPAMConfig}}{{.IPAMConfig.IPv4Address}}{{end}}{{end}}' "$container")
-    if [[ $address =~ ^([0-9]{1,3}[.]){3}[0-9]{1,3}$ ]]; then
-        printf '%s\n' "$address"
-    fi
-}
-
 # Set ENV_FLAGS to -e flags from semicolon-delimited env-vars, where \; is a
 # literal semicolon and \\ a literal backslash.
 parse_env_vars() {

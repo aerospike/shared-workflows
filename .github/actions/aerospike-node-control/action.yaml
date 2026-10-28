@@ -1,63 +1,90 @@
 name: Aerospike Node Control
 description: >
-  Starts or stops one node of a cluster created by setup-aerospike-server
-  and waits until the running nodes form a stable cluster without or with it.
+  Starts a background helper that adds and removes nodes of a cluster created
+  by setup-aerospike-server while a later test step runs. The test writes
+  start and stop requests to control-dir and reads the acknowledgements.
 
 inputs:
   cluster-settings:
     description: The cluster-settings output of setup-aerospike-server
     required: true
-  node-index:
-    description: 1-based index of the node to start or stop (container prefix-N)
+  template-node-index:
+    description: >
+      1-based index of a node setup-aerospike-server created but did not start
+      (start-nodes below num-nodes). Each start request runs a copy of it.
     required: true
-  operation:
-    description: start or stop
-    required: true
-  timeout:
-    description: Seconds to wait for each running node to report a stable cluster
+  control-dir:
+    description: >
+      Directory the test writes requests to. Defaults to
+      $RUNNER_TEMP/aerospike-node-control. A test in a container needs it
+      bind-mounted at the same path.
     required: false
-    default: "30"
+    default: ""
+  alternate-access-address:
+    description: >
+      Hostname or IP a start request with alternate-port=<port> writes as the
+      new node's alternate-access-address
+    required: false
+    default: ""
   enable-bash-trace-mode:
     description: Show commands being executed in shell scripts for debugging
     required: false
     default: "false"
 
 outputs:
-  cluster-size:
-    description: Number of running nodes, which the cluster size was waited for
-    value: ${{ steps.node-control.outputs.cluster-size }}
-  running-nodes:
-    description: Comma-separated names of the running nodes
-    value: ${{ steps.node-control.outputs.running-nodes }}
-  node-address:
-    description: IP of the node on network-name (may be empty after stop)
-    value: ${{ steps.node-control.outputs.node-address }}
+  control-dir:
+    description: Directory the helper serves requests from
+    value: ${{ steps.node-control.outputs.control-dir }}
+  log-file:
+    description: The helper's log on the runner
+    value: ${{ steps.node-control.outputs.log-file }}
 
 runs:
   using: composite
   steps:
-    - name: Start or stop Aerospike node
+    - name: Start node control helper
       id: node-control
       shell: bash
       env:
         ENABLE_BASH_TRACE_MODE: ${{ inputs.enable-bash-trace-mode }}
+        CONTROL_DIR: ${{ inputs.control-dir }}
         CONTAINER_NAME_PREFIX: ${{ fromJSON(inputs.cluster-settings).prefix }}
-        NODE_INDEX: ${{ inputs.node-index }}
-        OPERATION: ${{ inputs.operation }}
         NETWORK_NAME: ${{ fromJSON(inputs.cluster-settings).network }}
         SERVICE_PORT: ${{ fromJSON(inputs.cluster-settings).service_port }}
-        WAIT_TIMEOUT: ${{ inputs.timeout }}
-        ENABLE_SECURITY: ${{ fromJSON(inputs.cluster-settings).security }}
-        ENABLE_SC: ${{ fromJSON(inputs.cluster-settings).strong_consistency }}
-        TOOLS_IMAGE: ${{ fromJSON(inputs.cluster-settings).tools_image }}
+        TEMPLATE_NODE_INDEX: ${{ inputs.template-node-index }}
+        ALTERNATE_ACCESS_ADDRESS: ${{ inputs.alternate-access-address }}
       run: |
-        "${{ github.action_path }}/node-control.sh" \
+        if [[ "$ENABLE_BASH_TRACE_MODE" == "true" ]]; then
+          set -x
+        fi
+
+        control_dir="${CONTROL_DIR:-$RUNNER_TEMP/aerospike-node-control}"
+        mkdir -p "$control_dir"
+        rm -f "$control_dir/.ready"
+        log_file=$(mktemp "$RUNNER_TEMP/aerospike-node-control.XXXXXX")
+
+        # The helper outlives this step; the runner ends it with the job.
+        nohup "${{ github.action_path }}/node-control.sh" \
+          --control-dir "$control_dir" \
           --container-name-prefix "$CONTAINER_NAME_PREFIX" \
-          --node-index "$NODE_INDEX" \
-          --operation "$OPERATION" \
           --network "$NETWORK_NAME" \
           --service-port "$SERVICE_PORT" \
-          --timeout "$WAIT_TIMEOUT" \
-          --security "$ENABLE_SECURITY" \
-          --enable-sc "$ENABLE_SC" \
-          --tools-image "$TOOLS_IMAGE"
+          --template-node-index "$TEMPLATE_NODE_INDEX" \
+          --alternate-access-address "$ALTERNATE_ACCESS_ADDRESS" \
+          >"$log_file" 2>&1 </dev/null &
+        pid=$!
+
+        for _ in $(seq 1 100); do
+          [[ -e "$control_dir/.ready" ]] && break
+          kill -0 "$pid" 2>/dev/null || break
+          sleep 0.1
+        done
+        if [[ ! -e "$control_dir/.ready" ]]; then
+          cat "$log_file"
+          echo "Error: node control helper did not start" >&2
+          exit 1
+        fi
+        cat "$log_file"
+
+        echo "control-dir=$control_dir" >> "$GITHUB_OUTPUT"
+        echo "log-file=$log_file" >> "$GITHUB_OUTPUT"

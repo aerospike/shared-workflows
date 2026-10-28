@@ -842,7 +842,7 @@ jobs:
           done
 
   test-start-nodes-subnet:
-    name: Start 2 of 3 nodes on a fixed subnet, then start and stop by index
+    name: Start 2 of 3 nodes on a fixed subnet, then add and remove nodes through node control
     runs-on: ubuntu-22.04
     steps:
       - name: Harden the runner (Audit all outbound calls)
@@ -878,33 +878,66 @@ jobs:
             [[ "$ip" == "172.30.57.$((i + 1))" ]] || { echo "Unexpected IP on aerospike-$i"; exit 1; }
           done
 
-      - name: Start node 3
-        id: start-node-3
+      - name: Start node control helper
+        id: node-control
         uses: ./.github/actions/aerospike-node-control
         with:
           cluster-settings: ${{ steps.setup-aerospike-server.outputs.cluster-settings }}
-          node-index: "3"
-          operation: start
-          timeout: "60"
+          template-node-index: "3"
+          alternate-access-address: 127.0.0.1
           enable-bash-trace-mode: ${{ env.ENABLE_BASH_TRACE_MODE }}
 
-      - name: Stop node 2
-        id: stop-node-2
-        uses: ./.github/actions/aerospike-node-control
-        with:
-          cluster-settings: ${{ steps.setup-aerospike-server.outputs.cluster-settings }}
-          node-index: "2"
-          operation: stop
-          timeout: "60"
-          enable-bash-trace-mode: ${{ env.ENABLE_BASH_TRACE_MODE }}
-
-      - name: Verify node control outputs
+      - name: Add and remove nodes through control requests
         env:
-          START_SIZE: ${{ steps.start-node-3.outputs.cluster-size }}
-          START_ADDRESS: ${{ steps.start-node-3.outputs.node-address }}
-          STOP_SIZE: ${{ steps.stop-node-2.outputs.cluster-size }}
-          STOP_RUNNING: ${{ steps.stop-node-2.outputs.running-nodes }}
+          CONTROL_DIR: ${{ steps.node-control.outputs.control-dir }}
         run: |
-          echo "start node 3: size=$START_SIZE address=$START_ADDRESS; stop node 2: size=$STOP_SIZE running=$STOP_RUNNING"
-          [[ "$START_SIZE" == "3" && "$START_ADDRESS" == "172.30.57.4" ]] || { echo "Unexpected start outputs"; exit 1; }
-          [[ "$STOP_SIZE" == "2" && "$STOP_RUNNING" == "aerospike-1,aerospike-3" ]] || { echo "Unexpected stop outputs"; exit 1; }
+          request() {
+            local id
+            id=$(cat /proc/sys/kernel/random/uuid)
+            echo "$1" > "$CONTROL_DIR/$id.tmp"
+            mv "$CONTROL_DIR/$id.tmp" "$CONTROL_DIR/$id.request"
+            for _ in $(seq 1 300); do
+              [[ -e "$CONTROL_DIR/$id.ack" ]] && break
+              sleep 0.1
+            done
+            cat "$CONTROL_DIR/$id.ack"
+          }
+          wait_cluster_size() {
+            local size=""
+            for _ in $(seq 1 60); do
+              size=$(docker exec aerospike-1 asinfo -v statistics | tr ';' '\n' | sed -n 's/^cluster_size=//p')
+              [[ "$size" == "$1" ]] && return
+              sleep 1
+            done
+            echo "Expected cluster size $1, got ${size:-none}"
+            exit 1
+          }
+
+          ack=$(request "start")
+          echo "start: $ack"
+          [[ "$ack" == container=aerospike-4$'\n'address=172.30.57.* ]] || { echo "Unexpected start ack"; exit 1; }
+          wait_cluster_size 3
+
+          ack=$(request "start address=172.30.57.20 alternate-port=30005")
+          echo "start address=172.30.57.20 alternate-port=30005: $ack"
+          [[ "$ack" == container=aerospike-5$'\n'address=172.30.57.20 ]] || { echo "Unexpected start ack"; exit 1; }
+          wait_cluster_size 4
+          alternate=$(docker exec aerospike-5 asinfo -v service-clear-alt)
+          [[ "$alternate" == "127.0.0.1:30005" ]] || { echo "Unexpected service-clear-alt on aerospike-5: $alternate"; exit 1; }
+
+          ack=$(request "stop aerospike-1")
+          echo "stop aerospike-1: $ack"
+          [[ "$ack" == error=* ]] || { echo "Expected an error for a node the helper did not start"; exit 1; }
+
+          for node in aerospike-4 aerospike-5; do
+            ack=$(request "stop $node")
+            echo "stop $node: $ack"
+            [[ "$ack" == "removed=$node" ]] || { echo "Unexpected stop ack"; exit 1; }
+          done
+          wait_cluster_size 2
+
+      - name: Show node control log
+        if: ${{ always() && steps.node-control.outputs.log-file != '' }}
+        env:
+          LOG_FILE: ${{ steps.node-control.outputs.log-file }}
+        run: cat "$LOG_FILE"

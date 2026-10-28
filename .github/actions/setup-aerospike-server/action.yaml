@@ -17,7 +17,7 @@ inputs:
     description: >
       Number of nodes to start (1 to num-nodes). Defaults to num-nodes.
       Nodes after the first start-nodes are created with docker create but
-      not started; start them later with the aerospike-node-control action.
+      not started, as templates for the aerospike-node-control action.
       Readiness waits for a cluster of start-nodes nodes.
     required: false
     default: ""
@@ -239,13 +239,8 @@ runs:
         PREFIX: ${{ inputs.container-name-prefix }}
         NETWORK_NAME: ${{ inputs.network-name }}
         SERVICE_PORT: ${{ inputs.service-port }}
-        SECURITY: ${{ steps.validate.outputs.effective-security }}
-        ENABLE_SC: ${{ inputs.enable-strong-consistency }}
-        TOOLS_IMAGE: ${{ inputs.container-repo-url }}/database-docker-virtual/aerospike-tools:${{ inputs.tools-tag }}
       run: |
-        settings=$(jq -nc --arg prefix "$PREFIX" --arg network "$NETWORK_NAME" --arg service_port "$SERVICE_PORT" \
-          --arg security "$SECURITY" --arg strong_consistency "$ENABLE_SC" --arg tools_image "$TOOLS_IMAGE" \
-          '$ARGS.named')
+        settings=$(jq -nc --arg prefix "$PREFIX" --arg network "$NETWORK_NAME" --arg service_port "$SERVICE_PORT" '$ARGS.named')
         echo "cluster-settings=$settings" >> "$GITHUB_OUTPUT"
 
     - name: Set up JFrog CLI

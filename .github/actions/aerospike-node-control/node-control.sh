@@ -1,90 +1,202 @@
 #!/usr/bin/env bash
-# Start or stop node <prefix>-<index> of a setup-aerospike-server cluster and
-# wait until every running node reports a stable cluster of the running nodes.
-set -euo pipefail
+# Serve the node start and stop requests a running test writes to a control
+# directory. Each start runs a new node cloned from a node setup-aerospike-server
+# created but did not start; each stop removes a node this script started. The
+# request and acknowledgement format is in README.md.
+set -uo pipefail
 
 if [[ ${ENABLE_BASH_TRACE_MODE-} == "true" ]]; then
     set -x
 fi
-
-script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-setup_dir="$script_dir/../setup-aerospike-server"
-# shellcheck source=/dev/null
-source "$setup_dir/config-helpers.sh"
 
 error() {
     echo "Error: $1" >&2
     exit 1
 }
 
+dir=""
 prefix=aerospike
-node_index=""
-operation=""
 network=aerospike-net
 service_port=3000
-timeout=30
-security="false"
-enable_sc="false"
-tools_image=""
+template_index=""
+alternate_address=""
 
-while [[ $# -gt 0 ]]; do
-    case $1 in
-    --container-name-prefix) prefix=$2 ;;
-    --node-index) node_index=$2 ;;
-    --operation) operation=$2 ;;
-    --network) network=$2 ;;
-    --service-port) service_port=$2 ;;
-    --timeout) timeout=$2 ;;
-    --security) security=$2 ;;
-    --enable-sc) enable_sc=$2 ;;
-    --tools-image) tools_image=$2 ;;
-    *) error "Unknown option: $1" ;;
-    esac
-    shift 2
-done
+# Parse the options of one start request into start_ip and start_alternate_port,
+# or set start_error.
+parse_start_options() {
+    local option
+    start_ip=""
+    start_alternate_port=""
+    start_error=""
 
-[[ $node_index =~ ^[1-9][0-9]*$ ]] || error "node-index must be a positive integer (got: '$node_index')"
-[[ $operation == "start" || $operation == "stop" ]] || error "operation must be 'start' or 'stop' (got: '$operation')"
+    for option in $1; do
+        case $option in
+        alternate-port=*)
+            if [[ -z $alternate_address ]]; then
+                start_error="$option needs the alternate-access-address input"
+            elif [[ ! ${option#*=} =~ ^[1-9][0-9]*$ ]]; then
+                start_error="$option is not a port"
+            else
+                start_alternate_port=${option#*=}
+            fi
+            ;;
+        address=*)
+            if [[ ${option#*=} =~ ^[0-9]{1,3}([.][0-9]{1,3}){3}$ ]]; then
+                start_ip=${option#*=}
+            else
+                start_error="$option is not an IPv4 address"
+            fi
+            ;;
+        *)
+            start_error="unknown start option $option"
+            ;;
+        esac
+    done
+    [[ -z $start_error ]]
+}
 
-name="${prefix}-${node_index}"
-running=$(docker inspect --format '{{.State.Running}}' "$name" 2>/dev/null) ||
-    error "container $name does not exist"
+# Write the acknowledgement for request $1 atomically, so a reader never sees
+# a partial file.
+ack() {
+    printf '%s\n' "$2" >"$dir/$1.tmp"
+    mv "$dir/$1.tmp" "$dir/$1.ack"
+}
 
-if [[ $operation == "start" ]]; then
-    [[ $running == "false" ]] || error "$name is already running"
-    echo "Starting container: $name"
-    docker start "$name"
-else
-    [[ $running == "true" ]] || error "$name is not running"
-    echo "Stopping container: $name"
-    docker stop "$name"
-fi
+inspect() {
+    docker inspect "$template" | jq -r "$1"
+}
 
-running_nodes=""
-cluster_size=0
-while IFS= read -r container; do
-    suffix=${container#"$prefix"-}
-    if [[ $container == "$prefix"-* && $suffix =~ ^[0-9]+$ ]]; then
-        running_nodes+="${running_nodes:+,}$container"
-        cluster_size=$((cluster_size + 1))
+start() {
+    local id=$1 name conf address args=() run_options=() option
+    if ! parse_start_options "$2"; then
+        ack "$id" "error=$start_error"
+        return
     fi
-done < <(docker ps --format '{{.Names}}' | sort -V)
 
-if ((cluster_size > 0)); then
-    bash "$setup_dir/wait-for-aerospike-server.sh" \
-        --container-names "$running_nodes" \
-        --cluster-size "$cluster_size" \
-        --timeout "$timeout" \
-        --service-port "$service_port" \
-        --security "$security" \
-        --enable-sc "$enable_sc" \
-        --tools-image "$tools_image" \
-        --network "$network"
+    while docker inspect "$prefix-$next" >/dev/null 2>&1; do
+        next=$((next + 1))
+    done
+    name="$prefix-$next"
+    next=$((next + 1))
+    conf="$work/$name.conf"
+
+    if [[ -n $start_alternate_port ]]; then
+        ACCESS="        alternate-access-address $alternate_address"$'\n'"        alternate-access-port $start_alternate_port"$'\n' \
+            awk -v port="$service_port" '{print} $1 == "port" && $2 == port {printf "%s", ENVIRON["ACCESS"]}' \
+            "$work/template.conf" >"$conf"
+    else
+        cp "$work/template.conf" "$conf"
+    fi
+    if [[ -n $start_ip ]]; then
+        run_options+=(--ip "$start_ip")
+    fi
+
+    for option in "${cmd[@]}"; do
+        args+=("${option/#"$template_conf"/$conf_dir/$name.conf}")
+    done
+
+    if docker cp "$conf" "$writer:$conf_dir/$name.conf" 2>"$work/err" &&
+        docker run -d --name "$name" "${run_options[@]}" "${run_args[@]}" "$image" "${args[@]}" >/dev/null 2>>"$work/err"; then
+        started+="$name "
+        address=$(docker inspect -f "{{(index .NetworkSettings.Networks \"$network\").IPAddress}}" "$name")
+        ack "$id" "$(printf 'container=%s\naddress=%s' "$name" "$address")"
+        echo "Started $name ($address) $2"
+    else
+        ack "$id" "error=$(tr '\n' ' ' <"$work/err")"
+    fi
+}
+
+stop() {
+    local id=$1 name=$2
+    if [[ $started == *" $name "* ]] && docker rm -f "$name" >/dev/null; then
+        started=${started/ $name / }
+        ack "$id" "removed=$name"
+        echo "Removed $name"
+    else
+        ack "$id" "error=cannot remove $name, which this helper did not start"
+    fi
+}
+
+main() {
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+        --control-dir) dir=$2 ;;
+        --container-name-prefix) prefix=$2 ;;
+        --network) network=$2 ;;
+        --service-port) service_port=$2 ;;
+        --template-node-index) template_index=$2 ;;
+        --alternate-access-address) alternate_address=$2 ;;
+        *) error "Unknown option: $1" ;;
+        esac
+        shift 2
+    done
+
+    [[ -d $dir ]] || error "control directory '$dir' does not exist"
+    [[ $template_index =~ ^[1-9][0-9]*$ ]] || error "template-node-index must be a positive integer (got: '$template_index')"
+
+    template="$prefix-$template_index"
+    writer="$prefix-1"
+    next=$((template_index + 1))
+    started=" "
+    work="$(mktemp -d)"
+    trap 'rm -rf "$work"' EXIT
+
+    docker inspect "$template" >/dev/null 2>&1 || error "template node $template does not exist"
+    [[ $(docker inspect -f '{{.State.Running}}' "$writer" 2>/dev/null) == "true" ]] ||
+        error "$writer is not running; it mounts the config volume new nodes read"
+
+    image=$(inspect '.[0].Config.Image')
+    entrypoint=$(inspect '.[0].Config.Entrypoint[0] // empty')
+    mapfile -t cmd < <(inspect '.[0].Config.Cmd // [] | .[]')
+    template_conf=""
+    for ((i = 0; i < ${#cmd[@]} - 1; i++)); do
+        if [[ ${cmd[i]} == "--config-file" ]]; then
+            template_conf=${cmd[i + 1]}
+        fi
+    done
+    [[ -n $template_conf ]] || error "$template has no --config-file; it needs the per-node config of a multi-node cluster"
+    conf_dir=$(dirname "$template_conf")
+
+    run_args=(--network "$network" --ulimit nofile=15000)
+    [[ -n $entrypoint ]] && run_args+=(--entrypoint "$entrypoint")
+    while IFS= read -r mount; do
+        run_args+=(-v "$mount")
+    done < <(inspect '.[0].Mounts[] | "\(if .Type == "volume" then .Name else .Source end):\(.Destination)\(if .RW then "" else ":ro" end)"')
+    while IFS= read -r host; do
+        run_args+=(--add-host "$host")
+    done < <(inspect '.[0].HostConfig.ExtraHosts // [] | .[]')
+    while IFS= read -r variable; do
+        run_args+=(-e "$variable")
+    done < <(inspect '.[0].Config.Env // [] | .[]')
+
+    docker cp "$template:$template_conf" "$work/template.conf" || error "cannot copy $template_conf from $template"
+    if [[ -n $alternate_address ]] && ! awk -v port="$service_port" '$1 == "port" && $2 == port {found = 1} END {exit !found}' "$work/template.conf"; then
+        error "$template_conf has no 'port $service_port' line to add the alternate access address after"
+    fi
+
+    touch "$dir/.ready"
+    echo "Serving node control requests in $dir (template $template)"
+
+    local request id action arg
+    while true; do
+        for request in "$dir"/*.request; do
+            [[ -e $request ]] || continue
+            id=$(basename "$request" .request)
+            action=""
+            arg=""
+            read -r action arg <"$request" || true
+            rm -f "$request"
+
+            case $action in
+            start) start "$id" "$arg" ;;
+            stop) stop "$id" "$arg" ;;
+            *) ack "$id" "error=unknown request: $action $arg" ;;
+            esac
+        done
+        sleep 0.1
+    done
+}
+
+if [[ ${BASH_SOURCE[0]} == "$0" ]]; then
+    main "$@"
 fi
-
-echo "Running nodes: ${running_nodes:-(none)} (cluster size $cluster_size)"
-{
-    echo "cluster-size=$cluster_size"
-    echo "running-nodes=$running_nodes"
-    echo "node-address=$(container_address "$name" "$network")"
-} >>"${GITHUB_OUTPUT:-/dev/stdout}"
