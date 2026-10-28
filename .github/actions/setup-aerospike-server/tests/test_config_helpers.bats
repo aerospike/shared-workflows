@@ -234,18 +234,3 @@ EOF
     [ "$output" = $'a.example:10.0.0.1\nb:::1\nc:host-gateway' ]
 }
 
-
-@test "subnet_prefix prints the first three octets of a /24" {
-    run subnet_prefix 172.30.66.0/24
-
-    [ "$status" -eq 0 ]
-    [ "$output" = "172.30.66" ]
-}
-
-@test "subnet_prefix rejects anything but a.b.c.0/24" {
-    for subnet in 172.30.66.0/16 172.30.66.5/24 172.30.256.0/24 172.30.0/24 ""; do
-        run --separate-stderr subnet_prefix "$subnet"
-        [ "$status" -ne 0 ]
-        [[ $stderr == *"network-subnet"* ]]
-    done
-}

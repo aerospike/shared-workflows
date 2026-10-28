@@ -173,7 +173,6 @@ runs:
       shell: bash
       env:
         ENABLE_BASH_TRACE_MODE: ${{ inputs.enable-bash-trace-mode }}
-        NETWORK_SUBNET: ${{ inputs.network-subnet }}
       run: |
         echo "ENABLE_BASH_TRACE_MODE=$ENABLE_BASH_TRACE_MODE" >> "$GITHUB_ENV"
         if [[ "$ENABLE_BASH_TRACE_MODE" == "true" ]]; then
@@ -203,10 +202,6 @@ runs:
             || error "include-tls-name-san must be 'true' or 'false' (got: '${{ inputs.include-tls-name-san }}')"
           [[ "${{ inputs.tls-cert-cn }}" =~ ^[A-Za-z0-9]([A-Za-z0-9.-]{0,251}[A-Za-z0-9])?$ ]] \
             || error "tls-cert-cn must be a DNS name (got: '${{ inputs.tls-cert-cn }}')"
-        fi
-
-        if [[ -n "$NETWORK_SUBNET" ]]; then
-          subnet_prefix "$NETWORK_SUBNET" >/dev/null || exit 1
         fi
 
         effective_security="${{ inputs.enable-security }}"

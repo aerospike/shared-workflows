@@ -85,7 +85,7 @@ fi
 
 subnet=""
 if [[ -n $network_subnet ]]; then
-    subnet=$(subnet_prefix "$network_subnet") || exit 1
+    subnet=${network_subnet%.0/24}
     ((num_nodes <= 253)) || error "network-subnet has room for 253 nodes (got: num-nodes $num_nodes)"
 fi
 

@@ -107,15 +107,6 @@ parse_extra_hosts() {
     done
 }
 
-# Print the first three octets of a network-subnet of the form a.b.c.0/24.
-subnet_prefix() {
-    if [[ ! $1 =~ ^((25[0-5]|2[0-4][0-9]|1?[0-9]?[0-9])[.]){3}0/24$ ]]; then
-        printf 'Error: network-subnet must be an IPv4 /24 such as 172.30.0.0/24 (got: %q)\n' "$1" >&2
-        return 1
-    fi
-    printf '%s\n' "${1%.0/24}"
-}
-
 # Set ENV_FLAGS to -e flags from semicolon-delimited env-vars, where \; is a
 # literal semicolon and \\ a literal backslash.
 parse_env_vars() {
