@@ -21,9 +21,6 @@ jobs:
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: install dpkg-dev
-        run: |
-          sudo apt-get update && sudo apt-get install dpkg-dev -y
       - name: setup GPG
         uses: aerospike/shared-workflows/.github/actions/setup-gpg@mcbridem/infra-730-just-testing
         with:
