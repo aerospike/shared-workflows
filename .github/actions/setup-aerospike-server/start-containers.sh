@@ -5,6 +5,9 @@
 # the caller's config with {{NODE_INDEX}} and {{NODE_NAME}} replaced, and
 # copied into the config volume as <container-name>.conf.
 #
+# Nodes after --start-nodes are created with docker create but not started.
+# With --network-subnet a.b.c.0/24, node i gets the fixed IP a.b.c.(i + 1).
+#
 # ENV_VARS (semicolon-delimited KEY=VALUE pairs) and EXTRA_HOSTS
 # (comma-separated name:ip entries) are read from the environment.
 set -euo pipefail
@@ -25,6 +28,8 @@ error() {
 }
 
 num_nodes=1
+start_nodes=""
+network_subnet=""
 base_port=3000
 prefix=aerospike
 service_port=3000
@@ -47,6 +52,8 @@ loader_container=""
 while [[ $# -gt 0 ]]; do
     case $1 in
     --num-nodes) num_nodes=$2 ;;
+    --start-nodes) start_nodes=$2 ;;
+    --network-subnet) network_subnet=$2 ;;
     --base-port) base_port=$2 ;;
     --container-name-prefix) prefix=$2 ;;
     --service-port) service_port=$2 ;;
@@ -69,6 +76,18 @@ while [[ $# -gt 0 ]]; do
     esac
     shift 2
 done
+
+if [[ -z $start_nodes ]]; then
+    start_nodes=$num_nodes
+elif [[ ! $start_nodes =~ ^[1-9][0-9]*$ ]] || ((start_nodes > num_nodes)); then
+    error "start-nodes must be between 1 and num-nodes ($num_nodes) (got: '$start_nodes')"
+fi
+
+subnet=""
+if [[ -n $network_subnet ]]; then
+    subnet=${network_subnet%.0/24}
+    ((num_nodes <= 253)) || error "network-subnet has room for 253 nodes (got: num-nodes $num_nodes)"
+fi
 
 container_names=""
 service_ports=""
@@ -139,11 +158,14 @@ for ((i = 1; i <= num_nodes; i++)); do
 
     tls_host_port=$((tls_base_port + i - 1))
 
-    run_args=(
-        "--name" "$name"
-        "--detach"
-        "--network" "$network"
-    )
+    run_args=("--name" "$name")
+    if ((i <= start_nodes)); then
+        run_args+=("--detach")
+    fi
+    run_args+=("--network" "$network")
+    if [[ -n $network_subnet ]]; then
+        run_args+=("--ip" "$subnet.$((i + 1))")
+    fi
 
     if [[ $publish_ports == "true" ]]; then
         run_args+=("-p" "${host_port}:${service_port}")
@@ -177,14 +199,21 @@ for ((i = 1; i <= num_nodes; i++)); do
         run_args+=("$image")
     fi
 
+    docker_command=run
+    action="Starting"
+    if ((i > start_nodes)); then
+        docker_command=create
+        action="Creating (not started)"
+    fi
+
     if [[ $publish_ports == "true" ]]; then
-        echo "Starting container: $name (host port: $host_port)"
+        echo "$action container: $name (host port: $host_port)"
     else
-        echo "Starting container: $name (host ports unpublished)"
+        echo "$action container: $name (host ports unpublished)"
     fi
 
     # Prevent UNIX to windows path conversions here to prevent the aerospike.conf path from being wrongly converted
-    MSYS_NO_PATHCONV=1 docker run "${run_args[@]}"
+    MSYS_NO_PATHCONV=1 docker "$docker_command" "${run_args[@]}"
 
     # Build CSV outputs
     if [[ -n $container_names ]]; then

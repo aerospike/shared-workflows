@@ -13,6 +13,13 @@ inputs:
     description: Number of cluster nodes (1+)
     required: false
     default: "1"
+  start-nodes:
+    description: >
+      Number of nodes to start (1 to num-nodes). Defaults to num-nodes.
+      Nodes after the first start-nodes are created with docker create but
+      not started. Readiness waits for a cluster of start-nodes nodes.
+    required: false
+    default: ""
   container-name-prefix:
     description: "Container name prefix (nodes: prefix-1, prefix-2, ...)"
     required: false
@@ -73,6 +80,12 @@ inputs:
     description: Docker network name
     required: false
     default: aerospike-net
+  network-subnet:
+    description: >
+      IPv4 /24 subnet for the Docker network, such as 172.30.0.0/24. Node N
+      gets the fixed IP a.b.c.(N + 1), so 172.30.0.2 for node 1.
+    required: false
+    default: ""
   base-port:
     description: Base host port (node N maps to base-port + N - 1)
     required: false
@@ -420,6 +433,8 @@ runs:
     - name: Create Docker network
       id: create-network
       shell: bash
+      env:
+        NETWORK_SUBNET: ${{ inputs.network-subnet }}
       run: |
         if [[ "$ENABLE_BASH_TRACE_MODE" == "true" ]]; then
           set -x
@@ -427,7 +442,7 @@ runs:
 
         network="${{ inputs.network-name }}"
         if ! docker network inspect "$network" >/dev/null 2>&1; then
-          docker network create "$network"
+          docker network create ${NETWORK_SUBNET:+--subnet "$NETWORK_SUBNET"} "$network"
           echo "Created Docker network: $network"
         else
           echo "Docker network already exists: $network"
@@ -440,9 +455,13 @@ runs:
       env:
         ENV_VARS: ${{ inputs.env-vars }}
         EXTRA_HOSTS: ${{ inputs.extra-hosts }}
+        START_NODES: ${{ inputs.start-nodes }}
+        NETWORK_SUBNET: ${{ inputs.network-subnet }}
       run: |
         "${{ github.action_path }}/start-containers.sh" \
           --num-nodes "${{ inputs.num-nodes }}" \
+          --start-nodes "$START_NODES" \
+          --network-subnet "$NETWORK_SUBNET" \
           --base-port "${{ inputs.base-port }}" \
           --container-name-prefix "${{ inputs.container-name-prefix }}" \
           --service-port "${{ inputs.service-port }}" \
@@ -464,6 +483,8 @@ runs:
 
     - name: Wait for Aerospike Server readiness
       shell: bash
+      env:
+        START_NODES: ${{ inputs.start-nodes }}
       run: |
         chmod +x "${{ github.action_path }}/wait-for-aerospike-server.sh"
 
@@ -472,8 +493,16 @@ runs:
           bash_command+=("-x")
         fi
 
+        container_names="${{ steps.start-containers.outputs.container-names }}"
+        size_args=()
+        if [[ -n "$START_NODES" ]]; then
+          container_names=$(cut -d, -f "1-$START_NODES" <<<"$container_names")
+          size_args=(--cluster-size "$START_NODES")
+        fi
+
         "${bash_command[@]}" "${{ github.action_path }}/wait-for-aerospike-server.sh" \
-          --container-names "${{ steps.start-containers.outputs.container-names }}" \
+          --container-names "$container_names" \
+          "${size_args[@]}" \
           --timeout "${{ inputs.startup-timeout }}" \
           --service-port "${{ inputs.service-port }}" \
           --security "${{ steps.validate.outputs.effective-security }}" \
@@ -573,7 +602,7 @@ runs:
         }
 
         # Wait for SC partitions to become active after recluster
-        num_nodes=${{ inputs.num-nodes }}
+        num_nodes=${{ inputs.start-nodes || inputs.num-nodes }}
         timeout=${{ inputs.sc-stability-timeout-seconds }}
         echo "  Waiting for cluster stability (size=$num_nodes, ignore-migrations=false)..."
         elapsed=0
