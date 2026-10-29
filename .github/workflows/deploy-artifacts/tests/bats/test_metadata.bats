@@ -727,3 +727,332 @@ YAML
     result=$(get_jar_metadata "$dir/child-one-1.0.0.jar")
     [[ $result == "child-one 1.0.0 com.example.parent" ]]
 }
+
+# Run get_jar_metadata with xmllint absent from PATH.
+# Args: <jar>
+_run_get_jar_metadata_without_xmllint() {
+    local jar="$1"
+    local bindir="$BATS_TEST_TMPDIR/no-xmllint-bin"
+    local cmd src
+    mkdir -p "$bindir"
+    for cmd in unzip sed awk dirname basename; do
+        src=$(command -v "$cmd")
+        ln -sfn "$src" "$bindir/$cmd"
+    done
+    run bash -c 'export PATH="$1"; source "$2"; source "$3"; set +eu; trap - ERR; get_jar_metadata "$4"' \
+        bash "$bindir" "$DEPLOY_DIR/../lib/maven-helpers.sh" "$DEPLOY_DIR/package_utils.sh" "$jar"
+}
+
+@test "get_jar_metadata keeps an unsplit filename when the jar has no metadata" {
+    local dir="$BATS_TEST_TMPDIR/filename-only"
+    mkdir -p "$dir"
+    make_jar_with_embedded_poms "$dir/my-app-1.0.0.jar"
+
+    result=$(get_jar_metadata "$dir/my-app-1.0.0.jar")
+    [[ $result == "my-app-1.0.0 my-app-1.0.0 " ]]
+}
+
+@test "get_jar_metadata splits javadoc and sources filenames when no metadata exists" {
+    local dir="$BATS_TEST_TMPDIR/classifier-filename"
+    mkdir -p "$dir"
+    make_jar_with_embedded_poms "$dir/my-app-1.0.0-javadoc.jar"
+    make_jar_with_embedded_poms "$dir/my-app-1.0.0-sources.jar"
+
+    result=$(get_jar_metadata "$dir/my-app-1.0.0-javadoc.jar")
+    [[ $result == "my-app 1.0.0 " ]]
+    result=$(get_jar_metadata "$dir/my-app-1.0.0-sources.jar")
+    [[ $result == "my-app 1.0.0 " ]]
+}
+
+@test "get_jar_metadata uses the only basename match when the sibling POM disagrees" {
+    local dir="$BATS_TEST_TMPDIR/props-over-sibling"
+    mkdir -p "$dir"
+    make_jar_with_embedded_poms "$dir/my-app-1.0.0.jar" "com.example.app:my-app:1.0.0"
+    write_maven_pom "$dir/my-app-1.0.0.pom" "  <groupId>com.example.other</groupId>
+  <artifactId>other</artifactId>
+  <version>9.0.0</version>"
+
+    result=$(get_jar_metadata "$dir/my-app-1.0.0.jar")
+    [[ $result == "my-app 1.0.0 com.example.app" ]]
+}
+
+@test "get_jar_metadata fails when a pom.properties entry is missing a coordinate" {
+    local dir="$BATS_TEST_TMPDIR/missing-version"
+    mkdir -p "$dir"
+    make_jar_with_pom_props_at "$dir/my-app-1.0.0.jar" \
+        "META-INF/maven/com.example/my-app/pom.properties" "com.example" "my-app" ""
+
+    run get_jar_metadata "$dir/my-app-1.0.0.jar"
+    [[ $status -ne 0 ]]
+    [[ $output == *"missing groupId, artifactId, or version"* ]]
+}
+
+@test "get_jar_metadata keeps the filename when the jar has no pom and no sibling" {
+    local dir="$BATS_TEST_TMPDIR/foo-only"
+    mkdir -p "$dir"
+    make_jar_with_embedded_poms "$dir/foo.jar"
+
+    result=$(get_jar_metadata "$dir/foo.jar")
+    [[ $result == "foo foo " ]]
+}
+
+@test "get_jar_metadata skips a sibling POM when xmllint is absent" {
+    local dir="$BATS_TEST_TMPDIR/no-xmllint"
+    mkdir -p "$dir"
+    make_flat_jar_with_pom "$dir" "  <artifactId>my-app</artifactId>
+  <version>2.1.0</version>
+  <groupId>com.example.direct</groupId>"
+
+    _run_get_jar_metadata_without_xmllint "$dir/test.jar"
+    [[ $status -eq 0 ]]
+    [[ $output == "test test " ]]
+}
+
+@test "get_jar_metadata reads groupId for a javadoc jar from the main jar" {
+    local dir="$BATS_TEST_TMPDIR/javadoc-main"
+    mkdir -p "$dir"
+    make_jar_with_embedded_poms "$dir/my-app-1.0.0-javadoc.jar"
+    make_jar_with_embedded_poms "$dir/my-app-1.0.0.jar" "com.example.app:my-app:1.0.0"
+
+    result=$(get_jar_metadata "$dir/my-app-1.0.0-javadoc.jar")
+    [[ $result == "my-app 1.0.0 com.example.app" ]]
+}
+
+@test "get_jar_metadata reads groupId for a sources jar from the main jar" {
+    local dir="$BATS_TEST_TMPDIR/sources-main"
+    mkdir -p "$dir"
+    make_jar_with_embedded_poms "$dir/my-app-1.0.0-sources.jar"
+    make_jar_with_embedded_poms "$dir/my-app-1.0.0.jar" "com.example.app:my-app:1.0.0"
+
+    result=$(get_jar_metadata "$dir/my-app-1.0.0-sources.jar")
+    [[ $result == "my-app 1.0.0 com.example.app" ]]
+}
+
+@test "get_jar_metadata leaves groupId empty when a classifier jar has no main jar" {
+    local dir="$BATS_TEST_TMPDIR/javadoc-alone"
+    mkdir -p "$dir"
+    make_jar_with_embedded_poms "$dir/my-app-1.0.0-javadoc.jar"
+
+    result=$(get_jar_metadata "$dir/my-app-1.0.0-javadoc.jar")
+    [[ $result == "my-app 1.0.0 " ]]
+}
+
+@test "get_jar_metadata leaves groupId empty when the main jar has no pom.properties" {
+    local dir="$BATS_TEST_TMPDIR/main-without-props"
+    mkdir -p "$dir"
+    make_jar_with_embedded_poms "$dir/my-app-1.0.0-javadoc.jar"
+    make_jar_with_embedded_poms "$dir/my-app-1.0.0.jar"
+
+    result=$(get_jar_metadata "$dir/my-app-1.0.0-javadoc.jar")
+    [[ $result == "my-app 1.0.0 " ]]
+}
+
+@test "get_jar_metadata selects the module pom.properties regardless of zip order" {
+    local dir="$BATS_TEST_TMPDIR/shaded-order"
+    local first second
+    mkdir -p "$dir"
+    make_jar_with_embedded_poms "$dir/dep-first.jar" \
+        "org.slf4j:slf4j-api:2.0.9" \
+        "com.aerospike:bulk-loader:1.2.3"
+    mv "$dir/dep-first.jar" "$dir/bulk-loader-1.2.3.jar"
+    first=$(get_jar_metadata "$dir/bulk-loader-1.2.3.jar")
+
+    make_jar_with_embedded_poms "$dir/mod-first.jar" \
+        "com.aerospike:bulk-loader:1.2.3" \
+        "org.slf4j:slf4j-api:2.0.9"
+    mv "$dir/mod-first.jar" "$dir/bulk-loader-1.2.3.jar"
+    second=$(get_jar_metadata "$dir/bulk-loader-1.2.3.jar")
+
+    [[ $first == "bulk-loader 1.2.3 com.aerospike" ]]
+    [[ $second == "$first" ]]
+}
+
+@test "get_jar_metadata selects the child pom.properties when the parent is also embedded" {
+    local dir="$BATS_TEST_TMPDIR/parent-and-child"
+    mkdir -p "$dir"
+    make_jar_with_embedded_poms "$dir/child-one-1.0.0.jar" \
+        "com.example.parent:parent-proj:1.0.0" \
+        "com.example.parent:child-one:1.0.0"
+
+    result=$(get_jar_metadata "$dir/child-one-1.0.0.jar")
+    [[ $result == "child-one 1.0.0 com.example.parent" ]]
+}
+
+@test "get_jar_metadata ignores decoy pom.properties at shallower and earlier paths" {
+    local dir="$BATS_TEST_TMPDIR/decoy-paths"
+    mkdir -p "$dir"
+    make_jar_with_pom_props_at "$dir/my-app-1.0.0.jar" \
+        "META-INF/pom.properties" "com.decoy" "shallow" "0.0.1" \
+        "META-INF/maven/aaa/zzz/pom.properties" "com.decoy" "zzz" "0.0.1" \
+        "META-INF/maven/com.example.app/my-app/pom.properties" "com.example.app" "my-app" "1.0.0"
+
+    result=$(get_jar_metadata "$dir/my-app-1.0.0.jar")
+    [[ $result == "my-app 1.0.0 com.example.app" ]]
+}
+
+@test "get_jar_metadata prefers the sibling full GAV over embedded coordinates" {
+    command -v xmllint >/dev/null 2>&1 || skip "xmllint required"
+
+    local dir="$BATS_TEST_TMPDIR/sibling-gav"
+    mkdir -p "$dir"
+    make_jar_with_embedded_poms "$dir/test.jar" \
+        "com.other:my-app:2.1.0" \
+        "com.example:my-app:2.1.0"
+    write_maven_pom "$dir/test.pom" "  <groupId>com.example</groupId>
+  <artifactId>my-app</artifactId>
+  <version>2.1.0</version>"
+
+    result=$(get_jar_metadata "$dir/test.jar")
+    [[ $result == "my-app 2.1.0 com.example" ]]
+}
+
+@test "get_jar_metadata matches a javadoc or tests classifier suffix" {
+    local dir="$BATS_TEST_TMPDIR/classifier-suffix"
+    local javadoc_result tests_result
+    mkdir -p "$dir"
+    make_jar_with_embedded_poms "$dir/my-app-1.0.0-javadoc.jar" \
+        "org.slf4j:slf4j-api:2.0.9" \
+        "com.example.app:my-app:1.0.0"
+    make_jar_with_embedded_poms "$dir/my-app-1.0.0-tests.jar" \
+        "org.slf4j:slf4j-api:2.0.9" \
+        "com.example.app:my-app:1.0.0"
+
+    javadoc_result=$(get_jar_metadata "$dir/my-app-1.0.0-javadoc.jar")
+    tests_result=$(get_jar_metadata "$dir/my-app-1.0.0-tests.jar")
+    [[ $javadoc_result == "my-app 1.0.0 com.example.app" ]]
+    [[ $tests_result == "my-app 1.0.0 com.example.app" ]]
+}
+
+@test "get_jar_metadata fails when a SNAPSHOT stem matches both a release and a snapshot" {
+    local dir="$BATS_TEST_TMPDIR/snapshot-ambiguous"
+    mkdir -p "$dir"
+    make_jar_with_pom_props_at "$dir/my-app-1.0.0-SNAPSHOT.jar" \
+        "META-INF/maven/com.example.app/my-app/pom.properties" "com.example.app" "my-app" "1.0.0" \
+        "META-INF/maven/com.example.app/my-app-snapshot/pom.properties" "com.example.app" "my-app" "1.0.0-SNAPSHOT"
+
+    run get_jar_metadata "$dir/my-app-1.0.0-SNAPSHOT.jar"
+    [[ $status -ne 0 ]]
+    [[ $output == *"com.example.app:my-app:1.0.0 "* ]]
+    [[ $output == *"com.example.app:my-app:1.0.0-SNAPSHOT "* ]]
+}
+
+@test "get_jar_metadata uses the sibling GAV when a SNAPSHOT stem matches two versions" {
+    command -v xmllint >/dev/null 2>&1 || skip "xmllint required"
+
+    local dir="$BATS_TEST_TMPDIR/snapshot-sibling"
+    mkdir -p "$dir"
+    make_jar_with_pom_props_at "$dir/my-app-1.0.0-SNAPSHOT.jar" \
+        "META-INF/maven/com.example.app/my-app/pom.properties" "com.example.app" "my-app" "1.0.0" \
+        "META-INF/maven/com.example.app/my-app-snapshot/pom.properties" "com.example.app" "my-app" "1.0.0-SNAPSHOT"
+    write_maven_pom "$dir/my-app-1.0.0-SNAPSHOT.pom" "  <groupId>com.example.app</groupId>
+  <artifactId>my-app</artifactId>
+  <version>1.0.0-SNAPSHOT</version>"
+
+    result=$(get_jar_metadata "$dir/my-app-1.0.0-SNAPSHOT.jar")
+    [[ $result == "my-app 1.0.0-SNAPSHOT com.example.app" ]]
+}
+
+@test "get_jar_metadata fails when two groupIds share an artifactId and version" {
+    local dir="$BATS_TEST_TMPDIR/two-groups"
+    mkdir -p "$dir"
+    make_jar_with_embedded_poms "$dir/my-app-1.0.0.jar" \
+        "com.example:my-app:1.0.0" \
+        "com.other:my-app:1.0.0"
+
+    run get_jar_metadata "$dir/my-app-1.0.0.jar"
+    [[ $status -ne 0 ]]
+    [[ $output == *"com.example:my-app:1.0.0 "* ]]
+    [[ $output == *"com.other:my-app:1.0.0 "* ]]
+    [[ $output != *"my-app 1.0.0 com.example"* ]]
+    [[ $output != *"my-app 1.0.0 com.other"* ]]
+}
+
+@test "get_jar_metadata fails when the only embedded POM does not match the filename" {
+    local dir="$BATS_TEST_TMPDIR/renamed"
+    mkdir -p "$dir"
+    make_jar_with_embedded_poms "$dir/renamed.jar" "com.example:my-app:1.0.0"
+
+    run get_jar_metadata "$dir/renamed.jar"
+    [[ $status -ne 0 ]]
+    [[ $output == *"com.example:my-app:1.0.0 "* ]]
+}
+
+@test "get_jar_metadata treats two paths with the same GAV as one match" {
+    local dir="$BATS_TEST_TMPDIR/duplicate-gav"
+    mkdir -p "$dir"
+    make_jar_with_pom_props_at "$dir/my-app-1.0.0.jar" \
+        "META-INF/maven/com.example.app/my-app/pom.properties" "com.example.app" "my-app" "1.0.0" \
+        "META-INF/maven/com.example.app/my-app-copy/pom.properties" "com.example.app" "my-app" "1.0.0"
+
+    result=$(get_jar_metadata "$dir/my-app-1.0.0.jar")
+    [[ $result == "my-app 1.0.0 com.example.app" ]]
+}
+
+@test "get_jar_metadata does not treat a dotted version as a classifier" {
+    local dir="$BATS_TEST_TMPDIR/dotted-version"
+    mkdir -p "$dir"
+    make_jar_with_pom_props_at "$dir/foo-1.0.0.jar" \
+        "META-INF/maven/com.example/foo-short/pom.properties" "com.example" "foo" "1.0" \
+        "META-INF/maven/com.example/foo/pom.properties" "com.example" "foo" "1.0.0"
+
+    result=$(get_jar_metadata "$dir/foo-1.0.0.jar")
+    [[ $result == "foo 1.0.0 com.example" ]]
+}
+
+@test "get_jar_metadata fails when xmllint is absent and embedded coordinates are ambiguous" {
+    local dir="$BATS_TEST_TMPDIR/no-xmllint-ambiguous"
+    mkdir -p "$dir"
+    make_jar_with_embedded_poms "$dir/test.jar" \
+        "com.example:my-app:2.1.0" \
+        "com.other:other-app:9.9.9"
+    write_maven_pom "$dir/test.pom" "  <groupId>com.example</groupId>
+  <artifactId>my-app</artifactId>
+  <version>2.1.0</version>"
+
+    _run_get_jar_metadata_without_xmllint "$dir/test.jar"
+    [[ $status -ne 0 ]]
+    [[ $output == *"com.example:my-app:2.1.0 "* ]]
+    [[ $output == *"com.other:other-app:9.9.9 "* ]]
+}
+
+@test "get_jar_metadata fails when several main jars match a classifier" {
+    local dir="$BATS_TEST_TMPDIR/several-mains"
+    mkdir -p "$dir"
+    make_jar_with_embedded_poms "$dir/my-app-1.0.0-javadoc.jar"
+    make_jar_with_embedded_poms "$dir/my-app-1.0.0.jar" "com.example.app:my-app:1.0.0"
+    make_jar_with_embedded_poms "$dir/my-app-9.9.9.jar" "com.example.app:my-app:9.9.9"
+
+    run get_jar_metadata "$dir/my-app-1.0.0-javadoc.jar"
+    [[ $status -ne 0 ]]
+    [[ $output == *"my-app-1.0.0.jar"* ]]
+    [[ $output == *"my-app-9.9.9.jar"* ]]
+}
+
+@test "get_jar_metadata fails when the main jar pom.properties are ambiguous" {
+    local dir="$BATS_TEST_TMPDIR/main-ambiguous"
+    mkdir -p "$dir"
+    make_jar_with_embedded_poms "$dir/my-app-1.0.0-javadoc.jar"
+    make_jar_with_embedded_poms "$dir/my-app-1.0.0.jar" \
+        "com.other:my-app:1.0.0" \
+        "com.example:my-app:1.0.0"
+
+    run get_jar_metadata "$dir/my-app-1.0.0-javadoc.jar"
+    [[ $status -ne 0 ]]
+    [[ $output == *"com.other:my-app:1.0.0 "* ]]
+    [[ $output == *"com.example:my-app:1.0.0 "* ]]
+    [[ $output != *"my-app 1.0.0 com.example"* ]]
+    [[ $output != *"my-app 1.0.0 com.other"* ]]
+}
+
+@test "process_jar returns an error and does not copy an ambiguous jar" {
+    local dir="$BATS_TEST_TMPDIR/process-ambiguous"
+    mkdir -p "$dir"
+    make_jar_with_embedded_poms "$dir/my-app-1.0.0.jar" \
+        "com.example:my-app:1.0.0" \
+        "com.other:my-app:1.0.0"
+
+    run process_jar "$dir/my-app-1.0.0.jar" "$dir/out"
+    [[ $status -ne 0 ]]
+    [[ ! -e "$dir/out/com.example/my-app/1.0.0/my-app-1.0.0.jar" ]]
+    [[ ! -e "$dir/out/com.other/my-app/1.0.0/my-app-1.0.0.jar" ]]
+}
