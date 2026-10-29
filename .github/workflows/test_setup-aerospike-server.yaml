@@ -223,6 +223,143 @@ jobs:
           echo "asinfo status: $result"
           [[ $rc -eq 0 && "$result" == *"ok"* ]] || { echo "Expected status=ok"; exit 1; }
 
+  test-custom-config-features:
+    name: Custom config gains feature-key-file
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Aerospike Server with a custom config and features-content
+        id: setup-aerospike-server
+        uses: ./.github/actions/setup-aerospike-server
+        with:
+          features-content: ${{ secrets.AES_FEATURES_CONF }}
+          config-content: |
+            service {
+                cluster-name docker
+            }
+            logging {
+                console {
+                    context any info
+                }
+            }
+            network {
+                service {
+                    address any
+                    port 3000
+                }
+                heartbeat {
+                    mode mesh
+                    port 3002
+                }
+                fabric {
+                    port 3001
+                }
+            }
+            namespace test {
+                replication-factor 1
+                storage-engine memory {
+                    data-size 1G
+                }
+            }
+          oidc-provider: ${{ vars.JFROG_OIDC_PROVIDER }}
+          oidc-audience: ${{ vars.JFROG_OIDC_AUDIENCE }}
+          enable-bash-trace-mode: ${{ env.ENABLE_BASH_TRACE_MODE }}
+
+      - name: Verify feature-key-file names the mounted features file
+        run: |
+          config=$(docker inspect aerospike-1 --format '{{json .Args}}' | grep -oP '"--config-file","\K[^"]+')
+          echo "config-file: $config"
+          key_file=$(docker exec aerospike-1 awk '$1 == "feature-key-file" {print $2}' "$config")
+          echo "feature-key-file: $key_file"
+          [[ -n "$key_file" ]] || { echo "Expected a feature-key-file directive in $config"; exit 1; }
+          docker exec aerospike-1 test -f "$key_file" || { echo "$key_file is not mounted"; exit 1; }
+
+      - name: Verify server status via asinfo
+        run: |
+          tools_image="aerospike.jfrog.io/database-docker-virtual/aerospike-tools:12.1.1_2"
+          network="${{ steps.setup-aerospike-server.outputs.network-name }}"
+          rc=0
+          result=$(docker run --rm --network "$network" "$tools_image" \
+            asinfo -h aerospike-1 -p 3000 -v status 2>&1) || rc=$?
+          echo "asinfo status: $result (exit code: $rc)"
+          [[ $rc -eq 0 && "$result" == *"ok"* ]] || { echo "Expected status=ok"; exit 1; }
+
+  test-community-custom-config:
+    name: Community custom config drops feature-key-file
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Aerospike Server Community with a custom config naming a feature key
+        id: setup-aerospike-server
+        uses: ./.github/actions/setup-aerospike-server
+        with:
+          server-container-repo: database-docker-virtual/aerospike-server
+          config-content: |
+            service {
+                feature-key-file /etc/aerospike/features.conf
+                cluster-name docker
+            }
+            logging {
+                console {
+                    context any info
+                }
+            }
+            network {
+                service {
+                    address any
+                    port 3000
+                }
+                heartbeat {
+                    mode mesh
+                    port 3002
+                }
+                fabric {
+                    port 3001
+                }
+            }
+            namespace test {
+                replication-factor 1
+                storage-engine memory {
+                    data-size 1G
+                }
+            }
+          oidc-provider: ${{ vars.JFROG_OIDC_PROVIDER }}
+          oidc-audience: ${{ vars.JFROG_OIDC_AUDIENCE }}
+          enable-bash-trace-mode: ${{ env.ENABLE_BASH_TRACE_MODE }}
+
+      - name: Verify feature-key-file was removed
+        run: |
+          config=$(docker inspect aerospike-1 --format '{{json .Args}}' | grep -oP '"--config-file","\K[^"]+')
+          echo "config-file: $config"
+          if docker exec aerospike-1 grep -q 'feature-key-file' "$config"; then
+            echo "Community config should not keep feature-key-file"
+            exit 1
+          fi
+
+      - name: Verify server status via asinfo
+        run: |
+          tools_image="aerospike.jfrog.io/database-docker-virtual/aerospike-tools:12.1.1_2"
+          network="${{ steps.setup-aerospike-server.outputs.network-name }}"
+          rc=0
+          result=$(docker run --rm --network "$network" "$tools_image" \
+            asinfo -h aerospike-1 -p 3000 -v status 2>&1) || rc=$?
+          echo "asinfo status: $result (exit code: $rc)"
+          [[ $rc -eq 0 && "$result" == *"ok"* ]] || { echo "Expected status=ok"; exit 1; }
+
   test-community-multi-node:
     name: Community multi-node cluster (2 nodes)
     runs-on: ubuntu-22.04
