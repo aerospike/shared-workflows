@@ -245,6 +245,152 @@ EOF
     [[ "$(cat "$out")" == '{"package_name":"absctl","package_version":"1.2.0_20260929T144224Z","source_repository_key":"database-oci-dev-local"}' ]]
 }
 
+@test "container_destination with one value is written as a string" {
+    _require_bash4_for_detect_types
+    local wd root out
+    wd=$(_new_artifacts_wd one-destination)
+    root="$wd/build-artifacts"
+    mkdir -p "$root"
+    cat >"$root/release-bundle-record.json" <<'EOF'
+{
+  "artifacts": [
+    {
+      "package_type": "docker",
+      "package_name": "aerospike-server",
+      "package_version": "8.1.0.0",
+      "source_repository_key": "database-docker-dev-local",
+      "properties": [
+        {
+          "key": "container_destination",
+          "values": ["quayio"]
+        }
+      ]
+    }
+  ]
+}
+EOF
+
+    (cd "$wd" && "$DEPLOY_ARTIFACTS_DIR/detect_types.sh" --artifacts-dir build-artifacts >/dev/null)
+
+    out="$wd/structured_build_artifacts/generic/docker/docker-images.json"
+    [[ "$(cat "$out")" == '{"package_name":"aerospike-server","package_version":"8.1.0.0","source_repository_key":"database-docker-dev-local","container_destination":"quayio"}' ]]
+}
+
+@test "container_destination with several values is written as a list" {
+    _require_bash4_for_detect_types
+    local wd root out
+    wd=$(_new_artifacts_wd several-destinations)
+    root="$wd/build-artifacts"
+    mkdir -p "$root"
+    cat >"$root/release-bundle-record.json" <<'EOF'
+{
+  "artifacts": [
+    {
+      "package_type": "oci",
+      "package_name": "aerospike-backup-service",
+      "package_version": "3.7.0_20260929T140341Z",
+      "source_repository_key": "database-oci-dev-local",
+      "properties": [
+        {
+          "key": "container_destination",
+          "values": ["quayio", "opnshift"]
+        }
+      ]
+    }
+  ]
+}
+EOF
+
+    (cd "$wd" && "$DEPLOY_ARTIFACTS_DIR/detect_types.sh" --artifacts-dir build-artifacts >/dev/null)
+
+    out="$wd/structured_build_artifacts/generic/docker/docker-images.json"
+    [[ "$(cat "$out")" == '{"package_name":"aerospike-backup-service","package_version":"3.7.0_20260929T140341Z","source_repository_key":"database-oci-dev-local","container_destination":["quayio","opnshift"]}' ]]
+}
+
+@test "missing or blank container_destination is left off the row" {
+    _require_bash4_for_detect_types
+    local wd root out
+    wd=$(_new_artifacts_wd no-destination)
+    root="$wd/build-artifacts"
+    mkdir -p "$root"
+    cat >"$root/release-bundle-record.json" <<'EOF'
+{
+  "artifacts": [
+    {
+      "package_type": "docker",
+      "package_name": "aerospike-server",
+      "package_version": "8.1.0.0",
+      "source_repository_key": "database-docker-dev-local"
+    },
+    {
+      "package_type": "oci",
+      "package_name": "absctl",
+      "package_version": "1.2.0_20260929T144224Z",
+      "source_repository_key": "database-oci-dev-local",
+      "properties": [
+        {
+          "key": "container_destination",
+          "values": []
+        }
+      ]
+    },
+    {
+      "package_type": "docker",
+      "package_name": "aerospike-backup-service",
+      "package_version": "3.7.0_20260929T140341Z",
+      "source_repository_key": "database-docker-dev-local",
+      "properties": [
+        {
+          "key": "container_destination",
+          "values": [""]
+        }
+      ]
+    }
+  ]
+}
+EOF
+
+    (cd "$wd" && "$DEPLOY_ARTIFACTS_DIR/detect_types.sh" --artifacts-dir build-artifacts >/dev/null)
+
+    out="$wd/structured_build_artifacts/generic/docker/docker-images.json"
+    [[ "$(sed -n '1p' "$out")" == '{"package_name":"aerospike-server","package_version":"8.1.0.0","source_repository_key":"database-docker-dev-local"}' ]]
+    [[ "$(sed -n '2p' "$out")" == '{"package_name":"absctl","package_version":"1.2.0_20260929T144224Z","source_repository_key":"database-oci-dev-local"}' ]]
+    [[ "$(sed -n '3p' "$out")" == '{"package_name":"aerospike-backup-service","package_version":"3.7.0_20260929T140341Z","source_repository_key":"database-docker-dev-local"}' ]]
+    ! grep -q 'container_destination' "$out"
+    ! grep -q 'dockerio' "$out"
+}
+
+@test "a blank container_destination value is dropped and one remaining value is a string" {
+    _require_bash4_for_detect_types
+    local wd root out
+    wd=$(_new_artifacts_wd blank-and-one)
+    root="$wd/build-artifacts"
+    mkdir -p "$root"
+    cat >"$root/release-bundle-record.json" <<'EOF'
+{
+  "artifacts": [
+    {
+      "package_type": "oci",
+      "package_name": "aerospike-prometheus-exporter",
+      "package_version": "1.25.0",
+      "source_repository_key": "database-oci-dev-local",
+      "properties": [
+        {
+          "key": "container_destination",
+          "values": ["", "quayio"]
+        }
+      ]
+    }
+  ]
+}
+EOF
+
+    (cd "$wd" && "$DEPLOY_ARTIFACTS_DIR/detect_types.sh" --artifacts-dir build-artifacts >/dev/null)
+
+    out="$wd/structured_build_artifacts/generic/docker/docker-images.json"
+    [[ "$(cat "$out")" == '{"package_name":"aerospike-prometheus-exporter","package_version":"1.25.0","source_repository_key":"database-oci-dev-local","container_destination":"quayio"}' ]]
+}
+
 @test "record with no docker or oci tags does not create docker-images.json" {
     _require_bash4_for_detect_types
     local wd root out
