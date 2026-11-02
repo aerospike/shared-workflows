@@ -151,7 +151,7 @@ jobs:
       invocation-key: ${{ steps.parse.outputs.invocation-key }}
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
+        uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
         with:
           egress-policy: audit
 
@@ -254,7 +254,7 @@ jobs:
       id-token: write
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
+        uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
         with:
           egress-policy: audit
 
@@ -452,7 +452,7 @@ jobs:
 
       - name: Install JFrog CLI
         id: jf
-        uses: step-security/setup-jfrog-cli@f67dd6dcfe5fab8d1ebd695c456631275009a39d # v5.2.0
+        uses: step-security/setup-jfrog-cli@9d5fe0e81fc593a6c0c39bf83ad9a7b45587eed0 # v5.3.1
         env:
           JF_URL: ${{ inputs.jf-url }}
           JF_PROJECT: ${{ inputs.jf-project }}
@@ -674,7 +674,7 @@ jobs:
       jf-build-id: ${{ steps.buildinfo.outputs.jf-build-id }}
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
+        uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
         with:
           egress-policy: audit
 
@@ -682,7 +682,7 @@ jobs:
 
       - name: Install JFrog CLI
         id: jf
-        uses: step-security/setup-jfrog-cli@f67dd6dcfe5fab8d1ebd695c456631275009a39d # v5.2.0
+        uses: step-security/setup-jfrog-cli@9d5fe0e81fc593a6c0c39bf83ad9a7b45587eed0 # v5.3.1
         env:
           JF_URL: ${{ inputs.jf-url }}
           JF_PROJECT: ${{ inputs.jf-project }}
