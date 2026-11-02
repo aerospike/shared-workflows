@@ -12,7 +12,7 @@ jobs:
       matrix:
         os:
           - ubuntu-22.04
-          # - ubuntu-24.04
+          - ubuntu-24.04
     steps:
       - name: Harden the runner (Audit all outbound calls)
         uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
@@ -22,7 +22,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: setup GPG
-        uses: aerospike/shared-workflows/.github/actions/setup-gpg@4568d91df37ec85969404451068b3657973fc23a # v5.0.0
+        uses: aerospike/shared-workflows/.github/actions/setup-gpg@4b8281098da5478924a297ab771860715675f1fa
         with:
           gpg-private-key: ${{ secrets.GPG_SECRET_KEY }}
           gpg-public-key: ${{ secrets.GPG_PUBLIC_KEY }}

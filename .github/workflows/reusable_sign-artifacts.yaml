@@ -185,10 +185,6 @@ jobs:
           clean_logs: true
           signing_method: v1
 
-      - name: Install dpkg-sig
-        if: steps.gpg-signing.outputs.enabled == 'true'
-        run: |
-          sudo apt-get update && sudo apt-get install dpkg-sig dpkg-dev -y
       - name: Sign Artifacts
         if: steps.gpg-signing.outputs.enabled == 'true'
         run: |

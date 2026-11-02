@@ -107,7 +107,7 @@ The `reusable_artifacts-cicd.yaml` orchestrator runs 5 jobs.
 
 - Downloads `build-artifacts` into `unsigned-artifacts/`
 - **NuGet separation**: `.nupkg` files are **moved** out to `unsigned-nuget-packages/` before GPG signing, signed separately via SSL.com eSigner -> output to `signed-artifacts/nuget/`
-- **GPG signing**: entrypoint copies `unsigned-artifacts/**/*` with `cp --parents` to `signed-artifacts/` (preserves `unsigned-artifacts/` prefix), then signs deb (`dpkg-sig`), rpm (`rpm --addsign`), and creates `.asc` for all files
+- **GPG signing**: entrypoint copies `unsigned-artifacts/**/*` with `cp --parents` to `signed-artifacts/` (preserves `unsigned-artifacts/` prefix), then signs deb (`gpg`), rpm (`rpm --addsign`), and creates `.asc` for all files
 - Result structure: `signed-artifacts/unsigned-artifacts/{files}` + `signed-artifacts/nuget/{nupkg}`
 
 ### Deploy stage (`reusable_deploy-artifacts.yaml`)
