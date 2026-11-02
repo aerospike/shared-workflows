@@ -826,18 +826,18 @@ jobs:
         run: |
           set -euo pipefail
           values=()
-          IFS=',' read -ra raw <<< "$CONTAINER_DESTINATION"
-          for part in "${raw[@]}"; do
-            part="${part#"${part%%[![:space:]]*}"}"
-            part="${part%"${part##*[![:space:]]}"}"
-            if [ -z "$part" ]; then
+          IFS=',' read -ra destinations <<< "$CONTAINER_DESTINATION"
+          for dest in "${destinations[@]}"; do
+            dest="${dest#"${dest%%[![:space:]]*}"}"
+            dest="${dest%"${dest##*[![:space:]]}"}"
+            if [ -z "$dest" ]; then
               continue
             fi
-            if [[ ! "$part" =~ ^[A-Za-z0-9._-]+$ ]]; then
-              echo "::error::container-destination value must be a single name: ${part}"
+            if [[ ! "$dest" =~ ^[A-Za-z0-9._-]+$ ]]; then
+              echo "::error::container-destination value must be a single name: ${dest}"
               exit 1
             fi
-            values+=("$part")
+            values+=("$dest")
           done
           if [ "${#values[@]}" -eq 0 ]; then
             echo "container-destination is blank; leaving the property unset"
