@@ -30,6 +30,14 @@ on:
         type: string
         default: "{}"
         description: JSON object of build-args passed to docker build, {"KEY":"VALUE",...}
+      container-destination:
+        type: string
+        required: false
+        default: ""
+        description: |
+          Comma-separated Artifactory property container_destination on the immutable tag.
+          Unset leaves the property off the image, and publishing sends it to Docker Hub.
+          Names: dockerio, quayio, opnshift, githubcr, gitlabcr, ecrpub, gar, ocpproxy, kolla, rhosp.
       context:
         type: string
         default: .
@@ -807,6 +815,47 @@ jobs:
           digest="$(docker buildx imagetools inspect "$IMMUTABLE_TAG" --format '{{json .Manifest}}' | jq -r '.digest')"
           echo "digest=${digest}" >> "$GITHUB_OUTPUT"
           echo "image-ref=${IMMUTABLE_TAG}@${digest}" >> "$GITHUB_OUTPUT"
+
+      # An empty value leaves the property unset. Do not write dockerio here.
+      - name: Set container_destination
+        if: ${{ inputs.push && inputs.container-destination != '' }}
+        shell: bash
+        env:
+          CONTAINER_DESTINATION: ${{ inputs.container-destination }}
+          IMMUTABLE_TAG: ${{ steps.tags.outputs.immutable-tag }}
+        run: |
+          set -euo pipefail
+          values=()
+          IFS=',' read -ra raw <<< "$CONTAINER_DESTINATION"
+          for part in "${raw[@]}"; do
+            part="${part#"${part%%[![:space:]]*}"}"
+            part="${part%"${part##*[![:space:]]}"}"
+            if [ -z "$part" ]; then
+              continue
+            fi
+            if [[ ! "$part" =~ ^[A-Za-z0-9._-]+$ ]]; then
+              echo "::error::container-destination value must be a single name: ${part}"
+              exit 1
+            fi
+            values+=("$part")
+          done
+          if [ "${#values[@]}" -eq 0 ]; then
+            echo "container-destination is blank; leaving the property unset"
+            exit 0
+          fi
+
+          without_host="${IMMUTABLE_TAG#*/}"
+          tag="${without_host##*:}"
+          repo_image="${without_host%:*}"
+          if [ -z "$tag" ] || [ -z "$repo_image" ] || [ "$without_host" = "$IMMUTABLE_TAG" ]; then
+            echo "::error::immutable tag is not host/repo/image:tag: ${IMMUTABLE_TAG}"
+            exit 1
+          fi
+
+          props="container_destination=$(IFS=','; printf '%s' "${values[*]}")"
+          pattern="${repo_image}/${tag}/*manifest.json"
+          echo "Setting ${props} on ${pattern}"
+          jf rt set-props "$pattern" "$props"
 
       - name: Create build info for docker image
         if: ${{ inputs.push }}

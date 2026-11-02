@@ -30,6 +30,7 @@ jobs:
 - `app-name` (string, optional): Human-readable application name for OCI labels (defaults to `image-name`). Can differ from `image-name` for display purposes (e.g., `image-name="aerospike-server-enterprise"`, `app-name="Aerospike Server Enterprise"`)
 - `attest` (boolean, default `true`): Generate SLSA build-provenance attestation
 - `build-args-json` (string, default `{}`): JSON object of build-args passed to docker build (e.g., `{"VERSION":"7.0.0","BUILD_DATE":"2024-01-15T10:30:00Z","SOURCE_VERSION":"abc123"}`)
+- `container-destination` (string, default empty): Comma-separated Artifactory property `container_destination` on the immutable tag. Unset leaves the property off the image. See [Container destination](#container-destination).
 - `context` (string, default `.`): Docker build context directory
 - `file` (string, default `Dockerfile`): Path to Dockerfile (relative to context)
 - `gh-context-artifacts-json` (string, optional): JSON array of same-run GitHub artifacts to place inside the build context before the image build, e.g. `[{"name":"signed-artifacts","dest":"artifacts"}]`. See [Delivering artifacts into the build context](#delivering-artifacts-into-the-build-context)
@@ -73,6 +74,28 @@ bundle:
     jf-build-names: ${{ needs.build-docker-deploy.outputs.jf-build-name }}:${{ needs.build-docker-deploy.outputs.jf-build-id }}
     version: ${{ needs.extract-version.outputs.version }}
     # ...
+```
+
+## Container destination
+
+`container-destination` sets the Artifactory property `container_destination` on the immutable tag after the manifest is published and before build-info is published. `reusable_create-release-bundle.yaml` then snapshots that property onto the image in the release bundle record.
+
+Leave `container-destination` unset and the workflow does not call `jf rt set-props`. Publishing then sends the image to Docker Hub. The input is also skipped when `push` is false, because the tag is not in Artifactory.
+
+One name is one property value. Several names are comma-separated.
+
+| Value                                                                 | Destination                                                |
+| --------------------------------------------------------------------- | ---------------------------------------------------------- |
+| `dockerio`                                                            | Docker Hub, as `aerospike/<image>:<tag>`                   |
+| `quayio`                                                              | Quay, as `quay.io/aerospike/<image>:<tag>`                 |
+| `opnshift`                                                            | Quay, then a Red Hat check for OpenShift                   |
+| `githubcr`, `gitlabcr`, `ecrpub`, `gar`, `ocpproxy`, `kolla`, `rhosp` | Accepted names. Publishing does not copy these images yet. |
+
+A name outside this list stops publishing with `Unknown target registry: <name>`.
+
+```yaml
+with:
+  container-destination: quayio,opnshift
 ```
 
 ## Multi-arch build and caching
