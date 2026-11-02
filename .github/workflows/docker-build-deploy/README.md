@@ -84,18 +84,18 @@ Leave `container-destination` unset and the workflow does not call `jf rt set-pr
 
 One name is one property value. Several names are comma-separated.
 
-| Value                                                                 | Destination                                                |
-| --------------------------------------------------------------------- | ---------------------------------------------------------- |
-| `dockerio`                                                            | Docker Hub, as `aerospike/<image>:<tag>`                   |
-| `quayio`                                                              | Quay, as `quay.io/aerospike/<image>:<tag>`                 |
-| `opnshift`                                                            | Quay, then a Red Hat check for OpenShift                   |
-| `githubcr`, `gitlabcr`, `ecrpub`, `gar`, `ocpproxy`, `kolla`, `rhosp` | Accepted names. Publishing does not copy these images yet. |
+| Value                                                                    | Destination                                                |
+| ------------------------------------------------------------------------ | ---------------------------------------------------------- |
+| `docker`                                                                 | Docker Hub, as `aerospike/<image>:<tag>`                   |
+| `quay`                                                                   | Quay, as `quay.io/aerospike/<image>:<tag>`                 |
+| `openshift`                                                              | Quay, then a Red Hat check for OpenShift                   |
+| `ghcr`, `gitlab`, `ecr`, `googlear`, `openstack`, `kollacr`, `redhatocp` | Accepted names. Publishing does not copy these images yet. |
 
 A name outside this list stops publishing with `Unknown target registry: <name>`.
 
 ```yaml
 with:
-  container-destination: quayio,opnshift
+  container-destination: quay,openshift
 ```
 
 ## Multi-arch build and caching

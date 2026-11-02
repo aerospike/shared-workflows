@@ -37,7 +37,7 @@ on:
         description: |
           Comma-separated Artifactory property container_destination on the immutable tag.
           Unset leaves the property off the image, and publishing sends it to Docker Hub.
-          Names: dockerio, quayio, opnshift, githubcr, gitlabcr, ecrpub, gar, ocpproxy, kolla, rhosp.
+          Names: docker, quay, openshift, ghcr, gitlab, ecr, googlear, openstack, kollacr, redhatocp.
       context:
         type: string
         default: .
@@ -816,7 +816,7 @@ jobs:
           echo "digest=${digest}" >> "$GITHUB_OUTPUT"
           echo "image-ref=${IMMUTABLE_TAG}@${digest}" >> "$GITHUB_OUTPUT"
 
-      # An empty value leaves the property unset. Do not write dockerio here.
+      # An empty value leaves the property unset. Do not add a default destination.
       - name: Set container_destination
         if: ${{ inputs.push && inputs.container-destination != '' }}
         shell: bash

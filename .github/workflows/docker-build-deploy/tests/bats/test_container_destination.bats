@@ -74,19 +74,19 @@ run_set() {
 }
 
 @test "one destination is a single property value on the immutable tag" {
-    run_set "quayio"
+    run_set "quay"
     [ "$status" -eq 0 ]
-    [ "$(cat "$JF_LOG")" = "rt set-props database-docker-dev-local/test-image/7.0.0_20251202T021054Z/*manifest.json container_destination=quayio" ]
+    [ "$(cat "$JF_LOG")" = "rt set-props database-docker-dev-local/test-image/7.0.0_20251202T021054Z/*manifest.json container_destination=quay" ]
 }
 
 @test "several destinations stay in order" {
-    run_set " quayio, opnshift "
+    run_set " quay, openshift "
     [ "$status" -eq 0 ]
-    [ "$(cat "$JF_LOG")" = "rt set-props database-docker-dev-local/test-image/7.0.0_20251202T021054Z/*manifest.json container_destination=quayio,opnshift" ]
+    [ "$(cat "$JF_LOG")" = "rt set-props database-docker-dev-local/test-image/7.0.0_20251202T021054Z/*manifest.json container_destination=quay,openshift" ]
 }
 
 @test "a value that would add another property is rejected" {
-    run_set "quayio;dockerio"
+    run_set "quay;docker"
     [ "$status" -ne 0 ]
     [ ! -s "$JF_LOG" ]
 }
