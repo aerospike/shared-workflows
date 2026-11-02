@@ -36,6 +36,33 @@ Runner tools used by detectors: `jq`, `tar`, `unzip`, `xmllint` (for Maven POM d
 
 After detection, `.maven-bundle-metadata.json` can be passed to [create-release-bundle](../create-release-bundle/README.md) as `bundle-metadata-path` so those fields are set on the release bundle version (`jf release-bundle-annotate`).
 
+### Docker bundle metadata
+
+When `release-bundle-record.json` is in the artifacts root, detection writes `generic/docker/docker-images.json` under `structured-artifacts-dir`. Each line is one tagged Docker or OCI image and has `package_name`, `package_version`, and `source_repository_key`. Digest versions (`sha256__` and `sha256:`) are omitted.
+
+`container_destination` is an Artifactory property on that image. Set it before the release bundle is created. The release bundle record keeps the property, and detection copies it onto the image's line.
+
+- One value is written as a string.
+- Several values are written as a list of strings.
+- A missing or blank value is left off the line. Publishing then sends the image to Docker Hub.
+
+Set one or more of these names:
+
+| Value                                                                 | Destination                                                |
+| --------------------------------------------------------------------- | ---------------------------------------------------------- |
+| `dockerio`                                                            | Docker Hub, as `aerospike/<image>:<tag>`                   |
+| `quayio`                                                              | Quay, as `quay.io/aerospike/<image>:<tag>`                 |
+| `opnshift`                                                            | Quay, then a Red Hat check for OpenShift                   |
+| `githubcr`, `gitlabcr`, `ecrpub`, `gar`, `ocpproxy`, `kolla`, `rhosp` | Accepted names. Publishing does not copy these images yet. |
+
+A name outside this list stops publishing with `Unknown target registry: <name>`.
+
+Leave the property unset for Docker Hub. Set `dockerio` when that destination should be named on the line. A line with `quayio` and `opnshift` looks like this:
+
+```text
+{"package_name":"aerospike-server","package_version":"8.1.0.0","source_repository_key":"database-docker-dev-local","container_destination":["quayio","opnshift"]}
+```
+
 ## Example (after collect, before release bundle)
 
 ```yaml

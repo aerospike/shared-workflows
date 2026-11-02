@@ -458,12 +458,9 @@ _detect_structure_maven_poms() {
 }
 
 # Stage docker-images.json for downstream publish.
-# A Lifecycle release-bundle-record.json under the artifacts root is the source of truth:
-# keep package_type docker and oci, drop digest versions (sha256__ / sha256:), and emit
-# one compact {package_name, package_version, source_repository_key} object per kept row.
-# Image identity comes from those fields. list.manifest.json, manifest.json, and sha256__
-# blobs are not images, and source_repository_key is not derived from the path.
-# With no record, copy a pre-written docker-images.json. When both exist, do not copy it.
+# release-bundle-record.json wins over a pre-written docker-images.json.
+# Keep docker/oci tags. Drop sha256 digests; manifest blobs are not images.
+# Copy container_destination as one string or a list. Leave it off when missing or blank.
 _detect_structure_docker_bundle_metadata() {
     local artifacts_root="$1"
     local dest="./structured_build_artifacts/generic/docker"
@@ -486,6 +483,13 @@ _detect_structure_docker_bundle_metadata() {
         # nonempty rejects missing, null, and empty-string fields before startswith.
         if ! lines=$(jq -c -s '
             def nonempty: type == "string" and . != "";
+            def container_destinations:
+                [ (.properties // [])[]?
+                  | select(.key == "container_destination")
+                  | (.values // empty)
+                  | if type == "array" then .[] else empty end
+                  | select(nonempty)
+                ];
             .[]
             | .artifacts[]?
             | select(.package_type == "docker" or .package_type == "oci")
@@ -494,6 +498,11 @@ _detect_structure_docker_bundle_metadata() {
             | select(.package_name | nonempty)
             | select(.source_repository_key | nonempty)
             | {package_name, package_version, source_repository_key}
+              + (container_destinations as $d
+                 | if ($d | length) == 0 then {}
+                   elif ($d | length) == 1 then {container_destination: $d[0]}
+                   else {container_destination: $d}
+                   end)
         ' "${records[@]}"); then
             echo "Error: failed to read release bundle record" >&2
             return 1
