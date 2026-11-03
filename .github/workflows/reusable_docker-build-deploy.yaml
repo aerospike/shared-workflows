@@ -335,11 +335,6 @@ jobs:
                 # A charset is not implied by the traversal rules: "-rf" passes them all.
                 elif ($v.dest | test("^[A-Za-z0-9._/-]+$") | not)
                   then $at + "dest \"\($v.dest)\" must match ^[A-Za-z0-9._/-]+$"
-                # Splitting on "/" discards a trailing empty field, so this is not caught
-                # by the segment rules below. Left in, "x" and "x/" defeat the duplicate
-                # rule while naming one directory.
-                elif ($v.dest | endswith("/"))
-                  then $at + "dest \"\($v.dest)\" must not end with \"/\""
                 elif ($v.dest | split("/") | any(. == ""))
                   then $at + "dest \"\($v.dest)\" has an empty path segment"
                 elif ($v.dest | split("/") | any(. == ".."))

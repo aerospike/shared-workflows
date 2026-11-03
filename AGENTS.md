@@ -24,6 +24,7 @@ These rules apply to every change in this repo, whichever tool writes it. Repo l
 - Write one table-driven test per rule, not one test per input case.
 - Do not write tests that check a step exists, that removed code stays removed, or that a script's source contains certain text. Run the extracted step, or assert workflow wiring with `yq`.
 - Do not write bats tests against `test_*.yaml` workflows.
+- When you merge or remove tests, break each guard the remaining tests cover and confirm one fails.
 
 ## Code comments
 
