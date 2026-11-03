@@ -10,6 +10,120 @@ handle_error() {
     exit 1
 }
 
+# _maven_pom_properties_coordinates
+# Reads pom.properties on stdin. Prints groupId|artifactId|version.
+# Empty fields stay empty; the caller rejects an incomplete file.
+_maven_pom_properties_coordinates() {
+    awk -F= '
+        { sub(/\r$/, "") }
+        $1 == "groupId" && group == "" { group = substr($0, index($0, "=") + 1) }
+        $1 == "artifactId" && artifact == "" { artifact = substr($0, index($0, "=") + 1) }
+        $1 == "version" && version == "" { version = substr($0, index($0, "=") + 1) }
+        END { printf "%s|%s|%s\n", group, artifact, version }
+    '
+}
+
+# _stem_has_artifact_version <stem> <artifactId> <version>
+# True when stem is artifactId-version or artifactId-version-<classifier>.
+_stem_has_artifact_version() {
+    local stem="$1" artifact_id="$2" version="$3"
+    local key="${artifact_id}-${version}"
+    local prefix="${key}-"
+    if [[ $stem == "$key" ]]; then
+        return 0
+    fi
+    if [[ ${#stem} -gt ${#prefix} && ${stem:0:${#prefix}} == "$prefix" ]]; then
+        return 0
+    fi
+    return 1
+}
+
+# _select_embedded_pom_props <jar> <stem> <sibling_pom>
+# Prints artifactId|version|groupId.
+# Returns 2 when the jar has no pom.properties, 1 when no single triple is selected.
+# Several zip paths with the same triple are one match.
+_select_embedded_pom_props() {
+    local jar="$1" stem="$2" sibling_pom="$3"
+    local listing line entry body
+    local group_id artifact_id version
+    local -a paths=() groups=() artifacts=() versions=()
+
+    listing=$(unzip -Z1 "$jar") || return 1
+    while IFS= read -r line; do
+        [[ $line == *pom.properties ]] || continue
+        paths+=("$line")
+    done <<<"$listing"
+    if [[ ${#paths[@]} -eq 0 ]]; then
+        return 2
+    fi
+
+    for entry in "${paths[@]}"; do
+        body=$(unzip -p "$jar" "$entry") || return 1
+        IFS='|' read -r group_id artifact_id version <<<"$(printf '%s\n' "$body" | _maven_pom_properties_coordinates)"
+        if [[ -z $group_id || -z $artifact_id || -z $version ]]; then
+            echo "Error: pom.properties missing groupId, artifactId, or version: $entry" >&2
+            return 1
+        fi
+        groups+=("$group_id")
+        artifacts+=("$artifact_id")
+        versions+=("$version")
+    done
+
+    local i
+    if [[ -n $sibling_pom && -f $sibling_pom ]] && command -v xmllint >/dev/null 2>&1; then
+        local pom_artifact_id pom_group_id pom_version
+        local -a gav_hits=()
+        IFS='|' read -r pom_artifact_id pom_group_id pom_version \
+            < <(_maven_read_pom_gav "$sibling_pom")
+        for i in "${!paths[@]}"; do
+            if [[ ${groups[$i]} == "$pom_group_id" && ${artifacts[$i]} == "$pom_artifact_id" && ${versions[$i]} == "$pom_version" ]]; then
+                gav_hits+=("$i")
+            fi
+        done
+        if [[ ${#gav_hits[@]} -gt 0 ]]; then
+            i=${gav_hits[0]}
+            printf '%s|%s|%s\n' "${artifacts[$i]}" "${versions[$i]}" "${groups[$i]}"
+            return 0
+        fi
+    fi
+
+    local -a base_hits=() distinct=()
+    local gav d seen
+    for i in "${!paths[@]}"; do
+        if _stem_has_artifact_version "$stem" "${artifacts[$i]}" "${versions[$i]}"; then
+            base_hits+=("$i")
+        fi
+    done
+    if [[ ${#base_hits[@]} -gt 0 ]]; then
+        for i in "${base_hits[@]}"; do
+            gav="${groups[$i]}|${artifacts[$i]}|${versions[$i]}"
+            seen=0
+            if [[ ${#distinct[@]} -gt 0 ]]; then
+                for d in "${distinct[@]}"; do
+                    if [[ $d == "$gav" ]]; then
+                        seen=1
+                        break
+                    fi
+                done
+            fi
+            if [[ $seen -eq 0 ]]; then
+                distinct+=("$gav")
+            fi
+        done
+    fi
+    if [[ ${#distinct[@]} -eq 1 ]]; then
+        i=${base_hits[0]}
+        printf '%s|%s|%s\n' "${artifacts[$i]}" "${versions[$i]}" "${groups[$i]}"
+        return 0
+    fi
+
+    echo "Error: Maven coordinates in $jar are not a unique pom.properties match" >&2
+    for i in "${!paths[@]}"; do
+        printf '%s:%s:%s %s\n' "${groups[$i]}" "${artifacts[$i]}" "${versions[$i]}" "${paths[$i]}" >&2
+    done
+    return 1
+}
+
 # Function to extract JAR metadata
 get_jar_metadata() {
     local jar="$1"
@@ -17,7 +131,6 @@ get_jar_metadata() {
     local jar_dir
     jar_dir="$(dirname "$jar")"
     local pkgname version group_id=""
-    local pom_props
 
     local base_no_ext="${filename%.jar}"
 
@@ -25,48 +138,64 @@ get_jar_metadata() {
 
     pkgname=$(echo "$base_no_ext" | sed -E "s/-${version}(-javadoc|-sources)?$//")
 
-    # Try reading from pom.properties inside the jar
-    pom_props=$(unzip -Z1 "$jar" | awk '/pom\.properties$/ {print; exit}')
-    if [[ -n $pom_props ]]; then
-        pkgname=$(unzip -p "$jar" "$pom_props" | grep '^artifactId=' | cut -d= -f2)
-        version=$(unzip -p "$jar" "$pom_props" | grep '^version=' | cut -d= -f2)
-        group_id=$(unzip -p "$jar" "$pom_props" | grep '^groupId=' | cut -d= -f2)
-    fi
-
-    # Flat JAR + sibling POM (e.g. test.jar + test.pom): filename may not encode version.
-    # _maven_read_pom_gav (../lib/maven-helpers.sh) resolves parent inheritance;
-    # only overwrite filename-derived fields when the POM supplies non-empty values.
     local sibling_pom="$jar_dir/${base_no_ext}.pom"
-    if [[ -z $group_id && -f $sibling_pom ]]; then
-        if command -v xmllint >/dev/null 2>&1; then
-            local pom_artifact_id pom_group_id pom_version
-            IFS='|' read -r pom_artifact_id pom_group_id pom_version \
-                < <(_maven_read_pom_gav "$sibling_pom")
-            [[ -n $pom_artifact_id ]] && pkgname="$pom_artifact_id"
-            [[ -n $pom_version ]] && version="$pom_version"
-            [[ -n $pom_group_id ]] && group_id="$pom_group_id"
+    local selected=""
+    local select_status=0
+    selected=$(_select_embedded_pom_props "$jar" "$base_no_ext" "$sibling_pom") || select_status=$?
+    if [[ $select_status -ne 0 && $select_status -ne 2 ]]; then
+        return 1
+    fi
+    if [[ $select_status -eq 0 ]]; then
+        IFS='|' read -r pkgname version group_id <<<"$selected"
+    else
+        # Flat JAR + sibling POM (e.g. test.jar + test.pom): filename may not encode version.
+        # _maven_read_pom_gav (../lib/maven-helpers.sh) resolves parent inheritance;
+        # only overwrite filename-derived fields when the POM supplies non-empty values.
+        if [[ -z $group_id && -f $sibling_pom ]]; then
+            if command -v xmllint >/dev/null 2>&1; then
+                local pom_artifact_id pom_group_id pom_version
+                IFS='|' read -r pom_artifact_id pom_group_id pom_version \
+                    < <(_maven_read_pom_gav "$sibling_pom")
+                [[ -n $pom_artifact_id ]] && pkgname="$pom_artifact_id"
+                [[ -n $pom_version ]] && version="$pom_version"
+                [[ -n $pom_group_id ]] && group_id="$pom_group_id"
+            fi
         fi
     fi
 
     # If groupId is still empty (e.g., javadoc/sources jars), locate main artifact in same folder
     if [[ -z $group_id ]]; then
-        local main_jar=""
+        local -a main_jars=()
+        local candidate_jar
         shopt -s nullglob
         for candidate_jar in "$jar_dir/$pkgname"-*.jar; do
-            [ -e "$candidate_jar" ] || continue
-            if [[ $candidate_jar != *javadoc* && $candidate_jar != *sources* ]]; then
-                main_jar="$candidate_jar"
-                break
-            fi
+            [[ -e $candidate_jar ]] || continue
+            [[ $candidate_jar == "$jar" ]] && continue
+            [[ $candidate_jar == *javadoc* || $candidate_jar == *sources* ]] && continue
+            main_jars+=("$candidate_jar")
         done
+        shopt -u nullglob
 
-        if [[ -f $main_jar && $main_jar != "$jar" ]]; then
-            pom_props=$(unzip -Z1 "$main_jar" 2>/dev/null | awk '/pom\.properties$/ {print; exit}')
-            if [[ -n $pom_props ]]; then
-                group_id=$(unzip -p "$main_jar" "$pom_props" | grep '^groupId=' | cut -d= -f2)
+        if [[ ${#main_jars[@]} -gt 1 ]]; then
+            echo "Error: multiple main jars for $jar" >&2
+            printf '%s\n' "${main_jars[@]}" >&2
+            return 1
+        fi
+        if [[ ${#main_jars[@]} -eq 1 ]]; then
+            local main_jar="${main_jars[0]}"
+            local main_base="${main_jar##*/}"
+            main_base="${main_base%.jar}"
+            local main_sibling="$jar_dir/${main_base}.pom"
+            local main_selected=""
+            local main_status=0
+            main_selected=$(_select_embedded_pom_props "$main_jar" "$main_base" "$main_sibling") || main_status=$?
+            if [[ $main_status -ne 0 && $main_status -ne 2 ]]; then
+                return 1
+            fi
+            if [[ $main_status -eq 0 ]]; then
+                group_id=${main_selected##*|}
             fi
         fi
-        shopt -u nullglob
     fi
 
     # Return pkgname, version, groupId
@@ -262,11 +391,12 @@ process_rpm() {
 process_jar() {
     local jar="$1"
     local dest_dir="$2"
+    local meta_line
     local -a metadata
     local pkgname version group_id group_path
 
-    # Get metadata using the new function
-    read -r -a metadata < <(get_jar_metadata "$jar")
+    meta_line=$(get_jar_metadata "$jar") || return 1
+    read -r -a metadata <<<"$meta_line"
     pkgname="${metadata[0]}"
     version="${metadata[1]}"
     # Use :- to handle empty group_id (when array may only have 2 elements due to trailing space trimming)

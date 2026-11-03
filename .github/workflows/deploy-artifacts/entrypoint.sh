@@ -288,8 +288,10 @@ upload_jar_packages() {
         local pom_file="$artifact_dir/${base_name}.pom"
 
         if [[ -f $jar_file ]]; then
+            local meta_line
             local -a metadata
-            read -r -a metadata < <(get_jar_metadata "$jar_file")
+            meta_line=$(get_jar_metadata "$jar_file") || return 1
+            read -r -a metadata <<<"$meta_line"
             pkgname="${metadata[0]}"
             version="${metadata[1]}"
             group_id="${metadata[2]-${JAR_GROUP_ID-}}"
