@@ -32,6 +32,7 @@ jobs:
 - `build-args-json` (string, default `{}`): JSON object of build-args passed to docker build (e.g., `{"VERSION":"7.0.0","BUILD_DATE":"2024-01-15T10:30:00Z","SOURCE_VERSION":"abc123"}`)
 - `context` (string, default `.`): Docker build context directory
 - `file` (string, default `Dockerfile`): Path to Dockerfile (relative to context)
+- `gh-checkout-submodules` (string, default `false`): Submodules to check out into the build context, passed to `actions/checkout` `submodules` (`false`, `true`, or `recursive`). The checkout uses the calling repo's `GITHUB_TOKEN`, which reads public submodules but not private submodules in other repositories
 - `gh-context-artifacts-json` (string, optional): JSON array of same-run GitHub artifacts to place inside the build context before the image build, e.g. `[{"name":"signed-artifacts","dest":"artifacts"}]`. See [Delivering artifacts into the build context](#delivering-artifacts-into-the-build-context)
 - `jf-build-name` (string, optional): Build name for JFrog build-info (defaults to workflow name)
 - `jf-registry` (string, optional): Full Docker registry URL including repository path (e.g., `artifact.aerospike.io/database-docker-dev-local`)

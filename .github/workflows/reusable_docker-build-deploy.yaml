@@ -38,6 +38,10 @@ on:
         type: string
         default: Dockerfile
         description: Path to Dockerfile (relative to context)
+      gh-checkout-submodules:
+        type: string
+        default: "false"
+        description: Submodules to check out into the build context, passed to actions/checkout `submodules` ("false", "true", or "recursive")
       gh-context-artifacts-json:
         type: string
         default: ""
@@ -259,6 +263,8 @@ jobs:
           egress-policy: audit
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: ${{ inputs.gh-checkout-submodules }}
 
       # Keep these three steps between checkout and Install JFrog CLI: the
       # context does not exist before checkout, and running after the token is
