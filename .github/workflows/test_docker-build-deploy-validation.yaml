@@ -18,7 +18,7 @@ permissions:
   contents: read
 
 jobs:
-  context-artifact-validation:
+  bats:
     runs-on: ubuntu-22.04
     steps:
       - name: Harden the runner (Audit all outbound calls)
@@ -42,8 +42,6 @@ jobs:
           sudo install -m 0755 /tmp/yq /usr/local/bin/yq
           yq --version
 
-      # The helper libraries are off because no bats suite in this repo uses
-      # them; every existing `load` is a local helper file.
       - name: Install bats
         uses: bats-core/bats-action@77d6fb60505b4d0d1d73e48bd035b55074bbfb43 # 4.0.0
         with:
@@ -53,5 +51,5 @@ jobs:
           detik-install: false
           file-install: false
 
-      - name: Run build-context validation bats tests
+      - name: Run docker-build-deploy bats tests
         run: bats .github/workflows/docker-build-deploy/tests/bats/
