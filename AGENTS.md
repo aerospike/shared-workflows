@@ -14,11 +14,17 @@ These rules apply to every change in this repo, whichever tool writes it. Repo l
 
 - Do not embed Python or any other language in a shell script, a bats test, or a workflow `run:` block (`python3 -c`, `python3 - <<EOF`). Use the CLI built for the format, such as `jq` for JSON and `yq` for YAML, or write a standalone script in one language.
 - Use Python only when the logic exceeds what the CLI can do: stateful iteration, library calls, or a real parser. Reading or validating a field never qualifies. `jq empty` validates JSON.
+- Pass caller-supplied values to a `run:` block through `env:`. Never put `${{ }}` inside the script.
 
 ## Tests
 
 - Test behavior that can regress and paths that must fail closed. Skip tests for failures that are unlikely to happen and tests whose path another test already covers.
 - Assert on the lines that matter. Do not commit golden copies of whole generated files, such as full configs or full `docker run` argument lists, since every flag change rewrites them.
+- When a PR touches a bats suite, review the whole suite, not only the tests it adds.
+- Write one table-driven test per rule, not one test per input case.
+- Do not write tests that check a step exists, that removed code stays removed, or that a script's source contains certain text. Run the extracted step, or assert workflow wiring with `yq`.
+- Do not write bats tests against `test_*.yaml` workflows.
+- When you merge or remove tests, break each guard the remaining tests cover and confirm one fails.
 
 ## Code comments
 

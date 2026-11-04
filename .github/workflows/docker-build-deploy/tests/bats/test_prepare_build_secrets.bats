@@ -1,13 +1,12 @@
 #!/usr/bin/env bats
 #
-# What build-secrets-json writes into /tmp/docker-secrets, and what it must not.
+# What the build job writes into /tmp/docker-secrets.
 
 WORKFLOW="${BATS_TEST_DIRNAME}/../../../reusable_docker-build-deploy.yaml"
-STEP_NAME="Prepare build secrets"
 
 setup_file() {
     export STEP_SOURCE="${BATS_FILE_TMPDIR}/step.sh"
-    yq -r ".jobs.build.steps[] | select(.name == \"$STEP_NAME\") | .run" \
+    yq -r '.jobs.build.steps[] | select(.name == "Prepare build secrets") | .run' \
         "$WORKFLOW" > "$STEP_SOURCE"
 }
 
@@ -17,52 +16,34 @@ setup() {
     sed "s#/tmp/docker-secrets#${SECRETS_DIR}#g" "$STEP_SOURCE" > "$STEP"
 }
 
+# write_secrets <build-secrets-json> [jf-go-repo]
 write_secrets() {
-    OIDC_USER=u OIDC_TOKEN=t BUILD_SECRETS_JSON="$1" \
+    OIDC_USER='ci@example.com' OIDC_TOKEN='t:k/+' \
+        JF_GO_REPO="${2:-}" JF_REGISTRY_BASE=artifact.aerospike.io \
+        BUILD_SECRETS_JSON="$1" \
         GITHUB_ENV="${BATS_TEST_TMPDIR}/github_env" run bash "$STEP"
 }
 
-@test "the step this suite tests still exists in the workflow" {
-    [ -s "$STEP" ]
-}
-
-@test "no caller-supplied value is interpolated into the script" {
-    run grep -n 'secrets\.build-secrets-json' "$STEP_SOURCE"
-    [ "$status" -ne 0 ]
-}
-
-@test "writes a single-line value verbatim" {
-    write_secrets '{"token":"abc123"}'
+@test "writes each value byte-for-byte to its own file, and nothing the caller did not name" {
+    local key=$'-----BEGIN PGP PUBLIC KEY BLOCK-----\n\nmDMEZ+abc\nxyz==\n-----END PGP PUBLIC KEY BLOCK-----'
+    write_secrets "$(jq -nc --arg k "$key" '{gpg_public_key: $k, token: "abc123"}')" platforms-go-virtual
     [ "$status" -eq 0 ]
-    [ "$(cat "${SECRETS_DIR}/token")" = "abc123" ]
+    cmp "${SECRETS_DIR}/gpg_public_key" <(printf '%s' "$key")
+    cmp "${SECRETS_DIR}/token" <(printf '%s' abc123)
+    cmp "${SECRETS_DIR}/jfrog_token" <(printf '%s' 't:k/+')
+    cmp "${SECRETS_DIR}/goproxy" \
+        <(printf '%s' 'https://ci%40example.com:t%3Ak%2F%2B@artifact.aerospike.io/artifactory/api/go/platforms-go-virtual')
+    [ "$(ls "$SECRETS_DIR" | tr '\n' ' ')" = "goproxy gpg_public_key jfrog_token token " ]
 }
 
-@test "writes a multi-line value unchanged" {
-    local key
-    key=$'-----BEGIN PGP PUBLIC KEY BLOCK-----\n\nmDMEZ+abc\nxyz==\n-----END PGP PUBLIC KEY BLOCK-----'
-    write_secrets "$(jq -nc --arg k "$key" '{gpg_public_key:$k}')"
-    [ "$status" -eq 0 ]
-    [ "$(cat "${SECRETS_DIR}/gpg_public_key")" = "$key" ]
-}
-
-@test "creates no file for anything the caller did not name" {
-    local key
-    key=$'line-one\nline-two\nline-three'
-    write_secrets "$(jq -nc --arg k "$key" '{only:$k}')"
-    [ "$status" -eq 0 ]
-    [ "$(ls "$SECRETS_DIR" | grep -v jfrog_token | sort | tr '\n' ' ')" = "only " ]
-}
-
-@test "keeps entries separate when one value is multi-line" {
-    local key
-    key=$'first\nsecond'
-    write_secrets "$(jq -nc --arg k "$key" '{multi:$k, plain:"single"}')"
-    [ "$status" -eq 0 ]
-    [ "$(cat "${SECRETS_DIR}/multi")" = "$key" ]
-    [ "$(cat "${SECRETS_DIR}/plain")" = "single" ]
-}
-
-@test "appends no trailing newline" {
-    write_secrets '{"token":"abc123"}'
-    [ "$(wc -c < "${SECRETS_DIR}/token")" -eq 6 ]
+@test "rejects a key that is not a plain filename" {
+    local k
+    for k in ../escape a/b .hidden 'a b'; do
+        write_secrets "$(jq -nc --arg k "$k" '{($k): "v"}')"
+        if [ "$status" -eq 0 ]; then
+            echo "accepted key: $k"
+            return 1
+        fi
+    done
+    [ ! -e "$(dirname "$SECRETS_DIR")/escape" ]
 }

@@ -6,11 +6,10 @@
 # its own repository to reach one. See docs/why-gh-workflows-ref.md.
 
 WORKFLOW="${BATS_TEST_DIRNAME}/../../../reusable_docker-build-deploy.yaml"
-STEP_NAME="Validate build-context artifacts"
 
 setup_file() {
     export SCRIPT_UNDER_TEST="${BATS_FILE_TMPDIR}/validate.sh"
-    yq -r ".jobs.build.steps[] | select(.name == \"$STEP_NAME\") | .run" \
+    yq -r '.jobs.build.steps[] | select(.name == "Validate build-context artifacts") | .run' \
         "$WORKFLOW" > "$SCRIPT_UNDER_TEST"
 }
 
@@ -18,19 +17,18 @@ setup_file() {
 validate() {
     export GITHUB_OUTPUT="${BATS_TEST_TMPDIR}/github_output"
     : > "$GITHUB_OUTPUT"
-    CONTEXT_ARTIFACTS_JSON="$1" run bash "$SCRIPT_UNDER_TEST"
+    CONTEXT_ARTIFACTS_JSON="$1" run bash "$SCRIPT_UNDER_TEST" </dev/null
 }
 
 output_value() {
     grep "^$1=" "$GITHUB_OUTPUT" | cut -d= -f2-
 }
 
-# reject_all reads one JSON input per line from stdin and fails naming every
-# input the validator wrongly accepted, rather than only the first.
+# reject_all and accept_all read one JSON input per line from stdin and fail
+# naming every input that got the wrong verdict, not only the first.
 reject_all() {
     local bad=0 json
     while read -r json; do
-        [ -z "$json" ] && continue
         validate "$json"
         if [ "$status" -eq 0 ]; then
             echo "accepted but must reject: $json"
@@ -43,7 +41,6 @@ reject_all() {
 accept_all() {
     local bad=0 json
     while read -r json; do
-        [ -z "$json" ] && continue
         validate "$json"
         if [ "$status" -ne 0 ]; then
             echo "rejected but must accept: $json ($output)"
@@ -53,59 +50,31 @@ accept_all() {
     [ "$bad" -eq 0 ]
 }
 
-@test "the step this suite tests still exists in the workflow" {
-    [ -s "$SCRIPT_UNDER_TEST" ]
-}
-
-@test "no caller-supplied value is interpolated into the script" {
-    # Interpolation happens before bash sees a quote, so env: is the only
-    # safe channel for a caller-supplied value.
-    run grep -n '\${{' "$SCRIPT_UNDER_TEST"
-    [ "$status" -ne 0 ]
-}
-
-# --- accepted -------------------------------------------------------------
-
-@test "accepts valid entries" {
+@test "accepts valid entries and reports how many" {
     accept_all <<'CASES'
+[]
 [{"name":"signed-artifacts","dest":"artifacts"}]
 [{"name":"a","dest":"x"},{"name":"b","dest":"y"},{"name":"c","dest":"z"}]
 [{"name":"a","dest":"deploy/chart/files"}]
 [{"name":"a.b_c-1","dest":"a..b"}]
 [{"name":"a","dest":"my-dir/sub-dir"}]
 CASES
-}
-
-@test "an empty array is a no-op, not a failure" {
     validate '[]'
-    [ "$status" -eq 0 ]
     [ "$(output_value count)" = "0" ]
-}
-
-@test "reports how many entries it accepted" {
     validate '[{"name":"a","dest":"x"},{"name":"b","dest":"y"}]'
     [ "$(output_value count)" = "2" ]
 }
 
-# --- download pattern -----------------------------------------------------
-
-@test "a single entry emits a bare name, not a one-element brace" {
+@test "the download pattern is a bare name for one entry and a brace list for several" {
     # minimatch does not expand "{a}", so it would match that literal string
     # and download nothing.
     validate '[{"name":"signed-artifacts","dest":"x"}]'
     [ "$(output_value pattern)" = "signed-artifacts" ]
-}
-
-@test "two or more entries brace-expand" {
-    validate '[{"name":"a","dest":"x"},{"name":"b","dest":"y"}]'
-    [ "$(output_value pattern)" = "{a,b}" ]
     validate '[{"name":"a","dest":"x"},{"name":"b","dest":"y"},{"name":"c","dest":"z"}]'
     [ "$(output_value pattern)" = "{a,b,c}" ]
 }
 
-# --- rejected -------------------------------------------------------------
-
-@test "rejects input that is not an array of two-string objects" {
+@test "rejects input that is not an array of two-string objects, naming the entry" {
     reject_all <<'CASES'
 nonsense
 {"name":"a","dest":"x"}
@@ -118,34 +87,24 @@ nonsense
 [{"name":123,"dest":"x"}]
 [{"name":null,"dest":"x"}]
 CASES
-}
-
-@test "names the offending entry index" {
     validate '[{"name":"a","dest":"x"},{"dest":"y"}]'
-    [ "$status" -ne 0 ]
     [[ $output == *"entry 1"* ]]
 }
 
-@test "rejects a name outside the permitted charset" {
+@test "rejects an unsafe name" {
+    # "." and ".." pass the charset. download-artifact joins the name onto the
+    # staging path, so ".." resolves it to RUNNER_TEMP.
     reject_all <<'CASES'
 [{"name":"a/b","dest":"x"}]
 [{"name":"a*","dest":"x"}]
 [{"name":"a{b","dest":"x"}]
 [{"name":"a b","dest":"x"}]
+[{"name":".","dest":"x"}]
+[{"name":"..","dest":"x"}]
 CASES
 }
 
-@test 'rejects a name of "." or ".."' {
-    # Both pass the charset. download-artifact joins the name onto the staging
-    # path, so ".." resolves it to RUNNER_TEMP.
-    for n in . ..; do
-        validate "[{\"name\":\"$n\",\"dest\":\"x\"}]"
-        [ "$status" -ne 0 ]
-        [[ $output == *"path traversal"* ]]
-    done
-}
-
-@test "rejects a dest that escapes or reaches outside the context" {
+@test "rejects an unsafe dest" {
     reject_all <<'CASES'
 [{"name":"a","dest":"/etc/passwd"}]
 [{"name":"a","dest":"."}]
@@ -154,34 +113,15 @@ CASES
 [{"name":"a","dest":"good/../../escape"}]
 [{"name":"a","dest":"good/.."}]
 [{"name":"a","dest":"good/./x"}]
-CASES
-}
-
-@test "rejects a dest segment that a utility would read as an option" {
-    reject_all <<'CASES'
 [{"name":"a","dest":"-rf"}]
 [{"name":"a","dest":"good/-rf"}]
 [{"name":"a","dest":"--no-preserve-root"}]
-CASES
-    validate '[{"name":"a","dest":"-rf"}]'
-    [[ $output == *'beginning with "-"'* ]]
-}
-
-@test "rejects a dest outside the permitted charset" {
-    reject_all <<'CASES'
 [{"name":"a","dest":"my dir"}]
 [{"name":"a","dest":"x`id`"}]
 [{"name":"a","dest":"x$HOME"}]
-CASES
-}
-
-@test "rejects a malformed path shape" {
-    reject_all <<'CASES'
 [{"name":"a","dest":"good//bad"}]
 [{"name":"a","dest":"good/"}]
 CASES
-    validate '[{"name":"a","dest":"good/"}]'
-    [[ $output == *'must not end with "/"'* ]]
 }
 
 @test "rejects duplicates, including two dests naming one directory" {

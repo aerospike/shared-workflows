@@ -1,6 +1,6 @@
 # Reusable Docker Build, Publish & Attest
 
-This workflow builds, optionally attests, and publishes an OCI image to JFrog Artifactory
+This workflow builds, optionally attests, and publishes an OCI image to JFrog Artifactory.
 
 ## Usage
 
@@ -35,8 +35,8 @@ jobs:
 - `gh-checkout-submodules` (string, default `false`): Submodules to check out into the build context, passed to `actions/checkout` `submodules` (`false`, `true`, or `recursive`). The checkout uses the calling repo's `GITHUB_TOKEN`, which reads public submodules but not private submodules in other repositories
 - `gh-context-artifacts-json` (string, optional): JSON array of same-run GitHub artifacts to place inside the build context before the image build, e.g. `[{"name":"signed-artifacts","dest":"artifacts"}]`. See [Delivering artifacts into the build context](#delivering-artifacts-into-the-build-context)
 - `jf-build-name` (string, optional): Build name for JFrog build-info (defaults to workflow name)
-- `jf-registry` (string, optional): Full Docker registry URL including repository path (e.g., `artifact.aerospike.io/database-docker-dev-local`)
-- `jf-registry-base` (string, default `artifact.aerospike.io`): Registry hostname (no repo path)
+- `jf-registry` (string, optional): Deprecated and will be removed. The run fails unless it equals `{jf-registry-base}/{jf-project}{repo-scope}`
+- `jf-registry-base` (string, default `artifact.aerospike.io`): Registry hostname (no repo path) for the push, the BuildKit pull, and `jf-go-repo`
 - `jf-url` (string, default `https://artifact.aerospike.io`): Base JFrog Artifactory URL
 - `labels-json` (string, default `{}`): JSON object of image labels (e.g., `{"com.aerospike.version":"7.0.0","com.aerospike.release":"stable","maintainer":"Aerospike"}`)
 - `oidc-audience` (string, default `aerospike`): OIDC audience value for token
@@ -96,7 +96,7 @@ The Actions cache scope uses the same key, so those calls do not share a layer c
 
 The outputs and the single build-info record are produced by the merge step.
 
-Each leg and the merge step mint their own short-lived OIDC token immediately before pushing, so total build time no longer has to fit inside one token's lifetime.
+Each leg and the merge step mint their own short-lived OIDC token immediately before pushing, so total build time does not have to fit inside one token's lifetime.
 
 Two independent caching levers reduce repeat work:
 
@@ -116,7 +116,7 @@ Two independent caching levers reduce repeat work:
 
 ## OIDC
 
-Authenticate with the org-scoped provider (defaults: `oidc-provider-name: gh-aerospike`, `oidc-audience: aerospike`). Your repo needs a per-repo OIDC mapping in tf-artifactory granting write to the target project's dev locals plus read + cache-deploy on the public-mirror remotes (the standard consumer mapping; the legacy per-project-role providers like `gh-dev-test` are being retired). Without the cache-deploy grant, base-image pull-through (lever 1) cannot populate the cache on the first pull.
+Authenticate with the org-scoped provider (defaults: `oidc-provider-name: gh-aerospike`, `oidc-audience: aerospike`). Your repo needs a per-repo OIDC mapping in tf-artifactory granting write to the target project's dev locals plus read + cache-deploy on the public-mirror remotes (the standard consumer mapping). Without the cache-deploy grant, base-image pull-through (lever 1) cannot populate the cache on the first pull.
 
 ## Tag Generation
 
@@ -126,7 +126,7 @@ The workflow automatically generates tags based on the `app-version` input:
 2. **Version tag** (when `versions-override` is not provided): `{registry}/{image-name}:{app-version}` (e.g., `artifact.aerospike.io/database-docker-dev-local/test-image:7.0.0`)
 3. **Custom tags** (when `versions-override` is provided): Only the immutable tag plus the override tags are generated (e.g., with `versions-override: "dev"`, for app version `7.0.0`, the tag portions would be `7.0.0_20251202T021054Z, dev`).
 
-The registry is automatically constructed from `jf-registry` (if provided) or `{jf-registry-base}/{jf-project}{repo-scope}`.
+The registry is `{jf-registry-base}/{jf-project}{repo-scope}`.
 
 ## Delivering artifacts into the build context
 
@@ -165,7 +165,7 @@ entry when an artifact is missing, holds no regular files, or contains anything 
 regular file. There is no silent empty directory: an unset `COPY` argument expands to `COPY  /dest`,
 which copies the whole context into a directory and exits 0, so delivery fails loudly instead.
 
-Three things this does not do:
+Limits of this input:
 
 - **Bytes from a different run.** Published artifacts are reachable over the network from inside the
   build, which is how [aerospike-tools.docker](https://github.com/aerospike/aerospike-tools.docker/blob/master/Dockerfile#L26)
@@ -249,4 +249,3 @@ Pass secrets only through `build-secrets-json`, never through `build-args-json`.
 - OCI tags forbid the `+` character, but SemVer uses it for build metadata (e.g., `1.2.3+build-123`). The workflow replaces `+` with `-` in tags (`1.2.3+build-123` becomes `1.2.3-build-123`); the original version is preserved in the image's OCI labels.
 - OCI labels are automatically generated with image metadata (title, version, created, revision, source, url)
 - User-provided labels (via `labels-json`) override OCI labels when keys conflict
-- For Artifactory, the registry path includes the repository (e.g., `artifact.aerospike.io/database-docker-dev-local`)

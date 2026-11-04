@@ -58,7 +58,7 @@ on:
       jf-registry:
         type: string
         required: false
-        description: Full Docker registry URL including repository path (e.g., artifact.aerospike.io/test-docker-dev-local)
+        description: Deprecated, will be removed. Must equal {jf-registry-base}/{jf-project}{repo-scope}, or the run fails.
       jf-registry-base:
         type: string
         default: artifact.aerospike.io
@@ -159,6 +159,24 @@ jobs:
         with:
           egress-policy: audit
 
+      - name: Check registry inputs
+        shell: bash
+        env:
+          JF_REGISTRY: ${{ inputs.jf-registry }}
+          DERIVED_REGISTRY: ${{ format('{0}/{1}{2}', inputs.jf-registry-base, inputs.jf-project, inputs.repo-scope) }}
+        run: |
+          set -euo pipefail
+          case "$JF_REGISTRY" in
+            "") ;;
+            "$DERIVED_REGISTRY")
+              echo "::warning::jf-registry is deprecated and will be removed. Delete it from the call; the registry is ${DERIVED_REGISTRY} without it."
+              ;;
+            *)
+              echo "::error::jf-registry is ${JF_REGISTRY}, but the BuildKit pull and build-info use ${DERIVED_REGISTRY}. Delete jf-registry and set jf-registry-base or repo-scope."
+              exit 1
+              ;;
+          esac
+
       - name: Parse platforms into matrix
         id: parse
         shell: bash
@@ -251,7 +269,7 @@ jobs:
     env:
       JFROG_CLI_BUILD_NAME: ${{ inputs.jf-build-name || github.workflow }}
       JFROG_CLI_LOG_LEVEL: INFO
-      REGISTRY: ${{ inputs.jf-registry || format('{0}/{1}{2}', inputs.jf-registry-base, inputs.jf-project, inputs.repo-scope) }}
+      REGISTRY: ${{ format('{0}/{1}{2}', inputs.jf-registry-base, inputs.jf-project, inputs.repo-scope) }}
     permissions:
       contents: read
       packages: write
@@ -317,11 +335,6 @@ jobs:
                 # A charset is not implied by the traversal rules: "-rf" passes them all.
                 elif ($v.dest | test("^[A-Za-z0-9._/-]+$") | not)
                   then $at + "dest \"\($v.dest)\" must match ^[A-Za-z0-9._/-]+$"
-                # Splitting on "/" discards a trailing empty field, so this is not caught
-                # by the segment rules below. Left in, "x" and "x/" defeat the duplicate
-                # rule while naming one directory.
-                elif ($v.dest | endswith("/"))
-                  then $at + "dest \"\($v.dest)\" must not end with \"/\""
                 elif ($v.dest | split("/") | any(. == ""))
                   then $at + "dest \"\($v.dest)\" has an empty path segment"
                 elif ($v.dest | split("/") | any(. == ".."))
@@ -665,7 +678,7 @@ jobs:
     env:
       JFROG_CLI_BUILD_NAME: ${{ inputs.jf-build-name || github.workflow }}
       JFROG_CLI_LOG_LEVEL: INFO
-      REGISTRY: ${{ inputs.jf-registry || format('{0}/{1}{2}', inputs.jf-registry-base, inputs.jf-project, inputs.repo-scope) }}
+      REGISTRY: ${{ format('{0}/{1}{2}', inputs.jf-registry-base, inputs.jf-project, inputs.repo-scope) }}
     permissions:
       contents: read
       packages: write
