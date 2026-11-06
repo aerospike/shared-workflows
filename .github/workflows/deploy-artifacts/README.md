@@ -222,14 +222,13 @@ A `release-bundle-record.json` in the artifacts root is written to `generic/dock
 
 `container_destination` is an Artifactory property on the image. Set it before the release bundle is created. Detection copies it onto that image's line. One value is a string. Several values are a list of strings. A missing or blank property is left off the line, and publishing sends the image to Docker Hub.
 
-| Value                                                                 | Destination                                                |
-| --------------------------------------------------------------------- | ---------------------------------------------------------- |
-| `dockerio`                                                            | Docker Hub, as `aerospike/<image>:<tag>`                   |
-| `quayio`                                                              | Quay, as `quay.io/aerospike/<image>:<tag>`                 |
-| `opnshift`                                                            | Quay, then a Red Hat check for OpenShift                   |
-| `githubcr`, `gitlabcr`, `ecrpub`, `gar`, `ocpproxy`, `kolla`, `rhosp` | Accepted names. Publishing does not copy these images yet. |
+| Value       | Destination                                |
+| ----------- | ------------------------------------------ |
+| `docker`    | Docker Hub, as `aerospike/<image>:<tag>`   |
+| `quay`      | Quay, as `quay.io/aerospike/<image>:<tag>` |
+| `openshift` | Quay, then a Red Hat check for OpenShift   |
 
-A name outside this list stops publishing with `Unknown target registry: <name>`. The same field list is in the [detect-artifacts](../../actions/detect-artifacts/README.md#docker-bundle-metadata) action.
+`reusable_docker-build-deploy.yaml` accepts these names. Any other name fails that job before the property is set. The same field list is in the [detect-artifacts](../../actions/detect-artifacts/README.md#docker-bundle-metadata) action.
 
 ### Windows
 
