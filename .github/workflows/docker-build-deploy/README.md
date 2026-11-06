@@ -84,14 +84,13 @@ Leave `container-destination` unset and the workflow does not call `jf rt set-pr
 
 One name is one property value. Several names are comma-separated.
 
-| Value                                                                    | Destination                                                |
-| ------------------------------------------------------------------------ | ---------------------------------------------------------- |
-| `docker`                                                                 | Docker Hub, as `aerospike/<image>:<tag>`                   |
-| `quay`                                                                   | Quay, as `quay.io/aerospike/<image>:<tag>`                 |
-| `openshift`                                                              | Quay, then a Red Hat check for OpenShift                   |
-| `ghcr`, `gitlab`, `ecr`, `googlear`, `openstack`, `kollacr`, `redhatocp` | Accepted names. Publishing does not copy these images yet. |
+| Value       | Destination                                |
+| ----------- | ------------------------------------------ |
+| `docker`    | Docker Hub, as `aerospike/<image>:<tag>`   |
+| `quay`      | Quay, as `quay.io/aerospike/<image>:<tag>` |
+| `openshift` | Quay, then a Red Hat check for OpenShift   |
 
-A name outside this list stops publishing with `Unknown target registry: <name>`.
+Any other name, including `ghcr`, `gitlab`, `ecr`, `googlear`, `openstack`, `kollacr`, and `redhatocp`, fails the job before the property is set.
 
 ```yaml
 with:

@@ -48,14 +48,13 @@ When `release-bundle-record.json` is in the artifacts root, detection writes `ge
 
 Set one or more of these names:
 
-| Value                                                                    | Destination                                                |
-| ------------------------------------------------------------------------ | ---------------------------------------------------------- |
-| `docker`                                                                 | Docker Hub, as `aerospike/<image>:<tag>`                   |
-| `quay`                                                                   | Quay, as `quay.io/aerospike/<image>:<tag>`                 |
-| `openshift`                                                              | Quay, then a Red Hat check for OpenShift                   |
-| `ghcr`, `gitlab`, `ecr`, `googlear`, `openstack`, `kollacr`, `redhatocp` | Accepted names. Publishing does not copy these images yet. |
+| Value       | Destination                                |
+| ----------- | ------------------------------------------ |
+| `docker`    | Docker Hub, as `aerospike/<image>:<tag>`   |
+| `quay`      | Quay, as `quay.io/aerospike/<image>:<tag>` |
+| `openshift` | Quay, then a Red Hat check for OpenShift   |
 
-A name outside this list stops publishing with `Unknown target registry: <name>`.
+`reusable_docker-build-deploy.yaml` accepts these names. Any other name fails that job before the property is set. Detection copies the value stored on the image.
 
 Leave the property unset for Docker Hub. Set `docker` when that destination should be named on the line. A line with `quay` and `openshift` looks like this:
 

@@ -37,7 +37,7 @@ on:
         description: |
           Comma-separated Artifactory property container_destination on the immutable tag.
           Unset leaves the property off the image, and publishing sends it to Docker Hub.
-          Names: docker, quay, openshift, ghcr, gitlab, ecr, googlear, openstack, kollacr, redhatocp.
+          Names: docker, quay, openshift. Any other name fails the job.
       context:
         type: string
         default: .
@@ -837,6 +837,13 @@ jobs:
               echo "::error::container-destination value must be a single name: ${dest}"
               exit 1
             fi
+            case "$dest" in
+            docker | quay | openshift) ;;
+            *)
+              echo "::error::container-destination ${dest} is not implemented. Allowed: docker, quay, openshift"
+              exit 1
+              ;;
+            esac
             values+=("$dest")
           done
           if [ "${#values[@]}" -eq 0 ]; then

@@ -85,6 +85,22 @@ run_set() {
     [ "$(cat "$JF_LOG")" = "rt set-props database-docker-dev-local/test-image/7.0.0_20251202T021054Z/*manifest.json container_destination=quay,openshift" ]
 }
 
+@test "docker is an implemented destination" {
+    run_set "docker"
+    [ "$status" -eq 0 ]
+    [ "$(cat "$JF_LOG")" = "rt set-props database-docker-dev-local/test-image/7.0.0_20251202T021054Z/*manifest.json container_destination=docker" ]
+}
+
+@test "a destination that is not implemented fails before set-props" {
+    run_set "ghcr"
+    [ "$status" -ne 0 ]
+    [ ! -s "$JF_LOG" ]
+
+    run_set "quay,ghcr"
+    [ "$status" -ne 0 ]
+    [ ! -s "$JF_LOG" ]
+}
+
 @test "a value that would add another property is rejected" {
     run_set "quay;docker"
     [ "$status" -ne 0 ]
