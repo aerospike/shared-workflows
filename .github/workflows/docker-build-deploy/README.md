@@ -30,6 +30,7 @@ jobs:
 - `app-name` (string, optional): Human-readable application name for OCI labels (defaults to `image-name`). Can differ from `image-name` for display purposes (e.g., `image-name="aerospike-server-enterprise"`, `app-name="Aerospike Server Enterprise"`)
 - `attest` (boolean, default `true`): Generate SLSA build-provenance attestation
 - `build-args-json` (string, default `{}`): JSON object of build-args passed to docker build (e.g., `{"VERSION":"7.0.0","BUILD_DATE":"2024-01-15T10:30:00Z","SOURCE_VERSION":"abc123"}`)
+- `certification-component-id` (string, default empty): Artifactory property `certification_component_id` on the immutable tag. Required when `container-destination` includes `openshift`. See [Container destination](#container-destination).
 - `container-destination` (string, default empty): Comma-separated Artifactory property `container_destination` on the immutable tag. Unset leaves the property off the image. See [Container destination](#container-destination).
 - `context` (string, default `.`): Docker build context directory
 - `file` (string, default `Dockerfile`): Path to Dockerfile (relative to context)
@@ -93,9 +94,12 @@ One name is one property value. Several names are comma-separated.
 
 Any other name, including `ghcr`, `gitlab`, `ecr`, `googlear`, `openstack`, `kollacr`, and `redhatocp`, fails the job before the property is set.
 
+`openshift` requires `certification-component-id`. That value is written as the Artifactory property `certification_component_id` on the same tag. An id without `openshift` fails the job. Detection copies one id onto the image row and fails when the record has several.
+
 ```yaml
 with:
   container-destination: quay,openshift
+  certification-component-id: 69abc123
 ```
 
 ## Multi-arch build and caching

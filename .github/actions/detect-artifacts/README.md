@@ -54,12 +54,12 @@ Set one or more of these names:
 | `quay`      | Quay, as `quay.io/aerospike/<image>:<tag>` |
 | `openshift` | Quay, then a Red Hat check for OpenShift   |
 
-`reusable_docker-build-deploy.yaml` accepts these names. Any other name fails that job before the property is set. Detection copies the value stored on the image.
+`reusable_docker-build-deploy.yaml` accepts these names. Any other name fails that job before the property is set. `openshift` requires `certification-component-id` on that upload. Detection copies `certification_component_id` as one string. Several values fail detection. A missing or blank id is left off the row.
 
-Leave the property unset for Docker Hub. Set `docker` when that destination should be named on the line. A line with `quay` and `openshift` looks like this:
+Leave `container_destination` unset for Docker Hub. Set `docker` when that destination should be named on the line. A line with `quay` and `openshift` looks like this:
 
 ```text
-{"package_name":"aerospike-server","package_version":"8.1.0.0","source_repository_key":"database-docker-dev-local","container_destination":["quay","openshift"]}
+{"package_name":"aerospike-server","package_version":"8.1.0.0","source_repository_key":"database-docker-dev-local","container_destination":["quay","openshift"],"certification_component_id":"69abc123"}
 ```
 
 ## Example (after collect, before release bundle)

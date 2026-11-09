@@ -30,6 +30,13 @@ on:
         type: string
         default: "{}"
         description: JSON object of build-args passed to docker build, {"KEY":"VALUE",...}
+      certification-component-id:
+        type: string
+        required: false
+        default: ""
+        description: |
+          Artifactory property certification_component_id on the immutable tag.
+          Required when container-destination includes openshift. Any other use fails the job.
       container-destination:
         type: string
         required: false
@@ -837,15 +844,17 @@ jobs:
 
       # An empty value leaves the property unset. Do not add a default destination.
       - name: Set container_destination
-        if: ${{ inputs.push && inputs.container-destination != '' }}
+        if: ${{ inputs.push && (inputs.container-destination != '' || inputs.certification-component-id != '') }}
         shell: bash
         env:
           CONTAINER_DESTINATION: ${{ inputs.container-destination }}
+          CERTIFICATION_COMPONENT_ID: ${{ inputs.certification-component-id }}
           IMMUTABLE_TAG: ${{ steps.tags.outputs.immutable-tag }}
         run: |
           set -euo pipefail
           values=()
-          IFS=',' read -ra destinations <<< "$CONTAINER_DESTINATION"
+          wants_openshift=false
+          IFS=',' read -ra destinations <<< "${CONTAINER_DESTINATION:-}"
           for dest in "${destinations[@]}"; do
             dest="${dest#"${dest%%[![:space:]]*}"}"
             dest="${dest%"${dest##*[![:space:]]}"}"
@@ -863,8 +872,27 @@ jobs:
               exit 1
               ;;
             esac
+            if [ "$dest" = "openshift" ]; then
+              wants_openshift=true
+            fi
             values+=("$dest")
           done
+
+          component_id="${CERTIFICATION_COMPONENT_ID:-}"
+          component_id="${component_id#"${component_id%%[![:space:]]*}"}"
+          component_id="${component_id%"${component_id##*[![:space:]]}"}"
+          if [ -n "$component_id" ] && [[ ! "$component_id" =~ ^[A-Za-z0-9._-]+$ ]]; then
+            echo "::error::certification-component-id must be a single id: ${component_id}"
+            exit 1
+          fi
+          if [ "$wants_openshift" = true ] && [ -z "$component_id" ]; then
+            echo "::error::openshift requires certification-component-id"
+            exit 1
+          fi
+          if [ "$wants_openshift" = false ] && [ -n "$component_id" ]; then
+            echo "::error::certification-component-id requires container-destination to include openshift"
+            exit 1
+          fi
           if [ "${#values[@]}" -eq 0 ]; then
             echo "container-destination is blank; leaving the property unset"
             exit 0
@@ -879,6 +907,9 @@ jobs:
           fi
 
           props="container_destination=$(IFS=','; printf '%s' "${values[*]}")"
+          if [ -n "$component_id" ]; then
+            props="${props};certification_component_id=${component_id}"
+          fi
           pattern="${repo_image}/${tag}/*manifest.json"
           echo "Setting ${props} on ${pattern}"
           jf rt set-props "$pattern" "$props"
