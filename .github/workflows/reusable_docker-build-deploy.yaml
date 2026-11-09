@@ -36,7 +36,7 @@ on:
         default: ""
         description: |
           Artifactory property certification_component_id on the immutable tag.
-          Required when container-destination includes openshift. Any other use fails the job.
+          One id from connect.redhat.com. Several ids fail the job. Unset leaves the property off the image.
       container-destination:
         type: string
         required: false
@@ -853,7 +853,6 @@ jobs:
         run: |
           set -euo pipefail
           values=()
-          wants_openshift=false
           IFS=',' read -ra destinations <<< "${CONTAINER_DESTINATION:-}"
           for dest in "${destinations[@]}"; do
             dest="${dest#"${dest%%[![:space:]]*}"}"
@@ -872,28 +871,32 @@ jobs:
               exit 1
               ;;
             esac
-            if [ "$dest" = "openshift" ]; then
-              wants_openshift=true
-            fi
             values+=("$dest")
           done
 
-          component_id="${CERTIFICATION_COMPONENT_ID:-}"
-          component_id="${component_id#"${component_id%%[![:space:]]*}"}"
-          component_id="${component_id%"${component_id##*[![:space:]]}"}"
-          if [ -n "$component_id" ] && [[ ! "$component_id" =~ ^[A-Za-z0-9._-]+$ ]]; then
-            echo "::error::certification-component-id must be a single id: ${component_id}"
+          component_ids=()
+          IFS=',' read -ra raw_ids <<< "${CERTIFICATION_COMPONENT_ID:-}"
+          for component_id in "${raw_ids[@]}"; do
+            component_id="${component_id#"${component_id%%[![:space:]]*}"}"
+            component_id="${component_id%"${component_id##*[![:space:]]}"}"
+            if [ -z "$component_id" ]; then
+              continue
+            fi
+            if [[ ! "$component_id" =~ ^[A-Za-z0-9._-]+$ ]]; then
+              echo "::error::certification-component-id must be a single id: ${component_id}"
+              exit 1
+            fi
+            component_ids+=("$component_id")
+          done
+          if [ "${#component_ids[@]}" -gt 1 ]; then
+            echo "::error::certification-component-id must be a single id"
             exit 1
           fi
-          if [ "$wants_openshift" = true ] && [ -z "$component_id" ]; then
-            echo "::error::openshift requires certification-component-id"
-            exit 1
+          component_id=""
+          if [ "${#component_ids[@]}" -eq 1 ]; then
+            component_id="${component_ids[0]}"
           fi
-          if [ "$wants_openshift" = false ] && [ -n "$component_id" ]; then
-            echo "::error::certification-component-id requires container-destination to include openshift"
-            exit 1
-          fi
-          if [ "${#values[@]}" -eq 0 ]; then
+          if [ "${#values[@]}" -eq 0 ] && [ -z "$component_id" ]; then
             echo "container-destination is blank; leaving the property unset"
             exit 0
           fi
@@ -906,9 +909,16 @@ jobs:
             exit 1
           fi
 
-          props="container_destination=$(IFS=','; printf '%s' "${values[*]}")"
+          props=""
+          if [ "${#values[@]}" -gt 0 ]; then
+            props="container_destination=$(IFS=','; printf '%s' "${values[*]}")"
+          fi
           if [ -n "$component_id" ]; then
-            props="${props};certification_component_id=${component_id}"
+            if [ -n "$props" ]; then
+              props="${props};certification_component_id=${component_id}"
+            else
+              props="certification_component_id=${component_id}"
+            fi
           fi
           pattern="${repo_image}/${tag}/*manifest.json"
           echo "Setting ${props} on ${pattern}"

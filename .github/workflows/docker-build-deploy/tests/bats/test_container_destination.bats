@@ -86,19 +86,25 @@ run_set() {
 }
 
 @test "several destinations stay in order" {
-    run_set " quay, openshift " "69abc123"
+    run_set " quay, openshift "
     [ "$status" -eq 0 ]
-    [ "$(cat "$JF_LOG")" = "rt set-props database-docker-dev-local/test-image/7.0.0_20251202T021054Z/*manifest.json container_destination=quay,openshift;certification_component_id=69abc123" ]
+    [ "$(cat "$JF_LOG")" = "rt set-props database-docker-dev-local/test-image/7.0.0_20251202T021054Z/*manifest.json container_destination=quay,openshift" ]
 }
 
-@test "openshift without a certification component id does not call jf" {
+@test "an empty certification component id does not set the property" {
     run_set "openshift"
-    [ "$status" -ne 0 ]
-    [ ! -s "$JF_LOG" ]
+    [ "$status" -eq 0 ]
+    [ "$(cat "$JF_LOG")" = "rt set-props database-docker-dev-local/test-image/7.0.0_20251202T021054Z/*manifest.json container_destination=openshift" ]
 }
 
-@test "a certification component id without openshift does not call jf" {
-    run_set "quay" "69abc123"
+@test "one certification component id is set on the immutable tag" {
+    run_set "openshift" "69abc123"
+    [ "$status" -eq 0 ]
+    [ "$(cat "$JF_LOG")" = "rt set-props database-docker-dev-local/test-image/7.0.0_20251202T021054Z/*manifest.json container_destination=openshift;certification_component_id=69abc123" ]
+}
+
+@test "several certification component ids fail before set-props" {
+    run_set "openshift" "69abc123,69abc456"
     [ "$status" -ne 0 ]
     [ ! -s "$JF_LOG" ]
 }

@@ -228,7 +228,7 @@ A `release-bundle-record.json` in the artifacts root is written to `generic/dock
 | `quay`      | Quay, as `quay.io/aerospike/<image>:<tag>` |
 | `openshift` | Quay, then a Red Hat check for OpenShift   |
 
-`reusable_docker-build-deploy.yaml` accepts these names. Any other name fails that job before the property is set. `openshift` requires `certification_component_id` on that upload. Detection copies one id as a string and fails when the record has several. A missing or blank id is left off the row. The same field list is in the [detect-artifacts](../../actions/detect-artifacts/README.md#docker-bundle-metadata) action.
+`reusable_docker-build-deploy.yaml` accepts these names. Any other name fails that job before the property is set. The same field list is in the [detect-artifacts](../../actions/detect-artifacts/README.md#docker-bundle-metadata) action.
 
 ### Windows
 
