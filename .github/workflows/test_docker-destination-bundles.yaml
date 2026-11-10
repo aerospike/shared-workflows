@@ -5,8 +5,6 @@ name: Create Quay and OpenShift test bundles
 
 on:
   workflow_dispatch:
-  push:
-    branches: [feat-761-seed-test-bundles]
 
 permissions:
   contents: read
