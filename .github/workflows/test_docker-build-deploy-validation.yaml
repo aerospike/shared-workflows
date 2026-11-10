@@ -1,9 +1,9 @@
 name: "Test: Docker build-deploy input validation"
 
-# Static tests for reusable_docker-build-deploy.yaml's input handling. Kept out
-# of test_docker-build-deploy-workflow.yaml because that workflow serialises on
-# the jfrog-test-deploy concurrency group, which would queue a two-second suite
-# behind real registry pushes.
+# Static tests for reusable_docker-build-deploy.yaml and the Quay/OpenShift
+# test-bundle plan. Kept out of test_docker-build-deploy-workflow.yaml because
+# that workflow serialises on the jfrog-test-deploy concurrency group, which
+# would queue this suite behind real registry pushes.
 
 on:
   workflow_dispatch:
@@ -13,6 +13,7 @@ on:
       - .github/workflows/reusable_docker-build-deploy.yaml
       - .github/workflows/docker-build-deploy/**
       - .github/workflows/test_docker-build-deploy-validation.yaml
+      - .github/workflows/test_docker-destination-bundles.yaml
 
 permissions:
   contents: read
