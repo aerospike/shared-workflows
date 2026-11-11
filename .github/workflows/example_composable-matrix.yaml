@@ -235,7 +235,7 @@ jobs:
       jf-build-id: ${{ github.run_id }}-${{ github.run_attempt }}-buildinfo-darwin-arm64
       gh-source-path: repo-source
       working-directory: repo-source/.github/workflows/execute-build/test_apps/hi
-      runs-on: macos-14
+      runs-on: macos-15
       build-env: VERSION=${{ needs.extract-version.outputs.version }}
       build-script: |
         make clean build DISTRO=darwin ARCH=arm64

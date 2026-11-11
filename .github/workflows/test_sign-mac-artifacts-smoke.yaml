@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   create-test-pkg:
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - name: Harden the runner (Audit all outbound calls)
         uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
@@ -68,7 +68,7 @@ jobs:
       signing-identity: ${{ vars.APPLE_SIGNING_IDENTITY }}
       installer-identity: ${{ vars.APPLE_INSTALLER_IDENTITY }}
       notarize: true
-      runs-on: macos-14
+      runs-on: macos-15
     secrets:
       apple-application-cert: ${{ secrets.APPLE_APPLICATION_CERT }}
       apple-id: ${{ secrets.APPLE_ID }}
@@ -79,7 +79,7 @@ jobs:
 
   verify:
     needs: sign-mac
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - name: Harden the runner (Audit all outbound calls)
         uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3

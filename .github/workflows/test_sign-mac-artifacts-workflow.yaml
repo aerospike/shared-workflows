@@ -50,7 +50,7 @@ jobs:
       installer-identity: "Developer ID Installer: Test (TESTID)"
       notarize: false
       dry-run: true
-      runs-on: macos-14
+      runs-on: macos-15
 
   verify-artifacts-preserved:
     if: github.actor != 'dependabot[bot]'

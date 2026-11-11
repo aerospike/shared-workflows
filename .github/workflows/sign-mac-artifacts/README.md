@@ -27,7 +27,7 @@ The workflow downloads the full artifact tree, signs only the files matching `ar
 | `gh-unsigned-artifacts` | `string`  | No       | GitHub artifact name to download and overwrite. Default: `build-artifacts`              |
 | `installer-identity`    | `string`  | No       | Apple productsign identity. Required when signing `.pkg` files.                         |
 | `notarize`              | `boolean` | No       | Submit to Apple for notarization after signing. Default: `true`                         |
-| `runs-on`               | `string`  | No       | macOS runner label. Default: `macos-14`                                                 |
+| `runs-on`               | `string`  | No       | macOS runner label. Default: `macos-15`                                                 |
 
 ## Secrets
 
