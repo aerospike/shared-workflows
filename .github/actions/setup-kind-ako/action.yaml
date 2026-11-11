@@ -1,18 +1,43 @@
 name: Setup kind and AKO
 description: >
-  Starts a kind cluster, installs the Aerospike Kubernetes Operator, applies an
-  AerospikeCluster, installs ingress-nginx with a tcp-services ConfigMap, and
-  adds the CoreDNS entry that lets the server resolve the endpoint hostname.
+  Starts a kind cluster, installs the chosen Aerospike Kubernetes Operator
+  version, applies an AerospikeCluster with configuredIP or networkLoadBalancer
+  alternate access and one or many pods per node, installs ingress-nginx with a
+  tcp-services ConfigMap, and adds the CoreDNS entry that lets the server
+  resolve the endpoint hostname.
 
 inputs:
   admin-password:
     description: Aerospike admin password. Generated when empty.
     required: false
     default: ""
+  ako-helm-repo:
+    description: Helm repository that serves the aerospike-kubernetes-operator and aerospike-cluster charts
+    required: false
+    default: https://aerospike.github.io/aerospike-kubernetes-operator
+  ako-version:
+    description: >
+      aerospike-kubernetes-operator chart version. latest is the newest release
+      in ako-helm-repo; a prerelease such as 4.8.0-dev1 installs only when named.
+    required: false
+    default: latest
+  alternate-access:
+    description: >
+      AerospikeCluster alternateAccess, configuredIP or networkLoadBalancer.
+      Both advertise the endpoint hostname with each pod's Service NodePort.
+    required: false
+    default: configuredIP
+  cluster-chart-version:
+    description: >
+      aerospike-cluster chart version that renders the AerospikeCluster. Empty
+      uses the resolved ako-version; set it for a dev build, which ships no
+      matching cluster chart.
+    required: false
+    default: ""
   cluster-size:
     description: >
       Initial AerospikeCluster size. One server keeps setup inside the L3
-      3-5 minute budget. One kind node runs every pod.
+      3-5 minute budget.
     required: false
     default: "1"
   enable-tls:
@@ -24,6 +49,17 @@ inputs:
   features-content:
     description: Enterprise feature-key file contents
     required: true
+  kind-node-image:
+    description: kind node image. Its Kubernetes version must be one the ako-version supports.
+    required: false
+    default: kindest/node:v1.35.0
+  multi-pod-per-host:
+    description: >
+      true runs every pod on one kind node. false sets multiPodPerHost false
+      and adds cluster-size + 1 kind workers; it needs alternate-access
+      networkLoadBalancer.
+    required: false
+    default: "true"
   server-image:
     description: Aerospike server image used by the AerospikeCluster, as repository:tag
     required: false
@@ -33,6 +69,9 @@ outputs:
   admin-password:
     description: Aerospike admin password
     value: ${{ steps.prepare.outputs.admin-password }}
+  alternate-access:
+    description: alternateAccess the AerospikeCluster was built with
+    value: ${{ steps.setup.outputs.alternate-access }}
   endpoint-hostname:
     description: Hostname the client and the server both resolve
     value: ${{ steps.setup.outputs.endpoint-hostname }}
@@ -60,9 +99,15 @@ runs:
       shell: bash
       env:
         ADMIN_PASSWORD: ${{ inputs.admin-password }}
+        AKO_HELM_REPO: ${{ inputs.ako-helm-repo }}
+        AKO_VERSION: ${{ inputs.ako-version }}
+        ALTERNATE_ACCESS: ${{ inputs.alternate-access }}
+        CLUSTER_CHART_VERSION: ${{ inputs.cluster-chart-version }}
         CLUSTER_SIZE: ${{ inputs.cluster-size }}
         ENABLE_TLS: ${{ inputs.enable-tls }}
         FEATURES_CONTENT: ${{ inputs.features-content }}
+        KIND_NODE_IMAGE: ${{ inputs.kind-node-image }}
+        MULTI_POD_PER_HOST: ${{ inputs.multi-pod-per-host }}
         SERVER_IMAGE: ${{ inputs.server-image }}
       run: bash "${{ github.action_path }}/entrypoint.sh" prepare
 
@@ -77,8 +122,10 @@ runs:
 
     - name: Create kind cluster
       shell: bash
-      # AKO 4.5.0 supports Kubernetes through 1.35.
-      run: kind create cluster --name kind-ako --image kindest/node:v1.35.0 --wait 180s
+      env:
+        KIND_CONFIG: ${{ steps.prepare.outputs.kind-config }}
+        KIND_NODE_IMAGE: ${{ inputs.kind-node-image }}
+      run: kind create cluster --name kind-ako --image "$KIND_NODE_IMAGE" ${KIND_CONFIG:+--config "$KIND_CONFIG"} --wait 180s
 
     - name: Install helm
       uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
@@ -90,8 +137,14 @@ runs:
       shell: bash
       env:
         ADMIN_PASSWORD: ${{ steps.prepare.outputs.admin-password }}
+        AKO_HELM_REPO: ${{ inputs.ako-helm-repo }}
+        AKO_VERSION: ${{ inputs.ako-version }}
+        ALTERNATE_ACCESS: ${{ inputs.alternate-access }}
+        CLUSTER_CHART_VERSION: ${{ inputs.cluster-chart-version }}
         CLUSTER_SIZE: ${{ inputs.cluster-size }}
         ENABLE_TLS: ${{ inputs.enable-tls }}
         FEATURES_CONTENT: ${{ inputs.features-content }}
+        KIND_NODE_IMAGE: ${{ inputs.kind-node-image }}
+        MULTI_POD_PER_HOST: ${{ inputs.multi-pod-per-host }}
         SERVER_IMAGE: ${{ inputs.server-image }}
       run: bash "${{ github.action_path }}/entrypoint.sh" setup
