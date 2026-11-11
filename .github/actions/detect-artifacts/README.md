@@ -48,19 +48,18 @@ When `release-bundle-record.json` is in the artifacts root, detection writes `ge
 
 Set one or more of these names:
 
-| Value                                                                 | Destination                                                |
-| --------------------------------------------------------------------- | ---------------------------------------------------------- |
-| `dockerio`                                                            | Docker Hub, as `aerospike/<image>:<tag>`                   |
-| `quayio`                                                              | Quay, as `quay.io/aerospike/<image>:<tag>`                 |
-| `opnshift`                                                            | Quay, then a Red Hat check for OpenShift                   |
-| `githubcr`, `gitlabcr`, `ecrpub`, `gar`, `ocpproxy`, `kolla`, `rhosp` | Accepted names. Publishing does not copy these images yet. |
+| Value       | Destination                                |
+| ----------- | ------------------------------------------ |
+| `docker`    | Docker Hub, as `aerospike/<image>:<tag>`   |
+| `quay`      | Quay, as `quay.io/aerospike/<image>:<tag>` |
+| `openshift` | Quay, then a Red Hat check for OpenShift   |
 
-A name outside this list stops publishing with `Unknown target registry: <name>`.
+`reusable_docker-build-deploy.yaml` accepts these names. Any other name fails that job before the property is set. Detection copies the value stored on the image.
 
-Leave the property unset for Docker Hub. Set `dockerio` when that destination should be named on the line. A line with `quayio` and `opnshift` looks like this:
+Leave the property unset for Docker Hub. Set `docker` when that destination should be named on the line. A line with `quay` and `openshift` looks like this:
 
 ```text
-{"package_name":"aerospike-server","package_version":"8.1.0.0","source_repository_key":"database-docker-dev-local","container_destination":["quayio","opnshift"]}
+{"package_name":"aerospike-server","package_version":"8.1.0.0","source_repository_key":"database-docker-dev-local","container_destination":["quay","openshift"]}
 ```
 
 ## Example (after collect, before release bundle)

@@ -135,7 +135,7 @@ jobs:
       mac-installer-identity: "Developer ID Installer: Aerospike, Inc. (22224RFU67)"
       mac-artifact-glob: "*.pkg" # Only sign .pkg files; other artifacts pass through
       mac-notarize: true # Default: true
-      mac-runs-on: macos-14 # Default: macos-14
+      mac-runs-on: macos-15 # Default: macos-15
     secrets: inherit
 ```
 

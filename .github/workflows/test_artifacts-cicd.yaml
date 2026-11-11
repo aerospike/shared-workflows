@@ -48,8 +48,8 @@ jobs:
           {
             "distro":"darwin",
             "arch":"arm64",
-            "runs-on":"macos-14",
-            "build-script":"mkdir -p packaged && echo 'test-pkg-payload' > /tmp/test-binary && pkgbuild --root /tmp --identifier com.aerospike.test --version 1.0.0-test --install-location /usr/local/bin packaged/test-1.0.0-test-darwin-arm64.pkg"
+            "runs-on":"macos-15",
+            "build-script":"mkdir -p packaged && PKG_ROOT=$(mktemp -d) && echo 'test-pkg-payload' > $PKG_ROOT/test-binary && pkgbuild --root $PKG_ROOT --identifier com.aerospike.test --version 1.0.0-test --install-location /usr/local/bin packaged/test-1.0.0-test-darwin-arm64.pkg"
           },
           {
             "distro":"win10",
@@ -91,7 +91,7 @@ jobs:
     needs: cicd-test
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
         with:
           egress-policy: audit
 

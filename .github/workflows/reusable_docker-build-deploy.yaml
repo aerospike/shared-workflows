@@ -30,6 +30,14 @@ on:
         type: string
         default: "{}"
         description: JSON object of build-args passed to docker build, {"KEY":"VALUE",...}
+      container-destination:
+        type: string
+        required: false
+        default: ""
+        description: |
+          Comma-separated Artifactory property container_destination on the immutable tag.
+          Unset leaves the property off the image, and publishing sends it to Docker Hub.
+          Names: docker, quay, openshift. Any other name fails the job.
       context:
         type: string
         default: .
@@ -155,7 +163,7 @@ jobs:
       invocation-key: ${{ steps.parse.outputs.invocation-key }}
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
         with:
           egress-policy: audit
 
@@ -276,7 +284,7 @@ jobs:
       id-token: write
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
         with:
           egress-policy: audit
 
@@ -486,7 +494,7 @@ jobs:
         run: echo "fetched_at=$(date -u +%s)" >> "$GITHUB_OUTPUT"
 
       - name: Docker login to Artifactory
-        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ steps.jf.outputs.oidc-user }}
@@ -693,7 +701,7 @@ jobs:
       jf-build-id: ${{ steps.buildinfo.outputs.jf-build-id }}
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
         with:
           egress-policy: audit
 
@@ -719,7 +727,7 @@ jobs:
           echo "jf-build-id=${JFROG_CLI_BUILD_NUMBER}" >> "$GITHUB_OUTPUT"
 
       - name: Docker login to Artifactory
-        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ steps.jf.outputs.oidc-user }}
@@ -826,6 +834,54 @@ jobs:
           digest="$(docker buildx imagetools inspect "$IMMUTABLE_TAG" --format '{{json .Manifest}}' | jq -r '.digest')"
           echo "digest=${digest}" >> "$GITHUB_OUTPUT"
           echo "image-ref=${IMMUTABLE_TAG}@${digest}" >> "$GITHUB_OUTPUT"
+
+      # An empty value leaves the property unset. Do not add a default destination.
+      - name: Set container_destination
+        if: ${{ inputs.push && inputs.container-destination != '' }}
+        shell: bash
+        env:
+          CONTAINER_DESTINATION: ${{ inputs.container-destination }}
+          IMMUTABLE_TAG: ${{ steps.tags.outputs.immutable-tag }}
+        run: |
+          set -euo pipefail
+          values=()
+          IFS=',' read -ra destinations <<< "$CONTAINER_DESTINATION"
+          for dest in "${destinations[@]}"; do
+            dest="${dest#"${dest%%[![:space:]]*}"}"
+            dest="${dest%"${dest##*[![:space:]]}"}"
+            if [ -z "$dest" ]; then
+              continue
+            fi
+            if [[ ! "$dest" =~ ^[A-Za-z0-9._-]+$ ]]; then
+              echo "::error::container-destination value must be a single name: ${dest}"
+              exit 1
+            fi
+            case "$dest" in
+            docker | quay | openshift) ;;
+            *)
+              echo "::error::container-destination ${dest} is not implemented. Allowed: docker, quay, openshift"
+              exit 1
+              ;;
+            esac
+            values+=("$dest")
+          done
+          if [ "${#values[@]}" -eq 0 ]; then
+            echo "container-destination is blank; leaving the property unset"
+            exit 0
+          fi
+
+          without_host="${IMMUTABLE_TAG#*/}"
+          tag="${without_host##*:}"
+          repo_image="${without_host%:*}"
+          if [ -z "$tag" ] || [ -z "$repo_image" ] || [ "$without_host" = "$IMMUTABLE_TAG" ]; then
+            echo "::error::immutable tag is not host/repo/image:tag: ${IMMUTABLE_TAG}"
+            exit 1
+          fi
+
+          props="container_destination=$(IFS=','; printf '%s' "${values[*]}")"
+          pattern="${repo_image}/${tag}/*manifest.json"
+          echo "Setting ${props} on ${pattern}"
+          jf rt set-props "$pattern" "$props"
 
       - name: Create build info for docker image
         if: ${{ inputs.push }}

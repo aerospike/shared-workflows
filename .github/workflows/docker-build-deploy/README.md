@@ -30,6 +30,7 @@ jobs:
 - `app-name` (string, optional): Human-readable application name for OCI labels (defaults to `image-name`). Can differ from `image-name` for display purposes (e.g., `image-name="aerospike-server-enterprise"`, `app-name="Aerospike Server Enterprise"`)
 - `attest` (boolean, default `true`): Generate SLSA build-provenance attestation
 - `build-args-json` (string, default `{}`): JSON object of build-args passed to docker build (e.g., `{"VERSION":"7.0.0","BUILD_DATE":"2024-01-15T10:30:00Z","SOURCE_VERSION":"abc123"}`)
+- `container-destination` (string, default empty): Comma-separated Artifactory property `container_destination` on the immutable tag. Unset leaves the property off the image. See [Container destination](#container-destination).
 - `context` (string, default `.`): Docker build context directory
 - `file` (string, default `Dockerfile`): Path to Dockerfile (relative to context)
 - `gh-checkout-submodules` (string, default `false`): Submodules to check out into the build context, passed to `actions/checkout` `submodules` (`false`, `true`, or `recursive`). The checkout uses the calling repo's `GITHUB_TOKEN`, which reads public submodules but not private submodules in other repositories
@@ -74,6 +75,27 @@ bundle:
     jf-build-names: ${{ needs.build-docker-deploy.outputs.jf-build-name }}:${{ needs.build-docker-deploy.outputs.jf-build-id }}
     version: ${{ needs.extract-version.outputs.version }}
     # ...
+```
+
+## Container destination
+
+`container-destination` sets the Artifactory property `container_destination` on the immutable tag after the manifest is published and before build-info is published. `reusable_create-release-bundle.yaml` then snapshots that property onto the image in the release bundle record.
+
+Leave `container-destination` unset and the workflow does not call `jf rt set-props`. Publishing then sends the image to Docker Hub. The input is also skipped when `push` is false, because the tag is not in Artifactory.
+
+One name is one property value. Several names are comma-separated.
+
+| Value       | Destination                                |
+| ----------- | ------------------------------------------ |
+| `docker`    | Docker Hub, as `aerospike/<image>:<tag>`   |
+| `quay`      | Quay, as `quay.io/aerospike/<image>:<tag>` |
+| `openshift` | Quay, then a Red Hat check for OpenShift   |
+
+Any other name, including `ghcr`, `gitlab`, `ecr`, `googlear`, `openstack`, `kollacr`, and `redhatocp`, fails the job before the property is set.
+
+```yaml
+with:
+  container-destination: quay,openshift
 ```
 
 ## Multi-arch build and caching
