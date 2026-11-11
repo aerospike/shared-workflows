@@ -54,7 +54,7 @@ Set one or more of these names:
 | `quay`      | Quay, as `quay.io/aerospike/<image>:<tag>` |
 | `openshift` | Quay, then a Red Hat check for OpenShift   |
 
-`reusable_docker-build-deploy.yaml` accepts these names. Any other name fails that job before the property is set. Detection copies the value stored on the image.
+`reusable_docker-build-deploy.yaml` accepts these names. Any other name fails that job before the property is set.
 
 Leave the property unset for Docker Hub. Set `docker` when that destination should be named on the line. A line with `quay` and `openshift` looks like this:
 

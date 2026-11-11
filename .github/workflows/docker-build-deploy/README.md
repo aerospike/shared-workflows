@@ -30,6 +30,7 @@ jobs:
 - `app-name` (string, optional): Human-readable application name for OCI labels (defaults to `image-name`). Can differ from `image-name` for display purposes (e.g., `image-name="aerospike-server-enterprise"`, `app-name="Aerospike Server Enterprise"`)
 - `attest` (boolean, default `true`): Generate SLSA build-provenance attestation
 - `build-args-json` (string, default `{}`): JSON object of build-args passed to docker build (e.g., `{"VERSION":"7.0.0","BUILD_DATE":"2024-01-15T10:30:00Z","SOURCE_VERSION":"abc123"}`)
+- `certification-component-id` (string, default empty): Artifactory property `certification_component_id` on the immutable tag. One id from connect.redhat.com. Several ids fail the job. Unset leaves the property off the image. See [Container destination](#container-destination).
 - `container-destination` (string, default empty): Comma-separated Artifactory property `container_destination` on the immutable tag. Unset leaves the property off the image. See [Container destination](#container-destination).
 - `context` (string, default `.`): Docker build context directory
 - `file` (string, default `Dockerfile`): Path to Dockerfile (relative to context)
@@ -93,9 +94,12 @@ One name is one property value. Several names are comma-separated.
 
 Any other name, including `ghcr`, `gitlab`, `ecr`, `googlear`, `openstack`, `kollacr`, and `redhatocp`, fails the job before the property is set.
 
+`certification-component-id` stores the caller's Red Hat component id on the same tag, in the same `jf rt set-props` call. The build does not create the id. An empty input does not set `certification_component_id`. Several ids fail the job. One image has one component id.
+
 ```yaml
 with:
-  container-destination: quay,openshift
+  container-destination: openshift
+  certification-component-id: <id from connect.redhat.com/component/view/{id}/images>
 ```
 
 ## Multi-arch build and caching

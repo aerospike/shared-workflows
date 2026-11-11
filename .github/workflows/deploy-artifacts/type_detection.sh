@@ -483,13 +483,14 @@ _detect_structure_docker_bundle_metadata() {
         # nonempty rejects missing, null, and empty-string fields before startswith.
         if ! lines=$(jq -c -s '
             def nonempty: type == "string" and . != "";
-            def container_destinations:
+            def property_values($key):
                 [ (.properties // [])[]?
-                  | select(.key == "container_destination")
+                  | select(.key == $key)
                   | (.values // empty)
                   | if type == "array" then .[] else empty end
                   | select(nonempty)
                 ];
+            def container_destinations: property_values("container_destination");
             .[]
             | .artifacts[]?
             | select(.package_type == "docker" or .package_type == "oci")

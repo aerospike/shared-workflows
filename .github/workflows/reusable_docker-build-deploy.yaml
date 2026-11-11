@@ -30,6 +30,13 @@ on:
         type: string
         default: "{}"
         description: JSON object of build-args passed to docker build, {"KEY":"VALUE",...}
+      certification-component-id:
+        type: string
+        required: false
+        default: ""
+        description: |
+          Artifactory property certification_component_id on the immutable tag.
+          One id from connect.redhat.com. Several ids fail the job. Unset leaves the property off the image.
       container-destination:
         type: string
         required: false
@@ -837,15 +844,16 @@ jobs:
 
       # An empty value leaves the property unset. Do not add a default destination.
       - name: Set container_destination
-        if: ${{ inputs.push && inputs.container-destination != '' }}
+        if: ${{ inputs.push && (inputs.container-destination != '' || inputs.certification-component-id != '') }}
         shell: bash
         env:
           CONTAINER_DESTINATION: ${{ inputs.container-destination }}
+          CERTIFICATION_COMPONENT_ID: ${{ inputs.certification-component-id }}
           IMMUTABLE_TAG: ${{ steps.tags.outputs.immutable-tag }}
         run: |
           set -euo pipefail
           values=()
-          IFS=',' read -ra destinations <<< "$CONTAINER_DESTINATION"
+          IFS=',' read -ra destinations <<< "${CONTAINER_DESTINATION:-}"
           for dest in "${destinations[@]}"; do
             dest="${dest#"${dest%%[![:space:]]*}"}"
             dest="${dest%"${dest##*[![:space:]]}"}"
@@ -865,7 +873,30 @@ jobs:
             esac
             values+=("$dest")
           done
-          if [ "${#values[@]}" -eq 0 ]; then
+
+          component_ids=()
+          IFS=',' read -ra raw_ids <<< "${CERTIFICATION_COMPONENT_ID:-}"
+          for component_id in "${raw_ids[@]}"; do
+            component_id="${component_id#"${component_id%%[![:space:]]*}"}"
+            component_id="${component_id%"${component_id##*[![:space:]]}"}"
+            if [ -z "$component_id" ]; then
+              continue
+            fi
+            if [[ ! "$component_id" =~ ^[A-Za-z0-9._-]+$ ]]; then
+              echo "::error::certification-component-id must be a single id: ${component_id}"
+              exit 1
+            fi
+            component_ids+=("$component_id")
+          done
+          if [ "${#component_ids[@]}" -gt 1 ]; then
+            echo "::error::certification-component-id must be a single id"
+            exit 1
+          fi
+          component_id=""
+          if [ "${#component_ids[@]}" -eq 1 ]; then
+            component_id="${component_ids[0]}"
+          fi
+          if [ "${#values[@]}" -eq 0 ] && [ -z "$component_id" ]; then
             echo "container-destination is blank; leaving the property unset"
             exit 0
           fi
@@ -878,7 +909,17 @@ jobs:
             exit 1
           fi
 
-          props="container_destination=$(IFS=','; printf '%s' "${values[*]}")"
+          props=""
+          if [ "${#values[@]}" -gt 0 ]; then
+            props="container_destination=$(IFS=','; printf '%s' "${values[*]}")"
+          fi
+          if [ -n "$component_id" ]; then
+            if [ -n "$props" ]; then
+              props="${props};certification_component_id=${component_id}"
+            else
+              props="certification_component_id=${component_id}"
+            fi
+          fi
           pattern="${repo_image}/${tag}/*manifest.json"
           echo "Setting ${props} on ${pattern}"
           jf rt set-props "$pattern" "$props"
