@@ -106,7 +106,7 @@ A single integration test workflow (`test_artifacts-cicd.yaml`) calls the orches
 | el9 x86_64   | ubuntu-latest | RPM            |
 | jammy x86_64 | ubuntu-latest | DEB            |
 | dotnet any   | ubuntu-latest | NuGet (.nupkg) |
-| darwin arm64 | macos-14      | .pkg           |
+| darwin arm64 | macos-15      | .pkg           |
 
 A verify job downloads `signed-artifacts` and runs `test_artifacts_cicd.bats` to validate presence, signatures, sizing, and naming.
 

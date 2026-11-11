@@ -64,7 +64,7 @@ jobs:
             "build-env":"EMULATED=false"
           },
           {
-            "runs-on":"macos-14",
+            "runs-on":"macos-15",
             "distro":"darwin",
             "arch":"arm64",
             "working-directory":"repo-source/.github/workflows/execute-build/test_apps/hi",
@@ -79,7 +79,7 @@ jobs:
       mac-installer-identity: "Developer ID Installer: Aerospike, Inc. (22224RFU67)"
       mac-artifact-glob: "*.pkg"
       mac-notarize: true
-      mac-runs-on: macos-14
+      mac-runs-on: macos-15
 
       build-script: |
         echo "Default build script (overridden per matrix entry)"

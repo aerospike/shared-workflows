@@ -111,7 +111,7 @@ jobs:
             "setup-helm":true
           },
           {
-            "runs-on":"macos-14",
+            "runs-on":"macos-15",
             "distro":"darwin",
             "arch":"arm64",
             "working-directory":"repo-source/.github/workflows/execute-build/test_apps/hi",

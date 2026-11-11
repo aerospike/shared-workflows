@@ -236,7 +236,7 @@ on:
         description: macOS runner for sign-mac job
         required: false
         type: string
-        default: macos-14
+        default: macos-15
       mac-signing-identity:
         description: "codesign identity (e.g. 'Developer ID Application: Aerospike, Inc. (TEAMID)')"
         required: false

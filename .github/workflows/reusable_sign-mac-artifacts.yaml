@@ -56,7 +56,7 @@ on:
         description: macOS runner label
         required: false
         type: string
-        default: macos-14
+        default: macos-15
 
     secrets:
       apple-application-cert:
