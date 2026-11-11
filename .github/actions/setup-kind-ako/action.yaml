@@ -15,6 +15,12 @@ inputs:
       3-5 minute budget. One kind node runs every pod.
     required: false
     default: "1"
+  enable-tls:
+    description: >
+      Serve TLS on tls-port 4333 with tls-name aerospike-tls, from a generated
+      CA and a server certificate whose only SAN is that tls-name.
+    required: false
+    default: "false"
   features-content:
     description: Enterprise feature-key file contents
     required: true
@@ -39,6 +45,12 @@ outputs:
   service-node-ports:
     description: Comma-separated NodePorts for the Aerospike service port, pod order
     value: ${{ steps.setup.outputs.service-node-ports }}
+  tls-ca-file:
+    description: CA certificate that signed the server certificate. Set when enable-tls is true
+    value: ${{ steps.setup.outputs.tls-ca-file }}
+  tls-name:
+    description: tls-name the server certificate carries. Set when enable-tls is true
+    value: ${{ steps.setup.outputs.tls-name }}
 
 runs:
   using: composite
@@ -49,6 +61,7 @@ runs:
       env:
         ADMIN_PASSWORD: ${{ inputs.admin-password }}
         CLUSTER_SIZE: ${{ inputs.cluster-size }}
+        ENABLE_TLS: ${{ inputs.enable-tls }}
         FEATURES_CONTENT: ${{ inputs.features-content }}
         SERVER_IMAGE: ${{ inputs.server-image }}
       run: bash "${{ github.action_path }}/entrypoint.sh" prepare
@@ -78,6 +91,7 @@ runs:
       env:
         ADMIN_PASSWORD: ${{ steps.prepare.outputs.admin-password }}
         CLUSTER_SIZE: ${{ inputs.cluster-size }}
+        ENABLE_TLS: ${{ inputs.enable-tls }}
         FEATURES_CONTENT: ${{ inputs.features-content }}
         SERVER_IMAGE: ${{ inputs.server-image }}
       run: bash "${{ github.action_path }}/entrypoint.sh" setup

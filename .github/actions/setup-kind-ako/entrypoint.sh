@@ -22,6 +22,7 @@ CLUSTER_NAMESPACE="aerospike"
 SERVICE_PORT=3000
 INGRESS_PORT_BASE=9000
 ENDPOINT_HOSTNAME="as-endpoint.test"
+TLS_NAME="aerospike-tls"
 AKO_NAMESPACE="ako"
 INGRESS_NAMESPACE="ingress-nginx"
 STARTUP_TIMEOUT=300
@@ -54,6 +55,8 @@ cmd_prepare() {
     [[ $CLUSTER_SIZE =~ ^[1-8]$ ]] || error "cluster-size must be 1-8 (got: '$CLUSTER_SIZE')"
     [[ $SERVER_IMAGE =~ ^[A-Za-z0-9._:/-]+:[A-Za-z0-9._-]+$ ]] ||
         error "server-image must be repository:tag (got: '$SERVER_IMAGE')"
+    [[ $ENABLE_TLS == true || $ENABLE_TLS == false ]] ||
+        error "enable-tls must be true or false (got: '$ENABLE_TLS')"
     if [[ -z $password ]]; then
         password=$(openssl rand -hex 16)
     fi
@@ -111,13 +114,17 @@ install_ako() {
 
 render_cluster_manifest() {
     local rf=1
+    local -a values=(-f "$TEMPLATES/aerospike-cluster-values.yaml")
     if ((CLUSTER_SIZE >= 2)); then
         rf=2
+    fi
+    if [[ $ENABLE_TLS == true ]]; then
+        values+=(-f "$TEMPLATES/aerospike-cluster-tls-values.yaml")
     fi
     helm template "$CLUSTER_NAME" aerospike/aerospike-cluster \
         --namespace "$CLUSTER_NAMESPACE" \
         --version "$AKO_CHART_VERSION" \
-        -f "$TEMPLATES/aerospike-cluster-values.yaml" \
+        "${values[@]}" \
         --set "replicas=${CLUSTER_SIZE}" \
         --set "image.repository=${SERVER_IMAGE%:*}" \
         --set-string "image.tag=${SERVER_IMAGE##*:}" \
@@ -145,12 +152,36 @@ wait_for_webhook() {
     error "AKO webhook did not accept the AerospikeCluster within 180s: $(<"$WORK_DIR/webhook.err")"
 }
 
+# A CA and a server certificate whose only SAN is the dNSName TLS_NAME, so a
+# client must validate each node against the tls-name the cluster advertises,
+# not the endpoint hostname it dials.
+generate_tls() {
+    local dir="$WORK_DIR/tls"
+    mkdir -p "$dir"
+    printf '[v3_req]\nsubjectAltName = DNS:%s\n' "$TLS_NAME" >"$dir/san.ext"
+    openssl req -x509 -newkey rsa:2048 -nodes -keyout "$dir/ca.key" -out "$dir/ca.crt" -days 30 \
+        -subj "/CN=setup-kind-ako test CA"
+    openssl req -newkey rsa:2048 -nodes -keyout "$dir/server.key" -out "$dir/server.csr" \
+        -subj "/CN=${TLS_NAME}"
+    openssl x509 -req -in "$dir/server.csr" -CA "$dir/ca.crt" -CAkey "$dir/ca.key" -CAcreateserial \
+        -out "$dir/server.crt" -days 30 -extensions v3_req -extfile "$dir/san.ext"
+    rm -f "$dir/ca.key" "$dir/ca.srl" "$dir/server.csr" "$dir/san.ext"
+    openssl x509 -in "$dir/server.crt" -noout -subject -ext subjectAltName
+}
+
 deploy_cluster() {
+    local -a files=()
     printf '%s' "$FEATURES_CONTENT" >"$WORK_DIR/features.conf"
-    kubectl -n "$CLUSTER_NAMESPACE" create secret generic aerospike-secret \
-        --from-file="features.conf=$WORK_DIR/features.conf" \
+    files+=("--from-file=features.conf=$WORK_DIR/features.conf")
+    if [[ $ENABLE_TLS == true ]]; then
+        generate_tls
+        files+=("--from-file=ca.crt=$WORK_DIR/tls/ca.crt")
+        files+=("--from-file=server.crt=$WORK_DIR/tls/server.crt")
+        files+=("--from-file=server.key=$WORK_DIR/tls/server.key")
+    fi
+    kubectl -n "$CLUSTER_NAMESPACE" create secret generic aerospike-secret "${files[@]}" \
         --dry-run=client -o yaml | kubectl apply -f -
-    rm -f "$WORK_DIR/features.conf"
+    rm -f "$WORK_DIR/features.conf" "$WORK_DIR/tls/server.key"
     kubectl -n "$CLUSTER_NAMESPACE" create secret generic auth-secret \
         --from-literal="password=${ADMIN_PASSWORD}" \
         --dry-run=client -o yaml | kubectl apply -f -
@@ -190,6 +221,10 @@ publish_outputs() {
     write_output ingress-ports "$(IFS=, && printf '%s' "${ingress_ports[*]}")"
     write_output kubeconfig "${KUBECONFIG:-${HOME}/.kube/config}"
     write_output service-node-ports "$(IFS=, && printf '%s' "${node_ports[*]}")"
+    if [[ $ENABLE_TLS == true ]]; then
+        write_output tls-ca-file "$WORK_DIR/tls/ca.crt"
+        write_output tls-name "$TLS_NAME"
+    fi
 }
 
 run_group() {

@@ -8,9 +8,13 @@ permissions:
 
 jobs:
   setup:
-    name: kind plus AKO
+    name: kind plus AKO${{ matrix.enable-tls && ' with TLS' || '' }}
     runs-on: ubuntu-22.04
     timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        enable-tls: [false, true]
     steps:
       - name: Harden the runner (Audit all outbound calls)
         uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
@@ -25,6 +29,7 @@ jobs:
         uses: ./.github/actions/setup-kind-ako
         with:
           features-content: ${{ secrets.AES_FEATURES_CONF }}
+          enable-tls: ${{ matrix.enable-tls }}
 
       - name: Verify the outputs
         run: |
@@ -45,3 +50,26 @@ jobs:
             timeout 10 bash -c "echo >/dev/tcp/${ENDPOINT}/${port}"
             echo "reached ${ENDPOINT}:${port}"
           done
+
+      # The certificate names only the tls-name, so verifying it against the endpoint hostname must fail
+      - name: Complete a TLS handshake against the tls-name, not the endpoint hostname
+        if: ${{ matrix.enable-tls }}
+        env:
+          ENDPOINT: ${{ steps.kind-ako.outputs.endpoint-hostname }}
+          CA_FILE: ${{ steps.kind-ako.outputs.tls-ca-file }}
+          TLS_NAME: ${{ steps.kind-ako.outputs.tls-name }}
+        run: |
+          set -euo pipefail
+          port=$(kubectl -n aerospike get svc aerocluster-0-0 -o jsonpath='{.spec.ports[?(@.port==4333)].nodePort}')
+          [[ -n "$port" ]]
+          handshake() {
+            timeout 10 openssl s_client -connect "${ENDPOINT}:${port}" -CAfile "$CA_FILE" \
+              -verify_hostname "$1" -verify_return_error </dev/null >/dev/null 2>&1
+          }
+          handshake "$TLS_NAME"
+          echo "verified ${ENDPOINT}:${port} as ${TLS_NAME}"
+          if handshake "$ENDPOINT"; then
+            echo "::error::the certificate verified as ${ENDPOINT}"
+            exit 1
+          fi
+          echo "rejected ${ENDPOINT}:${port} as ${ENDPOINT}"
