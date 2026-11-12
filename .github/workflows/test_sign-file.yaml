@@ -22,7 +22,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: setup GPG
-        uses: aerospike/shared-workflows/.github/actions/setup-gpg@2514a12b2273fbb291ddb2c2dd622676e8f53e2f
+        uses: aerospike/shared-workflows/.github/actions/setup-gpg@e5bb33815e23341225d9301f2846af2ec46fcb2f
         with:
           gpg-private-key: ${{ secrets.GPG_SECRET_KEY }}
           gpg-public-key: ${{ secrets.GPG_PUBLIC_KEY }}
