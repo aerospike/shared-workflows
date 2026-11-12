@@ -12,19 +12,24 @@ inputs:
     required: false
     default: ""
   ako-helm-repo:
-    description: Helm repository that serves the aerospike-kubernetes-operator and aerospike-cluster charts
+    description: >
+      Helm repository that serves the aerospike-kubernetes-operator and
+      aerospike-cluster charts. Empty uses the repository pinned in
+      deps/Chart.yaml.
     required: false
-    default: https://aerospike.github.io/aerospike-kubernetes-operator
+    default: ""
   ako-version:
     description: >
-      aerospike-kubernetes-operator chart version. latest is the newest release
-      in ako-helm-repo; a prerelease such as 4.8.0-dev1 installs only when named.
+      aerospike-kubernetes-operator chart version. Empty uses the version pinned
+      in deps/Chart.yaml. latest resolves to the newest release in ako-helm-repo
+      at run time; a prerelease such as 4.8.0-dev1 installs only when named.
     required: false
-    default: latest
+    default: ""
   alternate-access:
     description: >
       AerospikeCluster alternateAccess, configuredIP or networkLoadBalancer.
       Both advertise the endpoint hostname with each pod's Service NodePort.
+      networkLoadBalancer is experimental and needs an AKO build with KO-649.
     required: false
     default: configuredIP
   cluster-chart-version:
@@ -57,7 +62,7 @@ inputs:
     description: >
       true runs every pod on one kind node. false sets multiPodPerHost false
       and adds cluster-size + 1 kind workers; it needs alternate-access
-      networkLoadBalancer.
+      networkLoadBalancer and is experimental.
     required: false
     default: "true"
   server-image:

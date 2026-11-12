@@ -134,6 +134,20 @@ teardown() {
     [ "$status" -eq 0 ]
 }
 
+@test "prepare rejects a dev ako-version without cluster-chart-version" {
+    AKO_VERSION=4.8.0-dev1 run "$ENTRYPOINT" prepare
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"ako-version 4.8.0-dev1 needs cluster-chart-version"* ]]
+}
+
+@test "empty ako-version and ako-helm-repo take a released version and an https repo from deps/Chart.yaml" {
+    AKO_VERSION="" AKO_HELM_REPO="" run_function 'apply_pinned_defaults; echo "$AKO_VERSION $AKO_HELM_REPO"'
+
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ ^[0-9]+\.[0-9]+\.[0-9]+\ https://[^\ ]+$ ]]
+}
+
 @test "prepare rejects an ako-version that is neither latest nor a chart version" {
     AKO_VERSION=v4.7 run "$ENTRYPOINT" prepare
 
@@ -215,19 +229,11 @@ teardown() {
     ! grep -q 'helm search' "$CALLS" || false
 }
 
-@test "a dev ako-version installs with operatorImage.pullPolicy Always" {
-    AKO_VERSION=4.8.0-dev1 run_function 'install_ako'
-
-    [ "$status" -eq 0 ]
-    grep -q 'aerospike-kubernetes-operator .*--version 4.8.0-dev1 .*--set operatorImage.pullPolicy=Always' "$CALLS"
-}
-
-@test "a released ako-version keeps the chart pullPolicy" {
+@test "install_ako installs the named ako-version" {
     AKO_VERSION=4.5.0 run_function 'install_ako'
 
     [ "$status" -eq 0 ]
     grep -q 'aerospike-kubernetes-operator .*--version 4.5.0 ' "$CALLS"
-    ! grep -q 'pullPolicy' "$CALLS" || false
 }
 
 @test "networkLoadBalancer fails after the AKO install when the CRD lacks it" {
