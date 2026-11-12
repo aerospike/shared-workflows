@@ -43,6 +43,7 @@ The kind cluster is one control-plane node with the control-plane taint removed,
 | `features-content` | required                                        | Enterprise feature-key file contents |
 | `admin-password`   | generated                                       | Aerospike admin password             |
 | `cluster-size`     | `1`                                             | Initial Aerospike servers. Maximum 8 |
+| `enable-tls`       | `false`                                         | Also serve TLS. See [TLS](#tls)      |
 | `server-image`     | `aerospike/aerospike-server-enterprise:8.1.2.5` | Server image, `repository:tag`       |
 
 Everything else is pinned in the action: kind `v0.33.0` and kubectl `v1.35.0` through `helm/kind-action`, the node image `kindest/node:v1.35.0`, helm `v3.22.1` through `azure/setup-helm`, and the chart versions, repositories, names, and namespaces at the top of `entrypoint.sh`. The AerospikeCluster is rendered by AKO's `aerospike-cluster` chart; its values and the ingress-nginx values are in `templates/`. The kind cluster is `kind-ako`, the AerospikeCluster is `aerospike/aerocluster`, and the action waits up to 300 seconds for it to reach `Completed`. ingress-nginx `4.15.1` is the final release of that project, archived in March 2026; it still supports Kubernetes 1.35. The cluster is not deleted when the job ends.
@@ -56,8 +57,14 @@ Everything else is pinned in the action: kind `v0.33.0` and kubectl `v1.35.0` th
 | `ingress-ports`      | tcp-services host ports, comma-separated               |
 | `kubeconfig`         | kubeconfig written by kind                             |
 | `service-node-ports` | NodePorts for the Aerospike service port, in pod order |
+| `tls-ca-file`        | CA certificate file, when `enable-tls` is `true`       |
+| `tls-name`           | `aerospike-tls`, when `enable-tls` is `true`           |
 
 `tcp-services` maps ports 9000-9007 to pods 0-7 up front, so pods added by scaling after this action returns are reachable without updating it.
+
+## TLS
+
+With `enable-tls: true`, the action generates a CA and a server certificate whose only SAN is the dNSName `aerospike-tls`, adds them to `aerospike-secret` with the server key, and layers `templates/aerospike-cluster-tls-values.yaml` over the cluster values. Every pod serves TLS on `tls-port` 4333 with that tls-name, and `tlsAlternateAccess` matches `alternateAccess`, so each pod advertises the endpoint hostname with its own Service NodePort for 4333. The certificate does not name the endpoint hostname, so a client must validate each node against the tls-name the cluster advertises. The CA key and the server key file are deleted once the secret holds them. Client certificates are not required.
 
 ## Tests
 

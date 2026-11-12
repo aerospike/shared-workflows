@@ -9,6 +9,7 @@ setup() {
     export RUNNER_TEMP="$TEST_TMPDIR"
     export GITHUB_OUTPUT="$TEST_TMPDIR/output"
     export CLUSTER_SIZE=1
+    export ENABLE_TLS=false
     export SERVER_IMAGE=aerospike/aerospike-server-enterprise:8.1.2.5
     export FEATURES_CONTENT=feature-key
     export ADMIN_PASSWORD=testpassword
@@ -72,4 +73,17 @@ teardown() {
 
     [ "$status" -ne 0 ]
     [[ "$output" == *"server-image must be repository:tag"* ]]
+}
+
+@test "prepare accepts enable-tls true" {
+    ENABLE_TLS=true run "$ENTRYPOINT" prepare
+
+    [ "$status" -eq 0 ]
+}
+
+@test "prepare rejects enable-tls other than true or false" {
+    ENABLE_TLS=yes run "$ENTRYPOINT" prepare
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"enable-tls must be true or false"* ]]
 }
