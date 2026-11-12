@@ -1,0 +1,8 @@
+# Not a deployable chart. entrypoint.sh reads these pins as input defaults, and Dependabot bumps them.
+apiVersion: v2
+name: setup-kind-ako-deps
+version: 0.0.0
+dependencies:
+  - name: aerospike-kubernetes-operator
+    version: 4.7.0
+    repository: https://aerospike.github.io/aerospike-kubernetes-enterprise

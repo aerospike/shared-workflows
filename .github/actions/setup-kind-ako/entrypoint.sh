@@ -14,6 +14,7 @@ handle_error() {
 }
 
 TEMPLATES="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/templates"
+PINNED_CHARTS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/deps/Chart.yaml"
 WORK_DIR="${RUNNER_TEMP:-/tmp}/setup-kind-ako"
 
 # The files in templates/ hardcode these names and ports; change both together.
@@ -50,8 +51,15 @@ write_output() {
     printf '%s=%s\n' "$key" "$value"
 }
 
+apply_pinned_defaults() {
+    local ako='.dependencies[] | select(.name == "aerospike-kubernetes-operator")'
+    AKO_VERSION=${AKO_VERSION:-$(yq "$ako | .version" "$PINNED_CHARTS")}
+    AKO_HELM_REPO=${AKO_HELM_REPO:-$(yq "$ako | .repository" "$PINNED_CHARTS")}
+}
+
 cmd_prepare() {
     local password=${ADMIN_PASSWORD-}
+    apply_pinned_defaults
     [[ -n ${FEATURES_CONTENT-} ]] || error "features-content is required"
     [[ $CLUSTER_SIZE =~ ^[1-8]$ ]] || error "cluster-size must be 1-8 (got: '$CLUSTER_SIZE')"
     [[ $SERVER_IMAGE =~ ^[A-Za-z0-9._:/-]+:[A-Za-z0-9._-]+$ ]] ||
@@ -64,6 +72,9 @@ cmd_prepare() {
         error "ako-helm-repo must be an https URL (got: '$AKO_HELM_REPO')"
     [[ -z $CLUSTER_CHART_VERSION || $CLUSTER_CHART_VERSION =~ ^${VERSION_PATTERN}$ ]] ||
         error "cluster-chart-version must be empty or a chart version such as 4.7.0 (got: '$CLUSTER_CHART_VERSION')"
+    if [[ $AKO_VERSION == *-dev* && -z $CLUSTER_CHART_VERSION ]]; then
+        error "ako-version ${AKO_VERSION} needs cluster-chart-version; dev builds publish no aerospike-cluster chart"
+    fi
     [[ $KIND_NODE_IMAGE =~ ^[A-Za-z0-9._:/-]+:[A-Za-z0-9._-]+(@sha256:[0-9a-f]{64})?$ ]] ||
         error "kind-node-image must be repository:tag (got: '$KIND_NODE_IMAGE')"
     [[ $ALTERNATE_ACCESS == configuredIP || $ALTERNATE_ACCESS == networkLoadBalancer ]] ||
@@ -139,15 +150,10 @@ resolve_ako_version() {
 }
 
 install_ako() {
-    local -a ako_args=()
     helm repo add jetstack "$CERT_MANAGER_HELM_REPO" --force-update
     helm repo add aerospike "$AKO_HELM_REPO" --force-update
     helm repo update
     resolve_ako_version
-    # Dev tags are rebuilt in place.
-    if [[ $RESOLVED_AKO_VERSION == *-dev* ]]; then
-        ako_args+=(--set operatorImage.pullPolicy=Always)
-    fi
     helm upgrade --install cert-manager jetstack/cert-manager \
         --namespace cert-manager --create-namespace \
         --version "$CERT_MANAGER_CHART_VERSION" \
@@ -158,7 +164,6 @@ install_ako() {
         --namespace "$AKO_NAMESPACE" --create-namespace \
         --version "$RESOLVED_AKO_VERSION" \
         --set "watchNamespaces=${CLUSTER_NAMESPACE}" \
-        "${ako_args[@]}" \
         --wait --timeout 10m
     kubectl wait --for=condition=Established crd/aerospikeclusters.asdb.aerospike.com --timeout=180s
     kubectl get clusterrole aerospike-cluster >/dev/null
@@ -329,6 +334,7 @@ run_group() {
 }
 
 cmd_setup() {
+    apply_pinned_defaults
     mkdir -p "$WORK_DIR"
     echo "::add-mask::${ADMIN_PASSWORD}"
     if [[ $ALTERNATE_ACCESS == configuredIP ]]; then
