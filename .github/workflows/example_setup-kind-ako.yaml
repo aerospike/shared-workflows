@@ -1,6 +1,9 @@
 name: Example Setup kind and AKO
 on:
   pull_request:
+    paths:
+      - .github/actions/setup-kind-ako/**
+      - .github/workflows/example_setup-kind-ako.yaml
   workflow_dispatch:
 
 permissions:
@@ -8,13 +11,29 @@ permissions:
 
 jobs:
   setup:
-    name: kind plus AKO${{ matrix.enable-tls && ' with TLS' || '' }}
+    name: kind plus AKO ${{ matrix.alternate-access }}${{ matrix.multi-pod-per-host == 'false' && ' one pod per node' || '' }}${{ matrix.enable-tls && ' with TLS' || '' }}
     runs-on: ubuntu-22.04
     timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
-        enable-tls: [false, true]
+        include:
+          - alternate-access: configuredIP
+            enable-tls: false
+          - alternate-access: configuredIP
+            enable-tls: true
+          - alternate-access: networkLoadBalancer
+            ako-version: 4.8.0-dev1
+            ako-helm-repo: https://aerospike.github.io/aerospike-kubernetes-operator
+            cluster-chart-version: 4.7.0
+            multi-pod-per-host: "true"
+            enable-tls: true
+          - alternate-access: networkLoadBalancer
+            ako-version: 4.8.0-dev1
+            ako-helm-repo: https://aerospike.github.io/aerospike-kubernetes-operator
+            cluster-chart-version: 4.7.0
+            multi-pod-per-host: "false"
+            enable-tls: false
     steps:
       - name: Harden the runner (Audit all outbound calls)
         uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
@@ -30,14 +49,61 @@ jobs:
         with:
           features-content: ${{ secrets.AES_FEATURES_CONF }}
           enable-tls: ${{ matrix.enable-tls }}
+          alternate-access: ${{ matrix.alternate-access }}
+          ako-version: ${{ matrix.ako-version }}
+          ako-helm-repo: ${{ matrix.ako-helm-repo }}
+          cluster-chart-version: ${{ matrix.cluster-chart-version }}
+          multi-pod-per-host: ${{ matrix.multi-pod-per-host || 'true' }}
 
       - name: Verify the outputs
         run: |
           [[ -n "${{ steps.kind-ako.outputs.ingress-ports }}" ]]
           [[ -n "${{ steps.kind-ako.outputs.service-node-ports }}" ]]
+          [[ "${{ steps.kind-ako.outputs.alternate-access }}" == "${{ matrix.alternate-access }}" ]]
           echo "endpoint ${{ steps.kind-ako.outputs.endpoint-hostname }}"
           echo "ingress ${{ steps.kind-ako.outputs.ingress-ports }}"
           echo "node ports ${{ steps.kind-ako.outputs.service-node-ports }}"
+
+      - name: Check the networkLoadBalancer cluster
+        if: ${{ matrix.alternate-access == 'networkLoadBalancer' }}
+        env:
+          ENDPOINT: ${{ steps.kind-ako.outputs.endpoint-hostname }}
+          ENABLE_TLS: ${{ matrix.enable-tls }}
+          MULTI_POD_PER_HOST: ${{ matrix.multi-pod-per-host }}
+        run: |
+          set -euo pipefail
+          cluster=$(kubectl -n aerospike get aerospikecluster aerocluster -o json)
+          advertised() {
+            jq -r --arg pod "$1" --arg field "$2" '(.status.pods[$pod].aerospike[$field] // []) | join(",")' <<<"$cluster"
+          }
+          labeled=$(kubectl get nodes -l aerospike.com/configured-alternate-access-address -o name)
+          [[ -z "$labeled" ]] || { echo "::error::labeled nodes: ${labeled}"; exit 1; }
+          echo "no node carries the configuredIP label"
+          pods=$(kubectl -n aerospike get pods -l aerospike.com/cr=aerocluster -o jsonpath='{.items[*].metadata.name}')
+          [[ -n "$pods" ]]
+          for pod in $pods; do
+            type=$(kubectl -n aerospike get svc "$pod" -o jsonpath='{.spec.type}')
+            node_port=$(kubectl -n aerospike get svc "$pod" -o jsonpath='{.spec.ports[?(@.port==3000)].nodePort}')
+            [[ "$type" == NodePort && -n "$node_port" ]] || { echo "::error::${pod} has no NodePort Service"; exit 1; }
+            host_ports=$(kubectl -n aerospike get pod "$pod" -o jsonpath='{.spec.containers[*].ports[*].hostPort}')
+            [[ -z "$host_ports" ]] || { echo "::error::${pod} sets hostPort ${host_ports}"; exit 1; }
+            echo "${pod}: Service NodePort ${node_port}, no hostPort"
+            endpoints=$(advertised "$pod" alternateAccessEndpoints)
+            [[ "$endpoints" == "${ENDPOINT}:${node_port}" ]] || { echo "::error::${pod} advertises '${endpoints}'"; exit 1; }
+            echo "${pod}: alternate access ${endpoints}"
+            if [[ "$ENABLE_TLS" == true ]]; then
+              tls_node_port=$(kubectl -n aerospike get svc "$pod" -o jsonpath='{.spec.ports[?(@.port==4333)].nodePort}')
+              endpoints=$(advertised "$pod" tlsAlternateAccessEndpoints)
+              [[ "$endpoints" == "${ENDPOINT}:${tls_node_port}" ]] || { echo "::error::${pod} advertises TLS '${endpoints}'"; exit 1; }
+              echo "${pod}: TLS alternate access ${endpoints}"
+            fi
+          done
+          if [[ "$MULTI_POD_PER_HOST" == false ]]; then
+            [[ "$(kubectl -n aerospike get aerospikecluster aerocluster -o jsonpath='{.spec.podSpec.multiPodPerHost}')" == false ]]
+            nodes=$(kubectl -n aerospike get pods -l aerospike.com/cr=aerocluster -o jsonpath='{range .items[*]}{.spec.nodeName}{"\n"}{end}')
+            [[ "$(sort <<<"$nodes" | uniq -d)" == "" ]] || { echo "::error::pods share a node: ${nodes}"; exit 1; }
+            echo "every pod runs on its own node"
+          fi
 
       - name: Reach the seed port and every NodePort from the runner
         env:
