@@ -1,0 +1,170 @@
+name: Create Quay and OpenShift test bundles
+
+# Builds test-image and creates test-docker-release versions in
+# test-release-bundles-v2. Stops when a version already exists.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+  attestations: write
+  id-token: write
+
+concurrency:
+  group: test-docker-destination-bundles
+  cancel-in-progress: false
+
+jobs:
+  guard:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup JFrog CLI
+        uses: step-security/setup-jfrog-cli@9d5fe0e81fc593a6c0c39bf83ad9a7b45587eed0 # v5.3.1
+        env:
+          JF_URL: https://artifact.aerospike.io
+          JF_PROJECT: test
+        with:
+          oidc-provider-name: gh-aerospike
+          oidc-audience: aerospike
+
+      - name: Stop when a bundle version exists
+        run: .github/workflows/docker-build-deploy/create-test-destination-bundles.sh
+
+  # Each build has its own jf-build-name. Every job in the run publishes build
+  # number github.run_number, so a shared name would be one build-info record.
+  build-quay-1:
+    needs: [guard]
+    uses: ./.github/workflows/reusable_docker-build-deploy.yaml
+    with:
+      jf-project: test
+      image-name: test-image
+      app-version: quay-1
+      container-destination: quay
+      push: true
+      context: ./.github/workflows/execute-build/test_apps/hi
+      file: ./.github/workflows/execute-build/test_apps/hi/Dockerfile
+      jf-build-name: test-container-quay-1
+      oidc-provider-name: gh-aerospike
+      oidc-audience: aerospike
+
+  build-openshift-1:
+    needs: [guard]
+    uses: ./.github/workflows/reusable_docker-build-deploy.yaml
+    with:
+      jf-project: test
+      image-name: test-image
+      app-version: openshift-1
+      container-destination: openshift
+      push: true
+      context: ./.github/workflows/execute-build/test_apps/hi
+      file: ./.github/workflows/execute-build/test_apps/hi/Dockerfile
+      jf-build-name: test-container-openshift-1
+      oidc-provider-name: gh-aerospike
+      oidc-audience: aerospike
+
+  build-quay-openshift-1:
+    needs: [guard]
+    uses: ./.github/workflows/reusable_docker-build-deploy.yaml
+    with:
+      jf-project: test
+      image-name: test-image
+      app-version: quay-openshift-1
+      container-destination: quay,openshift
+      push: true
+      context: ./.github/workflows/execute-build/test_apps/hi
+      file: ./.github/workflows/execute-build/test_apps/hi/Dockerfile
+      jf-build-name: test-container-quay-openshift-1
+      oidc-provider-name: gh-aerospike
+      oidc-audience: aerospike
+
+  # Different app-versions: one app-version publishes one mutable tag, and both
+  # builds can stamp the same immutable tag when they start in the same second.
+  build-openshift-2a:
+    needs: [guard]
+    uses: ./.github/workflows/reusable_docker-build-deploy.yaml
+    with:
+      jf-project: test
+      image-name: test-image
+      app-version: openshift-2a
+      container-destination: openshift
+      push: true
+      context: ./.github/workflows/execute-build/test_apps/hi
+      file: ./.github/workflows/execute-build/test_apps/hi/Dockerfile
+      jf-build-name: test-container-openshift-2a
+      oidc-provider-name: gh-aerospike
+      oidc-audience: aerospike
+
+  build-openshift-2b:
+    needs: [guard]
+    uses: ./.github/workflows/reusable_docker-build-deploy.yaml
+    with:
+      jf-project: test
+      image-name: test-image
+      app-version: openshift-2b
+      container-destination: openshift
+      push: true
+      context: ./.github/workflows/execute-build/test_apps/hi
+      file: ./.github/workflows/execute-build/test_apps/hi/Dockerfile
+      jf-build-name: test-container-openshift-2b
+      oidc-provider-name: gh-aerospike
+      oidc-audience: aerospike
+
+  bundle-quay-1:
+    needs: [build-quay-1]
+    uses: ./.github/workflows/reusable_create-release-bundle.yaml
+    with:
+      gh-workflows-ref: ${{ github.sha }}
+      jf-project: test
+      jf-build-names: ${{ needs.build-quay-1.outputs.jf-build-name }}:${{ needs.build-quay-1.outputs.jf-build-id }}
+      jf-bundle-name: test-docker-release
+      version: quay-1
+      oidc-provider-name: gh-aerospike
+      oidc-audience: aerospike
+
+  bundle-openshift-1:
+    needs: [build-openshift-1]
+    uses: ./.github/workflows/reusable_create-release-bundle.yaml
+    with:
+      gh-workflows-ref: ${{ github.sha }}
+      jf-project: test
+      jf-build-names: ${{ needs.build-openshift-1.outputs.jf-build-name }}:${{ needs.build-openshift-1.outputs.jf-build-id }}
+      jf-bundle-name: test-docker-release
+      version: openshift-1
+      oidc-provider-name: gh-aerospike
+      oidc-audience: aerospike
+
+  bundle-quay-openshift-1:
+    needs: [build-quay-openshift-1]
+    uses: ./.github/workflows/reusable_create-release-bundle.yaml
+    with:
+      gh-workflows-ref: ${{ github.sha }}
+      jf-project: test
+      jf-build-names: ${{ needs.build-quay-openshift-1.outputs.jf-build-name }}:${{ needs.build-quay-openshift-1.outputs.jf-build-id }}
+      jf-bundle-name: test-docker-release
+      version: quay-openshift-1
+      oidc-provider-name: gh-aerospike
+      oidc-audience: aerospike
+
+  bundle-openshift-2:
+    needs: [build-openshift-2a, build-openshift-2b]
+    uses: ./.github/workflows/reusable_create-release-bundle.yaml
+    with:
+      gh-workflows-ref: ${{ github.sha }}
+      jf-project: test
+      jf-build-names: >-
+        ${{ needs.build-openshift-2a.outputs.jf-build-name }}:${{ needs.build-openshift-2a.outputs.jf-build-id }},
+        ${{ needs.build-openshift-2b.outputs.jf-build-name }}:${{ needs.build-openshift-2b.outputs.jf-build-id }}
+      jf-bundle-name: test-docker-release
+      version: openshift-2
+      oidc-provider-name: gh-aerospike
+      oidc-audience: aerospike
