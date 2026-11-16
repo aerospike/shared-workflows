@@ -230,6 +230,8 @@ A `release-bundle-record.json` in the artifacts root is written to `generic/dock
 
 `reusable_docker-build-deploy.yaml` accepts these names. Any other name fails that job before the property is set. The same field list is in the [detect-artifacts](../../actions/detect-artifacts/README.md#docker-bundle-metadata) action.
 
+Detection copies `certification_component_id` as one string. A missing or blank id is left off the line. Several ids fail detection.
+
 ### Windows
 
 `.exe`, `.msi`, and `.msix` files are matched by extension and uploaded to the generic repository.

@@ -56,6 +56,8 @@ Set one or more of these names:
 
 `reusable_docker-build-deploy.yaml` accepts these names. Any other name fails that job before the property is set.
 
+Detection copies `certification_component_id` as one string. A missing or blank id is left off the line. Several ids fail detection.
+
 Leave the property unset for Docker Hub. Set `docker` when that destination should be named on the line. A line with `quay` and `openshift` looks like this:
 
 ```text

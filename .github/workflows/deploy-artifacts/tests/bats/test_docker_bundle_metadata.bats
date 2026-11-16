@@ -390,6 +390,107 @@ EOF
     [[ "$(cat "$out")" == '{"package_name":"aerospike-prometheus-exporter","package_version":"1.25.0","source_repository_key":"database-oci-dev-local","container_destination":"quay"}' ]]
 }
 
+@test "certification_component_id with one value is written as a string" {
+    _require_bash4_for_detect_types
+    local wd root out
+    wd=$(_new_artifacts_wd one-component-id)
+    root="$wd/build-artifacts"
+    mkdir -p "$root"
+    cat >"$root/release-bundle-record.json" <<'EOF'
+{
+  "artifacts": [
+    {
+      "package_type": "docker",
+      "package_name": "aerospike-server",
+      "package_version": "8.1.0.0",
+      "source_repository_key": "database-docker-dev-local",
+      "properties": [
+        {
+          "key": "certification_component_id",
+          "values": ["69abc123"]
+        }
+      ]
+    }
+  ]
+}
+EOF
+
+    (cd "$wd" && "$DEPLOY_ARTIFACTS_DIR/detect_types.sh" --artifacts-dir build-artifacts >/dev/null)
+
+    out="$wd/structured_build_artifacts/generic/docker/docker-images.json"
+    [[ "$(cat "$out")" == '{"package_name":"aerospike-server","package_version":"8.1.0.0","source_repository_key":"database-docker-dev-local","certification_component_id":"69abc123"}' ]]
+}
+
+@test "a missing or blank certification_component_id is left off the row" {
+    _require_bash4_for_detect_types
+    local wd root out
+    wd=$(_new_artifacts_wd no-component-id)
+    root="$wd/build-artifacts"
+    mkdir -p "$root"
+    cat >"$root/release-bundle-record.json" <<'EOF'
+{
+  "artifacts": [
+    {
+      "package_type": "docker",
+      "package_name": "aerospike-server",
+      "package_version": "8.1.0.0",
+      "source_repository_key": "database-docker-dev-local"
+    },
+    {
+      "package_type": "oci",
+      "package_name": "absctl",
+      "package_version": "1.2.0_20260929T144224Z",
+      "source_repository_key": "database-oci-dev-local",
+      "properties": [
+        {
+          "key": "certification_component_id",
+          "values": [""]
+        }
+      ]
+    }
+  ]
+}
+EOF
+
+    (cd "$wd" && "$DEPLOY_ARTIFACTS_DIR/detect_types.sh" --artifacts-dir build-artifacts >/dev/null)
+
+    out="$wd/structured_build_artifacts/generic/docker/docker-images.json"
+    [[ "$(sed -n '1p' "$out")" == '{"package_name":"aerospike-server","package_version":"8.1.0.0","source_repository_key":"database-docker-dev-local"}' ]]
+    [[ "$(sed -n '2p' "$out")" == '{"package_name":"absctl","package_version":"1.2.0_20260929T144224Z","source_repository_key":"database-oci-dev-local"}' ]]
+    ! grep -q 'certification_component_id' "$out"
+}
+
+@test "several certification_component_id values fail" {
+    _require_bash4_for_detect_types
+    local wd root out
+    wd=$(_new_artifacts_wd several-component-ids)
+    root="$wd/build-artifacts"
+    mkdir -p "$root"
+    cat >"$root/release-bundle-record.json" <<'EOF'
+{
+  "artifacts": [
+    {
+      "package_type": "oci",
+      "package_name": "aerospike-server",
+      "package_version": "8.1.0.0",
+      "source_repository_key": "database-oci-dev-local",
+      "properties": [
+        {
+          "key": "certification_component_id",
+          "values": ["69abc123", "69abc456"]
+        }
+      ]
+    }
+  ]
+}
+EOF
+
+    run bash -c 'cd "$1" && "$2" --artifacts-dir build-artifacts' _ "$wd" "$DEPLOY_ARTIFACTS_DIR/detect_types.sh"
+    [ "$status" -ne 0 ]
+    out="$wd/structured_build_artifacts/generic/docker/docker-images.json"
+    [ ! -e "$out" ]
+}
+
 @test "record with no docker or oci tags does not create docker-images.json" {
     _require_bash4_for_detect_types
     local wd root out
