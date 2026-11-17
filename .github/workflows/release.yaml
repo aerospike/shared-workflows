@@ -1,19 +1,26 @@
 name: Release
-permissions:
-  contents: write
-  packages: write
-  attestations: write
-  id-token: write
+permissions: {}
 on:
   workflow_dispatch:
   pull_request:
     branches: [main]
+env:
+  SEMANTIC_RELEASE_PACKAGES: >-
+    semantic-release@24
+    @semantic-release/commit-analyzer@13
+    @semantic-release/release-notes-generator@14
+    @semantic-release/github@11
+    conventional-changelog@7
+    conventional-changelog-conventionalcommits@8
 jobs:
-  release:
+  preview:
     runs-on: ubuntu-latest
     # A fork's head branch does not exist on this remote, and semantic-release
     # rejects a --branches value it cannot find there.
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    permissions:
+      # semantic-release checks push access even in a dry run.
+      contents: write
     steps:
       - name: Harden the runner (Audit all outbound calls)
         uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
@@ -25,21 +32,22 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
           # The default merge ref leaves a detached HEAD, and semantic-release
-          # matches --branches against the checked-out branch name.
-          ref: ${{ github.head_ref || github.ref }}
+          # matches --branches against the checked-out branch name. On dispatch
+          # this is empty, so preview and release analyse the dispatched commit.
+          ref: ${{ github.head_ref }}
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 20
 
-      - name: Semantic Release
+      - name: Semantic Release (dry run)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           EVENT_NAME: ${{ github.event_name }}
           HEAD_REF: ${{ github.head_ref }}
         run: |
           set -euo pipefail
-          args=()
+          args=(--dry-run)
           if [[ "$EVENT_NAME" == "pull_request" ]]; then
             # semantic-release reads the branch from GITHUB_REF, which the
             # runner sets to refs/pull/N/merge. Exporting it here rather than in
@@ -47,18 +55,13 @@ jobs:
             export GITHUB_REF="refs/heads/$HEAD_REF"
             # --no-ci because semantic-release otherwise declines to analyse a
             # pull request at all, even for a dry run.
-            args=(--dry-run --no-ci --branches "$HEAD_REF")
+            args+=(--no-ci --branches "$HEAD_REF")
           fi
-          npx -p semantic-release@24 \
-              -p @semantic-release/commit-analyzer@13 \
-              -p @semantic-release/release-notes-generator@14 \
-              -p @semantic-release/github@11 \
-              -p conventional-changelog@7 \
-              -p conventional-changelog-conventionalcommits@8 \
-              semantic-release "${args[@]}" | tee "$RUNNER_TEMP/release.log"
+          packages=()
+          for package in $SEMANTIC_RELEASE_PACKAGES; do packages+=(-p "$package"); done
+          npx "${packages[@]}" semantic-release "${args[@]}" | tee "$RUNNER_TEMP/release.log"
 
-      - name: Show the projected release on the pull request
-        if: github.event_name == 'pull_request'
+      - name: Show the projected release
         run: |
           set -euo pipefail
           log="$RUNNER_TEMP/release.log"
@@ -83,3 +86,37 @@ jobs:
               echo "No release would be published from these commits."
             fi
           } >>"$GITHUB_STEP_SUMMARY"
+
+  release:
+    needs: preview
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: write
+      packages: write
+      attestations: write
+      id-token: write
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 20
+
+      - name: Semantic Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          packages=()
+          for package in $SEMANTIC_RELEASE_PACKAGES; do packages+=(-p "$package"); done
+          npx "${packages[@]}" semantic-release
