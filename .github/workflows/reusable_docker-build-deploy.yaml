@@ -79,6 +79,10 @@ on:
         type: string
         default: "{}"
         description: JSON object of image labels, {"key":"value",...}
+      no-cache:
+        type: boolean
+        default: false
+        description: Build every layer without reading the build cache (pass-through to docker/build-push-action)
       oidc-audience:
         type: string
         default: aerospike
@@ -611,6 +615,7 @@ jobs:
           platforms: ${{ matrix.platform }}
           provenance: ${{ inputs.provenance }}
           sbom: ${{ inputs.sbom }}
+          no-cache: ${{ inputs.no-cache }}
           build-args: ${{ env.BUILD_ARGS }}
           labels: ${{ env.LABELS }}
           secret-files: ${{ env.BUILD_SECRET_FILES }}
