@@ -25,7 +25,8 @@ EOF
 
 run_set() {
     CONTAINER_DESTINATION="$1" \
-        IMMUTABLE_TAG="${2:-artifact.aerospike.io/database-docker-dev-local/test-image:7.0.0_20251202T021054Z}" \
+        CERTIFICATION_COMPONENT_ID="${2:-}" \
+        IMMUTABLE_TAG="artifact.aerospike.io/database-docker-dev-local/test-image:7.0.0_20251202T021054Z" \
         run bash "$SCRIPT_UNDER_TEST"
 }
 
@@ -37,6 +38,10 @@ run_set() {
     local required default_value
     required="$(yq -r '.on.workflow_call.inputs."container-destination".required' "$WORKFLOW")"
     default_value="$(yq -r '.on.workflow_call.inputs."container-destination".default' "$WORKFLOW")"
+    [ "$required" = "false" ]
+    [ "$default_value" = "" ]
+    required="$(yq -r '.on.workflow_call.inputs."certification-component-id".required' "$WORKFLOW")"
+    default_value="$(yq -r '.on.workflow_call.inputs."certification-component-id".default' "$WORKFLOW")"
     [ "$required" = "false" ]
     [ "$default_value" = "" ]
 }
@@ -59,6 +64,7 @@ run_set() {
     condition="$(yq -r '.jobs.merge.steps[] | select(.name == "Set container_destination") | .if' "$WORKFLOW")"
     [[ "$condition" == *"inputs.push"* ]]
     [[ "$condition" == *"inputs.container-destination"* ]]
+    [[ "$condition" == *"inputs.certification-component-id"* ]]
 }
 
 @test "an empty destination does not call jf" {
@@ -83,6 +89,24 @@ run_set() {
     run_set " quay, openshift "
     [ "$status" -eq 0 ]
     [ "$(cat "$JF_LOG")" = "rt set-props database-docker-dev-local/test-image/7.0.0_20251202T021054Z/*manifest.json container_destination=quay,openshift" ]
+}
+
+@test "an empty certification component id does not set the property" {
+    run_set "openshift"
+    [ "$status" -eq 0 ]
+    [ "$(cat "$JF_LOG")" = "rt set-props database-docker-dev-local/test-image/7.0.0_20251202T021054Z/*manifest.json container_destination=openshift" ]
+}
+
+@test "one certification component id is set on the immutable tag" {
+    run_set "openshift" "69abc123"
+    [ "$status" -eq 0 ]
+    [ "$(cat "$JF_LOG")" = "rt set-props database-docker-dev-local/test-image/7.0.0_20251202T021054Z/*manifest.json container_destination=openshift;certification_component_id=69abc123" ]
+}
+
+@test "several certification component ids fail before set-props" {
+    run_set "openshift" "69abc123,69abc456"
+    [ "$status" -ne 0 ]
+    [ ! -s "$JF_LOG" ]
 }
 
 @test "docker is an implemented destination" {
