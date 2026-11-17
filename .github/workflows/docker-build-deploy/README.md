@@ -40,6 +40,7 @@ jobs:
 - `jf-registry-base` (string, default `artifact.aerospike.io`): Registry hostname (no repo path) for the push, the BuildKit pull, and `jf-go-repo`
 - `jf-url` (string, default `https://artifact.aerospike.io`): Base JFrog Artifactory URL
 - `labels-json` (string, default `{}`): JSON object of image labels (e.g., `{"com.aerospike.version":"7.0.0","com.aerospike.release":"stable","maintainer":"Aerospike"}`)
+- `no-cache` (boolean, default `false`): Build every layer without reading the build cache (pass-through to docker/build-push-action). See [Multi-arch build and caching](#multi-arch-build-and-caching)
 - `oidc-audience` (string, default `aerospike`): OIDC audience value for token
 - `oidc-provider-name` (string, default `gh-aerospike`): JFrog OIDC provider name
 - `platforms` (string, default `linux/amd64,linux/arm64`): Comma-separated target platforms for buildx
@@ -135,6 +136,8 @@ Two independent caching levers reduce repeat work:
    The workflow pulls the BuildKit builder image from `<jf-registry-base>/<jf-project>-docker-virtual/moby/buildkit:buildx-stable-1` after the Artifactory login, so creating the builder uses the same cache. Artifactory serves those images under the virtual's repository path (`<project>-docker-virtual/library/ubuntu`, `<project>-docker-virtual/rockylinux`).
 
 2. **Build-step cache (secondary).** The workflow uses the GitHub Actions cache (`type=gha`, `mode=max`) so unchanged builder-stage layers are reused on warm runs. Nothing is written to JFrog. It is best-effort: the per-repo GHA cache quota is finite, so on large matrices a miss simply rebuilds.
+
+   A cached `RUN` layer is reused while its instruction and the layers below it are unchanged. A step such as `dnf update -y` on a digest-pinned base image therefore keeps the packages from the first build. Set `no-cache: true` to rebuild every layer on each run.
 
 ## OIDC
 
