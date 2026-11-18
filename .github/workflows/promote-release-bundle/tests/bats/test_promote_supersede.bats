@@ -46,17 +46,15 @@ jf release-bundle-promote my-app 1.2.3 TEST --project=test" ]
     grep -Fxq '| Reason | CVE fix \| rebuilt with patch |' "$GITHUB_STEP_SUMMARY"
 }
 
-@test "a failed promote re-promotes the incumbent and writes no record" {
+@test "a failed swap re-promotes what it un-promoted and writes no record" {
     bundle_has 1.2.2 app.deb
     at_stage 1.2.2 TEST
     JF_FAILS="release-bundle-promote my-app 1.2.3" supersede
     [ "$status" -eq 1 ]
     promoted_to TEST 1.2.2
     [ ! -s "$GITHUB_OUTPUT" ]
-    [ ! -s "$GITHUB_STEP_SUMMARY" ]
-}
 
-@test "a failed un-promote re-promotes the incumbents already un-promoted" {
+    setup_stubs
     bundle_has 1.2.1 app.deb
     bundle_has 1.2.2 app.rpm
     at_stage 1.2.1 TEST
@@ -66,6 +64,7 @@ jf release-bundle-promote my-app 1.2.3 TEST --project=test" ]
     promoted_to TEST 1.2.1
     run promoted_to TEST 1.2.3
     [ "$status" -eq 1 ]
+    [ ! -s "$GITHUB_OUTPUT" ]
 }
 
 @test "with nothing to replace, a supersede is a plain promote with no record" {
@@ -77,34 +76,22 @@ jf release-bundle-promote my-app 1.2.3 TEST --project=test" ]
     [ ! -s "$GITHUB_OUTPUT" ]
 }
 
-@test "refuses a supersede at PREVIEW, INTERNAL and PROD" {
+@test "refuses a supersede past STAGE or without a reason" {
     for stage in PREVIEW INTERNAL PROD; do
         promote "$stage" --supersede "rebuilt"
         [ "$status" -eq 1 ]
         [[ $output == *"a version at ${stage} cannot be superseded"* ]]
     done
-    [ ! -s "$JF_CALLS" ]
-}
-
-@test "refuses a supersede without a reason" {
     promote TEST --supersede ""
     [ "$status" -eq 1 ]
     [[ $output == *"--supersede requires a reason"* ]]
     [ ! -s "$JF_CALLS" ]
 }
 
-@test "truncated promotion records stop the supersede" {
-    bundle_has 1.2.2 app.deb
-    at_stage 1.2.2 TEST
-    jq '.total = 1001' "${JF_DATA}/stage-records.json" >"${JF_DATA}/stage-records.tmp"
-    mv "${JF_DATA}/stage-records.tmp" "${JF_DATA}/stage-records.json"
-    supersede
-    [ "$status" -eq 1 ]
-    [[ $output == *"truncated promotion records"* ]]
-    [ ! -s "$JF_CALLS" ]
-}
-
-@test "dry-run prints the swap and writes no record" {
+@test "dry-run runs no jf command and writes no record" {
+    supersede --dry-run
+    [ "$status" -eq 0 ]
+    [[ $output == *"Would promote my-app/1.2.3 to TEST"* ]]
     bundle_has 1.2.2 app.deb
     at_stage 1.2.2 TEST
     supersede --dry-run

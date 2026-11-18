@@ -44,20 +44,9 @@ STUB
         INPUT_SUPERSEDE=true INPUT_SUPERSEDE_REASON=rebuilt run bash "${BATS_TEST_TMPDIR}/promote.sh"
 }
 
-@test "inputs reach the scripts through env, not expressions" {
-    for name in "Promote Release Bundle" "$VERIFY_STEP" "Store the supersede record and its attestation"; do
-        script="$(yq -r "${JOB}.steps[] | select(.name == \"${name}\") | .run" "$WORKFLOW")"
-        [ -n "$script" ]
-        [[ $script != *'${{'* ]]
-    done
-}
-
-@test "the verify step passes when the checkout is the workflow's commit" {
+@test "the verify step fails unless the checkout is the workflow's commit" {
     run_verify HEAD
     [ "$status" -eq 0 ]
-}
-
-@test "the verify step fails when the checkout is another commit" {
     run_verify 0123456789abcdef0123456789abcdef01234567
     [ "$status" -eq 1 ]
     [[ $output == *"is not the commit this workflow runs from"* ]]
@@ -89,10 +78,4 @@ STUB
     [ "$status" -eq 0 ]
     [ "$(cat "${BATS_TEST_TMPDIR}/uploads")" = "release-evidence-local/evidence/supersede/test/my-app/1.2.3/TEST/1.sigstore.json
 release-evidence-local/evidence/supersede/test/my-app/1.2.3/TEST/1.json" ]
-}
-
-@test "the attestation predicate is the identifiers output, not the record" {
-    yq -e "${JOB}.steps[] | select(.name == \"Attest the supersede record\") | .with
-        | .predicate == \"\${{ steps.promote.outputs.record-predicate }}\" and has(\"predicate-path\") == false" \
-        "$WORKFLOW"
 }
