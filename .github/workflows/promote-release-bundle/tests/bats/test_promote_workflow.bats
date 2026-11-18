@@ -84,9 +84,15 @@ STUB
     yq -r "${JOB}.steps[] | select(.name == \"Store the supersede record and its attestation\") | .run" "$WORKFLOW" \
         >"${BATS_TEST_TMPDIR}/store.sh"
     PATH="${BATS_TEST_TMPDIR}/bin:$PATH" RECORD_FILE=record.json ATTESTATION=attestation.json \
-        RECORD_PATH=release-evidence-local/evidence/supersede/test/my-app/TEST/1-1.2.3.json \
+        RECORD_PATH=release-evidence-local/evidence/supersede/test/my-app/1.2.3/TEST/1.json \
         run bash "${BATS_TEST_TMPDIR}/store.sh"
     [ "$status" -eq 0 ]
-    [ "$(cat "${BATS_TEST_TMPDIR}/uploads")" = "release-evidence-local/evidence/supersede/test/my-app/TEST/1-1.2.3.sigstore.json
-release-evidence-local/evidence/supersede/test/my-app/TEST/1-1.2.3.json" ]
+    [ "$(cat "${BATS_TEST_TMPDIR}/uploads")" = "release-evidence-local/evidence/supersede/test/my-app/1.2.3/TEST/1.sigstore.json
+release-evidence-local/evidence/supersede/test/my-app/1.2.3/TEST/1.json" ]
+}
+
+@test "the attestation predicate is the identifiers output, not the record" {
+    yq -e "${JOB}.steps[] | select(.name == \"Attest the supersede record\") | .with
+        | .predicate == \"\${{ steps.promote.outputs.record-predicate }}\" and has(\"predicate-path\") == false" \
+        "$WORKFLOW"
 }

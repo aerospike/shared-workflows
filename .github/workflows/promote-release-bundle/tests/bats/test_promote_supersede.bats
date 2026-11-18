@@ -38,7 +38,9 @@ jf release-bundle-promote my-app 1.2.3 TEST --project=test" ]
     jq -e '.replaced == ["1.2.2"] and .replacedBy == "1.2.3" and .stage == "TEST" and .actor == "octocat"
         and .reason == "CVE fix | rebuilt\nwith patch"
         and .run == "https://github.com/aerospike/app/actions/runs/42/attempts/2"' "$(output_value record-file)"
-    [[ $(output_value record-path) == release-evidence-local/evidence/supersede/test/my-app/TEST/*-1.2.3.json ]]
+    [[ $(output_value record-path) =~ ^release-evidence-local/evidence/supersede/test/my-app/1\.2\.3/TEST/[0-9]{13}\.json$ ]]
+    jq -e '.at | test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:]{8}Z$")' "$(output_value record-file)"
+    [ "$(output_value record-predicate)" = '{"kind":"supersede","project":"test","bundle":"my-app","version":"1.2.3","stage":"TEST"}' ]
     grep -Fxq '### Superseded at TEST' "$GITHUB_STEP_SUMMARY"
     grep -Fxq '| Replaced | 1.2.2 |' "$GITHUB_STEP_SUMMARY"
     grep -Fxq '| Reason | CVE fix \| rebuilt with patch |' "$GITHUB_STEP_SUMMARY"
