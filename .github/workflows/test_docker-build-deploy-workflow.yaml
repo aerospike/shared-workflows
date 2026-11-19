@@ -9,6 +9,13 @@ on:
         default: ""
   pull_request:
     branches: [main]
+    paths:
+      - .github/workflows/reusable_docker-build-deploy.yaml
+      - .github/workflows/docker-build-deploy/**
+      - .github/workflows/execute-build/test_apps/**
+      - .github/workflows/VERSION.example
+      - .github/actions/extract-version-from-tag/**
+      - .github/workflows/test_docker-build-deploy-workflow.yaml
 
 permissions:
   contents: read

@@ -3,6 +3,13 @@ on:
   workflow_dispatch:
   pull_request:
     branches: [main]
+    paths:
+      - .github/workflows/reusable_sign-artifacts.yaml
+      - .github/workflows/sign-artifacts/**
+      - .github/workflows/lib/**
+      - .github/workflows/deploy-artifacts/create-test-fixtures.sh
+      - tests/**
+      - .github/workflows/test_sign-artifacts-workflow.yaml
 
 permissions:
   id-token: write

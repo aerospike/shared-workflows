@@ -3,6 +3,9 @@ on:
   workflow_dispatch:
   pull_request:
     branches: [main]
+    paths:
+      - .github/actions/release-evidence/**
+      - .github/workflows/test_release-evidence.yaml
 
 permissions:
   contents: read

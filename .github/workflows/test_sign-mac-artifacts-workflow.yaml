@@ -7,6 +7,7 @@ on:
     paths:
       - .github/workflows/reusable_sign-mac-artifacts.yaml
       - .github/workflows/sign-mac-artifacts/**
+      - .github/workflows/test_sign-mac-artifacts-workflow.yaml
 
 permissions:
   id-token: write
