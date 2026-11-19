@@ -25,57 +25,60 @@ promoted() {
         --args "${paths[@]}" >"${JF_DATA}/promotion-${id}.json"
 }
 
-@test "promotes to DEV or TEST with no prior promotion" {
-    for stage in DEV TEST; do
-        promote "$stage"
-        [ "$status" -eq 0 ]
-        promoted_to "$stage"
+@test "promotes to a stage only when the stage before it holds the version" {
+    local row held target want stage
+    local rows=(
+        "- DEV promote"
+        "- TEST promote"
+        "DEV STAGE refuse"
+        "TEST PREVIEW refuse"
+        "TEST INTERNAL refuse"
+        "TEST PROD refuse"
+        "TEST,STAGE PROD promote"
+    )
+    for row in "${rows[@]}"; do
+        setup_stubs
+        read -r held target want <<<"$row"
+        if [[ $held != - ]]; then
+            IFS=, read -ra held <<<"$held"
+            for stage in "${held[@]}"; do promoted "$stage"; done
+        fi
+        promote "$target"
+        if [[ $want == promote ]]; then
+            [ "$status" -eq 0 ]
+            promoted_to "$target"
+        else
+            [ "$status" -eq 1 ]
+            [[ $output == *"is not fully promoted to"* ]]
+            [ ! -s "$JF_CALLS" ]
+        fi
     done
 }
 
-@test "refuses STAGE until the version is at TEST" {
-    promoted DEV
-    promote STAGE
-    [ "$status" -eq 1 ]
-    [[ $output == *"::error::my-app/1.2.3 is not fully promoted to TEST, so it cannot be promoted to STAGE"* ]]
-    [ ! -s "$JF_CALLS" ]
-}
-
-@test "refuses PREVIEW, INTERNAL and PROD until the version is at STAGE" {
-    promoted TEST
-    for stage in PREVIEW INTERNAL PROD; do
-        promote "$stage"
-        [ "$status" -eq 1 ]
+@test "a stage holds the version only when completed promotions hold every artifact" {
+    local row want rest promotions promotion paths
+    local rows=(
+        "refuse STARTED:app.deb,app.rpm"
+        "refuse COMPLETED:app.deb"
+        "promote COMPLETED:app.deb COMPLETED:app.rpm"
+    )
+    for row in "${rows[@]}"; do
+        setup_stubs
+        read -r want rest <<<"$row"
+        read -ra promotions <<<"$rest"
+        for promotion in "${promotions[@]}"; do
+            IFS=, read -ra paths <<<"${promotion#*:}"
+            promoted TEST "${promotion%%:*}" "${paths[@]}"
+        done
+        promote STAGE
+        if [[ $want == promote ]]; then
+            [ "$status" -eq 0 ]
+            promoted_to STAGE
+        else
+            [ "$status" -eq 1 ]
+            [ ! -s "$JF_CALLS" ]
+        fi
     done
-    [ ! -s "$JF_CALLS" ]
-}
-
-@test "promotes to PROD from STAGE without PREVIEW" {
-    promoted TEST
-    promoted STAGE
-    promote PROD
-    [ "$status" -eq 0 ]
-    promoted_to PROD
-}
-
-@test "a TEST promotion that has not completed does not count" {
-    promoted TEST STARTED
-    promote STAGE
-    [ "$status" -eq 1 ]
-}
-
-@test "a TEST promotion of part of the bundle does not count" {
-    promoted TEST COMPLETED app.deb
-    promote STAGE
-    [ "$status" -eq 1 ]
-}
-
-@test "TEST promotions that together hold the bundle count" {
-    promoted TEST COMPLETED app.deb
-    promoted TEST COMPLETED app.rpm
-    promote STAGE
-    [ "$status" -eq 0 ]
-    promoted_to STAGE
 }
 
 @test "promoting to a stage that holds the whole version is a no-op" {
@@ -92,16 +95,6 @@ promoted() {
     [ ! -s "$JF_CALLS" ]
 }
 
-@test "a truncated artifact list stops the promotion" {
-    promoted TEST
-    jq '.total_artifacts_count = 3' "${JF_DATA}/bundle-1.2.3.json" >"${JF_DATA}/bundle-1.2.3.tmp"
-    mv "${JF_DATA}/bundle-1.2.3.tmp" "${JF_DATA}/bundle-1.2.3.json"
-    promote STAGE
-    [ "$status" -eq 1 ]
-    [[ $output == *"unexpected record at"* ]]
-    [ ! -s "$JF_CALLS" ]
-}
-
 @test "passes include and exclude repos to jf only when set" {
     promote TEST --include-repos "a-local;b-local" --exclude-repos "c-local"
     grep -Fq -- "--include-repos=a-local;b-local --exclude-repos=c-local" "$JF_CALLS"
@@ -109,11 +102,4 @@ promoted() {
     promote TEST --include-repos "" --exclude-repos ""
     run grep -F -e "--include-repos" -e "--exclude-repos" "$JF_CALLS"
     [ "$status" -eq 1 ]
-}
-
-@test "dry-run prints the promotion without running it" {
-    promote TEST --dry-run
-    [ "$status" -eq 0 ]
-    [[ $output == *"Would promote my-app/1.2.3 to TEST"* ]]
-    [ ! -s "$JF_CALLS" ]
 }

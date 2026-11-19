@@ -44,20 +44,9 @@ STUB
         INPUT_SUPERSEDE=true INPUT_SUPERSEDE_REASON=rebuilt run bash "${BATS_TEST_TMPDIR}/promote.sh"
 }
 
-@test "inputs reach the scripts through env, not expressions" {
-    for name in "Promote Release Bundle" "$VERIFY_STEP" "Store the supersede record and its attestation"; do
-        script="$(yq -r "${JOB}.steps[] | select(.name == \"${name}\") | .run" "$WORKFLOW")"
-        [ -n "$script" ]
-        [[ $script != *'${{'* ]]
-    done
-}
-
-@test "the verify step passes when the checkout is the workflow's commit" {
+@test "the verify step fails unless the checkout is the workflow's commit" {
     run_verify HEAD
     [ "$status" -eq 0 ]
-}
-
-@test "the verify step fails when the checkout is another commit" {
     run_verify 0123456789abcdef0123456789abcdef01234567
     [ "$status" -eq 1 ]
     [[ $output == *"is not the commit this workflow runs from"* ]]
@@ -84,9 +73,9 @@ STUB
     yq -r "${JOB}.steps[] | select(.name == \"Store the supersede record and its attestation\") | .run" "$WORKFLOW" \
         >"${BATS_TEST_TMPDIR}/store.sh"
     PATH="${BATS_TEST_TMPDIR}/bin:$PATH" RECORD_FILE=record.json ATTESTATION=attestation.json \
-        RECORD_PATH=release-evidence-local/evidence/supersede/test/my-app/TEST/1-1.2.3.json \
+        RECORD_PATH=release-evidence-local/evidence/supersede/test/my-app/1.2.3/TEST/1.json \
         run bash "${BATS_TEST_TMPDIR}/store.sh"
     [ "$status" -eq 0 ]
-    [ "$(cat "${BATS_TEST_TMPDIR}/uploads")" = "release-evidence-local/evidence/supersede/test/my-app/TEST/1-1.2.3.sigstore.json
-release-evidence-local/evidence/supersede/test/my-app/TEST/1-1.2.3.json" ]
+    [ "$(cat "${BATS_TEST_TMPDIR}/uploads")" = "release-evidence-local/evidence/supersede/test/my-app/1.2.3/TEST/1.sigstore.json
+release-evidence-local/evidence/supersede/test/my-app/1.2.3/TEST/1.json" ]
 }

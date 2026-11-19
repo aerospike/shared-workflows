@@ -199,7 +199,7 @@ jobs:
         with:
           subject-path: ${{ steps.promote.outputs.record-file }}
           predicate-type: https://aerospike.com/schemas/supersede/v1
-          predicate-path: ${{ steps.promote.outputs.record-file }}
+          predicate: ${{ steps.promote.outputs.record-predicate }}
 
       - name: Store the supersede record and its attestation
         if: steps.promote.outputs.record-file != ''

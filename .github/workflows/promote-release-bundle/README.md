@@ -61,8 +61,9 @@ with:
 - They are un-promoted, then this version is promoted. If either step fails, the versions already
   un-promoted are promoted again and no record is written.
 - After the swap, the workflow writes a record of it, attests the record, and stores both in
-  `release-evidence-local` under `evidence/supersede/<project>/<bundle>/<stage>/`. The attestation
-  is stored beside the record as `<record>.sigstore.json`.
+  `release-evidence-local` under `evidence/supersede/<project>/<bundle>/<version>/<stage>/`. The
+  attestation is stored beside the record as `<record>.sigstore.json`. Its predicate holds only the
+  project, bundle, version and stage, so the reason and actor stay in JFrog.
 - Supersede is allowed at DEV, TEST and STAGE. A version past STAGE is released, and a fix ships as a
   new version.
 - `supersede-reason` and `gh-environment` are required. The workflow checks only that

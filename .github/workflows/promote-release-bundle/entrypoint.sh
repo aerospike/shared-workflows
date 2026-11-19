@@ -150,12 +150,13 @@ supersede() {
     fi
 }
 
-# Writes the supersede record to a file, its store path to the step outputs, and the run summary.
+# Writes the supersede record to a file, its store path and attestation predicate to the step
+# outputs, and the run summary.
 write_record() {
     local epoch file path reason
-    epoch=$(date -u +%s)
+    epoch=$(jq -n 'now * 1000 | floor')
     file="${RUNNER_TEMP:-/tmp}/${epoch}-${VERSION}.json"
-    path="release-evidence-local/evidence/supersede/${PROJECT}/${BUNDLE_NAME}/${TARGET_STAGE}/${epoch}-${VERSION}.json"
+    path="release-evidence-local/evidence/supersede/${PROJECT}/${BUNDLE_NAME}/${VERSION}/${TARGET_STAGE}/${epoch}.json"
     jq -n \
         --arg project "$PROJECT" \
         --arg bundle "$BUNDLE_NAME" \
@@ -166,12 +167,15 @@ write_record() {
         --arg reason "$SUPERSEDE_REASON" \
         --arg run "${GITHUB_SERVER_URL-}/${GITHUB_REPOSITORY-}/actions/runs/${GITHUB_RUN_ID-}/attempts/${GITHUB_RUN_ATTEMPT-}" \
         '{schema: "https://aerospike.com/schemas/supersede/v1", project: $project, bundle: $bundle,
-          stage: $stage, replaced: $ARGS.positional, replacedBy: $version, at: ($epoch | todate),
+          stage: $stage, replaced: $ARGS.positional, replacedBy: $version, at: ($epoch / 1000 | floor | todate),
           actor: $actor, reason: $reason, run: $run}' \
         --args "${INCUMBENTS[@]}" >"$file"
     {
         echo "record-file=${file}"
         echo "record-path=${path}"
+        echo "record-predicate=$(jq -cn --arg project "$PROJECT" --arg bundle "$BUNDLE_NAME" \
+            --arg version "$VERSION" --arg stage "$TARGET_STAGE" \
+            '{kind: "supersede", project: $project, bundle: $bundle, version: $version, stage: $stage}')"
     } >>"${GITHUB_OUTPUT:-/dev/null}"
 
     # A newline or | in the reason would break the table row.
