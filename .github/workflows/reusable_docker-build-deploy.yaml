@@ -111,6 +111,21 @@ on:
         type: boolean
         default: true
         description: Enable SBOM generation (pass-through to docker/build-push-action)
+      source-ref:
+        type: string
+        default: ""
+        description: >-
+          Branch or tag the image is built from. Checked out in place of the
+          ref the run was dispatched from, and recorded as the VCS branch in
+          Docker build-info.
+      source-sha:
+        type: string
+        default: ""
+        description: >-
+          Full 40-character commit id on source-ref to build. Checked out in
+          place of that ref's tip, and recorded as the VCS revision in Docker
+          build-info and in the org.opencontainers.image.revision label.
+          Requires source-ref.
       jf-go-repo:
         type: string
         required: false
@@ -188,6 +203,27 @@ jobs:
               exit 1
               ;;
           esac
+
+      - name: Check source ref inputs
+        shell: bash
+        env:
+          SOURCE_REF: ${{ inputs.source-ref }}
+          SOURCE_SHA: ${{ inputs.source-sha }}
+        run: |
+          set -euo pipefail
+          if [ -z "$SOURCE_SHA" ]; then
+            exit 0
+          fi
+          if [ -z "$SOURCE_REF" ]; then
+            echo "::error::source-sha is set without source-ref. build-info records a branch only when the work tree is on a named ref."
+            exit 1
+          fi
+          # actions/checkout reads a ref as a commit only when it is 40
+          # lowercase hex digits, and git cannot fetch an abbreviated id.
+          if [[ ! "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::source-sha is ${SOURCE_SHA}, which is not a full 40-character lowercase commit id."
+            exit 1
+          fi
 
       - name: Parse platforms into matrix
         id: parse
@@ -294,6 +330,7 @@ jobs:
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ inputs.source-sha || inputs.source-ref }}
           submodules: ${{ inputs.gh-checkout-submodules }}
 
       # Keep these three steps between checkout and Install JFrog CLI: the
@@ -518,7 +555,6 @@ jobs:
         env:
           TITLE: ${{ inputs.app-name || inputs.image-name }}
           APP_VERSION: ${{ inputs.app-version }}
-          REVISION: ${{ github.sha }}
           SOURCE_URL: ${{ github.server_url }}/${{ github.repository }}
           LABELS_JSON: ${{ inputs.labels-json }}
           BUILD_ARGS_JSON: ${{ inputs.build-args-json }}
@@ -530,12 +566,14 @@ jobs:
           # token reaches the build through the jfrog_token secret-file mount.
           build_args="$(to_kv <<<"$BUILD_ARGS_JSON")"
 
+          revision="$(git rev-parse HEAD)"
+
           # User labels override the generated OCI set.
           labels="$(jq -n \
             --arg title "$TITLE" \
             --arg version "$APP_VERSION" \
             --arg created "$(date --utc -Iseconds)" \
-            --arg revision "$REVISION" \
+            --arg revision "$revision" \
             --arg url "$SOURCE_URL" \
             --argjson user "$LABELS_JSON" \
             '{
@@ -711,6 +749,21 @@ jobs:
           egress-policy: audit
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.source-ref }}
+
+      - name: Check out the built commit
+        if: ${{ inputs.source-sha != '' }}
+        shell: bash
+        env:
+          SOURCE_REF: ${{ inputs.source-ref }}
+          SOURCE_SHA: ${{ inputs.source-sha }}
+        run: |
+          set -euo pipefail
+          branch="${SOURCE_REF#refs/heads/}"
+          branch="${branch#refs/tags/}"
+          git fetch --depth 1 origin "$SOURCE_SHA"
+          git checkout -B "$branch" "$SOURCE_SHA"
 
       - name: Install JFrog CLI
         id: jf
