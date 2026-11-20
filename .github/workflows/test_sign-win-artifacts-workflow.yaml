@@ -8,6 +8,7 @@ on:
       - .github/workflows/reusable_artifacts-cicd.yaml
       - .github/workflows/reusable_sign-win-artifacts.yaml
       - .github/workflows/sign-win-artifacts/**
+      - .github/workflows/test_sign-win-artifacts-workflow.yaml
 
 permissions:
   id-token: write
