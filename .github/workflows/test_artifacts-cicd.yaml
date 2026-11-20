@@ -14,6 +14,8 @@ on:
       - .github/workflows/artifacts-cicd/**
       - .github/workflows/execute-build/**
       - .github/workflows/sign-artifacts/**
+      - .github/workflows/sign-mac-artifacts/**
+      - .github/workflows/sign-win-artifacts/**
       - .github/workflows/deploy-artifacts/**
       - .github/workflows/lib/**
       - .github/actions/collect-build-artifacts/**
