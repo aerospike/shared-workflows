@@ -4,31 +4,67 @@ on:
   workflow_dispatch:
   pull_request:
     branches: [main]
-    paths:
-      - .github/workflows/reusable_artifacts-cicd.yaml
-      - .github/workflows/reusable_execute-build.yaml
-      - .github/workflows/reusable_sign-artifacts.yaml
-      - .github/workflows/reusable_sign-mac-artifacts.yaml
-      - .github/workflows/reusable_sign-win-artifacts.yaml
-      - .github/workflows/reusable_deploy-artifacts.yaml
-      - .github/workflows/artifacts-cicd/**
-      - .github/workflows/execute-build/**
-      - .github/workflows/sign-artifacts/**
-      - .github/workflows/sign-mac-artifacts/**
-      - .github/workflows/sign-win-artifacts/**
-      - .github/workflows/deploy-artifacts/**
-      - .github/workflows/lib/**
-      - .github/actions/collect-build-artifacts/**
-      - .github/workflows/test_artifacts-cicd.yaml
 
 permissions:
   contents: read
   id-token: write
 
 jobs:
+  # Do not replace this gate with a workflow-level paths: filter. The ruleset
+  # requires the result check, and a workflow skipped by paths: never reports it.
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    outputs:
+      run: ${{ steps.check.outputs.run }}
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
+        with:
+          egress-policy: audit
+
+      - name: Check whether the pull request changes a tested path
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          TESTED_PATHS: >-
+            ^\.github/workflows/reusable_artifacts-cicd\.yaml$
+            ^\.github/workflows/reusable_execute-build\.yaml$
+            ^\.github/workflows/reusable_sign-artifacts\.yaml$
+            ^\.github/workflows/reusable_sign-mac-artifacts\.yaml$
+            ^\.github/workflows/reusable_sign-win-artifacts\.yaml$
+            ^\.github/workflows/reusable_deploy-artifacts\.yaml$
+            ^\.github/workflows/artifacts-cicd/
+            ^\.github/workflows/execute-build/
+            ^\.github/workflows/sign-artifacts/
+            ^\.github/workflows/sign-mac-artifacts/
+            ^\.github/workflows/sign-win-artifacts/
+            ^\.github/workflows/deploy-artifacts/
+            ^\.github/workflows/lib/
+            ^\.github/actions/collect-build-artifacts/
+            ^\.github/workflows/test_artifacts-cicd\.yaml$
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" != "pull_request" ]]; then
+            echo "run=true" >>"$GITHUB_OUTPUT"
+            exit 0
+          fi
+          read -ra patterns <<<"$TESTED_PATHS"
+          regex=$(IFS='|'; echo "${patterns[*]}")
+          files=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/files" --paginate --jq '.[] | .filename, (.previous_filename // empty)')
+          if grep -qE "$regex" <<<"$files"; then
+            echo "run=true" >>"$GITHUB_OUTPUT"
+          else
+            echo "run=false" >>"$GITHUB_OUTPUT"
+          fi
+
   # Skipped for Dependabot: SSL.com NuGet signing requires real credentials
   cicd-test:
-    if: github.actor != 'dependabot[bot]'
+    needs: changes
+    if: github.actor != 'dependabot[bot]' && needs.changes.outputs.run == 'true'
     name: Artifacts CI/CD
     uses: ./.github/workflows/reusable_artifacts-cicd.yaml
     with:
@@ -134,3 +170,20 @@ jobs:
           bats tests/test_artifacts_cicd.bats
         env:
           ARTIFACTS_DIR: ${{ github.workspace }}/verification/signed
+
+  result:
+    name: test_artifacts-cicd result
+    if: always()
+    needs: [changes, cicd-test, verify]
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
+        with:
+          egress-policy: audit
+
+      - name: Fail if a job failed or was cancelled
+        env:
+          RESULTS: ${{ toJSON(needs.*.result) }}
+        run: jq -e 'all(.[]; . == "success" or . == "skipped")' <<<"$RESULTS"
