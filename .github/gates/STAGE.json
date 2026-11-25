@@ -1,6 +1,6 @@
 {
+	"$schema": "../workflows/promote-release-bundle/gate-definition.schema.json",
 	"schema": 1,
-	"stage": "STAGE",
 	"page": "https://aerospike.atlassian.net/wiki/spaces/DevOps/pages/5824151563",
 	"mode": "warn",
 	"projects": {},

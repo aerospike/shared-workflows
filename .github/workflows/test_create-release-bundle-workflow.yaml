@@ -54,6 +54,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update && sudo apt-get install jq -y
+          pipx install check-jsonschema==0.39.0
       - name: Setup bats
         uses: bats-core/bats-action@3566550e0f594451ac0f58fcbfdeca93aa29a45e # 4.1.0
         with:

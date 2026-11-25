@@ -1,0 +1,82 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "https://raw.githubusercontent.com/aerospike/shared-workflows/main/.github/workflows/promote-release-bundle/gate-definition.schema.json",
+	"title": "Gate definition",
+	"description": "Required evidence for promotion to one stage. The file name is the target stage.",
+	"type": "object",
+	"additionalProperties": false,
+	"required": ["$schema", "schema", "page", "mode", "projects", "requires"],
+	"properties": {
+		"$schema": {
+			"const": "../workflows/promote-release-bundle/gate-definition.schema.json"
+		},
+		"schema": {
+			"const": 1
+		},
+		"page": {
+			"type": "string",
+			"pattern": "^https://aerospike\\.atlassian\\.net/wiki/spaces/DevOps/pages/[0-9]+$"
+		},
+		"mode": {
+			"$ref": "#/$defs/mode"
+		},
+		"projects": {
+			"type": "object",
+			"propertyNames": {
+				"pattern": "^[a-z][a-z0-9]*$"
+			},
+			"additionalProperties": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": ["mode"],
+				"properties": {
+					"mode": {
+						"$ref": "#/$defs/mode"
+					}
+				}
+			}
+		},
+		"requires": {
+			"type": "array",
+			"minItems": 1,
+			"items": {
+				"$ref": "#/$defs/requirement"
+			}
+		}
+	},
+	"$defs": {
+		"mode": {
+			"enum": ["warn", "enforce"]
+		},
+		"requirement": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["id", "evidence", "criterion", "check", "required"],
+			"properties": {
+				"id": {
+					"type": "string",
+					"pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+				},
+				"evidence": {
+					"type": "string",
+					"minLength": 1
+				},
+				"criterion": {
+					"type": "string",
+					"minLength": 1
+				},
+				"check": {
+					"enum": [
+						"bundle-signed",
+						"commit-traceability",
+						"promotion-record",
+						null
+					]
+				},
+				"required": {
+					"type": "boolean"
+				}
+			}
+		}
+	}
+}
