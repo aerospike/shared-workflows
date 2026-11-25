@@ -1,0 +1,37 @@
+{
+	"$schema": "../workflows/promote-release-bundle/gate-definition.schema.json",
+	"schema": 1,
+	"page": "https://aerospike.atlassian.net/wiki/spaces/DevOps/pages/5824053261",
+	"mode": "warn",
+	"projects": {},
+	"requires": [
+		{
+			"id": "security-check",
+			"evidence": "Security check",
+			"criterion": "No critical or high findings that have a fix available",
+			"check": null,
+			"required": true
+		},
+		{
+			"id": "manual-approval",
+			"evidence": "Manual approval",
+			"criterion": "A named Product approver approves",
+			"check": null,
+			"required": true
+		},
+		{
+			"id": "product-checklist",
+			"evidence": "Product checklist",
+			"criterion": "Complete, for a new product",
+			"check": null,
+			"required": true
+		},
+		{
+			"id": "promotion-record",
+			"evidence": "Promotion record",
+			"criterion": "Who promoted and when is recorded",
+			"check": "promotion-record",
+			"required": true
+		}
+	]
+}
