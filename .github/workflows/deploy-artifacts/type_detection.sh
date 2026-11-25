@@ -461,6 +461,7 @@ _detect_structure_maven_poms() {
 # release-bundle-record.json wins over a pre-written docker-images.json.
 # Keep docker/oci tags. Drop sha256 digests; manifest blobs are not images.
 # Copy container_destination as one string or a list. Leave it off when missing or blank.
+# Copy certification_component_id as one string. Several values fail. Leave it off when missing or blank.
 _detect_structure_docker_bundle_metadata() {
     local artifacts_root="$1"
     local dest="./structured_build_artifacts/generic/docker"
@@ -483,13 +484,14 @@ _detect_structure_docker_bundle_metadata() {
         # nonempty rejects missing, null, and empty-string fields before startswith.
         if ! lines=$(jq -c -s '
             def nonempty: type == "string" and . != "";
-            def container_destinations:
+            def property_values($key):
                 [ (.properties // [])[]?
-                  | select(.key == "container_destination")
+                  | select(.key == $key)
                   | (.values // empty)
                   | if type == "array" then .[] else empty end
                   | select(nonempty)
                 ];
+            def container_destinations: property_values("container_destination");
             .[]
             | .artifacts[]?
             | select(.package_type == "docker" or .package_type == "oci")
@@ -502,6 +504,11 @@ _detect_structure_docker_bundle_metadata() {
                  | if ($d | length) == 0 then {}
                    elif ($d | length) == 1 then {container_destination: $d[0]}
                    else {container_destination: $d}
+                   end)
+              + (property_values("certification_component_id") as $ids
+                 | if ($ids | length) == 0 then {}
+                   elif ($ids | length) == 1 then {certification_component_id: $ids[0]}
+                   else error("certification_component_id has several values")
                    end)
         ' "${records[@]}"); then
             echo "Error: failed to read release bundle record" >&2
