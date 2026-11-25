@@ -1,8 +1,6 @@
 # Default - dev-infra owns all files
 *   @aerospike/dev-infra
 
-# Gate definitions apply to each caller as soon as they merge.
-# The last matching line wins, so each gate line keeps @aerospike/dev-infra.
 /.github/gates/STAGE.json     @aerospike/dev-infra @aerospike/qe
 /.github/gates/PREVIEW.json   @aerospike/dev-infra @aerospike/product
 /.github/gates/PROD.json      @aerospike/dev-infra @aerospike/product @aerospike/seceng
