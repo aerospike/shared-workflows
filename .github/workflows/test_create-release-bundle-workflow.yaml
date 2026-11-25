@@ -36,6 +36,7 @@ jobs:
             ^\.github/workflows/promote-release-bundle/
             ^\.github/workflows/lib/
             ^\.github/actions/delete-release-bundle/
+            ^\.github/gates/
             ^\.github/workflows/test_create-release-bundle-workflow\.yaml$
         run: |
           set -euo pipefail
