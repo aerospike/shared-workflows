@@ -9,7 +9,53 @@ permissions:
   contents: read
 
 jobs:
+  # Do not replace this gate with a workflow-level paths: filter. The ruleset
+  # requires the result check, and a workflow skipped by paths: never reports it.
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    outputs:
+      run: ${{ steps.check.outputs.run }}
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
+        with:
+          egress-policy: audit
+
+      - name: Check whether the pull request changes a tested path
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          TESTED_PATHS: >-
+            ^\.github/workflows/reusable_create-release-bundle\.yaml$
+            ^\.github/workflows/reusable_promote-release-bundle\.yaml$
+            ^\.github/workflows/create-release-bundle/
+            ^\.github/workflows/promote-release-bundle/
+            ^\.github/workflows/lib/
+            ^\.github/actions/delete-release-bundle/
+            ^\.github/gates/
+            ^\.github/workflows/test_create-release-bundle-workflow\.yaml$
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" != "pull_request" ]]; then
+            echo "run=true" >>"$GITHUB_OUTPUT"
+            exit 0
+          fi
+          read -ra patterns <<<"$TESTED_PATHS"
+          regex=$(IFS='|'; echo "${patterns[*]}")
+          files=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/files" --paginate --jq '.[] | .filename, (.previous_filename // empty)')
+          if grep -qE "$regex" <<<"$files"; then
+            echo "run=true" >>"$GITHUB_OUTPUT"
+          else
+            echo "run=false" >>"$GITHUB_OUTPUT"
+          fi
+
   test-create-release-bundle-workflow:
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
     uses: ./.github/workflows/reusable_create-release-bundle.yaml
     with:
       gh-workflows-ref: ${{ github.sha }}
@@ -25,6 +71,8 @@ jobs:
 
   # dry-run must stay true: this runs against real JFrog.
   test-promote-release-bundle-workflow:
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
     uses: ./.github/workflows/reusable_promote-release-bundle.yaml
     permissions:
       attestations: write
@@ -40,6 +88,8 @@ jobs:
       dry-run: true
 
   run-tests:
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
     runs-on: ubuntu-22.04
     permissions:
       contents: read
@@ -72,3 +122,26 @@ jobs:
         run: bats .github/actions/delete-release-bundle/tests/bats/
       - name: Promotion tests
         run: bats .github/workflows/promote-release-bundle/tests/bats/
+
+  result:
+    name: test_create-release-bundle-workflow result
+    if: always()
+    needs:
+      [
+        changes,
+        test-create-release-bundle-workflow,
+        test-promote-release-bundle-workflow,
+        run-tests,
+      ]
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
+        with:
+          egress-policy: audit
+
+      - name: Fail if a job failed or was cancelled
+        env:
+          RESULTS: ${{ toJSON(needs.*.result) }}
+        run: jq -e 'all(.[]; . == "success" or . == "skipped")' <<<"$RESULTS"

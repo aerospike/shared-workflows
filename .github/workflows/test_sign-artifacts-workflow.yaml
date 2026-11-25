@@ -11,8 +11,51 @@ permissions:
 # nuget secrets are not valid for the dependabot test tokens
 # until we can have test tokens/pw to use will disable this.
 jobs:
+  # Do not replace this gate with a workflow-level paths: filter. The ruleset
+  # requires the result check, and a workflow skipped by paths: never reports it.
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    outputs:
+      run: ${{ steps.check.outputs.run }}
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
+        with:
+          egress-policy: audit
+
+      - name: Check whether the pull request changes a tested path
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          TESTED_PATHS: >-
+            ^\.github/workflows/reusable_sign-artifacts\.yaml$
+            ^\.github/workflows/sign-artifacts/
+            ^\.github/workflows/lib/
+            ^\.github/workflows/deploy-artifacts/create-test-fixtures\.sh$
+            ^tests/
+            ^\.github/workflows/test_sign-artifacts-workflow\.yaml$
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" != "pull_request" ]]; then
+            echo "run=true" >>"$GITHUB_OUTPUT"
+            exit 0
+          fi
+          read -ra patterns <<<"$TESTED_PATHS"
+          regex=$(IFS='|'; echo "${patterns[*]}")
+          files=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/files" --paginate --jq '.[] | .filename, (.previous_filename // empty)')
+          if grep -qE "$regex" <<<"$files"; then
+            echo "run=true" >>"$GITHUB_OUTPUT"
+          else
+            echo "run=false" >>"$GITHUB_OUTPUT"
+          fi
+
   upload-test-gh-artifacts:
-    if: github.actor != 'dependabot[bot]'
+    needs: changes
+    if: github.actor != 'dependabot[bot]' && needs.changes.outputs.run == 'true'
     runs-on: ubuntu-22.04
     steps:
       - name: Harden the runner (Audit all outbound calls)
@@ -105,3 +148,27 @@ jobs:
       - name: Test Entrypoint
         run: |
           .github/workflows/sign-artifacts/test-entrypoint.sh test-fixtures
+
+  result:
+    name: test_sign-artifacts-workflow result
+    if: always()
+    needs:
+      [
+        changes,
+        upload-test-gh-artifacts,
+        test-sign-workflow,
+        verify-nuget-signatures,
+        run-tests,
+      ]
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
+        with:
+          egress-policy: audit
+
+      - name: Fail if a job failed or was cancelled
+        env:
+          RESULTS: ${{ toJSON(needs.*.result) }}
+        run: jq -e 'all(.[]; . == "success" or . == "skipped")' <<<"$RESULTS"

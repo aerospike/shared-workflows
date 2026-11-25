@@ -8,6 +8,8 @@ on:
       - .github/workflows/reusable_deploy-artifacts.yaml
       - .github/workflows/reusable_create-release-bundle.yaml
       - .github/workflows/deploy-artifacts/**
+      - .github/workflows/lib/**
+      - tests/**
       - .github/workflows/test_deploy-artifacts-integration.yaml
 
 permissions:

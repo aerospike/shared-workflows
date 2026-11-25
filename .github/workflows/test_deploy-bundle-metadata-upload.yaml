@@ -9,6 +9,7 @@ on:
   pull_request:
     branches: [main]
     paths:
+      - .github/workflows/lib/**
       - .github/workflows/reusable_deploy-artifacts.yaml
       - .github/workflows/reusable_create-release-bundle.yaml
       - .github/workflows/test_deploy-bundle-metadata-upload.yaml
