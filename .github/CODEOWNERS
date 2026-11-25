@@ -1,5 +1,2 @@
 # Default - dev-infra owns all files
 *   @aerospike/dev-infra
-
-# Gate definitions apply to each caller as soon as they merge.
-/.github/gates/ @aerospike/dev-infra
