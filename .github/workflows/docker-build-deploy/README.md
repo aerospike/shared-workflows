@@ -36,6 +36,7 @@ jobs:
 - `gh-checkout-submodules` (string, default `false`): Submodules to check out into the build context, passed to `actions/checkout` `submodules` (`false`, `true`, or `recursive`). The checkout uses the calling repo's `GITHUB_TOKEN`, which reads public submodules but not private submodules in other repositories
 - `gh-context-artifacts-json` (string, optional): JSON array of same-run GitHub artifacts to place inside the build context before the image build, e.g. `[{"name":"signed-artifacts","dest":"artifacts"}]`. See [Delivering artifacts into the build context](#delivering-artifacts-into-the-build-context)
 - `jf-build-name` (string, optional): Build name for JFrog build-info (defaults to workflow name)
+- `jf-build-number` (string, optional): Build number for JFrog build-info (defaults to `github.run_number`). Set it to a value the caller knows in advance, such as the image version, so other repos can reference the build-info as `<jf-build-name>:<jf-build-number>` without looking up the run number. Only `A-Z`, `a-z`, `0-9`, `_`, `.` and `-` are allowed, because the release bundle splits `<jf-build-name>:<jf-build-number>` on `:` and joins it back as `name/number`
 - `jf-registry` (string, optional): Deprecated and will be removed. The run fails unless it equals `{jf-registry-base}/{jf-project}{repo-scope}`
 - `jf-registry-base` (string, default `artifact.aerospike.io`): Registry hostname (no repo path) for the push, the BuildKit pull, and `jf-go-repo`
 - `jf-url` (string, default `https://artifact.aerospike.io`): Base JFrog Artifactory URL
@@ -62,7 +63,7 @@ jobs:
 - `tags`: Comma separated list of tags used
 - `immutable-tag`: Immutable tag (registry/image:version_timestamp)
 - `jf-build-name`: JFrog build-info name (`jf-build-name` input, or the workflow name)
-- `jf-build-id`: JFrog build-info build number (`github.run_number`)
+- `jf-build-id`: JFrog build-info build number (`jf-build-number` input, or `github.run_number`)
 
 On a dry run (`push: false`), `digest` and `image-ref` are empty; `tags`, `immutable-tag`, `jf-build-name` and `jf-build-id` are still computed, but no build-info record is published.
 

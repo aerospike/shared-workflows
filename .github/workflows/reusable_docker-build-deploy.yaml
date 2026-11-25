@@ -63,6 +63,12 @@ on:
         type: string
         required: false
         description: Build name for JFrog build-info (defaults to workflow name)
+      jf-build-number:
+        type: string
+        required: false
+        description: >-
+          Build number for JFrog build-info (defaults to github.run_number).
+          Only A-Z, a-z, 0-9, '_', '.' and '-' are allowed.
       jf-registry:
         type: string
         required: false
@@ -188,6 +194,21 @@ jobs:
               exit 1
               ;;
           esac
+
+      # reusable_create-release-bundle.yaml splits each jf-build-names entry on
+      # `:` and joins it back as name/number, so the number must not contain
+      # `:` or `/`. The docker tag charset is enough.
+      - name: Check jf-build-number
+        if: ${{ inputs.jf-build-number != '' }}
+        shell: bash
+        env:
+          BUILD_NUMBER: ${{ inputs.jf-build-number }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$BUILD_NUMBER" =~ ^[A-Za-z0-9_.-]+$ ]]; then
+            echo "::error::jf-build-number '${BUILD_NUMBER}' must only use A-Z, a-z, 0-9, '_', '.' and '-'"
+            exit 1
+          fi
 
       - name: Parse platforms into matrix
         id: parse
@@ -690,6 +711,7 @@ jobs:
     runs-on: ubuntu-24.04
     env:
       JFROG_CLI_BUILD_NAME: ${{ inputs.jf-build-name || github.workflow }}
+      JFROG_CLI_BUILD_NUMBER: ${{ inputs.jf-build-number || github.run_number }}
       JFROG_CLI_LOG_LEVEL: INFO
       REGISTRY: ${{ format('{0}/{1}{2}', inputs.jf-registry-base, inputs.jf-project, inputs.repo-scope) }}
     permissions:
@@ -896,9 +918,6 @@ jobs:
           JF_REPO: ${{ inputs.jf-project }}${{ inputs.repo-scope }}
         run: |
           set -euo pipefail
-          # The build number stays at the setup-jfrog-cli default (github.run_number):
-          # consumer release-bundle references of the form <name>:<run_number> resolve
-          # against it.
           jf rt build-docker-create --image-file <(echo "$IMAGE_REF") "$JF_REPO"
 
       - name: Publish Build Info
