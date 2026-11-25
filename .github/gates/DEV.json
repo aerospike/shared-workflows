@@ -1,0 +1,37 @@
+{
+	"schema": 1,
+	"stage": "DEV",
+	"page": "https://aerospike.atlassian.net/wiki/spaces/DevOps/pages/5823725586",
+	"mode": "warn",
+	"projects": {},
+	"requires": [
+		{
+			"id": "build",
+			"evidence": "Build",
+			"criterion": "Succeeded in GitHub Actions",
+			"check": null,
+			"required": true
+		},
+		{
+			"id": "smoke-tests",
+			"evidence": "Smoke tests",
+			"criterion": "Passed before deployment to DEV",
+			"check": null,
+			"required": true
+		},
+		{
+			"id": "build-info",
+			"evidence": "Build info",
+			"criterion": "Published to JFrog",
+			"check": null,
+			"required": true
+		},
+		{
+			"id": "protected-branch",
+			"evidence": "Protected branch",
+			"criterion": "Built from a protected branch with required reviews",
+			"check": null,
+			"required": true
+		}
+	]
+}
