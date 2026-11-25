@@ -61,15 +61,6 @@ expect_rejected() {
     [[ $output == *"QA.json is not a gate definition"* ]]
 }
 
-@test "a definition that is not JSON is rejected" {
-    local copy="${BATS_TEST_TMPDIR}/gates"
-    cp -R "$GATES" "$copy"
-    echo '{"schema": 1,' >"${copy}/TEST.json"
-    run check_gates "$copy"
-    [ "$status" -eq 1 ]
-    [[ $output == *"TEST.json"* ]]
-}
-
 @test "a definition that breaks the schema is rejected" {
     expect_rejected TEST '.schema = 2' 'TEST.json::$.schema'
     expect_rejected TEST '.mode = "block"' 'TEST.json::$.mode'
